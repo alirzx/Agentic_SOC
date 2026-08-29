@@ -1,0 +1,59 @@
+{
+  "name": "AiSOC — one-click dev",
+  "//image": "Prebuilt image is published by .github/workflows/devcontainer-build.yml. It drops Codespaces cold-start from ~5 min → ~30 s by baking Node + pnpm + Python (+ uv) + Go + Docker + gh into a single layer instead of resolving them via `features:` on every boot.",
+  "image": "ghcr.io/beenuar/aisoc-devcontainer:latest",
+  "//build": "Fallback for local devcontainer-cli use and for forks that don't have GHCR pull access. The `image` directive above wins; the build block is only consulted by tooling like `devcontainer build`.",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "//features": "We intentionally do NOT enable docker-in-docker / python / go / github-cli features here — they are baked into the image at build time. Re-enabling them would cancel the cold-start win.",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [3000, 3001, 8000, 8001, 8086],
+  "portsAttributes": {
+    "3000": {
+      "label": "AiSOC console (web)",
+      "onAutoForward": "openPreview"
+    },
+    "8000": {
+      "label": "AiSOC API (FastAPI / OpenAPI)"
+    },
+    "8001": {
+      "label": "AiSOC agents (LangGraph)"
+    },
+    "8086": {
+      "label": "AiSOC realtime (WebSocket)"
+    },
+    "3001": {
+      "label": "Docs site"
+    }
+  },
+  "//onCreateCommand": "Runs once at image-spawn time. The pnpm store is already warm in the prebuilt image, so `--frozen-lockfile=false` here is fast (≤ 30 s on a green Codespace).",
+  "onCreateCommand": "pnpm install --frozen-lockfile=false",
+  "postAttachCommand": "echo '\\n>>> AiSOC dev container is ready.\\n>>> To run the demo, open a terminal and run:\\n>>>     pnpm aisoc:demo --no-open\\n>>> Then click the forwarded port 3000 in the Ports panel.\\n>>> Or, no-Docker:  pip install -e packages/aisoc-sandbox && aisoc-sandbox demo\\n'",
+  "remoteUser": "node",
+  "containerEnv": {
+    "AISOC_DEV_MODE": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "golang.go",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "editor.formatOnSave": false,
+        "files.eol": "\n"
+      }
+    }
+  }
+}

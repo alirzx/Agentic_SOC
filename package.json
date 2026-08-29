@@ -1,0 +1,71 @@
+{
+  "name": "aisoc-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AiSOC — Open-source AI-powered Security Operations Center (monorepo root). The publishable CLI package `aisoc` lives at packages/aisoc-lite.",
+  "license": "MIT",
+  "author": "AiSOC contributors",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "infra:plan": "cd infra/terraform && terraform plan",
+    "infra:apply": "cd infra/terraform && terraform apply",
+    "docker:dev": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "seed:demo": "docker compose exec api python -m app.scripts.seed_demo",
+    "demo:produce": "go run ./services/demo-producer",
+    "demo:produce:fast": "go run ./services/demo-producer --rate 8 --batch 10",
+    "detections:validate": "python3 scripts/validate_detections.py",
+    "playbooks:validate": "python3 scripts/validate_playbooks.py",
+    "playbooks:lint": "python3 scripts/lint_playbooks.py",
+    "eval:run": "python3 scripts/run_evals.py",
+    "eval:public": "python3 scripts/run_evals.py --out eval_report.json && python3 scripts/render_eval_charts.py eval_report.json",
+    "marketplace:build": "python3 scripts/build_marketplace.py",
+    "marketplace:check": "python3 scripts/build_marketplace.py --check",
+    "marketplace:sync": "python3 scripts/build_marketplace.py && python3 scripts/curate_detections.py && cp marketplace/index.json apps/web/public/marketplace/index.json && cp marketplace/curated.json apps/web/public/marketplace/curated.json && echo 'marketplace/index.json + curated.json built and synced to apps/web/public/'",
+    "marketplace:curate": "python3 scripts/curate_detections.py",
+    "marketplace:curate:check": "python3 scripts/curate_detections.py --check",
+    "aisoc:lab": "bash scripts/lab.sh",
+    "aisoc:doctor": "tsx scripts/aisoc-doctor.ts",
+    "aisoc:demo": "tsx scripts/aisoc-demo.ts",
+    "aisoc:demo:down": "docker compose -f infra/compose/docker-compose.demo.yml down -v",
+    "aisoc:demo:logs": "docker compose -f infra/compose/docker-compose.demo.yml logs -f",
+    "aisoc:acceptance": "tsx scripts/aisoc-acceptance.ts",
+    "aisoc:acceptance:cold": "tsx scripts/aisoc-acceptance.ts --cold",
+    "aisoc:selfplay": "cd services/purple-team && python3 -m app.adversary.canned",
+    "aisoc:selfplay:json": "cd services/purple-team && python3 -m app.adversary.canned --json",
+    "aisoc:memory:export": "cd services/fusion && python3 -m app.memory.cli",
+    "demo:public": "bash scripts/demo-public.sh",
+    "demo:public:tunnel-only": "bash scripts/demo-public.sh --skip-stack",
+    "demo:public:setup": "bash infra/cloudflare/tunnel.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "prettier": "^3.9.5",
+    "tsx": "^4.23.1",
+    "turbo": "^2.10.7",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.1",
+  "pnpm": {
+    "overrides": {
+      "shell-quote": ">=1.8.4",
+      "form-data": ">=4.0.6",
+      "ws": ">=8.21.0",
+      "hono": ">=4.12.25"
+    }
+  }
+}

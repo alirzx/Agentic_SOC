@@ -1,0 +1,65 @@
+[tool.poetry]
+name = "aisoc-slack-bot"
+version = "0.1.0"
+description = "AiSOC Slack bot — slash commands and approval flows for ChatOps-driven SOC operations"
+authors = ["Beenu Arora <beenu@cyble.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = ">=0.109,<0.137"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+slack-bolt = "^1.18.1"
+slack-sdk = "^3.27.0"
+# Required transitively by slack_bolt.async_app — declared explicitly so a
+# resolver pruning unused deps doesn't break the FastAPI/Bolt adapter.
+aiohttp = ">=3.9,<4.0"
+httpx = ">=0.27,<0.29"
+structlog = ">=24.1,<26.0"
+# Phase B3 — durable approval-SLA timer store (app/services/timer_store.py).
+# Optional at runtime (in-memory store is the fallback), but shipped so a
+# DATABASE_URL-configured deployment gets restart-durable timers.
+asyncpg = ">=0.29,<0.31"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.23.0"
+respx = "^0.21.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+
+# Phase 2.2 — coverage floor for CI gate.
+#
+# Measured baseline at the time of introduction: 91%. Floor is
+# set at 89% (current - 2pp) so flaky branch-execution variance
+# doesn't break main, while still catching any real regression. Raise
+# this number as the suite grows — never lower it without a written
+# justification. The pyproject is consulted by
+# `pytest --cov-config=pyproject.toml --cov=app` in CI.
+#
+# Why pyproject instead of pytest.ini: keeps the floor next to the
+# dep constraint that produced it, so a bump in either is reviewed
+# in the same diff.
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 89
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

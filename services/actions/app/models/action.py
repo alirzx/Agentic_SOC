@@ -1,0 +1,179 @@
+"""
+Action models for the Action Execution Service.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Any
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field
+
+
+class ActionType(str, Enum):
+    BLOCK_IP = "block_ip"
+    BLOCK_DOMAIN = "block_domain"
+    ISOLATE_HOST = "isolate_host"
+    DISABLE_USER = "disable_user"
+    RESET_PASSWORD = "reset_password"
+    KILL_PROCESS = "kill_process"
+    QUARANTINE_FILE = "quarantine_file"
+    CAPTURE_FORENSICS = "capture_forensics"
+    ADD_IOC_TO_BLOCKLIST = "add_ioc_to_blocklist"
+    NOTIFY_SLACK = "notify_slack"
+    CREATE_TICKET = "create_ticket"
+    RUN_PLAYBOOK = "run_playbook"
+    # ChatOps user verification: outbound interactive Slack/Teams prompt
+    # asking the affected user to confirm or deny an event ("Was this you?").
+    # The response is HMAC-validated and routed back into the case timeline.
+    CHATOPS_VERIFY = "chatops_verify"
+    # WS-E: Live vendor integration action types
+    # CrowdStrike Falcon RTR
+    RUN_SCRIPT = "run_script"
+    # AWS Security Groups / Network
+    ALLOW_IP = "allow_ip"
+    # Microsoft Defender for Endpoint
+    BLOCK_IOC = "block_ioc"
+    RUN_AV_SCAN = "run_av_scan"
+    # Okta identity response
+    SUSPEND_SESSION = "suspend_session"
+    FORCE_MFA = "force_mfa"
+    # SIEM actions (Splunk + Elastic)
+    SEARCH_SIEM = "search_siem"
+    CREATE_NOTABLE_EVENT = "create_notable_event"
+    SYNC_DETECTION_RULE = "sync_detection_rule"
+    UPDATE_WATCHER = "update_watcher"
+    # Phase 3.3 — alert lifecycle dispatch. Both verbs are SIEM/EDR
+    # agnostic; the executor picks Splunk / Elastic / MDE based on
+    # which credentials are present in the request.
+    ACK_ALERT = "ack_alert"
+    SUPPRESS_ALERT = "suppress_alert"
+
+
+class ActionStatus(str, Enum):
+    PENDING = "pending"
+    AWAITING_APPROVAL = "awaiting_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ROLLED_BACK = "rolled_back"
+
+
+class BlastRadius(str, Enum):
+    MINIMAL = "minimal"  # Notification-only, no infra changes
+    LOW = "low"  # Reversible, limited scope
+    MEDIUM = "medium"  # Affects single resource, reversible
+    HIGH = "high"  # Affects multiple resources or users
+    CRITICAL = "critical"  # Broad impact, potential service disruption
+
+
+# Map action types to their blast radius levels
+ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
+    ActionType.BLOCK_IP: BlastRadius.MEDIUM,
+    ActionType.BLOCK_DOMAIN: BlastRadius.MEDIUM,
+    ActionType.ISOLATE_HOST: BlastRadius.HIGH,
+    ActionType.DISABLE_USER: BlastRadius.HIGH,
+    ActionType.RESET_PASSWORD: BlastRadius.MEDIUM,
+    ActionType.KILL_PROCESS: BlastRadius.MEDIUM,
+    ActionType.QUARANTINE_FILE: BlastRadius.LOW,
+    ActionType.CAPTURE_FORENSICS: BlastRadius.LOW,
+    ActionType.ADD_IOC_TO_BLOCKLIST: BlastRadius.LOW,
+    ActionType.NOTIFY_SLACK: BlastRadius.MINIMAL,
+    ActionType.CREATE_TICKET: BlastRadius.MINIMAL,
+    ActionType.RUN_PLAYBOOK: BlastRadius.MEDIUM,
+    ActionType.CHATOPS_VERIFY: BlastRadius.MINIMAL,
+    # WS-E live vendor action blast radii
+    ActionType.RUN_SCRIPT: BlastRadius.HIGH,
+    ActionType.ALLOW_IP: BlastRadius.MEDIUM,
+    ActionType.BLOCK_IOC: BlastRadius.MEDIUM,
+    ActionType.RUN_AV_SCAN: BlastRadius.LOW,
+    ActionType.SUSPEND_SESSION: BlastRadius.HIGH,
+    ActionType.FORCE_MFA: BlastRadius.MEDIUM,
+    ActionType.SEARCH_SIEM: BlastRadius.MINIMAL,
+    ActionType.CREATE_NOTABLE_EVENT: BlastRadius.LOW,
+    ActionType.SYNC_DETECTION_RULE: BlastRadius.MEDIUM,
+    ActionType.UPDATE_WATCHER: BlastRadius.MEDIUM,
+    # Phase 3.3 — ack is just a status flip on a triage queue,
+    # suppress is more impactful because it removes the alert from
+    # an analyst's view. We rate suppression as LOW (not MEDIUM)
+    # because there's a documented unsuppress path in every vendor.
+    ActionType.ACK_ALERT: BlastRadius.MINIMAL,
+    ActionType.SUPPRESS_ALERT: BlastRadius.LOW,
+}
+
+# Actions that require explicit human approval
+APPROVAL_REQUIRED_ACTIONS = {
+    ActionType.ISOLATE_HOST,
+    ActionType.DISABLE_USER,
+    ActionType.RESET_PASSWORD,
+    ActionType.KILL_PROCESS,
+    ActionType.RUN_SCRIPT,
+    ActionType.SUSPEND_SESSION,
+    ActionType.BLOCK_IOC,
+    ActionType.SYNC_DETECTION_RULE,
+}
+
+
+# Wave 4 (W4.2) — least-privilege permission required to EXECUTE each action,
+# derived from its blast radius. A principal must hold this permission (or a
+# broader one — see `authz.has_action_permission`). MINIMAL/LOW → :low,
+# MEDIUM → :medium, HIGH/CRITICAL → :high.
+def _perm_for_blast(blast: BlastRadius) -> str:
+    if blast in (BlastRadius.HIGH, BlastRadius.CRITICAL):
+        return "actions:execute:high"
+    if blast == BlastRadius.MEDIUM:
+        return "actions:execute:medium"
+    return "actions:execute:low"
+
+
+ACTION_REQUIRED_PERMISSION: dict[ActionType, str] = {action: _perm_for_blast(blast) for action, blast in ACTION_BLAST_RADIUS.items()}
+
+
+class ActionPrincipal(BaseModel):
+    """The authenticated identity on whose behalf an action runs (W4.1).
+
+    Propagated from the API's authenticated user into the actions service so
+    execution + approval can be scoped to that user's real permissions —
+    replacing the free-text ``requested_by`` string as the authorization basis.
+    """
+
+    user_id: str
+    tenant_id: UUID | None = None
+    email: str | None = None
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class ActionRequest(BaseModel):
+    """Request to execute an action."""
+
+    id: UUID = Field(default_factory=uuid4)
+    incident_id: UUID
+    tenant_id: UUID
+    action_type: ActionType
+    target: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    requested_by: str = "system"
+    # W4.1 — structured invoking identity. Optional for back-compat with the
+    # legacy `requested_by` string + system-initiated calls.
+    principal: ActionPrincipal | None = None
+    rationale: str = ""
+    auto_rollback: bool = False
+    rollback_after_seconds: int | None = None
+
+
+class ActionResult(BaseModel):
+    """Result of an executed action."""
+
+    action_id: UUID
+    status: ActionStatus
+    blast_radius: BlastRadius
+    output: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    rollback_data: dict[str, Any] = Field(default_factory=dict)
+    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: datetime | None = None

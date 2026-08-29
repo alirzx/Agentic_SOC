@@ -1,0 +1,783 @@
+###############################################################################
+# AiSOC - AI Security Operations Center
+# Docker Compose - Full Development Stack
+# AiSOC — open-source under MIT License
+#
+# SECURITY NOTE
+# -------------
+# All host port publishings below are bound to 127.0.0.1 so a default
+# `docker compose up` does NOT expose Postgres / Kafka / OpenSearch /
+# Neo4j / Redis (with their development passwords) to the network the
+# host is attached to. This is intentional: the same passwords ship in
+# every clone of this repo. If you need to reach these from another
+# machine, write a docker-compose.override.yml that changes the host
+# binding for the specific service you're exposing — and rotate the
+# password while you're there.
+###############################################################################
+
+networks:
+  aisoc:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  clickhouse_data:
+  opensearch_data:
+  qdrant_data:
+  neo4j_data:
+  neo4j_logs:
+
+services:
+
+  # ─── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aisoc-postgres
+    environment:
+      POSTGRES_DB: aisoc
+      POSTGRES_USER: aisoc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aisoc_dev_secret}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/api/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aisoc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aisoc-redis
+    command: redis-server --appendonly yes --requirepass redis_dev_secret
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_dev_secret", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: aisoc-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: aisoc-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    networks:
+      - aisoc
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    # Memory caps surface OOMKiller events as a clear container exit instead of
+    # silent broker rebalances. Tune up if you raise KAFKA_HEAP_OPTS.
+    mem_limit: 1536m
+    mem_reservation: 1g
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: aisoc-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - aisoc
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: aisoc-clickhouse
+    ports:
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./services/api/clickhouse:/docker-entrypoint-initdb.d:ro
+    environment:
+      CLICKHOUSE_DB: aisoc
+      CLICKHOUSE_USER: aisoc
+      CLICKHOUSE_PASSWORD: clickhouse_dev_secret
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    networks:
+      - aisoc
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    mem_limit: 1g
+    mem_reservation: 768m
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: aisoc-opensearch
+    environment:
+      - cluster.name=aisoc-cluster
+      - node.name=aisoc-node-1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    networks:
+      - aisoc
+    mem_limit: 1g
+    mem_reservation: 768m
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.0
+    container_name: aisoc-qdrant
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - aisoc
+
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: aisoc-neo4j
+    ports:
+      - "127.0.0.1:7474:7474"   # HTTP browser
+      - "127.0.0.1:7687:7687"   # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_dev_secret
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_memory_heap_initial__size: 256m
+      NEO4J_dbms_memory_heap_max__size: 512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - aisoc
+    mem_limit: 1g
+    mem_reservation: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ─── Application Services ────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
+      OPENSEARCH_URL: http://opensearch:9200
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_dev_secret
+      SECRET_KEY: dev_secret_key_change_in_production
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      # Issue #478 — LiteLLM gateway. Route this service's live LLM endpoints
+      # (translation, hunts, KB, phishing, NL-detection) through the gateway by
+      # setting OPENAI_BASE_URL=http://litellm:4000/v1 + OPENAI_API_KEY=$LITELLM_MASTER_KEY.
+      LLM_GATEWAY_URL: http://litellm:4000/v1
+    # Phase 2.6 — use /readyz, not /health, so the orchestrator
+    # only routes traffic once the lifespan has finished wiring
+    # Postgres, Redis, Kafka, OpenSearch, Qdrant, and Neo4j.
+    # /livez is what the restart policy looks at via `pgrep`-style
+    # checks; we don't need a separate compose healthcheck for it
+    # because the process being up implies it's alive.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  ingest-worker:
+    build:
+      context: ./services/ingest
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-ingest:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-ingest
+    depends_on:
+      kafka:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:9090:9090"
+    environment:
+      ENV: development
+      HTTP_PORT: 8080
+      METRICS_PORT: 9090
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/1
+      LOG_LEVEL: info
+      JWT_SECRET: dev_secret_key_change_in_production
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+      # Phase A3 — graph-at-ingest is ON by default so a cold `up` builds the
+      # entity graph out of the box. Soft-fails (writer disabled) if Neo4j is
+      # unreachable, so this never blocks ingest.
+      AISOC_GRAPH_ENABLED: "true"
+      AISOC_NEO4J_URI: bolt://neo4j:7687
+      AISOC_NEO4J_USER: neo4j
+      AISOC_NEO4J_PASSWORD: neo4j_dev_secret
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  enrichment:
+    build:
+      context: ./services/enrichment
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-enrichment:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-enrichment
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8082"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/2
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  fusion:
+    build:
+      context: ./services/fusion
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-fusion:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-fusion
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8003:8003"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/3
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Phase A1 — populate the ClickHouse event lake from the raw-events stream.
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DATABASE: aisoc
+      CLICKHOUSE_USER: aisoc
+      CLICKHOUSE_PASSWORD: clickhouse_dev_secret
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  agents:
+    build:
+      context: ./services/agents
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-agents:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-agents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8001:8084"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/4
+      CORE_API_URL: http://api:8000
+      # Phase B1 — auto-triage every fused alert off the Kafka stream (copilot:
+      # read-only triage, no response dispatch). Degrades to deterministic
+      # triage when no LLM key is set.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_ALERTS_FUSED: aisoc.alerts.fused
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_dev_secret
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # Issue #478 — the LiteLLM gateway (below) is the single entry point for
+      # live LLM calls when enabled. To route this service through it, set in
+      # .env: OPENAI_BASE_URL=http://litellm:4000/v1 and
+      # OPENAI_API_KEY=$LITELLM_MASTER_KEY. Left unset, calls go direct to the
+      # provider (unchanged behaviour).
+      LLM_GATEWAY_URL: http://litellm:4000/v1
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ─── LLM gateway (LiteLLM) — issue #478 ─────────────────────────────────────
+  # Single entry point for every live LLM call. AiSOC requests a logical task
+  # alias (aisoc-triage, aisoc-investigation, …); the mapping alias → real model
+  # lives entirely in infra/litellm/config.yaml, so operators swap local/hosted
+  # models without touching AiSOC. Per-task latency/tokens/cost/errors are
+  # exported on /metrics (scraped as job `aisoc-litellm`). Lightweight and inert
+  # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
+  # `agents` service above.
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: aisoc-litellm
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    volumes:
+      - ./infra/litellm/config.yaml:/etc/litellm/config.yaml:ro
+    environment:
+      # Clients authenticate to the gateway with this key (AiSOC sends it as its
+      # OPENAI_API_KEY when OPENAI_BASE_URL points here). Override in .env.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
+      # Upstream provider keys the aliases resolve against (os.environ/... in the
+      # config). Empty is fine — the gateway still boots, serves /health and
+      # /metrics, and AiSOC falls back to its deterministic path.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  osquery-tls:
+    build:
+      context: ./services/osquery-tls
+      dockerfile: Dockerfile
+    # Not in publish-images.yml matrix yet — pull falls back to local build.
+    image: ghcr.io/beenuar/aisoc-osquery-tls:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-osquery-tls
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Host port 8007 was previously colliding with the `ueba` service's
+    # 127.0.0.1:8007 binding; remapped to 8091 here. UEBA still owns 8007.
+    ports:
+      - "127.0.0.1:8091:8007"
+    profiles:
+      - osquery
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      AISOC_OSQUERY_TLS_ENROLL_SECRET: ${AISOC_OSQUERY_TLS_ENROLL_SECRET:-change-me-in-production}
+      # The ingest service is registered as `ingest-worker` in this compose
+      # file; the previous `http://ingest:8080` would not resolve via DNS.
+      AISOC_INGEST_BASE_URL: http://ingest-worker:8080
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  actions:
+    build:
+      context: ./services/actions
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-actions:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-actions
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8002:8085"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/5
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      CORE_API_URL: http://api:8000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  connectors:
+    build:
+      context: ./services/connectors
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-connectors:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-connectors
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8088:8003"
+    # Phase A3 — the connector runtime is part of the default stack now (was
+    # profile-gated). It idles harmlessly with no configured instances; a cold
+    # `up` therefore ships the full ingest→detect→respond spine out of the box.
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/6
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      CORE_API_URL: http://api:8000
+      CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
+      CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  threatintel:
+    build:
+      context: ./services/threatintel
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-threatintel:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-threatintel
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8005:8005"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/7
+      OPENSEARCH_URL: http://opensearch:9200
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_dev_secret
+      MISP_URL: ${MISP_URL:-}
+      MISP_API_KEY: ${MISP_API_KEY:-}
+      OTX_API_KEY: ${OTX_API_KEY:-}
+      TAXII_URL: ${TAXII_URL:-}
+      TAXII_USERNAME: ${TAXII_USERNAME:-}
+      TAXII_PASSWORD: ${TAXII_PASSWORD:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  ueba:
+    build:
+      context: ./services/ueba
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-ueba:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-ueba
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8007:8004"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/8
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
+      CORE_API_URL: http://api:8000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  honeytokens:
+    # Gated behind the `extras` profile: image isn't published to GHCR yet, so
+    # `aisoc serve` skips it by default. Opt in with `--profile extras` and the
+    # local Dockerfile build will run.
+    profiles: ["extras"]
+    build:
+      context: ./services/honeytokens
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-honeytokens:${AISOC_VERSION:-latest}
+    pull_policy: build
+    container_name: aisoc-honeytokens
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8008:8005"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/9
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CORE_API_URL: http://api:8000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  purple-team:
+    # Gated behind the `extras` profile: image isn't published to GHCR yet, so
+    # `aisoc serve` skips it by default. Opt in with `--profile extras` and the
+    # local Dockerfile build will run.
+    profiles: ["extras"]
+    build:
+      context: ./services/purple-team
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-purple-team:${AISOC_VERSION:-latest}
+    pull_policy: build
+    container_name: aisoc-purple-team
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8006:8006"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/10
+      CORE_API_URL: http://api:8000
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  realtime:
+    build:
+      context: ./services/realtime
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-realtime:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-realtime
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8086:4000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379
+      REDIS_PASSWORD: redis_dev_secret
+      PORT: 4000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ChatOps adapter. Holds no state — forwards `/aisoc …` slash commands and
+  # approval-card button clicks to services/api and services/actions. Runs
+  # under the `chatops` profile so a default `docker compose up` doesn't fail
+  # when the operator has not yet provisioned a Slack app or service tokens.
+  slack-bot:
+    build:
+      context: ./services/slack-bot
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-slack-bot:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-slack-bot
+    depends_on:
+      - api
+      - actions
+    ports:
+      - "127.0.0.1:8009:8089"
+    profiles:
+      - chatops
+    environment:
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      AISOC_API_BASE_URL: http://api:8000
+      AISOC_ACTIONS_BASE_URL: http://actions:8085
+      AISOC_API_SERVICE_TOKEN: ${AISOC_SLACK_API_TOKEN:-}
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_SLACK_ACTIONS_TOKEN:-}
+      AISOC_DEFAULT_TENANT_ID: ${AISOC_DEFAULT_TENANT_ID:-00000000-0000-0000-0000-000000000000}
+      AISOC_WEB_BASE_URL: ${AISOC_WEB_BASE_URL:-http://localhost:3000}
+      AISOC_SLACK_BOT_PORT: 8089
+      AISOC_HTTP_TIMEOUT_SECONDS: 10
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/beenuar/aisoc-web:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-web
+    depends_on:
+      - api
+      - realtime
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8086
+      NODE_ENV: production
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ─── Observability ────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: aisoc-prometheus
+    ports:
+      - "127.0.0.1:9091:9090"
+    volumes:
+      - ./infra/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Phase 2.4 — alert rules mounted as a directory so adding a
+      # new rule file under `infra/docker/alerts/` is picked up on
+      # next `docker compose restart prometheus` (or a SIGHUP).
+      - ./infra/docker/alerts:/etc/prometheus/alerts:ro
+    # Phase 2.4 — Prometheus needs to reach the Alertmanager service
+    # before it can forward alerts. The `depends_on` keeps `docker
+    # compose up monitoring` healthy on cold boot — without it,
+    # Prometheus logs "level=warn ... alertmanager_url=... err=lookup"
+    # for the first ~30s of every restart.
+    depends_on:
+      - alertmanager
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  # Phase 2.4 — in-cluster Alertmanager. Receives firing alerts
+  # from Prometheus, groups + deduplicates them per
+  # `infra/docker/alertmanager.yml`, and forwards them to the
+  # configured receivers. The dev stack ships with a no-op webhook
+  # receiver that points at the API's `/internal/alerts/sink`
+  # endpoint (which logs the payload); production operators replace
+  # the receiver block with PagerDuty / Slack / Opsgenie. The
+  # `monitoring` profile keeps it out of `docker compose up`'s
+  # default surface so a stock `aisoc serve` doesn't fail when the
+  # operator hasn't provisioned downstream alerting.
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: aisoc-alertmanager
+    ports:
+      - "127.0.0.1:9094:9093"
+    volumes:
+      - ./infra/docker/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      # External URL is what Alertmanager uses to render deep-links
+      # in notification templates (e.g. "Silence in Alertmanager").
+      # Port 9094 here matches the host-side mapping so the link
+      # works from a browser on the operator's laptop.
+      - '--web.external-url=http://localhost:9094'
+    # NOTE: The Alertmanager binary does NOT substitute shell-style
+    # env vars in `alertmanager.yml`. To change receivers per
+    # environment, mount a different config file (production
+    # deployments do this through Helm values templating).
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: aisoc-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3001:3000"
+    # Default admin password is intentionally weak for the dev compose stack;
+    # the 127.0.0.1 binding above keeps the dashboard off the LAN. Override
+    # GF_SECURITY_ADMIN_PASSWORD in production deployments (helm/terraform).
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./infra/docker/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - aisoc
+    profiles:
+      - monitoring

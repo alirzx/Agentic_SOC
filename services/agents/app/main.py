@@ -1,0 +1,194 @@
+import asyncio
+import os
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app._health import install_health_routes
+from app.api.contextual import router as contextual_router
+from app.api.copilot import router as copilot_router
+from app.api.explain import router as explain_router
+from app.api.hunt_search import router as hunt_search_router
+from app.api.hunts import router as hunts_router
+from app.api.investigate import router as investigate_router
+from app.api.playbooks import router as playbook_router
+from app.api.router import router
+from app.api.triage import router as triage_router
+from app.core.telemetry import instrument_app
+from app.hunt import scheduler as hunt_scheduler
+from app.hunt import store as hunt_store
+from app.investigator import ledger as investigation_ledger
+from app.llm.factory import preflight_llm
+from app.playbook import PlaybookStore
+from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
+from app.workers.business_context import BusinessContextApplier
+from app.workers.business_context import is_enabled as business_context_enabled
+from app.workers.fused_alert_consumer import FusedAlertTriageWorker, worker_enabled
+
+logger = structlog.get_logger()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Load resources on startup."""
+    # Seed playbook store with default templates
+    try:
+        store = PlaybookStore.default()
+        n = store.seed_defaults()
+        if n:
+            logger.info("playbook_store.seeded", count=n)
+    except Exception as exc:
+        logger.warning("Playbook store seed failed", error=str(exc))
+
+    # Wave 1 — surface an unroutable LLM gateway/alias config at boot instead of
+    # silently degrading to heuristics on the first (400ing) live call.
+    for warning in preflight_llm():
+        logger.warning("llm_preflight", detail=warning)
+
+    # Load full MITRE ATT&CK corpus
+    try:
+        await load_attck_corpus()
+    except Exception as exc:
+        logger.warning("MITRE ATT&CK corpus load failed at startup", error=str(exc))
+
+    # Embed into Qdrant for RAG (only if configured)
+    qdrant_url = os.getenv("QDRANT_URL", "")
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    if qdrant_url and openai_key:
+        try:
+            await embed_techniques_into_qdrant(
+                qdrant_url=qdrant_url,
+                openai_api_key=openai_key,
+            )
+        except Exception as exc:
+            logger.warning("ATT&CK Qdrant embedding skipped", error=str(exc))
+
+    # Warm up the investigation-ledger pool. This is best-effort: if the DB is
+    # unreachable we keep running, ledger writes just become no-ops.
+    try:
+        await investigation_ledger.get_pool()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("investigation_ledger.warmup_failed", error=str(exc))
+
+    # Start the continuous hunt scheduler (Wave 2 — w2-hac). Gated by env
+    # so dev/CI runs that don't want background jobs can opt out via
+    # AISOC_HUNT_SCHEDULER_DISABLE=1. Best-effort: a corpus load failure
+    # or DB outage must not block API startup.
+    if os.getenv("AISOC_HUNT_SCHEDULER_DISABLE", "").strip() not in ("1", "true", "yes"):
+        try:
+            await hunt_scheduler.start_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("hunt.scheduler.start_failed", error=str(exc))
+
+    # Phase B1 — auto-triage every fused alert off the Kafka stream (copilot:
+    # read-only triage, no response dispatch). Off unless KAFKA_BOOTSTRAP_SERVERS
+    # is set; degrades to deterministic triage without an LLM key.
+    app.state.triage_worker = None
+    app.state.triage_worker_task = None
+    if worker_enabled():
+        try:
+            # Phase B4 — environment-specific noise reduction (post-fusion →
+            # pre-triage). Enabled by default; needs a rules file to do anything.
+            applier = BusinessContextApplier() if business_context_enabled() else None
+            triage_worker = FusedAlertTriageWorker(
+                bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+                topic=os.getenv("KAFKA_TOPIC_ALERTS_FUSED", "aisoc.alerts.fused"),
+                business_context=applier,
+            )
+            app.state.triage_worker = triage_worker
+            app.state.triage_worker_task = asyncio.create_task(triage_worker.start())
+            logger.info("auto_triage_worker.enabled")
+        except Exception as exc:  # noqa: BLE001 — never block API startup
+            logger.warning("auto_triage_worker.start_failed", error=str(exc))
+
+    # Phase 2.6 — flip /readyz to 200 once startup work is done.
+    app.state.mark_ready()
+
+    yield
+
+    # Phase 2.6 — flip /readyz to 503 the moment we start draining.
+    app.state.mark_not_ready()
+
+    # Stop the auto-triage worker first so in-flight triage can finish.
+    if getattr(app.state, "triage_worker", None) is not None:
+        try:
+            await app.state.triage_worker.stop()
+            if app.state.triage_worker_task is not None:
+                app.state.triage_worker_task.cancel()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("auto_triage_worker.stop_failed", error=str(exc))
+
+    # Stop the hunt scheduler before draining DB pools so in-flight runs
+    # can flush their writes.
+    try:
+        await hunt_scheduler.stop_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("hunt.scheduler.stop_failed", error=str(exc))
+
+    try:
+        await hunt_store.close_pool()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("hunt.store.close_failed", error=str(exc))
+
+    # Drain the pool so the container exits cleanly on shutdown.
+    try:
+        await investigation_ledger.close_pool()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("investigation_ledger.close_failed", error=str(exc))
+
+
+app = FastAPI(
+    title="AiSOC Agent Orchestrator",
+    description="LangGraph-based autonomous investigation and response agents",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+# /readyz returns 503 until the lifespan startup finishes touching
+# MITRE, Qdrant, ledger pool, and the hunt scheduler.
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-agents")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
+
+# CORS — the web console talks to this service directly (it does not go through
+# the Next.js rewrite layer for agent endpoints because we want to stream
+# NDJSON without buffering through the proxy). Origins are resolved via the
+# shared ``build_cors_kwargs`` helper which reads AISOC_CORS_ORIGINS (canonical)
+# / CORS_ORIGINS (legacy) and enforces the "no wildcard with credentials in
+# production" invariant so a careless ``export CORS_ORIGINS=*`` can't ship
+# CSRF to prod.
+from app.core.cors import build_cors_kwargs  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    **build_cors_kwargs(service_name="agents", allow_credentials=True),
+)
+
+# OpenTelemetry auto-instrumentation (FastAPI + httpx)
+instrument_app(app)
+
+app.include_router(router, prefix="/api/v1")
+app.include_router(investigate_router)  # prefix already set in investigate.py
+app.include_router(triage_router)  # prefix: /api/v1  (POST /cases/{id}/triage — router topology, T2.2)
+app.include_router(playbook_router)  # prefix: /api/v1/playbooks
+app.include_router(contextual_router)  # prefix: /api/v1/contextual
+app.include_router(hunts_router)  # prefix: /api/v1/hunts
+app.include_router(hunt_search_router)  # prefix: /api/v1/hunt  (search + saved)
+app.include_router(copilot_router)  # prefix: /api/v1/copilot
+app.include_router(explain_router)  # prefix: /api/v1  (POST /explain — NDJSON stream)
+
+
+@app.get("/health")
+async def health():
+    from app.tools.mitre_full import get_coverage_summary
+
+    summary = get_coverage_summary()
+    return {
+        "status": "healthy",
+        "service": "aisoc-agents",
+        "attck_corpus": summary,
+    }
