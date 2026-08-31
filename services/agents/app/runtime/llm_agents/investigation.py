@@ -56,6 +56,13 @@ def _state_summary(state: StructuredInvestigationState, evidence: list[Any]) -> 
 def _tool_unavailable_reason(result: Any) -> str | None:
     if not isinstance(result, dict):
         return None
+    splunk_status = str(result.get("status") or "")
+    if splunk_status.startswith("SPLUNK_") and splunk_status not in {
+        "SUCCESS_WITH_RESULTS",
+        "SUCCESS_NO_RESULTS",
+        "SPLUNK_RESULT_TRUNCATED",
+    }:
+        return splunk_status
     detail = str(result.get("detail") or result.get("error") or "")
     lowered = detail.lower()
     if "getaddrinfo" in lowered or "network" in lowered or "dns" in lowered:
@@ -131,23 +138,39 @@ async def run_llm_investigation(
                 reason=step.reason,
             )
             unavailable = _tool_unavailable_reason(result)
+            evidence_items = evidence if isinstance(evidence, list) else ([evidence] if evidence else [])
+            splunk_status = result.get("status") if isinstance(result, dict) else None
+            tool_ok = bool(evidence_items) or splunk_status in {
+                "SUCCESS_NO_RESULTS",
+                "SUCCESS_WITH_RESULTS",
+                "SPLUNK_RESULT_TRUNCATED",
+            }
             state.tool_calls.append(
                 {
                     "tool_name": step.tool,
                     "arguments": step.arguments,
                     "permission": "READ_SECURITY_DATA",
-                    "result": "ok" if evidence else "error",
-                    "tool_status": "UNAVAILABLE" if unavailable else ("ok" if evidence else "error"),
+                    "result": "ok" if tool_ok else "error",
+                    "tool_status": "UNAVAILABLE" if unavailable else ("ok" if tool_ok else "error"),
                     "unavailable_reason": unavailable,
+                    "splunk_status": splunk_status,
                     "dry_run": bool(context.metadata.get("shadow_mode")),
                     "timestamp": time.time(),
                 }
             )
-            if evidence is not None:
-                collected_evidence.append(evidence)
-                state.evidence_ids.append(evidence.id)
+            if evidence_items:
+                for ev in evidence_items:
+                    collected_evidence.append(ev)
+                    state.evidence_ids.append(ev.id)
+                ids_preview = ", ".join(ev.id for ev in evidence_items[:5])
                 state.observations.append(
-                    f"Tool {step.tool} returned evidence {evidence.id}: {sanitize_text(step.reason, max_len=120)}"
+                    f"Tool {step.tool} returned {len(evidence_items)} evidence item(s) [{ids_preview}]: "
+                    f"{sanitize_text(step.reason, max_len=120)}"
+                )
+            elif splunk_status == "SUCCESS_NO_RESULTS":
+                state.observations.append(
+                    f"Tool {step.tool} completed with no matching SIEM events: "
+                    f"{sanitize_text(step.reason, max_len=120)}"
                 )
             else:
                 reason_label = unavailable or "error"
@@ -170,6 +193,9 @@ async def run_llm_investigation(
     state.risk_signals = output.risk_signals
     context.metadata["investigation_state"] = state.model_dump(mode="json")
     context.metadata["investigation_execution"] = exec_meta.as_dict()
+    context.metadata.setdefault("splunk_tool_calls", int(context.metadata.get("splunk_tool_calls", 0)))
+    context.metadata.setdefault("splunk_events", int(context.metadata.get("splunk_events", 0)))
+    context.metadata.setdefault("splunk_status", context.metadata.get("splunk_status", "NOT_USED"))
     context.metadata["risk_signals"] = output.risk_signals.model_dump()
     if state.llm_calls > 0 and exec_meta.parse_status == "VALID":
         context.metadata["execution_mode"] = "LLM"

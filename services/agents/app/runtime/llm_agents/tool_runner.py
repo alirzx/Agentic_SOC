@@ -7,7 +7,7 @@ from typing import Any
 
 import structlog
 
-from app.runtime.contracts import AgentContext
+from app.runtime.contracts import AgentContext, Evidence
 from app.runtime.tools import SocToolRegistry, ToolCallBudgetExceeded, ToolContext, ToolPermissionDenied, UnknownToolError
 
 from .evidence_bridge import evidence_from_tool_result
@@ -57,11 +57,12 @@ async def execute_registry_tool(
     arguments: dict[str, Any],
     tool_call_count: int,
     reason: str = "",
-) -> tuple[Any, Any]:
-    """Execute tool via registry; returns (result, Evidence)."""
+) -> tuple[Any, Any | list[Evidence]]:
+    """Execute tool via registry; returns (result, Evidence or list[Evidence])."""
     tool_ctx = _tool_context(context, agent_name, tool_call_count)
     try:
         result = await registry.execute(tool_name, arguments or {}, tool_ctx)
+        context.metadata.update(tool_ctx.metadata)
     except UnknownToolError as exc:
         return {"error": "tool_not_found", "detail": str(exc)}, None
     except ToolPermissionDenied as exc:
@@ -71,6 +72,11 @@ async def execute_registry_tool(
     except Exception as exc:  # noqa: BLE001
         logger.warning("tool_execution_failed", tool=tool_name, error=str(exc))
         return {"error": "tool_execution_failed", "detail": str(exc)}, None
+    if tool_name == "splunk_search":
+        pending = list(context.metadata.pop("splunk_pending_evidence", []) or [])
+        if pending:
+            return result, [Evidence.model_validate(row) for row in pending]
+        return result, None
     evidence = evidence_from_tool_result(
         context,
         tool_name=tool_name,

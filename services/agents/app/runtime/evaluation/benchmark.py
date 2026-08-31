@@ -139,6 +139,15 @@ def print_benchmark_summary(run: AgenticEvaluationRun) -> None:
     )
     print(f"Average Latency: {metrics.get('avg_duration_ms', 0)} ms")
     print(f"Average Cost: {cost_display}")
+    if metrics.get("llm_calls") is not None:
+        print()
+        print(f"execution_mode=LLM llm_calls={metrics.get('llm_calls', 0)}")
+        print(
+            f"splunk_tool_calls={metrics.get('splunk_tool_calls', 0)} "
+            f"splunk_events={metrics.get('splunk_events', 0)} "
+            f"splunk_status={metrics.get('splunk_status', 'NOT_USED')}"
+        )
+        print(f"cost_status={cost_status} cost={cost_display}")
     print()
     readiness = run.production_readiness.get("status", "UNKNOWN")
     print(f"Readiness: {readiness}")

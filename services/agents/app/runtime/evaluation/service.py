@@ -118,6 +118,8 @@ class AgenticEvaluationService:
         total_tokens_out = 0
         total_cost = 0.0
         total_llm_calls = 0
+        total_splunk_calls = 0
+        total_splunk_events = 0
         degraded_any = False
         for case in dataset.cases:
             case_id = str(case.get("id") or case.get("case_id") or uuid4())
@@ -128,6 +130,8 @@ class AgenticEvaluationService:
                 total_tokens_out += row.agentic_result.output_tokens
                 total_cost += row.agentic_result.estimated_cost
                 total_llm_calls += row.metric_details.get("llm_calls", 0)
+                total_splunk_calls += row.metric_details.get("splunk_tool_calls", 0)
+                total_splunk_events += row.metric_details.get("splunk_events", 0)
                 if row.agentic_result.pipeline_degraded or row.stage_metrics.get("pipeline_degraded"):
                     degraded_any = True
             except Exception as exc:  # noqa: BLE001
@@ -149,9 +153,19 @@ class AgenticEvaluationService:
             run.cost_status = "MEASURED" if total_cost > 0 else "ESTIMATED"
             metrics["cost_status"] = run.cost_status
             metrics["llm_calls"] = total_llm_calls
+            metrics["splunk_tool_calls"] = total_splunk_calls
+            metrics["splunk_events"] = total_splunk_events
         else:
             run.cost_status = "NOT_AVAILABLE"
             metrics["cost_status"] = "NOT_AVAILABLE"
+        if case_rows:
+            for row in reversed(case_rows):
+                status = row.metric_details.get("splunk_status")
+                if row.metric_details.get("splunk_tool_calls", 0) > 0 and status:
+                    metrics["splunk_status"] = status
+                    break
+            else:
+                metrics["splunk_status"] = "NOT_USED"
         gates = evaluate_gates(metrics)
         readiness = compute_readiness(metrics, gates)
         run.completed_cases = len(case_rows)
@@ -358,6 +372,10 @@ class AgenticEvaluationService:
         row.metric_details = {
             **row.metric_details,
             "llm_calls": llm_calls,
+            "splunk_tool_calls": int(context.metadata.get("splunk_tool_calls", 0)),
+            "splunk_events": int(context.metadata.get("splunk_events", 0)),
+            "splunk_status": context.metadata.get("splunk_status", "NOT_USED"),
+            "splunk_tool_metadata": context.metadata.get("splunk_tool_metadata") or [],
             "stage_metrics": stage_metrics,
         }
         row.failure_categories = classify_failures(

@@ -93,6 +93,9 @@ def build_tool_registry() -> SocToolRegistry:
             input_schema={"type": "object", "required": ["case_id"]},
         )
     )
+    from app.integrations.splunk.soc_tool import SplunkSearchSocTool
+
+    registry.register(SplunkSearchSocTool())
     registry.register(
         CallableSOCTool(
             name="extract_iocs",
