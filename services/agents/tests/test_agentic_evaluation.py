@@ -123,7 +123,7 @@ async def test_aggregate_metrics_and_versioning() -> None:
     assert run.workflow_version == "agentic-eval-v1.6"
     assert run.agent_version
     assert run.dataset_version
-    assert run.comparison_summary.get("delta") is not None
+    assert run.comparison_summary.get("delta_valid_for_optimization") is not None
     assert run.aggregate_metrics.get("production_action_leakage") == 0.0
 
 

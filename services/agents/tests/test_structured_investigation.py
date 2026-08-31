@@ -69,10 +69,14 @@ def test_empty_response_classified() -> None:
 
 @pytest.mark.asyncio
 async def test_repair_succeeds(monkeypatch) -> None:
+    class _Resp:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
     exec_meta = InvestigationExecutionMeta()
     llm = MagicMock()
-    bad = MagicMock(content="not json")
-    good = MagicMock(content=__import__("json").dumps(VALID_STEP))
+    bad = _Resp("not-json")
+    good = _Resp(__import__("json").dumps(VALID_STEP))
     monkeypatch.setattr(
         "app.runtime.llm_agents.structured_step.safe_ainvoke",
         AsyncMock(side_effect=[bad, good]),
@@ -92,9 +96,13 @@ async def test_repair_succeeds(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_repair_fails_raises_structured_error(monkeypatch) -> None:
+    class _Resp:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
     exec_meta = InvestigationExecutionMeta()
     llm = MagicMock()
-    bad = MagicMock(content="not json")
+    bad = _Resp("not-json")
     monkeypatch.setattr(
         "app.runtime.llm_agents.structured_step.safe_ainvoke",
         AsyncMock(side_effect=[bad, bad]),
@@ -133,18 +141,20 @@ async def test_auth_error_no_repair(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_cost_tracker_counts_initial_and_repair(monkeypatch) -> None:
+    class _Resp:
+        def __init__(self, content: str, usage: dict | None = None) -> None:
+            self.content = content
+            self.usage_metadata = usage or {}
+
     llm = MagicMock()
-    bad = MagicMock(content="bad")
-    good = MagicMock(content=__import__("json").dumps(VALID_STEP))
-    good.usage_metadata = {"input_tokens": 5, "output_tokens": 2}
-    bad.usage_metadata = {"input_tokens": 3, "output_tokens": 1}
+    bad = _Resp("not-json", {"input_tokens": 3, "output_tokens": 1})
+    good = _Resp(__import__("json").dumps(VALID_STEP), {"input_tokens": 5, "output_tokens": 2})
 
     async def _fake_ainvoke(_llm, _messages, **_kwargs):
         from app.core.cost_telemetry import record_llm_call
 
-        call = _fake_ainvoke.calls
         _fake_ainvoke.calls += 1
-        resp = bad if call == 1 else good
+        resp = bad if _fake_ainvoke.calls == 1 else good
         record_llm_call(resp, model="DeepSeek-V4-Flash", latency_ms=1.0)
         return resp
 
