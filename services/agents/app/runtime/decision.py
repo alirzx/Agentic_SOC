@@ -65,14 +65,28 @@ class DecisionAgent(Agent):
 
     async def execute(self, context: AgentContext) -> AgentResult:
         raw = context.state.raw_alert
+        signals = context.metadata.get("risk_signals") or {}
+        threat_intel = int(raw.get("threat_intel", 0) or 0)
+        if signals.get("c2_detected"):
+            threat_intel = max(threat_intel, 12)
+        if signals.get("credential_access_confirmed"):
+            threat_intel = max(threat_intel, 10)
+        correlation = int(raw.get("correlation", 0) or 0)
+        correlation = max(correlation, min(10, len(context.evidence)))
+        attack_chain = int(raw.get("attack_chain", 0) or 0)
+        if signals.get("lateral_movement_suspected"):
+            attack_chain = max(attack_chain, 10)
+        user_privilege = int(raw.get("user_privilege", 0) or 0)
+        if signals.get("privileged_account"):
+            user_privilege = max(user_privilege, 10)
         factors = RiskFactors(
             alert_severity=str(context.state.severity or raw.get("severity") or "medium"),
             asset_criticality=int(raw.get("asset_criticality", 0) or 0),
-            user_privilege=int(raw.get("user_privilege", 0) or 0),
-            threat_intel=int(raw.get("threat_intel", 0) or 0),
+            user_privilege=user_privilege,
+            threat_intel=threat_intel,
             behavioral_anomaly=int(raw.get("behavioral_anomaly", 0) or 0),
-            correlation=int(raw.get("correlation", 0) or 0),
-            attack_chain=int(raw.get("attack_chain", 0) or 0),
+            correlation=correlation,
+            attack_chain=attack_chain,
         )
         risk = score_risk(factors)
         confidence = min(1.0, max(context.state.confidence, context.metadata.get("confidence", 0.0) or 0.0))

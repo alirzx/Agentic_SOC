@@ -58,6 +58,31 @@ class SocOrchestrator:
         return result
 
     async def run(self, context: AgentContext) -> list[AgentResult]:
+        tracker = None
+        owns_tracker = False
+        try:
+            from app.core.cost_telemetry import CostTracker, current_cost_tracker
+
+            if current_cost_tracker() is None:
+                tracker = CostTracker(
+                    run_id=context.correlation_id or context.incident_id,
+                    tenant_id=context.tenant_id,
+                )
+                await tracker.__aenter__()
+                owns_tracker = True
+        except Exception:  # noqa: BLE001
+            tracker = None
+            owns_tracker = False
+        try:
+            return await self._run_pipeline(context)
+        finally:
+            if tracker is not None and owns_tracker:
+                try:
+                    await tracker.__aexit__(None, None, None)
+                except Exception:  # noqa: BLE001
+                    pass
+
+    async def _run_pipeline(self, context: AgentContext) -> list[AgentResult]:
         machine = IncidentStateMachine(IncidentState.NEW)
         results: list[AgentResult] = []
         machine.transition(IncidentState.TRIAGING, reason="orchestrator_start")

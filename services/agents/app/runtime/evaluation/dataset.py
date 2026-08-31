@@ -60,6 +60,7 @@ def load_golden_dataset() -> EvaluationDataset:
         name="Agentic SOC Golden Benchmark",
         description="Representative synthetic incidents (explicitly SYNTHETIC).",
         source="SYNTHETIC",
+        dataset_type="SYNTHETIC",
         version="1.0",
         cases=cases,
     )
@@ -73,6 +74,7 @@ def load_synthetic_substrate(limit: int | None = None) -> EvaluationDataset:
         name="Synthetic incidents substrate",
         description="200-case eval substrate from synthetic_incidents.json",
         source="existing_soc_substrate",
+        dataset_type="SYNTHETIC",
         version="1.0",
         cases=items,
     )

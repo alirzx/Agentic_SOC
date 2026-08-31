@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
+
 from .contracts import (
     Agent,
     AgentAction,
@@ -16,6 +18,11 @@ from .contracts import (
     NextTask,
 )
 from .hypothesis import Hypothesis, reject_hypothesis, support_hypothesis
+from .llm_agents.execution_errors import InvestigationStructuredOutputError
+from .llm_agents import is_llm_configured, run_llm_investigation, run_llm_triage
+from .tools import SocToolRegistry
+
+logger = structlog.get_logger()
 
 
 def _uuid_or_new(value: str) -> UUID:
@@ -38,7 +45,13 @@ def _investigation_state(context: AgentContext) -> Any:
     )
 
 
-def _evidence_from_state(context: AgentContext, source: str, payload: dict[str, Any], agent: str, version: str) -> Evidence:
+def _evidence_from_state(
+    context: AgentContext,
+    source: str,
+    payload: dict[str, Any],
+    agent: str,
+    version: str,
+) -> Evidence:
     return Evidence(
         incident_id=context.incident_id,
         type=source,
@@ -54,90 +67,154 @@ def _evidence_from_state(context: AgentContext, source: str, payload: dict[str, 
     )
 
 
+async def _heuristic_triage(agent: Agent, context: AgentContext) -> AgentResult:
+    from app.agents.triage_agent import run_triage
+
+    state = await run_triage(_investigation_state(context))
+    evidence = _evidence_from_state(
+        context,
+        "triage",
+        {
+            "findings": state.findings,
+            "mitre": state.mitre_mappings,
+            "raw_alert": state.raw_alert,
+        },
+        agent.name,
+        agent.version,
+    )
+    text = " ".join(state.findings).lower()
+    hypothesis = Hypothesis(name="initial", statement=context.objective or "unspecified", confidence=0.5)
+    if "false positive" in text or "benign" in text:
+        hypothesis = reject_hypothesis(hypothesis, evidence_ids=[evidence.id], reason="triage classified benign/FP")
+    else:
+        hypothesis = support_hypothesis(hypothesis, evidence_ids=[evidence.id], reason="triage escalated for investigation")
+    finding = Finding(
+        statement="; ".join(state.findings) or "triage complete",
+        evidence_ids=[evidence.id],
+        confidence=float(getattr(state, "confidence", 0.5) or 0.5),
+        mitre_techniques=list(state.mitre_mappings),
+    )
+    context.metadata.setdefault("execution_mode", "HEURISTIC")
+    return AgentResult(
+        status="success",
+        findings=[finding],
+        evidence=[evidence],
+        next_tasks=[NextTask(agent="investigation", objective="collect_evidence", priority=1)],
+        confidence=finding.confidence,
+        reasoning=f"heuristic hypothesis={hypothesis.status}",
+        uncertainty=[] if state.findings else ["triage produced no findings"],
+    )
+
+
+async def _heuristic_investigation(agent: Agent, context: AgentContext) -> AgentResult:
+    from app.agents.investigation_agent import run_investigation
+
+    state = await run_investigation(_investigation_state(context))
+    evidence = _evidence_from_state(
+        context,
+        "investigation",
+        {"findings": state.findings, "mitre": state.mitre_mappings},
+        agent.name,
+        agent.version,
+    )
+    actions = [
+        AgentAction(
+            name=action.action_type,
+            tool=f"response.{action.action_type}",
+            input=dict(action.parameters),
+            risk_level="medium",
+        )
+        for action in state.proposed_actions
+    ]
+    finding = Finding(
+        statement="; ".join(state.findings) or "investigation complete",
+        evidence_ids=[evidence.id],
+        confidence=float(getattr(state, "confidence", 0.5) or 0.5),
+        mitre_techniques=list(state.mitre_mappings),
+    )
+    context.metadata.setdefault("execution_mode", "HEURISTIC")
+    return AgentResult(
+        status="success",
+        findings=[finding],
+        evidence=[evidence, *context.evidence],
+        actions=actions,
+        next_tasks=[NextTask(agent="threat-intel", objective="enrich_iocs", priority=1)],
+        confidence=finding.confidence,
+        reasoning="heuristic investigation adapter",
+        uncertainty=[] if state.findings else ["investigation produced no findings"],
+    )
+
+
 class TriageRuntimeAgent(Agent):
-    """Wraps heuristic ``run_triage`` (deterministic; LLM auto-triage stays on the graph)."""
+    """LLM-backed triage with explicit heuristic fallback (Phase 8.6)."""
 
     name = "triage"
-    version = "1.0"
+    version = "2.0"
+
+    def __init__(self, tool_registry: SocToolRegistry) -> None:
+        self._tools = tool_registry
 
     async def execute(self, context: AgentContext) -> AgentResult:
-        from app.agents.triage_agent import run_triage
-
-        state = await run_triage(_investigation_state(context))
-        evidence = _evidence_from_state(
-            context,
-            "triage",
-            {
-                "findings": state.findings,
-                "mitre": state.mitre_mappings,
-                "raw_alert": state.raw_alert,
-            },
-            self.name,
-            self.version,
-        )
-        text = " ".join(state.findings).lower()
-        hypothesis = Hypothesis(name="initial", statement=context.objective or "unspecified", confidence=0.5)
-        if "false positive" in text or "benign" in text:
-            hypothesis = reject_hypothesis(hypothesis, evidence_ids=[evidence.id], reason="triage classified benign/FP")
-        else:
-            hypothesis = support_hypothesis(hypothesis, evidence_ids=[evidence.id], reason="triage escalated for investigation")
-        finding = Finding(
-            statement="; ".join(state.findings) or "triage complete",
-            evidence_ids=[evidence.id],
-            confidence=float(getattr(state, "confidence", 0.5) or 0.5),
-            mitre_techniques=list(state.mitre_mappings),
-        )
-        return AgentResult(
-            status="success",
-            findings=[finding],
-            evidence=[evidence],
-            next_tasks=[NextTask(agent="investigation", objective="collect_evidence", priority=1)],
-            confidence=finding.confidence,
-            reasoning=f"hypothesis={hypothesis.status}",
-            uncertainty=[] if state.findings else ["triage produced no findings"],
-        )
+        if context.metadata.get("force_heuristic"):
+            return await _heuristic_triage(self, context)
+        if not is_llm_configured():
+            context.metadata["execution_mode"] = "FALLBACK_HEURISTIC"
+            return await _heuristic_triage(self, context)
+        try:
+            return await run_llm_triage(
+                context,
+                self._tools,
+                agent_name=self.name,
+                agent_version=self.version,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("triage.llm_failed_fallback", error=str(exc))
+            context.metadata["execution_mode"] = "FALLBACK_HEURISTIC"
+            context.metadata["llm_error"] = str(exc)
+            return await _heuristic_triage(self, context)
 
 
 class InvestigationRuntimeAgent(Agent):
+    """LLM tool-using investigation with heuristic fallback (Phase 8.6)."""
+
     name = "investigation"
-    version = "1.0"
+    version = "2.0"
+
+    def __init__(self, tool_registry: SocToolRegistry) -> None:
+        self._tools = tool_registry
 
     async def execute(self, context: AgentContext) -> AgentResult:
-        from app.agents.investigation_agent import run_investigation
-
-        state = await run_investigation(_investigation_state(context))
-        evidence = _evidence_from_state(
-            context,
-            "investigation",
-            {"findings": state.findings, "mitre": state.mitre_mappings},
-            self.name,
-            self.version,
-        )
-        actions = [
-            AgentAction(
-                name=action.action_type,
-                tool=f"response.{action.action_type}",
-                input=dict(action.parameters),
-                risk_level="medium",
+        if context.metadata.get("force_heuristic"):
+            return await _heuristic_investigation(self, context)
+        if not is_llm_configured():
+            context.metadata["execution_mode"] = "FALLBACK_HEURISTIC"
+            return await _heuristic_investigation(self, context)
+        try:
+            return await run_llm_investigation(
+                context,
+                self._tools,
+                agent_name=self.name,
+                agent_version=self.version,
             )
-            for action in state.proposed_actions
-        ]
-        finding = Finding(
-            statement="; ".join(state.findings) or "investigation complete",
-            evidence_ids=[evidence.id],
-            confidence=float(getattr(state, "confidence", 0.5) or 0.5),
-            mitre_techniques=list(state.mitre_mappings),
-        )
-        return AgentResult(
-            status="success",
-            findings=[finding],
-            evidence=[evidence, *context.evidence],
-            actions=actions,
-            next_tasks=[NextTask(agent="threat-intel", objective="enrich_iocs", priority=1)],
-            confidence=finding.confidence,
-            reasoning="investigation adapter over run_investigation",
-            uncertainty=[] if state.findings else ["investigation produced no findings"],
-        )
+        except InvestigationStructuredOutputError as exc:
+            logger.warning(
+                "investigation.structured_output_fallback",
+                reason=exc.reason,
+                detail=str(exc.detail or "")[:200],
+            )
+            context.metadata["execution_mode"] = "FALLBACK_HEURISTIC"
+            context.metadata["fallback_reason"] = exc.reason
+            context.metadata["llm_error"] = exc.reason
+            if exc.meta is not None:
+                exc.meta.fallback = True
+                exc.meta.execution_mode = "FALLBACK_HEURISTIC"
+                context.metadata["investigation_execution"] = exc.meta.as_dict()
+            return await _heuristic_investigation(self, context)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("investigation.llm_failed_fallback", error=str(exc))
+            context.metadata["execution_mode"] = "FALLBACK_HEURISTIC"
+            context.metadata["llm_error"] = str(exc)
+            return await _heuristic_investigation(self, context)
 
 
 class ThreatIntelRuntimeAgent(Agent):

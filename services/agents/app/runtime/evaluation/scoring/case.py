@@ -33,7 +33,7 @@ def score_case(
     mitre = score_mitre(ground_truth.mitre_techniques, agentic.mitre_techniques, existing.mitre_techniques)
     ioc = score_iocs(ground_truth.iocs, agentic.iocs, existing.iocs)
     corr = score_correlation(ground_truth.expected_correlation_group, agentic.correlation_groups)
-    evidence_metrics = score_evidence(agentic.claims, agentic.evidence)
+    evidence_metrics = score_evidence(agentic.claims, agentic.evidence, case_payload.get("telemetry"))
     hallucination = score_hallucination(agentic.claims, agentic.evidence)
     investigation = score_investigation(case_payload, agentic.investigation_stages)
     actions = score_actions(ground_truth.expected_actions, agentic.recommended_actions, shadow_mode=True)

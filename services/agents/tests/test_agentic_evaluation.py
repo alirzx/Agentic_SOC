@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+import asyncio
 import pytest
 
 _AGENTS_ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,7 @@ if str(_AGENTS_ROOT) not in sys.path:
 
 from app.runtime.audit import InMemoryAuditSink
 from app.runtime.contracts import Agent, AgentContext, AgentResult, NextTask
-from app.runtime.evaluation.dataset import load_dataset, load_golden_dataset
+from app.runtime.evaluation.dataset import load_dataset, load_golden_dataset, ground_truth_from_case
 from app.runtime.evaluation.gates import evaluate_gates
 from app.runtime.evaluation.pipeline_verify import verify_pipeline
 from app.runtime.evaluation.regression import check_regression
@@ -118,8 +119,8 @@ def test_action_scoring_no_leakage() -> None:
 @pytest.mark.asyncio
 async def test_aggregate_metrics_and_versioning() -> None:
     svc = AgenticEvaluationService(orchestrator=_stub_orchestrator(), timeout=5.0)
-    run = await svc.run_evaluation("golden", tenant_id=TENANT, limit=2)
-    assert run.workflow_version == "agentic-eval-v1"
+    run = await svc.run_evaluation("golden", tenant_id=TENANT, limit=2, diagnostics_only=True)
+    assert run.workflow_version == "agentic-eval-v1.6"
     assert run.agent_version
     assert run.dataset_version
     assert run.comparison_summary.get("delta") is not None
@@ -129,7 +130,7 @@ async def test_aggregate_metrics_and_versioning() -> None:
 @pytest.mark.asyncio
 async def test_evaluation_run_stub_pipeline() -> None:
     svc = AgenticEvaluationService(orchestrator=_stub_orchestrator(), timeout=5.0)
-    run = await svc.run_evaluation("golden", tenant_id=TENANT, limit=1)
+    run = await svc.run_evaluation("golden", tenant_id=TENANT, limit=1, diagnostics_only=True)
     assert run.status in {"completed", "failed"}
     cases = svc.get_cases(run.id)
     assert len(cases) == 1
@@ -179,7 +180,62 @@ def test_quality_gates() -> None:
 def test_pipeline_verify_modules() -> None:
     status = verify_pipeline()
     assert "adapters" in status
-    assert "modules" in status
+    assert "dependencies" in status or "modules" in status
+    assert "eval_valid" in status
+
+
+def test_baseline_contamination_guard() -> None:
+    from app.runtime.evaluation.regression import can_update_baseline, update_baseline
+
+    assert can_update_baseline({"eval_valid": False, "pipeline_degraded": True}) is False
+    result = update_baseline({"eval_valid": False, "pipeline_degraded": True})
+    assert result["updated"] is False
+
+
+def test_stage_metrics_present() -> None:
+    from app.runtime.evaluation.stages import REQUIRED_STAGES
+
+    assert len(REQUIRED_STAGES) == 8
+
+
+def test_human_review() -> None:
+    svc = AgenticEvaluationService(orchestrator=_stub_orchestrator(), timeout=5.0)
+    run = asyncio.run(svc.run_evaluation("golden", tenant_id=TENANT, limit=1, diagnostics_only=True))
+    cases = svc.get_cases(run.id)
+    reviewed = svc.apply_human_review(
+        run.id,
+        cases[0].case_id,
+        verdict="CORRECT",
+        reviewer="analyst@test",
+        comment="looks good",
+    )
+    assert reviewed is not None
+    assert reviewed.human_review_verdict == "CORRECT"
+
+
+def test_benchmark_leakage_on_synthetic_substrate() -> None:
+    from app.runtime.evaluation.benchmark_audit import audit_case_leakage, audit_dataset
+    from app.runtime.evaluation.dataset import load_synthetic_substrate
+    from app.runtime.evaluation.result_extract import existing_snapshot_from_case
+    from app.runtime.evaluation.scoring.case import score_case
+    from app.runtime.evaluation.scoring.classification import score_classification
+    from app.runtime.evaluation.scoring.severity import score_severity
+    from app.runtime.evaluation.scoring.mitre import score_mitre
+
+    dataset = load_synthetic_substrate(limit=20)
+    audit = audit_dataset(dataset.cases)
+    assert audit["leakage_rate"] >= 0.95
+    assert audit["existing_score_valid"] is False
+    assert audit["interpretation"] == "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC"
+
+    case = dataset.cases[0]
+    gt = ground_truth_from_case(case)
+    existing = existing_snapshot_from_case(case)
+    assert score_classification(gt.classification, existing.classification) == 1.0
+    assert score_severity(gt.severity, existing.severity) == 1.0
+    mitre = score_mitre(gt.mitre_techniques, [], existing.mitre_techniques)
+    assert mitre["existing_f1"] == 1.0
+    assert audit_case_leakage(case)["leakage_detected"] is True
 
 
 def test_zero_action_leakage_shadow() -> None:

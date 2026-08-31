@@ -23,12 +23,27 @@ def _simulated_response(**kwargs: Any) -> dict[str, Any]:
 
 
 def build_tool_registry() -> SocToolRegistry:
-    from app.investigator.tools import enrich_ioc, extract_iocs, fetch_related_alerts, map_to_mitre
+    from app.investigator.tools import enrich_ioc, extract_iocs, fetch_case, fetch_related_alerts, map_to_mitre
     from app.tools.mitre import lookup_technique
 
     registry = SocToolRegistry()
     read_agents = frozenset(
         {"triage", "investigation", "threat-intel", "correlation", "decision", "validation", "report"}
+    )
+    investigate_agents = frozenset({"investigation", "correlation", "validation"})
+
+    async def search_ti(ioc_value: str, ioc_type: str = "ip") -> dict[str, Any]:
+        return await enrich_ioc(ioc_value, ioc_type)
+
+    registry.register(
+        CallableSOCTool(
+            name="search_ti",
+            description="Search threat intelligence for an IOC (alias for TI lookup).",
+            fn=search_ti,
+            risk_level="read",
+            allowed_agents=read_agents,
+            input_schema={"type": "object", "required": ["ioc_value"]},
+        )
     )
     registry.register(
         CallableSOCTool(
@@ -64,7 +79,18 @@ def build_tool_registry() -> SocToolRegistry:
             description="Fetch related alerts for a case (paginated).",
             fn=fetch_related_alerts,
             risk_level="read",
-            allowed_agents=frozenset({"investigation", "correlation", "validation"}),
+            allowed_agents=investigate_agents,
+            input_schema={"type": "object", "required": ["case_id"]},
+        )
+    )
+    registry.register(
+        CallableSOCTool(
+            name="siem.get_case",
+            description="Fetch full case details from the API.",
+            fn=fetch_case,
+            risk_level="read",
+            allowed_agents=investigate_agents,
+            input_schema={"type": "object", "required": ["case_id"]},
         )
     )
     registry.register(
@@ -108,10 +134,11 @@ def build_tool_registry() -> SocToolRegistry:
 
 
 def build_agent_registry() -> AgentRegistry:
+    tool_registry = build_tool_registry()
     registry = AgentRegistry()
     for agent in (
-        TriageRuntimeAgent(),
-        InvestigationRuntimeAgent(),
+        TriageRuntimeAgent(tool_registry=tool_registry),
+        InvestigationRuntimeAgent(tool_registry=tool_registry),
         ThreatIntelRuntimeAgent(),
         CorrelationRuntimeAgent(),
         DecisionAgent(),

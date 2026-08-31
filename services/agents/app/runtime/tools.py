@@ -94,6 +94,10 @@ class CallableSOCTool(SOCTool[dict[str, Any], Any]):
         allowed_agents: frozenset[str] | None = None,
         allowed_roles: frozenset[str] | None = None,
         input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        permission: str = "READ_SECURITY_DATA",
+        timeout_seconds: float = 30.0,
+        audit_required: bool = True,
     ) -> None:
         self.name = name
         self.description = description
@@ -103,6 +107,19 @@ class CallableSOCTool(SOCTool[dict[str, Any], Any]):
         self.allowed_agents = allowed_agents or frozenset()
         self.allowed_roles = allowed_roles or frozenset({"analyst", "admin", "system"})
         self.input_schema = input_schema or {"type": "object"}
+        self.output_schema = output_schema or {"type": "object"}
+        self.permission = permission
+        self.timeout_seconds = timeout_seconds
+        self.audit_required = audit_required
+
+    def to_schema(self) -> dict[str, Any]:
+        return {
+            "output_schema": self.output_schema,
+            "permission": self.permission,
+            "risk_level": self.risk_level.upper(),
+            "timeout": self.timeout_seconds,
+            "audit_required": self.audit_required,
+        }
 
     async def execute(self, input: dict[str, Any], context: ToolContext) -> Any:
         result = self._fn(**(input or {}))

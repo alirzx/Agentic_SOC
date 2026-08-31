@@ -30,6 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GET /api/v1/soc/agentic/evaluations*`. See
   `docs/architecture/phase-8-evaluation.md`.
 
+- **Phase 8.5 runtime validation & benchmark.** Canonical runner
+  `scripts/run_agentic_eval.py`, extended `pipeline_verify`, stage metrics,
+  fail-fast semantics, regression suite #12 in `scripts/run_evals.py`,
+  reports under `reports/agentic/`. See
+  `docs/architecture/phase-8.5-validation.md`.
+
+- **Phase 8.6 LLM tool-using agents.** `TriageRuntimeAgent` / `InvestigationRuntimeAgent`
+  v2.0 use `app.llm.factory` + `SocToolRegistry` with explicit heuristic fallback,
+  structured evidence/claims, iteration limits, and three-way eval comparison.
+  See `docs/architecture/phase-8.6-llm-agents.md`.
+
 ### Fixed
 
 - **UEBA can no longer read an unscoreable baseline as normal behaviour.** A

@@ -31,6 +31,7 @@ from typing import Any
 from langchain_openai import ChatOpenAI
 
 from app.llm.contract import DEFAULT_OPENAI_CHAT_COMPLETIONS_URL
+from app.llm.gateway_config import load_api_key, normalize_openai_base_url
 from app.llm.model_pins import get_pin
 
 # Wave 1 — per-tenant BYOK override. The auto-triage / investigation paths
@@ -72,7 +73,9 @@ def resolve_base_url() -> str | None:
     gateway is an explicit choice so the bearer token (the gateway master key vs.
     a provider key) is never ambiguous.
     """
-    return os.getenv("OPENAI_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip() or None
+    return normalize_openai_base_url(
+        os.getenv("OPENAI_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip() or ""
+    ) or None
 
 
 def chat_completions_url() -> str:
@@ -106,8 +109,9 @@ def make_chat_model(
     base_url = (override or {}).get("base_url") or resolve_base_url()
     if base_url:
         params["base_url"] = base_url
-    if override and override.get("api_key"):
-        params["api_key"] = override["api_key"]
+    api_key = (override or {}).get("api_key") or load_api_key()
+    if api_key:
+        params["api_key"] = api_key
     params.update(kwargs)
     return ChatOpenAI(**params)
 

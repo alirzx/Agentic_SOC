@@ -79,7 +79,9 @@ def test_chat_completions_url_appends_path(monkeypatch):
 # ── make_chat_model ──────────────────────────────────────────────────────────
 
 
-def test_make_chat_model_uses_alias_and_base_url(monkeypatch):
+def test_base_url_normalization_in_factory(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm:4000/v1/chat/completions/")
+    assert resolve_base_url() == "http://litellm:4000/v1"
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm:4000/v1")
     llm = make_chat_model("triage", temperature=0.0, max_tokens=256)

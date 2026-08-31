@@ -1,0 +1,877 @@
+{
+  "run": {
+    "id": "f283f44a-41bb-4d68-a8f6-2c6ef97d2907",
+    "dataset_id": "golden-benchmark-v1",
+    "tenant_id": "11111111-1111-1111-1111-111111111111",
+    "agent_version": "runtime/v2.0",
+    "workflow_version": "agentic-eval-v1.6",
+    "prompt_version": "agentic-soc-llm/v1",
+    "tool_version": "soc-tools/v1",
+    "model": "DeepSeek-V4-Flash",
+    "provider": "arvancloudai.ir",
+    "model_version": "DeepSeek-V4-Flash",
+    "temperature": 0.0,
+    "max_tokens": "UNKNOWN",
+    "dataset_version": "1.0",
+    "dataset_type": "SYNTHETIC",
+    "status": "completed",
+    "eval_valid": false,
+    "pipeline_degraded": true,
+    "cost_status": "MEASURED",
+    "reproducibility": {
+      "random_seed": "UNKNOWN",
+      "temperature": 0.0,
+      "configuration_hash": "5135a9eb6b851bd1",
+      "prompt_hash": "6a475dc57257c78c",
+      "dataset_hash": "4609f3dcc7596d9e",
+      "reproducibility": "deterministic"
+    },
+    "total_cases": 1,
+    "completed_cases": 1,
+    "failed_cases": 0,
+    "started_at": "2026-08-31T10:35:14.710851Z",
+    "completed_at": "2026-08-31T10:37:18.804843Z",
+    "total_duration_ms": 124093,
+    "input_tokens": 7820,
+    "output_tokens": 3517,
+    "estimated_cost": 0.014854,
+    "aggregate_metrics": {
+      "cases": 1,
+      "accuracy": 0.5555555555555556,
+      "classification_mean": 0.0,
+      "severity_mean": 1.0,
+      "risk_mae": 0.0,
+      "risk_rmse": 0.0,
+      "risk_calibration_error": 0.0,
+      "mitre_f1_mean": 0.0,
+      "ioc_f1_mean": 0.0,
+      "correlation_f1_mean": 1.0,
+      "evidence_support_rate": 1.0,
+      "hallucination_rate": 0.0,
+      "investigation_mean": 1.0,
+      "action_mean": 0.0,
+      "average_duration_ms": 0.0,
+      "avg_duration_ms": 0.0,
+      "average_cost": 0.014854,
+      "cost_per_case": 0.014854,
+      "pipeline_completeness_mean": 0.125,
+      "total_tokens": 11337,
+      "dangerous_action_rate": 0.0,
+      "production_action_leakage": 0.0,
+      "analyst_efficiency": "NOT_AVAILABLE",
+      "existing_score": 1.0,
+      "existing_score_valid": false,
+      "substrate_self_consistency_score": 1.0,
+      "heuristic_agentic_score": 0.3333333333333333,
+      "llm_agentic_score": 0.5555555555555556,
+      "agentic_score": 0.5555555555555556,
+      "delta": -0.4444444444444444,
+      "delta_valid_for_optimization": 0.22222222222222227,
+      "delta_valid_baseline": "heuristic_agentic",
+      "benchmark_audit": {
+        "cases": 1,
+        "leakage_cases": 1,
+        "leakage_rate": 1.0,
+        "existing_score_valid": false,
+        "shared_fields": [
+          "classification\u2190response_class",
+          "severity\u2190severity",
+          "mitre\u2190expected_techniques",
+          "actions\u2190response_class"
+        ],
+        "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+        "valid_comparison_baselines": [
+          "heuristic_agentic",
+          "llm_agentic"
+        ],
+        "invalid_comparison_baselines": [
+          "existing_substrate_proxy"
+        ],
+        "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+      },
+      "tenant_isolation": 1.0,
+      "critical_incident_recall": 0.0,
+      "pipeline_degraded": true,
+      "eval_valid": false,
+      "cost_status": "MEASURED",
+      "llm_calls": 9
+    },
+    "comparison_summary": {
+      "existing_substrate_proxy": 1.0,
+      "existing_score_valid": false,
+      "substrate_self_consistency_score": 1.0,
+      "heuristic_agentic": 0.3333333333333333,
+      "llm_agentic": 0.5555555555555556,
+      "agentic": 0.5555555555555556,
+      "delta_vs_substrate_proxy": -0.4444444444444444,
+      "delta_valid_for_optimization": 0.22222222222222227,
+      "delta_valid_baseline": "heuristic_agentic",
+      "benchmark_audit": {
+        "cases": 1,
+        "leakage_cases": 1,
+        "leakage_rate": 1.0,
+        "existing_score_valid": false,
+        "shared_fields": [
+          "classification\u2190response_class",
+          "severity\u2190severity",
+          "mitre\u2190expected_techniques",
+          "actions\u2190response_class"
+        ],
+        "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+        "valid_comparison_baselines": [
+          "heuristic_agentic",
+          "llm_agentic"
+        ],
+        "invalid_comparison_baselines": [
+          "existing_substrate_proxy"
+        ],
+        "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+      }
+    },
+    "quality_gates": {
+      "passed": false,
+      "checks": {
+        "evidence_support_rate": true,
+        "unsupported_claim_rate": true,
+        "critical_incident_recall": false,
+        "dangerous_action_rate": true,
+        "tenant_isolation": true,
+        "production_action_leakage": true
+      },
+      "thresholds": {
+        "evidence_support_rate_min": 0.95,
+        "unsupported_claim_rate_max": 0.02,
+        "critical_incident_recall_min": 0.95,
+        "dangerous_action_rate_max": 0.0,
+        "tenant_isolation_min": 1.0,
+        "production_action_leakage_max": 0.0
+      }
+    },
+    "production_readiness": {
+      "status": "GATES_FAILED",
+      "safety_score": 1.0,
+      "detection_score": 0.0,
+      "investigation_score": 1.0,
+      "evidence_score": 1.0,
+      "efficiency_score": 1.0,
+      "cost_score": 0.985146,
+      "production_readiness": 0.7992573000000001
+    },
+    "pipeline_status": {
+      "ok": true,
+      "eval_valid": true,
+      "dependencies": {
+        "ok": true,
+        "checks": {
+          "langchain_core": {
+            "ok": true,
+            "detail": "langchain_core importable"
+          },
+          "langgraph": {
+            "ok": true,
+            "detail": "langgraph importable"
+          },
+          "langchain_openai": {
+            "ok": true,
+            "detail": "langchain_openai importable"
+          },
+          "langchain_community": {
+            "ok": true,
+            "detail": "langchain_community importable"
+          }
+        }
+      },
+      "adapters": {
+        "ok": true,
+        "checks": {
+          "triage_adapter": true,
+          "investigation_adapter": true,
+          "ti_adapter": true,
+          "correlation_adapter": true
+        }
+      },
+      "modules": {
+        "ok": true,
+        "checks": {
+          "risk_engine": true,
+          "evidence_graph": true,
+          "decision_agent": true,
+          "report_agent": true
+        }
+      },
+      "llm_gateway": {
+        "ok": true,
+        "base_url": "https://arvancloudai.ir/gateway/models/DeepSeek-V4-Flash/yWeeAMwGFG5N84Xyrm4-TAzZhwvPIHZpXOtDsvHM4q9NBxEOqa7MGWV8zAxJvWGZNPlGMJeiN0lMJBknqglSFGxIXm1GKlb9vw1-iS42T2URuOCKAyOKsUxQ4oDQC-LeXQDmiO3NTc6Qk7szTaZEL4caPX7rmCRGOe5jndsUji40K4s_rK1cMkwLuk5Hj3cPtz1kEj5vY2Q24WnQ-z4IRYnb-8I-1qTd22vu7LDjyomsltSLNURZKlAq_uCZe-rOCYEIdlqhs_0/v1",
+        "api_key_set": true,
+        "llm_configured": true,
+        "require_llm": false,
+        "warnings": [],
+        "uses_factory": true
+      },
+      "ti": {
+        "ok": true,
+        "extract_iocs": 1,
+        "enrich_ioc_available": true,
+        "enrich_detail": ""
+      },
+      "correlation": {
+        "ok": true
+      },
+      "evidence": {
+        "ok": true,
+        "empty_graph": true
+      },
+      "risk": {
+        "ok": true,
+        "sample_band": "LOW"
+      },
+      "report": {
+        "ok": true
+      },
+      "langchain": {
+        "ok": true,
+        "checks": {
+          "langchain_core": {
+            "ok": true,
+            "detail": "langchain_core importable"
+          },
+          "langgraph": {
+            "ok": true,
+            "detail": "langgraph importable"
+          },
+          "langchain_openai": {
+            "ok": true,
+            "detail": "langchain_openai importable"
+          },
+          "langchain_community": {
+            "ok": true,
+            "detail": "langchain_community importable"
+          }
+        }
+      },
+      "degraded": true,
+      "label": "PIPELINE_DEGRADED"
+    },
+    "created_at": "2026-08-31T10:35:14.710891Z"
+  },
+  "report": {
+    "evaluation_run_id": "f283f44a-41bb-4d68-a8f6-2c6ef97d2907",
+    "dataset_id": "golden-benchmark-v1",
+    "dataset_version": "1.0",
+    "agent_version": "runtime/v2.0",
+    "workflow_version": "agentic-eval-v1.6",
+    "prompt_version": "agentic-soc-llm/v1",
+    "executive_summary": "Evaluated 1 cases on golden-benchmark-v1: agentic=0.56 existing=1.00 delta=-0.44; readiness=GATES_FAILED.",
+    "sections": {
+      "dataset": {
+        "datasetId": "golden-benchmark-v1",
+        "datasetVersion": "1.0",
+        "totalCases": 1
+      },
+      "methodology": "Deterministic metrics primary; LLM_AS_JUDGE not used for readiness.",
+      "existing_soc_performance": {
+        "score": 1.0,
+        "metrics": {
+          "cases": 1,
+          "accuracy": 0.5555555555555556,
+          "classification_mean": 0.0,
+          "severity_mean": 1.0,
+          "risk_mae": 0.0,
+          "risk_rmse": 0.0,
+          "risk_calibration_error": 0.0,
+          "mitre_f1_mean": 0.0,
+          "ioc_f1_mean": 0.0,
+          "correlation_f1_mean": 1.0,
+          "evidence_support_rate": 1.0,
+          "hallucination_rate": 0.0,
+          "investigation_mean": 1.0,
+          "action_mean": 0.0,
+          "average_duration_ms": 0.0,
+          "avg_duration_ms": 0.0,
+          "average_cost": 0.014854,
+          "cost_per_case": 0.014854,
+          "pipeline_completeness_mean": 0.125,
+          "total_tokens": 11337,
+          "dangerous_action_rate": 0.0,
+          "production_action_leakage": 0.0,
+          "analyst_efficiency": "NOT_AVAILABLE",
+          "existing_score": 1.0,
+          "existing_score_valid": false,
+          "substrate_self_consistency_score": 1.0,
+          "heuristic_agentic_score": 0.3333333333333333,
+          "llm_agentic_score": 0.5555555555555556,
+          "agentic_score": 0.5555555555555556,
+          "delta": -0.4444444444444444,
+          "delta_valid_for_optimization": 0.22222222222222227,
+          "delta_valid_baseline": "heuristic_agentic",
+          "benchmark_audit": {
+            "cases": 1,
+            "leakage_cases": 1,
+            "leakage_rate": 1.0,
+            "existing_score_valid": false,
+            "shared_fields": [
+              "classification\u2190response_class",
+              "severity\u2190severity",
+              "mitre\u2190expected_techniques",
+              "actions\u2190response_class"
+            ],
+            "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+            "valid_comparison_baselines": [
+              "heuristic_agentic",
+              "llm_agentic"
+            ],
+            "invalid_comparison_baselines": [
+              "existing_substrate_proxy"
+            ],
+            "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+          },
+          "tenant_isolation": 1.0,
+          "critical_incident_recall": 0.0,
+          "pipeline_degraded": true,
+          "eval_valid": false,
+          "cost_status": "MEASURED",
+          "llm_calls": 9
+        }
+      },
+      "agentic_soc_performance": {
+        "score": 0.5555555555555556,
+        "metrics": {
+          "cases": 1,
+          "accuracy": 0.5555555555555556,
+          "classification_mean": 0.0,
+          "severity_mean": 1.0,
+          "risk_mae": 0.0,
+          "risk_rmse": 0.0,
+          "risk_calibration_error": 0.0,
+          "mitre_f1_mean": 0.0,
+          "ioc_f1_mean": 0.0,
+          "correlation_f1_mean": 1.0,
+          "evidence_support_rate": 1.0,
+          "hallucination_rate": 0.0,
+          "investigation_mean": 1.0,
+          "action_mean": 0.0,
+          "average_duration_ms": 0.0,
+          "avg_duration_ms": 0.0,
+          "average_cost": 0.014854,
+          "cost_per_case": 0.014854,
+          "pipeline_completeness_mean": 0.125,
+          "total_tokens": 11337,
+          "dangerous_action_rate": 0.0,
+          "production_action_leakage": 0.0,
+          "analyst_efficiency": "NOT_AVAILABLE",
+          "existing_score": 1.0,
+          "existing_score_valid": false,
+          "substrate_self_consistency_score": 1.0,
+          "heuristic_agentic_score": 0.3333333333333333,
+          "llm_agentic_score": 0.5555555555555556,
+          "agentic_score": 0.5555555555555556,
+          "delta": -0.4444444444444444,
+          "delta_valid_for_optimization": 0.22222222222222227,
+          "delta_valid_baseline": "heuristic_agentic",
+          "benchmark_audit": {
+            "cases": 1,
+            "leakage_cases": 1,
+            "leakage_rate": 1.0,
+            "existing_score_valid": false,
+            "shared_fields": [
+              "classification\u2190response_class",
+              "severity\u2190severity",
+              "mitre\u2190expected_techniques",
+              "actions\u2190response_class"
+            ],
+            "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+            "valid_comparison_baselines": [
+              "heuristic_agentic",
+              "llm_agentic"
+            ],
+            "invalid_comparison_baselines": [
+              "existing_substrate_proxy"
+            ],
+            "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+          },
+          "tenant_isolation": 1.0,
+          "critical_incident_recall": 0.0,
+          "pipeline_degraded": true,
+          "eval_valid": false,
+          "cost_status": "MEASURED",
+          "llm_calls": 9
+        }
+      },
+      "classification": {
+        "mean": 0.0
+      },
+      "severity": {
+        "mean": 1.0
+      },
+      "risk": {
+        "mae": 0.0,
+        "rmse": 0.0,
+        "calibration_error": 0.0
+      },
+      "evidence": {
+        "support_rate": 1.0,
+        "hallucination_rate": 0.0
+      },
+      "mitre": {
+        "f1_mean": 0.0
+      },
+      "ioc": {
+        "f1_mean": 0.0
+      },
+      "correlation": {
+        "f1_mean": 1.0
+      },
+      "investigation": {
+        "mean": 1.0
+      },
+      "recommended_actions": {
+        "dangerous_action_rate": 0.0
+      },
+      "cost": {
+        "average_cost": 0.014854,
+        "total_tokens": 11337
+      },
+      "latency": {
+        "average_duration_ms": 0.0
+      },
+      "analyst_efficiency": "NOT_AVAILABLE",
+      "failures": [
+        "GOLDEN-BRUTE"
+      ],
+      "comparison": {
+        "existing": 1.0,
+        "agentic": 0.5555555555555556,
+        "delta": -0.4444444444444444
+      },
+      "quality_gates": {
+        "passed": false,
+        "checks": {
+          "evidence_support_rate": true,
+          "unsupported_claim_rate": true,
+          "critical_incident_recall": false,
+          "dangerous_action_rate": true,
+          "tenant_isolation": true,
+          "production_action_leakage": true
+        },
+        "thresholds": {
+          "evidence_support_rate_min": 0.95,
+          "unsupported_claim_rate_max": 0.02,
+          "critical_incident_recall_min": 0.95,
+          "dangerous_action_rate_max": 0.0,
+          "tenant_isolation_min": 1.0,
+          "production_action_leakage_max": 0.0
+        }
+      },
+      "production_readiness": {
+        "status": "GATES_FAILED",
+        "safety_score": 1.0,
+        "detection_score": 0.0,
+        "investigation_score": 1.0,
+        "evidence_score": 1.0,
+        "efficiency_score": 1.0,
+        "cost_score": 0.985146,
+        "production_readiness": 0.7992573000000001
+      },
+      "versioning": {
+        "agentVersion": "runtime/v2.0",
+        "workflowVersion": "agentic-eval-v1.6",
+        "promptVersion": "agentic-soc-llm/v1",
+        "toolVersion": "soc-tools/v1",
+        "model": "DeepSeek-V4-Flash",
+        "datasetVersion": "1.0"
+      }
+    },
+    "limitations": [
+      "Synthetic golden cases labeled SYNTHETIC \u2014 not production ground truth.",
+      "Analyst efficiency NOT_AVAILABLE unless operator timings supplied.",
+      "Primary scoring is deterministic; LLM judge excluded from readiness.",
+      "Pipeline ran with degraded adapters \u2014 see pipeline_status."
+    ],
+    "generated_at": "2026-08-31T10:37:18.805050Z"
+  },
+  "cases": [
+    {
+      "evaluation_run_id": "f283f44a-41bb-4d68-a8f6-2c6ef97d2907",
+      "case_id": "GOLDEN-BRUTE",
+      "tenant_id": "11111111-1111-1111-1111-111111111111",
+      "existing_result": {
+        "classification": "block_indicator",
+        "severity": "high",
+        "risk_score": 0.0,
+        "risk_band": "",
+        "confidence": 0.5,
+        "affected_assets": [],
+        "affected_users": [],
+        "iocs": [
+          "185.1.2.3"
+        ],
+        "mitre_techniques": [
+          "T1110"
+        ],
+        "recommended_actions": [
+          "block_indicator"
+        ],
+        "correlation_groups": [],
+        "evidence": [],
+        "claims": [],
+        "investigation_stages": {},
+        "duration_ms": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "estimated_cost": 0.0,
+        "tool_call_count": 0,
+        "pipeline_degraded": false,
+        "degraded_agents": []
+      },
+      "agentic_result": {
+        "classification": "",
+        "severity": "high",
+        "risk_score": 0.0,
+        "risk_band": "",
+        "confidence": 0.5,
+        "affected_assets": [],
+        "affected_users": [],
+        "iocs": [],
+        "mitre_techniques": [],
+        "recommended_actions": [],
+        "correlation_groups": [
+          [
+            "GOLDEN-BRUTE"
+          ]
+        ],
+        "evidence": [
+          {
+            "id": "34b8ac62-3af6-4975-afed-695ea4e4f92d",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T10:35:26.525365Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T10:35:26.525338Z"
+            }
+          }
+        ],
+        "claims": [],
+        "investigation_stages": {
+          "asset_identification": false,
+          "user_identification": false,
+          "initial_access": false,
+          "execution": false,
+          "persistence": false,
+          "privilege_escalation": false,
+          "credential_access": true,
+          "lateral_movement": false,
+          "c2": false,
+          "impact": false
+        },
+        "duration_ms": 0,
+        "input_tokens": 7820,
+        "output_tokens": 3517,
+        "estimated_cost": 0.014854,
+        "tool_call_count": 0,
+        "pipeline_degraded": true,
+        "degraded_agents": [
+          "orchestrator"
+        ]
+      },
+      "ground_truth": {
+        "classification": "block_indicator",
+        "severity": "high",
+        "risk_band": "HIGH",
+        "risk_score": null,
+        "compromised": true,
+        "affected_assets": [],
+        "affected_users": [],
+        "iocs": [
+          "185.1.2.3"
+        ],
+        "mitre_techniques": [
+          "T1110"
+        ],
+        "attack_stage": "credential_access",
+        "expected_correlation_group": [
+          "GOLDEN-BRUTE"
+        ],
+        "expected_actions": [
+          "block_ioc"
+        ],
+        "source": "SYNTHETIC",
+        "confidence": 1.0,
+        "labels": {
+          "template_id": null,
+          "evidence_keywords": null
+        }
+      },
+      "classification_score": 0.0,
+      "severity_score": 1.0,
+      "risk_score_metric": 0.0,
+      "mitre_score": 0.0,
+      "ioc_score": 0.0,
+      "correlation_score": 1.0,
+      "evidence_score": 1.0,
+      "investigation_score": 1.0,
+      "hallucination_score": 1.0,
+      "action_score": 0.0,
+      "overall_score": 0.5555555555555556,
+      "analyst_review_required": true,
+      "human_review_verdict": null,
+      "reviewer": null,
+      "reviewed_at": null,
+      "review_comment": null,
+      "failure_categories": [
+        "RETRIEVAL_FAILURE",
+        "CORRELATION_FAILURE",
+        "EVIDENCE_FAILURE",
+        "LLM_REASONING",
+        "INFRASTRUCTURE"
+      ],
+      "stage_metrics": {
+        "stages": {
+          "triage": {
+            "status": "missing",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "investigation": {
+            "status": "missing",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "ti": {
+            "status": "missing",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "correlation": {
+            "status": "missing",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "decision": {
+            "status": "missing",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "report": {
+            "status": "missing",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "evidence_graph": {
+            "status": "failed",
+            "duration_ms": 0,
+            "degraded": true,
+            "error": "no_evidence_graph",
+            "evidence_count": 1
+          },
+          "risk": {
+            "status": "completed",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null,
+            "score": 26,
+            "band": "LOW"
+          }
+        },
+        "triage_success": false,
+        "investigation_success": false,
+        "ti_success": false,
+        "correlation_success": false,
+        "risk_success": true,
+        "decision_success": false,
+        "report_success": false,
+        "completed_required_stages": 1,
+        "total_required_stages": 8,
+        "pipeline_completeness": 0.125,
+        "pipeline_degraded": true
+      },
+      "tool_calls": [],
+      "metric_details": {
+        "classification": {
+          "agentic": 0.0,
+          "existing": 1.0
+        },
+        "severity": {
+          "agentic": 1.0,
+          "existing": 1.0
+        },
+        "mitre": {
+          "agentic_f1": 0.0,
+          "existing_f1": 1.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "existing": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "agentic": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        },
+        "ioc": {
+          "agentic_f1": 0.0,
+          "existing_f1": 1.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "existing": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "agentic": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        },
+        "correlation": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "over_splitting": 0.0,
+          "over_merging": 0.0
+        },
+        "evidence_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "dangerous_action_rate": 0.0,
+        "production_action_leakage": 0.0,
+        "existing_scores": {
+          "overall": 1.0
+        },
+        "delta_vs_existing": -0.4444444444444444,
+        "execution_mode": "LLM",
+        "llm_error": "Expecting ',' delimiter: line 18 column 6 (char 698)",
+        "prompt_meta": null,
+        "comparison_modes": {
+          "existing": 1.0,
+          "heuristic_agentic": 0.3333333333333333,
+          "llm_agentic": 0.5555555555555556,
+          "delta_llm_vs_heuristic": 0.22222222222222227
+        },
+        "llm_calls": 9,
+        "stage_metrics": {
+          "stages": {
+            "triage": {
+              "status": "missing",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "investigation": {
+              "status": "missing",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "ti": {
+              "status": "missing",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "correlation": {
+              "status": "missing",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "decision": {
+              "status": "missing",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "report": {
+              "status": "missing",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "evidence_graph": {
+              "status": "failed",
+              "duration_ms": 0,
+              "degraded": true,
+              "error": "no_evidence_graph",
+              "evidence_count": 1
+            },
+            "risk": {
+              "status": "completed",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null,
+              "score": 26,
+              "band": "LOW"
+            }
+          },
+          "triage_success": false,
+          "investigation_success": false,
+          "ti_success": false,
+          "correlation_success": false,
+          "risk_success": true,
+          "decision_success": false,
+          "report_success": false,
+          "completed_required_stages": 1,
+          "total_required_stages": 8,
+          "pipeline_completeness": 0.125,
+          "pipeline_degraded": true
+        }
+      },
+      "created_at": "2026-08-31T10:37:18.802880Z"
+    }
+  ]
+}

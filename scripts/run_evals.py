@@ -51,6 +51,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import sys
@@ -212,6 +213,7 @@ _TARGETS = {
     # positive fixture; "target" here is the *ceiling* on per-rule FPR.
     # See services/agents/tests/test_detection_fp_rate.py.
     "detection_fp_rate": _DETECTION_FP_CEILING,
+    "agentic_eval": 0.50,
 }
 
 # Per-template macro floors (kept slightly below per-case floors because each
@@ -243,6 +245,7 @@ _SUITE_NAMES: tuple[str, ...] = (
     "override_accuracy",
     "playbook_completion_rate",
     "detection_fp_rate",
+    "agentic_eval",
 )
 
 
@@ -405,6 +408,84 @@ def _run_hunt_corpus() -> dict:
             "positive_pass": positive_pass,
             "negative_pass": negative_pass,
             "no_orphans": no_orphans,
+        },
+    }
+
+
+def _run_agentic_eval(deterministic: bool = True, limit: int = 2) -> dict:
+    """Suite #12 — Agentic SOC evaluation (deterministic stub by default)."""
+    t0 = time.perf_counter()
+    try:
+        from app.runtime.audit import InMemoryAuditSink
+        from app.runtime.contracts import Agent, AgentContext, AgentResult, NextTask
+        from app.runtime.evaluation.regression import check_regression
+        from app.runtime.evaluation.service import AgenticEvaluationService
+        from app.runtime.orchestrator import SocOrchestrator
+        from app.runtime.registry import AgentRegistry
+        from app.runtime.runtime import AgentRuntime
+    except Exception as exc:  # pragma: no cover
+        return {
+            "metric": "agentic_overall_score",
+            "value": 0.0,
+            "target": _TARGETS["agentic_eval"],
+            "passed": False,
+            "duration_ms": 0.0,
+            "details": {"error": str(exc), "mode": "import_failed"},
+        }
+
+    class _StubAgent(Agent):
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.version = "1.0"
+
+        async def execute(self, context: AgentContext) -> AgentResult:
+            return AgentResult(
+                status="success",
+                next_tasks=[NextTask(agent="report", objective="write_report")],
+                reasoning=f"{self.name} stub correlated activity",
+                confidence=0.9,
+            )
+
+    registry = AgentRegistry()
+    for name in (
+        "triage",
+        "investigation",
+        "threat-intel",
+        "correlation",
+        "decision",
+        "response",
+        "validation",
+        "report",
+    ):
+        registry.register(_StubAgent(name))
+    orchestrator = SocOrchestrator(AgentRuntime(registry, audit=InMemoryAuditSink()), registry)
+    svc = AgenticEvaluationService(orchestrator=orchestrator, timeout=30.0)
+    run = asyncio.run(
+        svc.run_evaluation(
+            "golden",
+            limit=limit,
+            diagnostics_only=deterministic,
+            require_full_pipeline=not deterministic,
+        )
+    )
+    dur = (time.perf_counter() - t0) * 1000
+    metrics = run.aggregate_metrics or {}
+    regression = check_regression(metrics)
+    score = float(metrics.get("agentic_score", 0.0))
+    passed = run.eval_valid and regression["passed"] and score >= _TARGETS["agentic_eval"]
+    return {
+        "metric": "agentic_overall_score",
+        "value": round(score, 4),
+        "target": _TARGETS["agentic_eval"],
+        "passed": passed,
+        "duration_ms": round(dur, 1),
+        "details": {
+            "mode": "deterministic_stub" if deterministic else "full_pipeline",
+            "eval_valid": run.eval_valid,
+            "pipeline_degraded": metrics.get("pipeline_degraded"),
+            "regression": regression,
+            "production_action_leakage": metrics.get("production_action_leakage", 0),
+            "cases": metrics.get("cases", 0),
         },
     }
 
@@ -966,6 +1047,7 @@ def main() -> None:
                 "override_accuracy": _run_override_accuracy(),
                 "playbook_completion_rate": _run_playbook_completion(),
                 "detection_fp_rate": _run_detection_fp_rate(),
+                "agentic_eval": _run_agentic_eval(deterministic=True, limit=2),
             },
             "telemetry": _summarise_telemetry(),
             "per_investigation": per_investigation,

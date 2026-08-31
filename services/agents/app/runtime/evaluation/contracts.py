@@ -17,6 +17,13 @@ GroundTruthSource = Literal[
     "existing_soc_substrate",
 ]
 EvaluationRunStatus = Literal["created", "running", "completed", "failed", "cancelled"]
+HumanReviewVerdict = Literal[
+    "CORRECT",
+    "PARTIALLY_CORRECT",
+    "INCORRECT",
+    "UNSAFE",
+    "INSUFFICIENT_EVIDENCE",
+]
 SeverityBand = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL", "EMERGENCY"]
 RiskBand = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL", "EMERGENCY"]
 
@@ -71,6 +78,7 @@ class EvaluationDataset(BaseModel):
     name: str
     description: str = ""
     source: str = "SYNTHETIC"
+    dataset_type: str = "SYNTHETIC"
     version: str = "1.0"
     created_at: datetime = Field(default_factory=utcnow)
     cases: list[dict[str, Any]] = Field(default_factory=list)
@@ -81,12 +89,21 @@ class AgenticEvaluationRun(BaseModel):
     dataset_id: str
     tenant_id: str
     agent_version: str = "runtime/v1.0"
-    workflow_version: str = "agentic-eval-v1"
+    workflow_version: str = "agentic-eval-v1.5"
     prompt_version: str = "agentic-soc-runtime/v1"
     tool_version: str = "soc-tools/v1"
-    model: str = "deterministic"
+    model: str = "UNKNOWN"
+    provider: str = "UNKNOWN"
+    model_version: str = "UNKNOWN"
+    temperature: float = 0.0
+    max_tokens: int | str = "UNKNOWN"
     dataset_version: str = "1.0"
+    dataset_type: str = "SYNTHETIC"
     status: EvaluationRunStatus = "created"
+    eval_valid: bool = False
+    pipeline_degraded: bool = True
+    cost_status: str = "NOT_AVAILABLE"
+    reproducibility: dict[str, Any] = Field(default_factory=dict)
     total_cases: int = 0
     completed_cases: int = 0
     failed_cases: int = 0
@@ -123,6 +140,13 @@ class AgenticCaseEvaluation(BaseModel):
     action_score: float = 0.0
     overall_score: float = 0.0
     analyst_review_required: bool = False
+    human_review_verdict: HumanReviewVerdict | str | None = None
+    reviewer: str | None = None
+    reviewed_at: datetime | None = None
+    review_comment: str | None = None
+    failure_categories: list[str] = Field(default_factory=list)
+    stage_metrics: dict[str, Any] = Field(default_factory=dict)
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     metric_details: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utcnow)
 
