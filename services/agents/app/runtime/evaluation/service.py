@@ -383,6 +383,7 @@ class AgenticEvaluationService:
             "splunk_events": int(context.metadata.get("splunk_events", 0)),
             "splunk_status": context.metadata.get("splunk_status", "NOT_USED"),
             "splunk_tool_metadata": context.metadata.get("splunk_tool_metadata") or [],
+            "investigation_state": context.metadata.get("investigation_state"),
             "stage_metrics": stage_metrics,
         }
         row.failure_categories = classify_failures(
