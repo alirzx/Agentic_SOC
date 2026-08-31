@@ -24,6 +24,8 @@ from app.investigator import ledger as investigation_ledger
 from app.llm.factory import preflight_llm
 from app.playbook import PlaybookStore
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
+from app.runtime.flags import enabled as agentic_enabled
+from app.runtime.shadow_consumer import AgenticShadowConsumer, shadow_consumer_enabled
 from app.workers.business_context import BusinessContextApplier
 from app.workers.business_context import is_enabled as business_context_enabled
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker, worker_enabled
@@ -104,6 +106,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:  # noqa: BLE001 — never block API startup
             logger.warning("auto_triage_worker.start_failed", error=str(exc))
 
+    app.state.shadow_worker = None
+    app.state.shadow_worker_task = None
+    if shadow_consumer_enabled():
+        try:
+            shadow_worker = AgenticShadowConsumer(
+                bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+                topic=os.getenv("KAFKA_TOPIC_ALERTS_FUSED", "aisoc.alerts.fused"),
+            )
+            app.state.shadow_worker = shadow_worker
+            app.state.shadow_worker_task = asyncio.create_task(shadow_worker.start())
+            logger.info("agentic.shadow.worker.enabled")
+        except Exception as exc:  # noqa: BLE001 — never block API or triage worker
+            logger.warning("agentic.shadow.worker.start_failed", error=str(exc))
+    elif agentic_enabled():
+        logger.info("agentic.shadow.worker.skipped", reason="kafka_disabled_or_missing")
+
     # Phase 2.6 — flip /readyz to 200 once startup work is done.
     app.state.mark_ready()
 
@@ -120,6 +138,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.triage_worker_task.cancel()
         except Exception as exc:  # noqa: BLE001
             logger.warning("auto_triage_worker.stop_failed", error=str(exc))
+
+    if getattr(app.state, "shadow_worker", None) is not None:
+        try:
+            await app.state.shadow_worker.stop()
+            if app.state.shadow_worker_task is not None:
+                app.state.shadow_worker_task.cancel()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("agentic.shadow.worker.stop_failed", error=str(exc))
 
     # Stop the hunt scheduler before draining DB pools so in-flight runs
     # can flush their writes.

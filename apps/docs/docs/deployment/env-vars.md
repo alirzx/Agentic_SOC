@@ -168,6 +168,11 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `AISOC_SSRF_ALLOWED_SCHEMES` | `http,https` | Comma-separated list of URL schemes allowed for outbound `http_request` and `notify` playbook steps. Anything else is rejected. |
 | `AISOC_SSRF_ALLOW_PRIVATE` | `false` | When `true`, lets playbook steps reach loopback / RFC1918 / link-local destinations. Leave off in production; enable only for self-hosted webhooks on a private network. |
 | `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny in addition to the built-in cloud-metadata block list (`169.254.169.254`, `metadata.google.internal`, …). |
+| `AGENTIC_SOC_ENABLED` | `false` | Master switch for the Phase 7 Agentic SOC shadow consumer. `false` = completely inactive; existing fused-alert triage is unchanged. |
+| `AGENTIC_SOC_SHADOW_MODE` | `true` | When enabled together with `AGENTIC_SOC_ENABLED`, run the agentic orchestrator in parallel. Destructive tools always dry-run. |
+| `AGENTIC_SOC_AUTO_RESPONSE` | `false` | Ignored while shadow mode is on (tool layer still dry-runs). Do not enable in production. |
+| `AGENTIC_SOC_MAX_CONCURRENT_RUNS` | `10` | Semaphore + queue for in-flight shadow investigations. Excess work waits; it is never silently dropped. |
+| `AGENTIC_SOC_TIMEOUT_SECONDS` | `120` | Wall-clock timeout around `SocOrchestrator.run`. Expiry stores status `timeout`. |
 
 ---
 

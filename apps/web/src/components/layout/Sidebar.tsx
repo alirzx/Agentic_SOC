@@ -239,6 +239,11 @@ const navSections: NavSection[] = [
         icon: <SparklesIcon />,
       },
       {
+        label: 'Agentic Shadow Runs',
+        href: '/agentic/shadow-runs',
+        icon: <EyeIcon />,
+      },
+      {
         label: 'Coverage Advisor',
         href: '/coverage-advisor',
         icon: <ShieldIcon />,

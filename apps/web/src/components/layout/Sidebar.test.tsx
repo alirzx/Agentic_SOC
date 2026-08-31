@@ -38,6 +38,10 @@ describe('Sidebar', () => {
     // everything else is grouped under one of these four titles.
     expect(screen.getByText('Threat Operations')).toBeInTheDocument();
     expect(screen.getByText('Intelligence')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /agentic shadow runs/i })).toHaveAttribute(
+      'href',
+      '/agentic/shadow-runs',
+    );
     expect(screen.getByText('Automation')).toBeInTheDocument();
     expect(screen.getByText('Platform')).toBeInTheDocument();
   });

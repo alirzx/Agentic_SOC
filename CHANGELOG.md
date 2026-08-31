@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Soorin Agentic SOC runtime contracts** (`services/agents/app/runtime/`).
+  Spec-aligned Agent/Tool/Incident/Risk/Decision/Report contracts layered on
+  the existing Python stack (no NestJS rewrite). Includes a versioned agent
+  registry, audit-wrapped runtime, permissioned tool registry, deterministic
+  0–100 risk engine, HITL policy, evidence provenance graph, and a state-machine
+  orchestrator. Existing LangGraph graphs, four-agent façade, fusion, and
+  connectors are unchanged. Gap analysis: `docs/architecture/soorin-gap-analysis.md`.
+
+- **Phase 7 Agentic SOC shadow mode.** Optional parallel consumer on
+  `aisoc.alerts.fused` (group `aisoc-agents-agentic-shadow`) runs the agentic
+  orchestrator without mutating Case/Alert or executing response actions.
+  Gated by `AGENTIC_SOC_ENABLED` (default false). See
+  `docs/architecture/phase-7-shadow-mode.md`.
+
 ### Fixed
 
 - **UEBA can no longer read an unscoreable baseline as normal behaviour.** A

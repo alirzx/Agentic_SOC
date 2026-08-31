@@ -1742,6 +1742,53 @@ export const ledgerApi = {
     ),
 };
 
+export interface AgenticShadowRunSummary {
+  id: string;
+  alert_id: string;
+  case_id: string;
+  status: string;
+  duration_ms: number;
+  risk_score: number;
+  confidence: number;
+  agent_version: string;
+  tool_call_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+  decision: string;
+  recommended_actions: string[];
+  created_at: string;
+  error?: string | null;
+}
+
+export interface AgenticShadowRunDetail extends AgenticShadowRunSummary {
+  tenant_id: string;
+  workflow_version: string;
+  prompt_version: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  result: Record<string, unknown>;
+  comparison: {
+    caseId?: string;
+    existing?: Record<string, unknown>;
+    agentic?: Record<string, unknown>;
+    differences?: string[];
+  };
+}
+
+export const agenticShadowApi = {
+  list: (params?: { status?: string; limit?: number }) =>
+    request<AgenticShadowRunSummary[]>('/api/v1/soc/agentic/shadow-runs', {
+      params: { status: params?.status, limit: params?.limit },
+    }),
+  get: (runId: string) =>
+    request<AgenticShadowRunDetail>(`/api/v1/soc/agentic/shadow-runs/${runId}`),
+  evidence: (runId: string) =>
+    request<{ id: string; evidence: unknown[] }>(`/api/v1/soc/agentic/shadow-runs/${runId}/evidence`),
+  comparison: (runId: string) =>
+    request<AgenticShadowRunDetail['comparison']>(`/api/v1/soc/agentic/shadow-runs/${runId}/comparison`),
+};
+
 // ─── Metrics / Dashboard ─────────────────────────────────────────────────────
 
 export interface DashboardMetrics {
