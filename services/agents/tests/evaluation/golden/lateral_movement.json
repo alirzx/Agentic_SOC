@@ -1,0 +1,13 @@
+{
+  "id": "GOLDEN-LATERAL",
+  "source": "SYNTHETIC",
+  "title": "Lateral movement via RDP",
+  "description": "RDP from compromised host to domain controller.",
+  "severity": "critical",
+  "response_class": "isolate_host",
+  "expected_techniques": ["T1021.001"],
+  "expected_actions": ["isolate_asset"],
+  "expected_correlation_group": ["GOLDEN-LATERAL", "GOLDEN-LATERAL-2"],
+  "attack_stage": "lateral_movement",
+  "telemetry": [{"source": "windows", "event": "rdp lateral movement"}]
+}

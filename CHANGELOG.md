@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Gated by `AGENTIC_SOC_ENABLED` (default false). See
   `docs/architecture/phase-7-shadow-mode.md`.
 
+- **Phase 8 Agentic SOC evaluation engine.** Deterministic scoring vs ground
+  truth (classification, severity, risk, MITRE, IOC, evidence, hallucination,
+  correlation, investigation, actions). Golden dataset at
+  `services/agents/tests/evaluation/golden/`. Read API at
+  `GET /api/v1/soc/agentic/evaluations*`. See
+  `docs/architecture/phase-8-evaluation.md`.
+
 ### Fixed
 
 - **UEBA can no longer read an unscoreable baseline as normal behaviour.** A

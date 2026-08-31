@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-BRUTE",
+  "source": "SYNTHETIC",
+  "title": "Brute force authentication from 185.1.2.3",
+  "description": "Repeated failed VPN logins followed by success.",
+  "severity": "high",
+  "response_class": "block_indicator",
+  "expected_techniques": ["T1110"],
+  "expected_actions": ["block_ioc"],
+  "expected_correlation_group": ["GOLDEN-BRUTE"],
+  "iocs": ["185.1.2.3"],
+  "attack_stage": "credential_access",
+  "telemetry": [{"source": "vpn", "src_ip": "185.1.2.3", "failures": 50}]
+}

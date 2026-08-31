@@ -156,3 +156,22 @@ export interface AgenticComparison {
   agentic: AgenticSocSnapshot;
   differences: string[];
 }
+
+export type AgenticEvaluationRunStatus =
+  | "created"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface AgenticEvaluationRunSummary {
+  id: string;
+  datasetId: string;
+  datasetVersion: string;
+  status: AgenticEvaluationRunStatus;
+  totalCases: number;
+  completedCases: number;
+  failedCases: number;
+  comparisonSummary: Record<string, unknown>;
+  productionReadiness: Record<string, unknown>;
+}

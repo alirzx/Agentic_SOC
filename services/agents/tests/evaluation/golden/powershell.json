@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-PWSH",
+  "source": "SYNTHETIC",
+  "title": "PowerShell encoded command execution",
+  "description": "Encoded PowerShell download cradle on endpoint.",
+  "severity": "high",
+  "response_class": "isolate_host",
+  "expected_techniques": ["T1059.001"],
+  "expected_actions": ["isolate_asset"],
+  "attack_stage": "execution",
+  "telemetry": [{"source": "sysmon", "Image": "powershell.exe", "CommandLine": "-enc"}]
+}

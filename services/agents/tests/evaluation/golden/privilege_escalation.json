@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-PRIV-ESC",
+  "source": "SYNTHETIC",
+  "title": "Privilege escalation via UAC bypass",
+  "description": "Standard user escalated to admin via UAC bypass.",
+  "severity": "critical",
+  "response_class": "disable_account",
+  "expected_techniques": ["T1548.002"],
+  "expected_actions": ["disable_account"],
+  "attack_stage": "privilege_escalation",
+  "telemetry": [{"source": "edr", "event": "uac bypass"}]
+}

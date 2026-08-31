@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-INSIDER",
+  "source": "SYNTHETIC",
+  "title": "Insider bulk download of sensitive files",
+  "description": "Employee downloaded 10k files from SharePoint.",
+  "severity": "medium",
+  "response_class": "request_analyst_review",
+  "expected_techniques": ["T1530"],
+  "expected_actions": ["request_analyst_review"],
+  "attack_stage": "collection",
+  "telemetry": [{"source": "saas", "User": "insider@corp.com", "files": 10000}]
+}

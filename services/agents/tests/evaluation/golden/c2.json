@@ -1,0 +1,13 @@
+{
+  "id": "GOLDEN-C2",
+  "source": "SYNTHETIC",
+  "title": "C2 beacon to malicious domain",
+  "description": "Periodic HTTPS beacon to evil-c2.example.",
+  "severity": "high",
+  "response_class": "block_indicator",
+  "expected_techniques": ["T1071.001"],
+  "expected_actions": ["block_ioc"],
+  "iocs": ["evil-c2.example"],
+  "attack_stage": "c2",
+  "telemetry": [{"source": "dns", "domain": "evil-c2.example"}]
+}

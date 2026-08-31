@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-EXFIL",
+  "source": "SYNTHETIC",
+  "title": "Data exfiltration to cloud storage",
+  "description": "Large outbound transfer to unknown S3 bucket.",
+  "severity": "high",
+  "response_class": "isolate_host",
+  "expected_techniques": ["T1567"],
+  "expected_actions": ["isolate_asset"],
+  "attack_stage": "impact",
+  "telemetry": [{"source": "dlp", "bytes_out": 500000000}]
+}

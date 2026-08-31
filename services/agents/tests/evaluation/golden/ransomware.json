@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-RANSOMWARE",
+  "source": "SYNTHETIC",
+  "title": "Ransomware encryption on finance endpoints",
+  "description": "Mass file encryption detected on FIN-WS-12 with ransom note deployment.",
+  "severity": "critical",
+  "response_class": "isolate_host",
+  "expected_techniques": ["T1486"],
+  "expected_correlation_group": ["GOLDEN-RANSOMWARE"],
+  "expected_actions": ["isolate_asset"],
+  "attack_stage": "impact",
+  "compromised": true,
+  "hostname": "FIN-WS-12"
+}

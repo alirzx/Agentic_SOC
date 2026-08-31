@@ -1,6 +1,7 @@
 """ORM models package - imports all models for Alembic and SQLAlchemy."""
 
 from app.db.database import Base
+from app.models.agentic_evaluation import AgenticCaseEvaluation, AgenticEvaluationRun
 from app.models.agentic_shadow import AgenticShadowRun
 from app.models.alert import Alert
 from app.models.asset import AlertAssetCorrelation, Asset, AssetVulnerability
@@ -50,6 +51,8 @@ __all__ = [
     "User",
     "ApiKey",
     "AgenticShadowRun",
+    "AgenticEvaluationRun",
+    "AgenticCaseEvaluation",
     "Alert",
     "AlertAssetCorrelation",
     "AlertIdentityLink",

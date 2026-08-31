@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-WEBSHELL",
+  "source": "SYNTHETIC",
+  "title": "Web shell on public-facing server",
+  "description": "Webshell uploaded to IIS server WEB-01.",
+  "severity": "critical",
+  "response_class": "isolate_host",
+  "expected_techniques": ["T1505.003"],
+  "expected_actions": ["isolate_asset"],
+  "attack_stage": "persistence",
+  "telemetry": [{"source": "waf", "hostname": "WEB-01", "uri": "/shell.aspx"}]
+}
