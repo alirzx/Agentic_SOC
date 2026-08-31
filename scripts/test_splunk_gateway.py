@@ -69,19 +69,43 @@ async def _run() -> int:
         return 1
     print("Authentication: OK")
     print(f"Server Info: OK (version={health.get('version', 'unknown')})")
-    safe_query = ensure_search_prefix("| makeresults | eval agentic_soc_test=\"true\" | head 1")
+    safe_query = ensure_search_prefix("index=* | head 5")
     result = await run_splunk_search(
         safe_query,
-        earliest="-5m",
+        earliest="-60m",
         latest="now",
         max_events=5,
     )
     print(f"Search: {'OK' if result.status.startswith('SUCCESS') or result.status == 'SPLUNK_RESULT_TRUNCATED' else result.status}")
+    print(f"SID: {result.search_id}")
     print(f"Events: {result.event_count}")
+    print(f"Duration_ms: {result.duration_ms}")
     print(f"Status: {result.status}")
+    if result.events:
+        ev = result.events[0]
+        print(f"Sample evidence_id: {ev.evidence_id}")
+        print(f"Sample index: {ev.index} sourcetype: {ev.sourcetype} host: {ev.host}")
+    sysmon_query = ensure_search_prefix("index=sysmon EventID=1 | head 10")
+    sysmon_result = await run_splunk_search(sysmon_query, earliest="-60m", latest="now", max_events=10)
+    print()
+    print("Sysmon search:")
+    print(f"  status={sysmon_result.status} sid={sysmon_result.search_id} events={sysmon_result.event_count}")
+    if sysmon_result.events:
+        sample = sysmon_result.events[0]
+        print(f"  sample_evidence_id={sample.evidence_id}")
+        print(f"  sample_index={sample.index} sourcetype={sample.sourcetype}")
+        sysmon = sample.fields.get("sysmon") if sample.fields else None
+        if isinstance(sysmon, dict):
+            print(f"  sysmon_parse_status={sysmon.get('parse_status')}")
+            for key in ("EventID", "Image", "User", "ParentImage"):
+                if sysmon.get(key):
+                    print(f"  {key}={sysmon.get(key)}")
     if result.status.startswith("SPLUNK_") and result.status not in {
         "SPLUNK_RESULT_TRUNCATED",
     }:
+        return 1
+    if result.event_count == 0:
+        print("Search: NO_EVENTS")
         return 1
     return 0
 

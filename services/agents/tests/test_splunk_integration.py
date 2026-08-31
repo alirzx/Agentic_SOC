@@ -157,6 +157,55 @@ async def test_registry_splunk_tool_evidence() -> None:
     assert evidence[0].source == "splunk"
 
 
+def test_sysmon_xml_parsing() -> None:
+    from app.integrations.splunk.sysmon_parser import merge_sysmon_into_row, parse_sysmon_raw
+
+    raw = (
+        "<Event><System><Provider Name='Microsoft-Windows-Sysmon' Guid='{guid}'/>"
+        "<EventID>1</EventID><Computer>DESKTOP-6I8VJRD</Computer>"
+        "<Channel>Microsoft-Windows-Sysmon/Operational</Channel></System>"
+        "<EventData><Data Name='Image'>C:\\Windows\\splunk-powershell.exe</Data>"
+        "<Data Name='User'>SYSTEM</Data>"
+        "<Data Name='ParentImage'>C:\\Splunk\\bin\\splunkd.exe</Data>"
+        "<Data Name='Hashes'>MD5=abc,SHA256=def,IMPHASH=ghi</Data></EventData></Event>"
+    )
+    parsed = parse_sysmon_raw(raw)
+    assert parsed.get("parse_status") == "ok"
+    assert parsed.get("EventID") == "1"
+    assert parsed.get("Computer") == "DESKTOP-6I8VJRD"
+    row = merge_sysmon_into_row({"_raw": raw, "index": "sysmon", "sourcetype": "XmlWinEventLog"})
+    event = normalize_splunk_event(row, search_id="1788180793.247368", event_index=0)
+    assert event.evidence_id == "splunk:1788180793.247368:0"
+    assert event.index == "sysmon"
+    assert event.fields.get("_raw")
+    assert event.fields.get("sysmon", {}).get("EventID") == "1"
+    assert event.fields.get("sysmon", {}).get("Image") == "C:\\Windows\\splunk-powershell.exe"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_query_rejected() -> None:
+    with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):
+        ctx = AgentContext(incident_id="inc-1", tenant_id="t-1", objective="", metadata={})
+        with patch.object(
+            SplunkClient,
+            "search",
+            new=AsyncMock(return_value=("job-dup", [{"host": "h1"}], 10)),
+        ):
+            first = await run_splunk_search("index=sysmon EventID=1", earliest="-15m", context=ctx)
+            second = await run_splunk_search("index=sysmon EventID=1", earliest="-15m", context=ctx)
+    assert first.status == "SUCCESS_WITH_RESULTS"
+    assert second.status == "SPLUNK_QUERY_REJECTED"
+
+
+@pytest.mark.asyncio
+async def test_dangerous_spl_map_rejected() -> None:
+    with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):
+        with patch.object(SplunkClient, "search", new=AsyncMock()) as mock_search:
+            result = await run_splunk_search("index=sysmon | map search=\"foo\"", earliest="-5m")
+    mock_search.assert_not_called()
+    assert result.status == "SPLUNK_QUERY_REJECTED"
+
+
 def test_fabricated_evidence_id_rejected() -> None:
     from app.runtime.llm_agents.models import Claim, InvestigationOutput
     from app.runtime.llm_agents.validation import validate_investigation_output
@@ -166,6 +215,25 @@ def test_fabricated_evidence_id_rejected() -> None:
     )
     validated = validate_investigation_output(output, available_evidence_ids={"splunk:real:0"})
     assert validated.claims[0].status == "unsupported"
+
+
+@pytest.mark.asyncio
+async def test_grounded_splunk_claim() -> None:
+    from app.runtime.llm_agents.models import Claim, InvestigationOutput
+    from app.runtime.llm_agents.validation import validate_investigation_output
+
+    eid = "splunk:1788180793.247368:0"
+    output = InvestigationOutput(
+        claims=[
+            Claim(
+                claim="Process splunk-powershell.exe observed",
+                confidence=0.85,
+                evidence_ids=[eid],
+            )
+        ],
+    )
+    validated = validate_investigation_output(output, available_evidence_ids={eid})
+    assert validated.claims[0].status == "supported"
 
 
 @pytest.mark.asyncio

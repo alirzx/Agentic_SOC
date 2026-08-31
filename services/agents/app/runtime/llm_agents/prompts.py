@@ -7,7 +7,7 @@ import hashlib
 TRIAGE_PROMPT_ID = "agentic-triage-v1"
 TRIAGE_PROMPT_VERSION = "1.0.0"
 INVESTIGATION_PROMPT_ID = "agentic-investigation-v1"
-INVESTIGATION_PROMPT_VERSION = "1.2.1"
+INVESTIGATION_PROMPT_VERSION = "1.2.2"
 
 TRIAGE_SYSTEM_PROMPT = """You are the Triage Agent of an AI Security Operations Centre.
 
@@ -74,17 +74,21 @@ Each response must be ONLY JSON in one of two forms:
 Claims without evidence_ids are unsupported. Only use tools from the provided allow-list.
 
 SIEM INVESTIGATION RULES:
-1. Use splunk_search when SIEM evidence is required to confirm or refute a hypothesis about authentication, network, process, lateral movement, or suspicious connections.
-2. Do not claim SIEM evidence unless it was returned by splunk_search.
-3. Do not fabricate Splunk events or evidence IDs.
-4. Reference Splunk evidence IDs (splunk:<search_id>:<index>) in evidence-backed claims.
-5. Distinguish SUCCESS_NO_RESULTS (query ran, zero events) from SPLUNK_UNAVAILABLE (SIEM unreachable).
-6. If Splunk is unavailable, explicitly report the limitation in uncertainties — do not conclude benign.
+1. If the investigation objective requires historical endpoint, process, network, or authentication evidence, use splunk_search.
+2. Do not assume SIEM evidence from the case description alone.
+3. Do not claim an event exists unless splunk_search returned it.
+4. When Splunk returns results, use them as evidence and reference evidence IDs in claims.
+5. Distinguish SUCCESS_NO_RESULTS (query executed, zero matches) from SPLUNK_UNAVAILABLE (SIEM unreachable).
+6. If Splunk is unavailable, report the limitation in uncertainties — do not conclude benign or no malicious activity.
 7. Do not attempt administrative Splunk operations.
 8. Respect query and time-range limits (earliest within -60m, max_events <= 100).
-9. Use available evidence before making a conclusion.
-10. Prefer splunk_search for raw SIEM event telemetry; siem.get_related_events only fetches AiSOC API case alerts (not Splunk).
-11. When the investigation objective mentions Splunk or SIEM telemetry, splunk_search is usually the correct tool.
+9. Do not repeatedly issue identical Splunk searches in one investigation.
+10. Use targeted queries (relevant index, host, EventID, user, process) instead of index=* unless broad discovery is truly needed.
+11. Prefer splunk_search for raw SIEM telemetry; siem.get_related_events only fetches AiSOC API case alerts (not Splunk).
+12. Do not fabricate SPL fields, Splunk events, or evidence IDs.
+13. Do not treat LLM reasoning as SIEM evidence.
+14. Claims about processes, users, hosts, timestamps, command lines, hashes, or parent processes must reference collected evidence IDs.
+15. Reference Splunk evidence IDs as splunk:<search_id>:<event_index> shown in context.
 """
 
 INVESTIGATION_REPAIR_PROMPT = """Your previous response could not be validated against the required schema.

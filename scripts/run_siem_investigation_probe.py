@@ -46,7 +46,7 @@ async def _splunk_live_probe() -> dict[str, object]:
         out["splunk_duration_ms"] = int((time.monotonic() - started) * 1000)
         return out
     search_started = time.monotonic()
-    search_query = ensure_search_prefix("index=* | head 5")
+    search_query = ensure_search_prefix("index=sysmon EventID=1 | head 10")
     result = await run_splunk_search(search_query, earliest="-60m", latest="now", max_events=5)
     out["search_duration_ms"] = int((time.monotonic() - search_started) * 1000)
     out["search_status"] = result.status

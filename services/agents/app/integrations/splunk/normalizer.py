@@ -17,23 +17,47 @@ def _first_field(row: dict[str, Any], *keys: str) -> str | None:
     return None
 
 
+from .sysmon_parser import merge_sysmon_into_row
+
+
 def normalize_splunk_event(row: dict[str, Any], *, search_id: str, event_index: int) -> SplunkEventRecord:
-    host = _first_field(row, "host", "hostname")
-    src_ip = _first_field(row, "src_ip", "src", "source_ip", "ClientIP", "IpAddress")
-    dest_ip = _first_field(row, "dest_ip", "dest", "destination_ip", "dest_ip")
-    user = _first_field(row, "user", "username", "user_name", "AccountName")
+    enriched = merge_sysmon_into_row(row)
+    host = _first_field(enriched, "host", "hostname", "Computer")
+    src_ip = _first_field(enriched, "src_ip", "src", "source_ip", "ClientIP", "IpAddress")
+    dest_ip = _first_field(enriched, "dest_ip", "dest", "destination_ip", "dest_ip")
+    user = _first_field(enriched, "user", "username", "user_name", "AccountName", "User")
+    event_type = _first_field(enriched, "EventID", "action", "EventCode", "signature", "event_type")
+    index_name = _first_field(enriched, "index")
+    raw = enriched.get("_raw")
+    fields = {
+        k: v
+        for k, v in enriched.items()
+        if k not in {"_serial", "_si", "_bkt", "_cd"}
+    }
+    if raw is not None:
+        fields["_raw"] = str(raw)
+    if enriched.get("sysmon"):
+        fields["sysmon"] = enriched["sysmon"]
+    if enriched.get("Image"):
+        fields["Image"] = enriched["Image"]
+    if enriched.get("CommandLine"):
+        fields["CommandLine"] = enriched["CommandLine"]
+    if enriched.get("ParentImage"):
+        fields["ParentImage"] = enriched["ParentImage"]
+    if enriched.get("Hashes"):
+        fields["Hashes"] = enriched["Hashes"]
     return SplunkEventRecord(
         evidence_id=f"splunk:{search_id}:{event_index}",
-        event_time=_first_field(row, "_time", "time"),
+        event_time=_first_field(enriched, "_time", "time", "UtcTime"),
         host=host,
         src_ip=src_ip,
         dest_ip=dest_ip,
         user=user,
-        event_type=_first_field(row, "action", "EventCode", "signature", "event_type"),
-        index=_first_field(row, "index"),
-        sourcetype=_first_field(row, "sourcetype"),
-        source=_first_field(row, "source"),
-        fields={k: v for k, v in row.items() if k not in {"_raw", "_serial", "_si"}},
+        event_type=event_type,
+        index=index_name,
+        sourcetype=_first_field(enriched, "sourcetype"),
+        source=_first_field(enriched, "source"),
+        fields=fields,
     )
 
 
@@ -68,14 +92,18 @@ def evidence_from_splunk_event(
             "source": "splunk",
             "siem": "splunk",
             "search_id": search_id,
+            "evidence_id": event.evidence_id,
             "event_time": event.event_time,
             "host": event.host,
             "src_ip": event.src_ip,
             "dest_ip": event.dest_ip,
             "user": event.user,
+            "event_type": event.event_type,
             "index": event.index,
             "sourcetype": event.sourcetype,
             "fields": event.fields,
+            "_raw": event.fields.get("_raw"),
+            "sysmon": event.fields.get("sysmon"),
         },
         confidence=0.85,
         provenance=EvidenceProvenance(

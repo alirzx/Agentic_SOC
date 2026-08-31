@@ -86,8 +86,8 @@ def load_golden_siem_case() -> EvaluationDataset:
     payload.setdefault("source", "SYNTHETIC")
     return EvaluationDataset(
         dataset_id="golden-siem-v1",
-        name="Golden SIEM Investigation Probe",
-        description="Single case requiring Splunk SIEM evidence (SYNTHETIC labels).",
+        name="Golden SIEM Sysmon Investigation Probe",
+        description="Sysmon-focused case requiring Splunk SIEM evidence (SYNTHETIC labels).",
         source="SYNTHETIC",
         dataset_type="SYNTHETIC",
         version="1.0",

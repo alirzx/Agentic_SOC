@@ -97,6 +97,24 @@ async def run_splunk_search(
         _record_tool_metadata(context, result)
         return result
     spl = ensure_search_prefix(search_input.query)
+    query_hash = hash_query(spl)
+    if context is not None:
+        seen = set(context.metadata.get("splunk_query_hashes") or [])
+        if query_hash in seen:
+            record_splunk_metric("splunk_query_rejected_total")
+            result = build_search_result(
+                status="SPLUNK_QUERY_REJECTED",
+                search_id=None,
+                events=[],
+                truncated=False,
+                duration_ms=0,
+                error="duplicate Splunk query in this investigation",
+                query_hash=query_hash,
+            )
+            _record_tool_metadata(context, result)
+            return result
+        seen.add(query_hash)
+        context.metadata["splunk_query_hashes"] = list(seen)
     client = SplunkClient(config)
     started = time.monotonic()
     try:

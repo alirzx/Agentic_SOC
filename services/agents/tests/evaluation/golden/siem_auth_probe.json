@@ -1,29 +1,30 @@
 {
-  "id": "GOLDEN-SIEM-AUTH",
+  "id": "GOLDEN-SIEM-SYSMON",
   "source": "SYNTHETIC",
-  "title": "Suspicious authentication activity from external source IP",
-  "description": "VPN security alert: source IP 185.1.2.3 generated repeated failed authentication attempts followed by a successful login. Analyst needs SIEM telemetry to determine whether this IP produced authentication or network activity during the alert window.",
-  "investigation_objective": "Determine whether source IP 185.1.2.3 generated authentication failures, successful logins, or related network activity in the Splunk SIEM during the last 60 minutes. Use splunk_search with SIEM queries scoped to this IP and time window before concluding.",
-  "required_evidence": ["splunk_siem_events", "authentication_logs", "network_activity"],
+  "title": "Suspicious Windows process activity on managed endpoint",
+  "description": "SOC alert: unusual process creation activity was reported on a Windows endpoint. Endpoint telemetry is collected into Splunk via Sysmon (index=sysmon, sourcetype XmlWinEventLog). The alert summary alone is insufficient — SIEM evidence is required to validate process creation chains, parent/child relationships, users, and command lines.",
+  "investigation_objective": "Use Splunk SIEM evidence to investigate Windows Sysmon process creation activity during the last 60 minutes. Determine whether suspicious process execution occurred on the affected endpoint by querying relevant Sysmon telemetry (process creation events) before concluding. Do not rely on the alert narrative alone.",
+  "required_evidence": ["splunk_siem_events", "sysmon_process_create", "endpoint_telemetry"],
   "severity": "high",
   "response_class": "investigate",
-  "expected_techniques": ["T1110"],
+  "expected_techniques": ["T1059", "T1204"],
   "expected_actions": ["investigate"],
-  "expected_correlation_group": ["GOLDEN-SIEM-AUTH"],
-  "iocs": ["185.1.2.3"],
-  "attack_stage": "credential_access",
+  "expected_correlation_group": ["GOLDEN-SIEM-SYSMON"],
+  "iocs": [],
+  "attack_stage": "execution",
   "entities": {
-    "src_ip": "185.1.2.3",
-    "alert_type": "vpn_bruteforce"
+    "host": "DESKTOP-6I8VJRD",
+    "platform": "windows",
+    "siem_index_hint": "sysmon",
+    "telemetry_type": "sysmon_process_create"
   },
   "telemetry": [
     {
-      "source": "vpn",
-      "src_ip": "185.1.2.3",
-      "failures": 42,
-      "success": 1,
-      "action": "authentication"
+      "source": "edr_alert",
+      "host": "DESKTOP-6I8VJRD",
+      "alert_type": "process_creation",
+      "note": "Endpoint Sysmon data available in Splunk SIEM"
     }
   ],
-  "evidence_keywords": ["splunk", "authentication", "siem"]
+  "evidence_keywords": ["splunk", "sysmon", "siem", "process"]
 }

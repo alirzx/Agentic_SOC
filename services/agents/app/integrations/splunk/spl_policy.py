@@ -11,9 +11,12 @@ _DANGEROUS_COMMANDS = (
     "| collect",
     "| outputlookup",
     "| outputcsv",
+    "| inputlookup",
+    "| rest",
     "| rest ",
     "| script",
     "| sendemail",
+    "| map",
     "| run",
     "inputlookup",
 )
