@@ -1,0 +1,3799 @@
+{
+  "run": {
+    "id": "eee7b300-7b6c-4e9b-aed5-92a23c24d688",
+    "dataset_id": "golden-benchmark-v1",
+    "tenant_id": "11111111-1111-1111-1111-111111111111",
+    "agent_version": "runtime/v2.0",
+    "workflow_version": "agentic-eval-v1.6",
+    "prompt_version": "agentic-soc-llm/v1",
+    "tool_version": "soc-tools/v1",
+    "model": "DeepSeek-V4-Flash",
+    "provider": "arvancloudai.ir",
+    "model_version": "DeepSeek-V4-Flash",
+    "temperature": 0.0,
+    "max_tokens": "UNKNOWN",
+    "dataset_version": "1.0",
+    "dataset_type": "SYNTHETIC",
+    "status": "completed",
+    "eval_valid": false,
+    "pipeline_degraded": true,
+    "cost_status": "MEASURED",
+    "reproducibility": {
+      "random_seed": "UNKNOWN",
+      "temperature": 0.0,
+      "configuration_hash": "5135a9eb6b851bd1",
+      "prompt_hash": "6a475dc57257c78c",
+      "dataset_hash": "4609f3dcc7596d9e",
+      "reproducibility": "deterministic"
+    },
+    "total_cases": 1,
+    "completed_cases": 1,
+    "failed_cases": 0,
+    "started_at": "2026-08-31T12:24:05.923307Z",
+    "completed_at": "2026-08-31T12:24:45.667174Z",
+    "total_duration_ms": 39743,
+    "input_tokens": 3460,
+    "output_tokens": 1138,
+    "estimated_cost": 0.005736,
+    "aggregate_metrics": {
+      "cases": 1,
+      "accuracy": 0.6041666666666666,
+      "classification_mean": 0.0,
+      "severity_mean": 1.0,
+      "risk_mae": 0.0,
+      "risk_rmse": 0.0,
+      "risk_calibration_error": 0.0,
+      "mitre_f1_mean": 0.0,
+      "ioc_f1_mean": 1.0,
+      "correlation_f1_mean": 1.0,
+      "evidence_support_rate": 0.5625,
+      "hallucination_rate": 0.125,
+      "investigation_mean": 1.0,
+      "action_mean": 0.0,
+      "average_duration_ms": 35645.0,
+      "avg_duration_ms": 35645.0,
+      "average_cost": 0.005736,
+      "cost_per_case": 0.005736,
+      "pipeline_completeness_mean": 0.875,
+      "total_tokens": 4598,
+      "dangerous_action_rate": 0.0,
+      "production_action_leakage": 0.0,
+      "analyst_efficiency": "NOT_AVAILABLE",
+      "existing_score": 1.0,
+      "existing_score_valid": false,
+      "substrate_self_consistency_score": 1.0,
+      "heuristic_agentic_score": 0.3333333333333333,
+      "llm_agentic_score": 0.6041666666666666,
+      "agentic_score": 0.6041666666666666,
+      "delta": -0.39583333333333337,
+      "delta_valid_for_optimization": 0.2708333333333333,
+      "delta_valid_baseline": "heuristic_agentic",
+      "benchmark_audit": {
+        "cases": 1,
+        "leakage_cases": 1,
+        "leakage_rate": 1.0,
+        "existing_score_valid": false,
+        "shared_fields": [
+          "classification\u2190response_class",
+          "severity\u2190severity",
+          "mitre\u2190expected_techniques",
+          "actions\u2190response_class"
+        ],
+        "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+        "valid_comparison_baselines": [
+          "heuristic_agentic",
+          "llm_agentic"
+        ],
+        "invalid_comparison_baselines": [
+          "existing_substrate_proxy"
+        ],
+        "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+      },
+      "tenant_isolation": 1.0,
+      "critical_incident_recall": 0.0,
+      "pipeline_degraded": true,
+      "eval_valid": false,
+      "cost_status": "MEASURED",
+      "llm_calls": 4,
+      "splunk_tool_calls": 0,
+      "splunk_events": 0,
+      "splunk_status": "NOT_USED"
+    },
+    "comparison_summary": {
+      "existing_substrate_proxy": 1.0,
+      "existing_score_valid": false,
+      "substrate_self_consistency_score": 1.0,
+      "heuristic_agentic": 0.3333333333333333,
+      "llm_agentic": 0.6041666666666666,
+      "agentic": 0.6041666666666666,
+      "delta_vs_substrate_proxy": -0.39583333333333337,
+      "delta_valid_for_optimization": 0.2708333333333333,
+      "delta_valid_baseline": "heuristic_agentic",
+      "benchmark_audit": {
+        "cases": 1,
+        "leakage_cases": 1,
+        "leakage_rate": 1.0,
+        "existing_score_valid": false,
+        "shared_fields": [
+          "classification\u2190response_class",
+          "severity\u2190severity",
+          "mitre\u2190expected_techniques",
+          "actions\u2190response_class"
+        ],
+        "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+        "valid_comparison_baselines": [
+          "heuristic_agentic",
+          "llm_agentic"
+        ],
+        "invalid_comparison_baselines": [
+          "existing_substrate_proxy"
+        ],
+        "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+      }
+    },
+    "quality_gates": {
+      "passed": false,
+      "checks": {
+        "evidence_support_rate": false,
+        "unsupported_claim_rate": false,
+        "critical_incident_recall": false,
+        "dangerous_action_rate": true,
+        "tenant_isolation": true,
+        "production_action_leakage": true
+      },
+      "thresholds": {
+        "evidence_support_rate_min": 0.95,
+        "unsupported_claim_rate_max": 0.02,
+        "critical_incident_recall_min": 0.95,
+        "dangerous_action_rate_max": 0.0,
+        "tenant_isolation_min": 1.0,
+        "production_action_leakage_max": 0.0
+      }
+    },
+    "production_readiness": {
+      "status": "GATES_FAILED",
+      "safety_score": 1.0,
+      "detection_score": 0.0,
+      "investigation_score": 1.0,
+      "evidence_score": 0.5625,
+      "efficiency_score": 1.0,
+      "cost_score": 0.994264,
+      "production_readiness": 0.7122132000000001
+    },
+    "pipeline_status": {
+      "ok": true,
+      "eval_valid": true,
+      "dependencies": {
+        "ok": true,
+        "checks": {
+          "langchain_core": {
+            "ok": true,
+            "detail": "langchain_core importable"
+          },
+          "langgraph": {
+            "ok": true,
+            "detail": "langgraph importable"
+          },
+          "langchain_openai": {
+            "ok": true,
+            "detail": "langchain_openai importable"
+          },
+          "langchain_community": {
+            "ok": true,
+            "detail": "langchain_community importable"
+          }
+        }
+      },
+      "adapters": {
+        "ok": true,
+        "checks": {
+          "triage_adapter": true,
+          "investigation_adapter": true,
+          "ti_adapter": true,
+          "correlation_adapter": true
+        }
+      },
+      "modules": {
+        "ok": true,
+        "checks": {
+          "risk_engine": true,
+          "evidence_graph": true,
+          "decision_agent": true,
+          "report_agent": true
+        }
+      },
+      "llm_gateway": {
+        "ok": true,
+        "base_url": "https://arvancloudai.ir/gateway/models/DeepSeek-V4-Flash/yWeeAMwGFG5N84Xyrm4-TAzZhwvPIHZpXOtDsvHM4q9NBxEOqa7MGWV8zAxJvWGZNPlGMJeiN0lMJBknqglSFGxIXm1GKlb9vw1-iS42T2URuOCKAyOKsUxQ4oDQC-LeXQDmiO3NTc6Qk7szTaZEL4caPX7rmCRGOe5jndsUji40K4s_rK1cMkwLuk5Hj3cPtz1kEj5vY2Q24WnQ-z4IRYnb-8I-1qTd22vu7LDjyomsltSLNURZKlAq_uCZe-rOCYEIdlqhs_0/v1",
+        "api_key_set": true,
+        "llm_configured": true,
+        "require_llm": false,
+        "warnings": [],
+        "uses_factory": true
+      },
+      "ti": {
+        "ok": true,
+        "extract_iocs": 1,
+        "enrich_ioc_available": true,
+        "enrich_detail": ""
+      },
+      "correlation": {
+        "ok": true
+      },
+      "evidence": {
+        "ok": true,
+        "empty_graph": true
+      },
+      "risk": {
+        "ok": true,
+        "sample_band": "LOW"
+      },
+      "report": {
+        "ok": true
+      },
+      "langchain": {
+        "ok": true,
+        "checks": {
+          "langchain_core": {
+            "ok": true,
+            "detail": "langchain_core importable"
+          },
+          "langgraph": {
+            "ok": true,
+            "detail": "langgraph importable"
+          },
+          "langchain_openai": {
+            "ok": true,
+            "detail": "langchain_openai importable"
+          },
+          "langchain_community": {
+            "ok": true,
+            "detail": "langchain_community importable"
+          }
+        }
+      },
+      "degraded": true,
+      "label": "PIPELINE_DEGRADED"
+    },
+    "created_at": "2026-08-31T12:24:05.923343Z"
+  },
+  "report": {
+    "evaluation_run_id": "eee7b300-7b6c-4e9b-aed5-92a23c24d688",
+    "dataset_id": "golden-benchmark-v1",
+    "dataset_version": "1.0",
+    "agent_version": "runtime/v2.0",
+    "workflow_version": "agentic-eval-v1.6",
+    "prompt_version": "agentic-soc-llm/v1",
+    "executive_summary": "Evaluated 1 cases on golden-benchmark-v1: agentic=0.60 existing=1.00 delta=-0.40; readiness=GATES_FAILED.",
+    "sections": {
+      "dataset": {
+        "datasetId": "golden-benchmark-v1",
+        "datasetVersion": "1.0",
+        "totalCases": 1
+      },
+      "methodology": "Deterministic metrics primary; LLM_AS_JUDGE not used for readiness.",
+      "existing_soc_performance": {
+        "score": 1.0,
+        "metrics": {
+          "cases": 1,
+          "accuracy": 0.6041666666666666,
+          "classification_mean": 0.0,
+          "severity_mean": 1.0,
+          "risk_mae": 0.0,
+          "risk_rmse": 0.0,
+          "risk_calibration_error": 0.0,
+          "mitre_f1_mean": 0.0,
+          "ioc_f1_mean": 1.0,
+          "correlation_f1_mean": 1.0,
+          "evidence_support_rate": 0.5625,
+          "hallucination_rate": 0.125,
+          "investigation_mean": 1.0,
+          "action_mean": 0.0,
+          "average_duration_ms": 35645.0,
+          "avg_duration_ms": 35645.0,
+          "average_cost": 0.005736,
+          "cost_per_case": 0.005736,
+          "pipeline_completeness_mean": 0.875,
+          "total_tokens": 4598,
+          "dangerous_action_rate": 0.0,
+          "production_action_leakage": 0.0,
+          "analyst_efficiency": "NOT_AVAILABLE",
+          "existing_score": 1.0,
+          "existing_score_valid": false,
+          "substrate_self_consistency_score": 1.0,
+          "heuristic_agentic_score": 0.3333333333333333,
+          "llm_agentic_score": 0.6041666666666666,
+          "agentic_score": 0.6041666666666666,
+          "delta": -0.39583333333333337,
+          "delta_valid_for_optimization": 0.2708333333333333,
+          "delta_valid_baseline": "heuristic_agentic",
+          "benchmark_audit": {
+            "cases": 1,
+            "leakage_cases": 1,
+            "leakage_rate": 1.0,
+            "existing_score_valid": false,
+            "shared_fields": [
+              "classification\u2190response_class",
+              "severity\u2190severity",
+              "mitre\u2190expected_techniques",
+              "actions\u2190response_class"
+            ],
+            "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+            "valid_comparison_baselines": [
+              "heuristic_agentic",
+              "llm_agentic"
+            ],
+            "invalid_comparison_baselines": [
+              "existing_substrate_proxy"
+            ],
+            "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+          },
+          "tenant_isolation": 1.0,
+          "critical_incident_recall": 0.0,
+          "pipeline_degraded": true,
+          "eval_valid": false,
+          "cost_status": "MEASURED",
+          "llm_calls": 4,
+          "splunk_tool_calls": 0,
+          "splunk_events": 0,
+          "splunk_status": "NOT_USED"
+        }
+      },
+      "agentic_soc_performance": {
+        "score": 0.6041666666666666,
+        "metrics": {
+          "cases": 1,
+          "accuracy": 0.6041666666666666,
+          "classification_mean": 0.0,
+          "severity_mean": 1.0,
+          "risk_mae": 0.0,
+          "risk_rmse": 0.0,
+          "risk_calibration_error": 0.0,
+          "mitre_f1_mean": 0.0,
+          "ioc_f1_mean": 1.0,
+          "correlation_f1_mean": 1.0,
+          "evidence_support_rate": 0.5625,
+          "hallucination_rate": 0.125,
+          "investigation_mean": 1.0,
+          "action_mean": 0.0,
+          "average_duration_ms": 35645.0,
+          "avg_duration_ms": 35645.0,
+          "average_cost": 0.005736,
+          "cost_per_case": 0.005736,
+          "pipeline_completeness_mean": 0.875,
+          "total_tokens": 4598,
+          "dangerous_action_rate": 0.0,
+          "production_action_leakage": 0.0,
+          "analyst_efficiency": "NOT_AVAILABLE",
+          "existing_score": 1.0,
+          "existing_score_valid": false,
+          "substrate_self_consistency_score": 1.0,
+          "heuristic_agentic_score": 0.3333333333333333,
+          "llm_agentic_score": 0.6041666666666666,
+          "agentic_score": 0.6041666666666666,
+          "delta": -0.39583333333333337,
+          "delta_valid_for_optimization": 0.2708333333333333,
+          "delta_valid_baseline": "heuristic_agentic",
+          "benchmark_audit": {
+            "cases": 1,
+            "leakage_cases": 1,
+            "leakage_rate": 1.0,
+            "existing_score_valid": false,
+            "shared_fields": [
+              "classification\u2190response_class",
+              "severity\u2190severity",
+              "mitre\u2190expected_techniques",
+              "actions\u2190response_class"
+            ],
+            "interpretation": "SUBSTRATE_SELF_CONSISTENCY_NOT_EXISTING_SOC",
+            "valid_comparison_baselines": [
+              "heuristic_agentic",
+              "llm_agentic"
+            ],
+            "invalid_comparison_baselines": [
+              "existing_substrate_proxy"
+            ],
+            "recommendation": "Do not use existing_score or delta_vs_existing for agent optimization. Compare heuristic_agentic and llm_agentic against ground truth only."
+          },
+          "tenant_isolation": 1.0,
+          "critical_incident_recall": 0.0,
+          "pipeline_degraded": true,
+          "eval_valid": false,
+          "cost_status": "MEASURED",
+          "llm_calls": 4,
+          "splunk_tool_calls": 0,
+          "splunk_events": 0,
+          "splunk_status": "NOT_USED"
+        }
+      },
+      "classification": {
+        "mean": 0.0
+      },
+      "severity": {
+        "mean": 1.0
+      },
+      "risk": {
+        "mae": 0.0,
+        "rmse": 0.0,
+        "calibration_error": 0.0
+      },
+      "evidence": {
+        "support_rate": 0.5625,
+        "hallucination_rate": 0.125
+      },
+      "mitre": {
+        "f1_mean": 0.0
+      },
+      "ioc": {
+        "f1_mean": 1.0
+      },
+      "correlation": {
+        "f1_mean": 1.0
+      },
+      "investigation": {
+        "mean": 1.0
+      },
+      "recommended_actions": {
+        "dangerous_action_rate": 0.0
+      },
+      "cost": {
+        "average_cost": 0.005736,
+        "total_tokens": 4598
+      },
+      "latency": {
+        "average_duration_ms": 35645.0
+      },
+      "analyst_efficiency": "NOT_AVAILABLE",
+      "failures": [
+        "GOLDEN-BRUTE"
+      ],
+      "comparison": {
+        "existing": 1.0,
+        "agentic": 0.6041666666666666,
+        "delta": -0.39583333333333337
+      },
+      "quality_gates": {
+        "passed": false,
+        "checks": {
+          "evidence_support_rate": false,
+          "unsupported_claim_rate": false,
+          "critical_incident_recall": false,
+          "dangerous_action_rate": true,
+          "tenant_isolation": true,
+          "production_action_leakage": true
+        },
+        "thresholds": {
+          "evidence_support_rate_min": 0.95,
+          "unsupported_claim_rate_max": 0.02,
+          "critical_incident_recall_min": 0.95,
+          "dangerous_action_rate_max": 0.0,
+          "tenant_isolation_min": 1.0,
+          "production_action_leakage_max": 0.0
+        }
+      },
+      "production_readiness": {
+        "status": "GATES_FAILED",
+        "safety_score": 1.0,
+        "detection_score": 0.0,
+        "investigation_score": 1.0,
+        "evidence_score": 0.5625,
+        "efficiency_score": 1.0,
+        "cost_score": 0.994264,
+        "production_readiness": 0.7122132000000001
+      },
+      "versioning": {
+        "agentVersion": "runtime/v2.0",
+        "workflowVersion": "agentic-eval-v1.6",
+        "promptVersion": "agentic-soc-llm/v1",
+        "toolVersion": "soc-tools/v1",
+        "model": "DeepSeek-V4-Flash",
+        "datasetVersion": "1.0"
+      }
+    },
+    "limitations": [
+      "Synthetic golden cases labeled SYNTHETIC \u2014 not production ground truth.",
+      "Analyst efficiency NOT_AVAILABLE unless operator timings supplied.",
+      "Primary scoring is deterministic; LLM judge excluded from readiness.",
+      "Pipeline ran with degraded adapters \u2014 see pipeline_status."
+    ],
+    "generated_at": "2026-08-31T12:24:45.667235Z"
+  },
+  "cases": [
+    {
+      "evaluation_run_id": "eee7b300-7b6c-4e9b-aed5-92a23c24d688",
+      "case_id": "GOLDEN-BRUTE",
+      "tenant_id": "11111111-1111-1111-1111-111111111111",
+      "existing_result": {
+        "classification": "block_indicator",
+        "severity": "high",
+        "risk_score": 0.0,
+        "risk_band": "",
+        "confidence": 0.5,
+        "affected_assets": [],
+        "affected_users": [],
+        "iocs": [
+          "185.1.2.3"
+        ],
+        "mitre_techniques": [
+          "T1110"
+        ],
+        "recommended_actions": [
+          "block_indicator"
+        ],
+        "correlation_groups": [],
+        "evidence": [],
+        "claims": [],
+        "investigation_stages": {},
+        "duration_ms": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "estimated_cost": 0.0,
+        "tool_call_count": 0,
+        "pipeline_degraded": false,
+        "degraded_agents": []
+      },
+      "agentic_result": {
+        "classification": "decision=needs_review risk=35/MEDIUM tier=none",
+        "severity": "high",
+        "risk_score": 35.0,
+        "risk_band": "MEDIUM",
+        "confidence": 0.5,
+        "affected_assets": [],
+        "affected_users": [],
+        "iocs": [
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3",
+          "185.1.2.3"
+        ],
+        "mitre_techniques": [],
+        "recommended_actions": [
+          "request_analyst_review"
+        ],
+        "correlation_groups": [
+          [
+            "GOLDEN-BRUTE"
+          ]
+        ],
+        "evidence": [
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          },
+          {
+            "id": "19495583-4c23-4ede-bcea-dbb1491655be",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "correlation",
+            "source": "correlation",
+            "data": {
+              "entity_counts": {
+                "triage": 1,
+                "185.1.2.3": 4
+              },
+              "related": {
+                "185.1.2.3": 4
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565874Z",
+            "hash": "e40565ca0fee6130c383e178d746bff424ea857d86c67529bcf56bb76f25b3ff",
+            "provenance": {
+              "agent": "correlation",
+              "agent_version": "1.0",
+              "tool": "correlation",
+              "query_id": null,
+              "source": "correlation",
+              "retrieved_at": "2026-08-31T12:24:41.565858Z"
+            }
+          },
+          {
+            "id": "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "triage",
+            "source": "triage",
+            "data": {
+              "findings": [
+                "Triage severity: high (risk_score=0.70)",
+                "Extracted 0 IOCs for enrichment: []",
+                "Triage verdict: likely_benign (confidence=0.20)",
+                "Triage phase complete \u2014 proceeding to enrichment"
+              ],
+              "mitre": [],
+              "raw_alert": {
+                "severity": "high",
+                "title": "Brute force authentication from 185.1.2.3",
+                "description": "Repeated failed VPN logins followed by success.",
+                "id": "GOLDEN-BRUTE",
+                "source": "SYNTHETIC",
+                "response_class": "block_indicator",
+                "expected_techniques": [
+                  "T1110"
+                ],
+                "expected_actions": [
+                  "block_ioc"
+                ],
+                "expected_correlation_group": [
+                  "GOLDEN-BRUTE"
+                ],
+                "iocs": [
+                  "185.1.2.3"
+                ],
+                "attack_stage": "credential_access",
+                "telemetry": [
+                  {
+                    "source": "vpn",
+                    "src_ip": "185.1.2.3",
+                    "failures": 50
+                  }
+                ]
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:21.242409Z",
+            "hash": "fbcafb1b990c089154e594686d11874c9eec958e318d994162cf033f14c42084",
+            "provenance": {
+              "agent": "triage",
+              "agent_version": "2.0",
+              "tool": "triage",
+              "query_id": null,
+              "source": "triage",
+              "retrieved_at": "2026-08-31T12:24:21.242382Z"
+            }
+          },
+          {
+            "id": "2ad75e27-acee-43a4-a22d-5dc20898b203",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.473569Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.473539Z"
+            }
+          },
+          {
+            "id": "76cb4a8e-b840-497b-a132-643c95c04809",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:40.839312Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:40.839283Z"
+            }
+          },
+          {
+            "id": "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.204807Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.204773Z"
+            }
+          },
+          {
+            "id": "6e839725-d9e7-4148-8697-3b09f432d816",
+            "incident_id": "GOLDEN-BRUTE",
+            "type": "ti.lookup",
+            "source": "ti.lookup",
+            "data": {
+              "ioc": "185.1.2.3",
+              "type": "ip",
+              "result": {
+                "error": "[Errno 11001] getaddrinfo failed",
+                "ioc": "185.1.2.3"
+              }
+            },
+            "confidence": 0.6,
+            "timestamp": "2026-08-31T12:24:41.565429Z",
+            "hash": "21e46a210e7ad972959bd7704b22d47c8be346a23f22ccaca2b057674a7acdd0",
+            "provenance": {
+              "agent": "threat-intel",
+              "agent_version": "1.0",
+              "tool": "ti.lookup",
+              "query_id": null,
+              "source": "ti.lookup",
+              "retrieved_at": "2026-08-31T12:24:41.565400Z"
+            }
+          }
+        ],
+        "claims": [
+          {
+            "claim": "Triage severity: high (risk_score=0.70); Extracted 0 IOCs for enrichment: []; Triage verdict: likely_benign (confidence=0.20); Triage phase complete \u2014 proceeding to enrichment",
+            "evidence_ids": [
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5"
+            ],
+            "confidence": 0.2
+          },
+          {
+            "claim": "investigation status=INSUFFICIENT_EVIDENCE",
+            "evidence_ids": [],
+            "confidence": 0.4
+          },
+          {
+            "claim": "enriched 4 IOC(s)",
+            "evidence_ids": [
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "claim": "correlated 1 repeated entities across 5 evidence items",
+            "evidence_ids": [
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816"
+            ],
+            "confidence": 0.7
+          },
+          {
+            "claim": "decision=needs_review risk=35/MEDIUM tier=none",
+            "evidence_ids": [
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816"
+            ],
+            "confidence": 0.5
+          },
+          {
+            "claim": "response_simulated",
+            "evidence_ids": [],
+            "confidence": 1.0
+          },
+          {
+            "claim": "containment_effective",
+            "evidence_ids": [
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816"
+            ],
+            "confidence": 0.8
+          },
+          {
+            "claim": "report_package_ready",
+            "evidence_ids": [
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816",
+              "19495583-4c23-4ede-bcea-dbb1491655be",
+              "f0dced54-90bd-465f-bd48-a45a4f52f2d5",
+              "2ad75e27-acee-43a4-a22d-5dc20898b203",
+              "76cb4a8e-b840-497b-a132-643c95c04809",
+              "225bd8f9-91d9-4214-aa36-e3b7435c8eef",
+              "6e839725-d9e7-4148-8697-3b09f432d816"
+            ],
+            "confidence": 0.0
+          }
+        ],
+        "investigation_stages": {
+          "asset_identification": false,
+          "user_identification": false,
+          "initial_access": false,
+          "execution": true,
+          "persistence": false,
+          "privilege_escalation": false,
+          "credential_access": true,
+          "lateral_movement": false,
+          "c2": false,
+          "impact": false
+        },
+        "duration_ms": 35645,
+        "input_tokens": 3460,
+        "output_tokens": 1138,
+        "estimated_cost": 0.005736,
+        "tool_call_count": 2,
+        "pipeline_degraded": true,
+        "degraded_agents": [
+          "investigation"
+        ]
+      },
+      "ground_truth": {
+        "classification": "block_indicator",
+        "severity": "high",
+        "risk_band": "HIGH",
+        "risk_score": null,
+        "compromised": true,
+        "affected_assets": [],
+        "affected_users": [],
+        "iocs": [
+          "185.1.2.3"
+        ],
+        "mitre_techniques": [
+          "T1110"
+        ],
+        "attack_stage": "credential_access",
+        "expected_correlation_group": [
+          "GOLDEN-BRUTE"
+        ],
+        "expected_actions": [
+          "block_ioc"
+        ],
+        "source": "SYNTHETIC",
+        "confidence": 1.0,
+        "labels": {
+          "template_id": null,
+          "evidence_keywords": null
+        }
+      },
+      "classification_score": 0.0,
+      "severity_score": 1.0,
+      "risk_score_metric": 0.0,
+      "mitre_score": 0.0,
+      "ioc_score": 1.0,
+      "correlation_score": 1.0,
+      "evidence_score": 0.5625,
+      "investigation_score": 1.0,
+      "hallucination_score": 0.875,
+      "action_score": 0.0,
+      "overall_score": 0.6041666666666666,
+      "analyst_review_required": true,
+      "human_review_verdict": null,
+      "reviewer": null,
+      "reviewed_at": null,
+      "review_comment": null,
+      "failure_categories": [
+        "HALLUCINATION",
+        "LLM_REASONING",
+        "INFRASTRUCTURE"
+      ],
+      "stage_metrics": {
+        "stages": {
+          "triage": {
+            "status": "completed",
+            "duration_ms": 35645,
+            "degraded": false,
+            "error": null
+          },
+          "investigation": {
+            "status": "failed",
+            "duration_ms": 0,
+            "degraded": true,
+            "error": "LLM investigation status=INSUFFICIENT_EVIDENCE tool_calls=2 llm_calls=3"
+          },
+          "ti": {
+            "status": "completed",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "correlation": {
+            "status": "completed",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "decision": {
+            "status": "completed",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "report": {
+            "status": "completed",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null
+          },
+          "evidence_graph": {
+            "status": "completed",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null,
+            "evidence_count": 88
+          },
+          "risk": {
+            "status": "completed",
+            "duration_ms": 0,
+            "degraded": false,
+            "error": null,
+            "score": 37,
+            "band": "MEDIUM"
+          }
+        },
+        "triage_success": true,
+        "investigation_success": false,
+        "ti_success": true,
+        "correlation_success": true,
+        "risk_success": true,
+        "decision_success": true,
+        "report_success": true,
+        "completed_required_stages": 7,
+        "total_required_stages": 8,
+        "pipeline_completeness": 0.875,
+        "pipeline_degraded": true
+      },
+      "tool_calls": [
+        {
+          "tool_name": "splunk_search",
+          "arguments": {
+            "query": "index=* src_ip=185.1.2.3 (authentication OR brute force OR login OR failed)",
+            "earliest": "-60m",
+            "max_events": 100
+          },
+          "permission": "READ_SECURITY_DATA",
+          "result": "error",
+          "tool_status": "UNAVAILABLE",
+          "unavailable_reason": "SPLUNK_UNAVAILABLE",
+          "splunk_status": "SPLUNK_UNAVAILABLE",
+          "dry_run": true,
+          "timestamp": 1788179067.722598
+        },
+        {
+          "tool_name": "ti.lookup_ip",
+          "arguments": {
+            "ip": "185.1.2.3"
+          },
+          "permission": "READ_SECURITY_DATA",
+          "result": "error",
+          "tool_status": "UNAVAILABLE",
+          "unavailable_reason": "tool_execution_failed",
+          "splunk_status": null,
+          "dry_run": true,
+          "timestamp": 1788179073.5548127
+        },
+        {
+          "tool_name": "response.request_analyst_review",
+          "arguments": {},
+          "permission": "medium",
+          "result": "simulated",
+          "dry_run": true,
+          "agent": "decision",
+          "timestamp": null
+        },
+        {
+          "tool_name": "response.request_analyst_review",
+          "arguments": {},
+          "permission": "medium",
+          "result": "simulated",
+          "dry_run": true,
+          "agent": "response",
+          "timestamp": null
+        }
+      ],
+      "metric_details": {
+        "classification": {
+          "agentic": 0.0,
+          "existing": 1.0
+        },
+        "severity": {
+          "agentic": 1.0,
+          "existing": 1.0
+        },
+        "mitre": {
+          "agentic_f1": 0.0,
+          "existing_f1": 1.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "existing": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "agentic": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        },
+        "ioc": {
+          "agentic_f1": 1.0,
+          "existing_f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "existing": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "agentic": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "correlation": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "over_splitting": 0.0,
+          "over_merging": 0.0
+        },
+        "evidence_support_rate": 0.5625,
+        "unsupported_claim_rate": 0.125,
+        "dangerous_action_rate": 0.0,
+        "production_action_leakage": 0.0,
+        "existing_scores": {
+          "overall": 1.0
+        },
+        "delta_vs_existing": -0.39583333333333337,
+        "execution_mode": "LLM",
+        "llm_error": "empty response",
+        "fallback_reason": null,
+        "prompt_meta": {
+          "prompt_id": "agentic-investigation-v1",
+          "prompt_version": "1.2.0",
+          "prompt_hash": "7289744385aeaa8e"
+        },
+        "investigation_execution": {
+          "agent": "investigation",
+          "execution_mode": "LLM",
+          "llm_calls": 3,
+          "parse_status": "VALID",
+          "schema_status": "VALID",
+          "repair_attempted": false,
+          "fallback": false,
+          "fallback_reason": null,
+          "steps": [
+            {
+              "attempt": 1,
+              "parse_status": "VALID",
+              "schema_status": "VALID",
+              "repair_attempted": false,
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "attempt": 2,
+              "parse_status": "VALID",
+              "schema_status": "VALID",
+              "repair_attempted": false,
+              "error_code": null,
+              "error_detail": null
+            },
+            {
+              "attempt": 3,
+              "parse_status": "VALID",
+              "schema_status": "VALID",
+              "repair_attempted": false,
+              "error_code": null,
+              "error_detail": null
+            }
+          ]
+        },
+        "investigation_parse_status": "VALID",
+        "investigation_schema_status": "VALID",
+        "investigation_repair_attempted": false,
+        "comparison_modes": {
+          "existing": 1.0,
+          "heuristic_agentic": 0.3333333333333333,
+          "llm_agentic": 0.6041666666666666,
+          "delta_llm_vs_heuristic": 0.2708333333333333
+        },
+        "llm_calls": 4,
+        "splunk_tool_calls": 0,
+        "splunk_events": 0,
+        "splunk_status": "NOT_USED",
+        "splunk_tool_metadata": [],
+        "stage_metrics": {
+          "stages": {
+            "triage": {
+              "status": "completed",
+              "duration_ms": 35645,
+              "degraded": false,
+              "error": null
+            },
+            "investigation": {
+              "status": "failed",
+              "duration_ms": 0,
+              "degraded": true,
+              "error": "LLM investigation status=INSUFFICIENT_EVIDENCE tool_calls=2 llm_calls=3"
+            },
+            "ti": {
+              "status": "completed",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "correlation": {
+              "status": "completed",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "decision": {
+              "status": "completed",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "report": {
+              "status": "completed",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null
+            },
+            "evidence_graph": {
+              "status": "completed",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null,
+              "evidence_count": 88
+            },
+            "risk": {
+              "status": "completed",
+              "duration_ms": 0,
+              "degraded": false,
+              "error": null,
+              "score": 37,
+              "band": "MEDIUM"
+            }
+          },
+          "triage_success": true,
+          "investigation_success": false,
+          "ti_success": true,
+          "correlation_success": true,
+          "risk_success": true,
+          "decision_success": true,
+          "report_success": true,
+          "completed_required_stages": 7,
+          "total_required_stages": 8,
+          "pipeline_completeness": 0.875,
+          "pipeline_degraded": true
+        }
+      },
+      "created_at": "2026-08-31T12:24:45.666365Z"
+    }
+  ]
+}

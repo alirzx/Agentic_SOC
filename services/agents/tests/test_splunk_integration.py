@@ -8,7 +8,13 @@ import pytest
 
 from app.integrations.splunk.client import SplunkClient
 from app.integrations.splunk.config import SplunkConfig, load_splunk_config
-from app.integrations.splunk.errors import SplunkAuthenticationError, SplunkQueryValidationError
+from app.integrations.splunk.errors import (
+    SplunkAuthenticationError,
+    SplunkAuthorizationError,
+    SplunkQueryValidationError,
+    SplunkTimeoutError,
+    SplunkUnavailableError,
+)
 from app.integrations.splunk.normalizer import normalize_splunk_event, normalize_splunk_results
 from app.integrations.splunk.spl_policy import validate_spl_query
 from app.integrations.splunk.tool import run_splunk_search
@@ -149,3 +155,60 @@ async def test_registry_splunk_tool_evidence() -> None:
     assert isinstance(evidence, list)
     assert evidence[0].id == "splunk:job-3:0"
     assert evidence[0].source == "splunk"
+
+
+@pytest.mark.asyncio
+async def test_auth_failure_via_search() -> None:
+    with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):
+        with patch.object(
+            SplunkClient,
+            "search",
+            new=AsyncMock(side_effect=SplunkAuthenticationError("auth failed")),
+        ):
+            result = await run_splunk_search("index=main", earliest="-5m")
+    assert result.status == "SPLUNK_AUTH_FAILURE"
+
+
+@pytest.mark.asyncio
+async def test_authorization_failure() -> None:
+    with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):
+        with patch.object(
+            SplunkClient,
+            "search",
+            new=AsyncMock(side_effect=SplunkAuthorizationError("forbidden")),
+        ):
+            result = await run_splunk_search("index=main", earliest="-5m")
+    assert result.status == "SPLUNK_AUTHORIZATION_FAILURE"
+
+
+@pytest.mark.asyncio
+async def test_timeout_failure() -> None:
+    with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):
+        with patch.object(
+            SplunkClient,
+            "search",
+            new=AsyncMock(side_effect=SplunkTimeoutError("poll timed out")),
+        ):
+            result = await run_splunk_search("index=main", earliest="-5m")
+    assert result.status == "SPLUNK_TIMEOUT"
+
+
+@pytest.mark.asyncio
+async def test_network_failure() -> None:
+    with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):
+        with patch.object(
+            SplunkClient,
+            "search",
+            new=AsyncMock(side_effect=SplunkUnavailableError("connection refused")),
+        ):
+            result = await run_splunk_search("index=main", earliest="-5m")
+    assert result.status == "SPLUNK_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_query_rejected_skips_network() -> None:
+    with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):
+        with patch.object(SplunkClient, "search", new=AsyncMock()) as mock_search:
+            result = await run_splunk_search("index=* | delete", earliest="-5m")
+    mock_search.assert_not_called()
+    assert result.status == "SPLUNK_QUERY_REJECTED"

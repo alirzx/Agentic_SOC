@@ -53,7 +53,14 @@ async def _run() -> int:
         print("Connectivity: SKIPPED (SPLUNK_ENABLED=false)")
         return 1
     if not config.base_url or not config.username or not config.password:
-        print("Connectivity: FAIL (missing base_url, username, or password)")
+        missing = []
+        if not config.base_url:
+            missing.append("base_url")
+        if not config.username:
+            missing.append("username")
+        if not config.password:
+            missing.append("password")
+        print(f"Connectivity: CONFIGURATION_ERROR (missing: {', '.join(missing)})")
         return 1
     client = SplunkClient(config)
     health = await client.health_check()
