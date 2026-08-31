@@ -1,0 +1,29 @@
+{
+  "id": "GOLDEN-SIEM-AUTH",
+  "source": "SYNTHETIC",
+  "title": "Suspicious authentication activity from external source IP",
+  "description": "VPN security alert: source IP 185.1.2.3 generated repeated failed authentication attempts followed by a successful login. Analyst needs SIEM telemetry to determine whether this IP produced authentication or network activity during the alert window.",
+  "investigation_objective": "Determine whether source IP 185.1.2.3 generated authentication failures, successful logins, or related network activity in the Splunk SIEM during the last 60 minutes. Use splunk_search with SIEM queries scoped to this IP and time window before concluding.",
+  "required_evidence": ["splunk_siem_events", "authentication_logs", "network_activity"],
+  "severity": "high",
+  "response_class": "investigate",
+  "expected_techniques": ["T1110"],
+  "expected_actions": ["investigate"],
+  "expected_correlation_group": ["GOLDEN-SIEM-AUTH"],
+  "iocs": ["185.1.2.3"],
+  "attack_stage": "credential_access",
+  "entities": {
+    "src_ip": "185.1.2.3",
+    "alert_type": "vpn_bruteforce"
+  },
+  "telemetry": [
+    {
+      "source": "vpn",
+      "src_ip": "185.1.2.3",
+      "failures": 42,
+      "success": 1,
+      "action": "authentication"
+    }
+  ],
+  "evidence_keywords": ["splunk", "authentication", "siem"]
+}

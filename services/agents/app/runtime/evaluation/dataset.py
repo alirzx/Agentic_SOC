@@ -80,7 +80,24 @@ def load_synthetic_substrate(limit: int | None = None) -> EvaluationDataset:
     )
 
 
+def load_golden_siem_case() -> EvaluationDataset:
+    path = _GOLDEN_ROOT / "siem_auth_probe.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.setdefault("source", "SYNTHETIC")
+    return EvaluationDataset(
+        dataset_id="golden-siem-v1",
+        name="Golden SIEM Investigation Probe",
+        description="Single case requiring Splunk SIEM evidence (SYNTHETIC labels).",
+        source="SYNTHETIC",
+        dataset_type="SYNTHETIC",
+        version="1.0",
+        cases=[payload],
+    )
+
+
 def load_dataset(dataset_id: str, limit: int | None = None) -> EvaluationDataset:
+    if dataset_id in {"golden-siem", "golden-siem-v1", "siem-golden"}:
+        return load_golden_siem_case()
     if dataset_id in {"golden-benchmark-v1", "golden"}:
         dataset = load_golden_dataset()
         if limit is not None:

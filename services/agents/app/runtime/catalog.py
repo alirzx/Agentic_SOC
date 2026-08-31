@@ -32,8 +32,23 @@ def build_tool_registry() -> SocToolRegistry:
     )
     investigate_agents = frozenset({"investigation", "correlation", "validation"})
 
-    async def search_ti(ioc_value: str, ioc_type: str = "ip") -> dict[str, Any]:
+    async def search_ti(**kwargs: Any) -> dict[str, Any]:
+        ioc_value = str(
+            kwargs.get("ioc_value") or kwargs.get("query") or kwargs.get("ip") or kwargs.get("value") or ""
+        )
+        ioc_type = str(kwargs.get("ioc_type") or kwargs.get("type") or "ip")
         return await enrich_ioc(ioc_value, ioc_type)
+
+    async def lookup_ip(**kwargs: Any) -> dict[str, Any]:
+        ioc_value = str(kwargs.get("ioc_value") or kwargs.get("ip") or kwargs.get("ioc") or "")
+        return await enrich_ioc(ioc_value, "ip")
+
+    async def get_related_events(**kwargs: Any) -> list[dict[str, Any]]:
+        case_id = str(
+            kwargs.get("case_id") or kwargs.get("evidence_id") or kwargs.get("incident_id") or ""
+        )
+        limit = int(kwargs.get("limit") or 20)
+        return await fetch_related_alerts(case_id, limit=limit)
 
     registry.register(
         CallableSOCTool(
@@ -42,17 +57,31 @@ def build_tool_registry() -> SocToolRegistry:
             fn=search_ti,
             risk_level="read",
             allowed_agents=read_agents,
-            input_schema={"type": "object", "required": ["ioc_value"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "ioc_value": {"type": "string"},
+                    "query": {"type": "string", "description": "alias for ioc_value"},
+                    "ip": {"type": "string", "description": "alias for ioc_value when type is ip"},
+                    "ioc_type": {"type": "string"},
+                },
+            },
         )
     )
     registry.register(
         CallableSOCTool(
             name="ti.lookup_ip",
             description="Enrich an IP with threat intelligence.",
-            fn=lambda ioc_value, ioc_type="ip": enrich_ioc(ioc_value, ioc_type),
+            fn=lookup_ip,
             risk_level="read",
             allowed_agents=read_agents,
-            input_schema={"type": "object", "required": ["ioc_value"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "ioc_value": {"type": "string"},
+                    "ip": {"type": "string", "description": "alias for ioc_value"},
+                },
+            },
         )
     )
     registry.register(
@@ -76,11 +105,19 @@ def build_tool_registry() -> SocToolRegistry:
     registry.register(
         CallableSOCTool(
             name="siem.get_related_events",
-            description="Fetch related alerts for a case (paginated).",
-            fn=fetch_related_alerts,
+            description="Fetch related alerts for a case from the AiSOC API (not Splunk SIEM).",
+            fn=get_related_events,
             risk_level="read",
             allowed_agents=investigate_agents,
-            input_schema={"type": "object", "required": ["case_id"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "case_id": {"type": "string"},
+                    "evidence_id": {"type": "string", "description": "alias for case_id in eval mode"},
+                    "incident_id": {"type": "string", "description": "alias for case_id"},
+                    "limit": {"type": "integer"},
+                },
+            },
         )
     )
     registry.register(

@@ -13,8 +13,11 @@ from .tool import run_splunk_search
 class SplunkSearchSocTool(SOCTool[dict[str, Any], Any]):
     name = "splunk_search"
     description = (
-        "Run a bounded read-only Splunk SIEM search. "
-        "Use for authentication, network, or process telemetry around alert entities."
+        "Search the organization's Splunk SIEM for security-relevant events (read-only). "
+        "Use when validating an alert, investigating authentication activity, network connections, "
+        "suspicious hosts/IPs/users, or correlating activity in a time window. "
+        "Returns normalized Splunk evidence events with evidence_id splunk:<sid>:<index>. "
+        "Prefer this over siem.get_related_events when raw SIEM telemetry is needed."
     )
     risk_level = "read"
     requires_approval = False

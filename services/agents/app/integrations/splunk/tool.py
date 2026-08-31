@@ -64,9 +64,13 @@ async def run_splunk_search(
     """Execute a bounded read-only Splunk search."""
     config = load_splunk_config()
     if not config.enabled:
-        return build_search_result(status="SPLUNK_UNAVAILABLE", search_id=None, events=[], truncated=False, duration_ms=0)
+        result = build_search_result(status="SPLUNK_UNAVAILABLE", search_id=None, events=[], truncated=False, duration_ms=0)
+        _record_tool_metadata(context, result)
+        return result
     if not config.base_url or not config.username or not config.password:
-        return build_search_result(status="SPLUNK_UNAVAILABLE", search_id=None, events=[], truncated=False, duration_ms=0)
+        result = build_search_result(status="SPLUNK_UNAVAILABLE", search_id=None, events=[], truncated=False, duration_ms=0)
+        _record_tool_metadata(context, result)
+        return result
     search_input = SplunkSearchInput(query=query, earliest=earliest, latest=latest, max_events=max_events)
     try:
         _ensure_tool_budget(context, config)

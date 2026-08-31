@@ -157,6 +157,17 @@ async def test_registry_splunk_tool_evidence() -> None:
     assert evidence[0].source == "splunk"
 
 
+def test_fabricated_evidence_id_rejected() -> None:
+    from app.runtime.llm_agents.models import Claim, InvestigationOutput
+    from app.runtime.llm_agents.validation import validate_investigation_output
+
+    output = InvestigationOutput(
+        claims=[Claim(claim="Fake splunk reference", confidence=0.9, evidence_ids=["splunk:fake-sid:999"])],
+    )
+    validated = validate_investigation_output(output, available_evidence_ids={"splunk:real:0"})
+    assert validated.claims[0].status == "unsupported"
+
+
 @pytest.mark.asyncio
 async def test_auth_failure_via_search() -> None:
     with patch("app.integrations.splunk.tool.load_splunk_config", return_value=_cfg()):

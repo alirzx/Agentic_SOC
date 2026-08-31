@@ -233,7 +233,12 @@ class AgenticEvaluationService:
         context = AgentContext(
             incident_id=case_id,
             tenant_id=tenant_id,
-            objective=str(case.get("title") or case.get("description") or case_id),
+            objective=str(
+                case.get("investigation_objective")
+                or case.get("title")
+                or case.get("description")
+                or case_id
+            ),
             state=IncidentStateSnapshot(
                 state="NEW",
                 severity=str(case.get("severity") or "medium"),
@@ -246,6 +251,8 @@ class AgenticEvaluationService:
                 "fail_soft": False,
                 "approval_granted": False,
                 "eval_mode": True,
+                "required_evidence": list(case.get("required_evidence") or []),
+                "entities": dict(case.get("entities") or {}),
             },
         )
         degraded: list[str] = []

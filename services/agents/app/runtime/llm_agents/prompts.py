@@ -7,7 +7,7 @@ import hashlib
 TRIAGE_PROMPT_ID = "agentic-triage-v1"
 TRIAGE_PROMPT_VERSION = "1.0.0"
 INVESTIGATION_PROMPT_ID = "agentic-investigation-v1"
-INVESTIGATION_PROMPT_VERSION = "1.2.0"
+INVESTIGATION_PROMPT_VERSION = "1.2.1"
 
 TRIAGE_SYSTEM_PROMPT = """You are the Triage Agent of an AI Security Operations Centre.
 
@@ -74,15 +74,17 @@ Each response must be ONLY JSON in one of two forms:
 Claims without evidence_ids are unsupported. Only use tools from the provided allow-list.
 
 SIEM INVESTIGATION RULES:
-1. Use splunk_search when SIEM evidence is required.
+1. Use splunk_search when SIEM evidence is required to confirm or refute a hypothesis about authentication, network, process, lateral movement, or suspicious connections.
 2. Do not claim SIEM evidence unless it was returned by splunk_search.
 3. Do not fabricate Splunk events or evidence IDs.
 4. Reference Splunk evidence IDs (splunk:<search_id>:<index>) in evidence-backed claims.
 5. Distinguish SUCCESS_NO_RESULTS (query ran, zero events) from SPLUNK_UNAVAILABLE (SIEM unreachable).
-6. If Splunk is unavailable, explicitly report the limitation in uncertainties.
+6. If Splunk is unavailable, explicitly report the limitation in uncertainties — do not conclude benign.
 7. Do not attempt administrative Splunk operations.
 8. Respect query and time-range limits (earliest within -60m, max_events <= 100).
 9. Use available evidence before making a conclusion.
+10. Prefer splunk_search for raw SIEM event telemetry; siem.get_related_events only fetches AiSOC API case alerts (not Splunk).
+11. When the investigation objective mentions Splunk or SIEM telemetry, splunk_search is usually the correct tool.
 """
 
 INVESTIGATION_REPAIR_PROMPT = """Your previous response could not be validated against the required schema.
