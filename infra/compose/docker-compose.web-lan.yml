@@ -1,0 +1,17 @@
+# Overlay: make the demo web UI reachable on the host LAN.
+# Usage:
+#   docker compose -f infra/compose/docker-compose.demo.yml \
+#     -f infra/compose/docker-compose.web-lan.yml \
+#     up -d --force-recreate --no-build web
+services:
+  web:
+    ports:
+      - "0.0.0.0:5000:3000"
+    environment:
+      API_URL: http://api:8000
+      AGENTS_URL: http://agents:8084
+      REALTIME_URL: http://realtime:4000
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    command: ["pnpm", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]

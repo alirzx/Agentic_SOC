@@ -227,7 +227,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${AISOC_API_PORT:-8888}:8000"
+      - "${AISOC_BIND_ADDR:-0.0.0.0}:${AISOC_API_PORT:-8888}:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
@@ -368,7 +368,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${AISOC_AGENTS_PORT:-8887}:8084"
+      - "${AISOC_BIND_ADDR:-0.0.0.0}:${AISOC_AGENTS_PORT:-8887}:8084"
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
@@ -700,7 +700,7 @@ services:
       - api
       - realtime
     ports:
-      - "127.0.0.1:${AISOC_WEB_PORT:-5000}:3000"
+      - "${AISOC_BIND_ADDR:-0.0.0.0}:${AISOC_WEB_PORT:-5000}:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:${AISOC_API_PORT:-8888}
       NEXT_PUBLIC_WS_URL: ws://localhost:8086

@@ -233,6 +233,20 @@ ssh -L 5000:localhost:5000 -L 8888:localhost:8888 USER@IP-اوبونتو
 
 بعد روی لپ‌تاپ: http://localhost:5000
 
+از ماشین دیگر در همان شبکه (نه از خود VM) آدرس `http://IP:5000` را باز کنید.
+پورت وب باید روی `0.0.0.0` باشد نه فقط `127.0.0.1`. بعد از کشیدن این تغییر:
+
+```bash
+cd /home/api/Agentic_SOC
+export AISOC_BIND_ADDR=0.0.0.0
+export AISOC_CORS_ORIGINS="http://localhost:5000,http://127.0.0.1:5000,http://192.168.0.55:5000"
+docker compose -f infra/compose/docker-compose.demo.yml up -d --force-recreate web api agents realtime
+```
+
+اگر فایروال روشن است: `sudo ufw allow 5000/tcp && sudo ufw reload`
+
+روی خود VM برای تست: `curl -I http://127.0.0.1:5000` باید ۲۰۰ بدهد. `docker ps` باید نشان بدهد `0.0.0.0:5000->3000/tcp` نه `127.0.0.1:5000`.
+
 ---
 
 ## پورت‌های اشغال‌شده
