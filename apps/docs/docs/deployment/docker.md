@@ -109,7 +109,7 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 
 Before going live, walk through the
-[Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md)
+[Hardening Runbook](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/HARDENING.md)
 — TLS termination, secret rotation, network policies, audit log forwarding,
 and tenant-scoped backups all need to be in place.
 
@@ -157,7 +157,7 @@ release artifact before deploying it into a sensitive environment:
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
+  --certificate-identity-regexp '^https://github.com/SoorinSecurity/Agentic_SOC' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/beenuar/aisoc-api:<version>
 ```
@@ -196,8 +196,8 @@ docker compose logs -f ingest-worker
 ## Reference
 
 The canonical service inventory is in
-[`docker-compose.yml`](https://github.com/beenuar/AiSOC/blob/main/docker-compose.yml).
+[`docker-compose.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docker-compose.yml).
 The deeper architectural picture — what each service owns, how the data plane
 fits together, and where ITSM / Slack / osquery bolt in — lives in
 [Architecture](../architecture) and the
-[System Design doc](https://github.com/beenuar/AiSOC/blob/main/docs/architecture/SYSTEM_DESIGN.md).
+[System Design doc](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/architecture/SYSTEM_DESIGN.md).

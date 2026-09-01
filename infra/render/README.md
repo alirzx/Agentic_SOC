@@ -3,7 +3,7 @@
 One-click deploy of the full AiSOC demo stack to [Render](https://render.com)
 via Render's [Blueprint](https://render.com/docs/blueprint-spec) feature.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/SoorinSecurity/Agentic_SOC)
 
 ## What this deploys
 

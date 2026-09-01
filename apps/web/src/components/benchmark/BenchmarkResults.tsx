@@ -118,7 +118,7 @@ const SNAPSHOT_REPORT: EvalReport = {
 };
 
 const LATEST_URL =
-  'https://raw.githubusercontent.com/beenuar/AiSOC/eval-results/eval/results/latest.json';
+  'https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/eval-results/eval/results/latest.json';
 
 /**
  * Server-side fetch of the most recent `eval_report.json` published by the

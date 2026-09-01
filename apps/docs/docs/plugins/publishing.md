@@ -86,7 +86,7 @@ The `signature_status` value is exposed on `GET /api/v1/plugins` so operators ca
 
 - Include a `README.md` with installation and configuration instructions.
 - Write tests with ≥ 80% coverage.
-- Follow the AiSOC [Code of Conduct](https://github.com/beenuar/AiSOC/blob/main/CODE_OF_CONDUCT.md).
+- Follow the AiSOC [Code of Conduct](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CODE_OF_CONDUCT.md).
 - Pin dependency versions for reproducibility.
 - Never log or store credentials in plain text.
 - Ship a signed `plugin.sig`. Unsigned plugins are refused in production.

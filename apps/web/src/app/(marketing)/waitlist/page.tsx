@@ -436,7 +436,7 @@ function SuccessCard() {
         We&apos;ll be in touch within 5 business days. In the meantime,
         the entire substrate is open-source —{' '}
         <a
-          href="https://github.com/beenuar/AiSOC"
+          href="https://github.com/SoorinSecurity/Agentic_SOC"
           target="_blank"
           rel="noreferrer"
           className="text-brand-300 underline-offset-2 hover:underline"

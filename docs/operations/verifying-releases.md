@@ -26,7 +26,7 @@ The osquery browser-extension binaries are signed with `cosign` (keyless / OIDC)
 cosign verify-blob \
   --certificate <artifact>.pem \
   --signature <artifact>.sig \
-  --certificate-identity-regexp 'https://github.com/beenuar/AiSOC/.*' \
+  --certificate-identity-regexp 'https://github.com/SoorinSecurity/Agentic_SOC/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   <artifact>
 ```
@@ -37,7 +37,7 @@ Every `ghcr.io/beenuar/*` service image pushed to `main` or a release tag is sig
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp 'https://github.com/beenuar/AiSOC/.*' \
+  --certificate-identity-regexp 'https://github.com/SoorinSecurity/Agentic_SOC/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/beenuar/aisoc-core-api:<version>
 ```
@@ -49,7 +49,7 @@ Each image carries a CycloneDX SBOM attached as a cosign attestation (generated 
 ```bash
 cosign verify-attestation \
   --type cyclonedx \
-  --certificate-identity-regexp 'https://github.com/beenuar/AiSOC/.*' \
+  --certificate-identity-regexp 'https://github.com/SoorinSecurity/Agentic_SOC/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/beenuar/aisoc-core-api:<version> \
   | jq -r '.payload' | base64 -d | jq '.predicate'

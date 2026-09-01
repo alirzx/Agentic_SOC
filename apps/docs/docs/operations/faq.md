@@ -238,7 +238,7 @@ The agent and the platform are MIT-licensed. There are no enterprise-edition fea
 
 ### Who maintains it?
 
-The AiSOC community. The project is hosted at [github.com/beenuar/AiSOC](https://github.com/beenuar/AiSOC). Contribution guidelines are in [contributing/guidelines](../contributing/guidelines). Security advisories are handled privately via GitHub Security Advisories.
+The AiSOC community. The project is hosted at [github.com/beenuar/AiSOC](https://github.com/SoorinSecurity/Agentic_SOC). Contribution guidelines are in [contributing/guidelines](../contributing/guidelines). Security advisories are handled privately via GitHub Security Advisories.
 
 ### How do I file a bug or feature request?
 

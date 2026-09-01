@@ -64,5 +64,5 @@ Security · Developer Tools · Open Source · Artificial Intelligence
 ## Links
 
 - Website: https://tryaisoc.com
-- GitHub: https://github.com/beenuar/AiSOC
-- Benchmark: https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/benchmark.md
+- GitHub: https://github.com/SoorinSecurity/Agentic_SOC
+- Benchmark: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/docs/docs/benchmark.md

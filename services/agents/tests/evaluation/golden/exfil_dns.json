@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-EXFIL-DNS",
+  "source": "SYNTHETIC",
+  "title": "DNS tunnel exfiltration detected",
+  "description": "Synthetic golden case for MITRE T1048.",
+  "severity": "high",
+  "response_class": "block_indicator",
+  "expected_techniques": [
+    "T1048"
+  ],
+  "expected_actions": [
+    "block_indicator"
+  ],
+  "attack_stage": "exfiltration",
+  "expected_soc_doc_playbook_id": "exfiltration",
+  "expected_mitre_tactic_id": "TA0010",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1048"
+    }
+  ]
+}

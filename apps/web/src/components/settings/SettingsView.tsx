@@ -1406,7 +1406,7 @@ function DeploymentAIPanel() {
               from this pod and mirror the egress gate exactly. To change them
               cluster-wide, update environment variables and redeploy. See{' '}
               <a
-                href="https://beenuar.github.io/AiSOC/docs/operations/airgap/"
+                href="https://github.com/SoorinSecurity/Agentic_SOC/docs/operations/airgap/"
                 target="_blank"
                 rel="noreferrer"
                 className="text-blue-400 hover:text-blue-300 hover:underline"
@@ -2201,22 +2201,22 @@ function AboutPanel() {
   return (
     <div>
       <PanelHeader
-        title="About AiSOC"
-        description="Open-source SOC platform — community-built, MIT licensed."
+        title="About Soorin Agentic SOC"
+        description="Self-hostable AI SOC platform from Soorin Security."
       />
       <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
         <InfoTile label="Version" value="v6.0.1" />
         <InfoTile label="Build" value="local • dev" />
         <InfoTile label="License" value="MIT" />
-        <InfoTile label="Source" value="github.com/beenuar/AiSOC" mono />
+        <InfoTile label="Source" value="github.com/SoorinSecurity/Agentic_SOC" mono />
       </div>
       <div className="border-t border-gray-800 px-6 py-5 text-sm text-gray-400">
         <p>
-          AiSOC is community-driven. Issues, ideas, and PRs welcome on GitHub.
+          Soorin Agentic SOC is maintained by Soorin Security. Issues and PRs welcome on GitHub.
           See the{' '}
           <a
             className="text-blue-400 hover:text-blue-300"
-            href="https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md"
+            href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CONTRIBUTING.md"
             target="_blank"
             rel="noreferrer"
           >
@@ -2227,7 +2227,7 @@ function AboutPanel() {
         <div className="mt-4 flex flex-wrap gap-2">
           <a
             className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
-            href="https://github.com/beenuar/AiSOC"
+            href="https://github.com/SoorinSecurity/Agentic_SOC"
             target="_blank"
             rel="noreferrer"
           >
@@ -2235,7 +2235,7 @@ function AboutPanel() {
           </a>
           <a
             className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
-            href="https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md"
+            href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md"
             target="_blank"
             rel="noreferrer"
           >
@@ -2243,7 +2243,7 @@ function AboutPanel() {
           </a>
           <a
             className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
-            href="https://github.com/beenuar/AiSOC/blob/main/SECURITY.md"
+            href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/SECURITY.md"
             target="_blank"
             rel="noreferrer"
           >

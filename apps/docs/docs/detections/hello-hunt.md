@@ -94,7 +94,7 @@ A few non-obvious things:
 
 ## Step 3 — Write the `detection` block
 
-This is the actual logic. The community tier supports the same Sigma-style shape that the rule engine's [`_sigma_fallback`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/rule_engine.py) understands:
+This is the actual logic. The community tier supports the same Sigma-style shape that the rule engine's [`_sigma_fallback`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/rule_engine.py) understands:
 
 ```yaml
 detection:

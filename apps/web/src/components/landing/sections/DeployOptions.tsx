@@ -57,7 +57,7 @@ const OPTIONS: ReadonlyArray<DeployOption> = [
     residency: 'Operator-defined',
     body:
       'Render one-click, Docker Compose, Fly.io, Helm, AWS Terraform — pick any. The slim demo stack ships pre-seeded with a LockBit case mid-investigation.',
-    cta: { label: 'Self-host on GitHub', href: 'https://github.com/beenuar/AiSOC' },
+    cta: { label: 'Self-host on GitHub', href: 'https://github.com/SoorinSecurity/Agentic_SOC' },
   },
   {
     id: 'sovereign',

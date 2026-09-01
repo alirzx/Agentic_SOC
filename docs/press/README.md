@@ -28,7 +28,7 @@ accurately. Please keep quotes and stats consistent with the
 - **License:** MIT
 - **Try it:** `npx aisoc triage --demo` (deterministic, offline, <1s)
 - **Live demo:** https://tryaisoc.com
-- **Source:** https://github.com/beenuar/AiSOC
+- **Source:** https://github.com/SoorinSecurity/Agentic_SOC
 - **Orchestrator:** ~600-line LangGraph in `services/agents/`
 - **Default response posture:** copilot / dry-run (human approval required)
 - **Data residency:** self-hosted; hosted-LLM evidence pseudonymized by default; air-gapped local-model path available
@@ -51,5 +51,5 @@ all sides; on dark backgrounds use the mark as-is.
 
 ## Contact
 
-Open a [GitHub Discussion](https://github.com/beenuar/AiSOC/discussions) for
+Open a [GitHub Discussion](https://github.com/SoorinSecurity/Agentic_SOC/discussions) for
 press or partnership inquiries.

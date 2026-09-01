@@ -31,7 +31,7 @@ describe('Sidebar', () => {
     render(<Sidebar />);
 
     // Brand
-    expect(screen.getByText('Ai')).toBeInTheDocument();
+    expect(screen.getByText('Soorin')).toBeInTheDocument();
     expect(screen.getByText('SOC')).toBeInTheDocument();
 
     // Section headings — Dashboard sits in an unlabelled lead section,
@@ -60,6 +60,6 @@ describe('Sidebar', () => {
     render(<Sidebar />);
 
     const license = screen.getByRole('link', { name: /MIT License/i });
-    expect(license).toHaveAttribute('href', 'https://github.com/beenuar/AiSOC');
+    expect(license).toHaveAttribute('href', 'https://github.com/SoorinSecurity/Agentic_SOC');
   });
 });

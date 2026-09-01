@@ -60,11 +60,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/beenuar/AiSOC.git",
+    "url": "git+https://github.com/SoorinSecurity/Agentic_SOC.git",
     "directory": "packages/aisoc-lite"
   },
-  "homepage": "https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-lite#readme",
+  "homepage": "https://github.com/SoorinSecurity/Agentic_SOC/tree/main/packages/aisoc-lite#readme",
   "bugs": {
-    "url": "https://github.com/beenuar/AiSOC/issues"
+    "url": "https://github.com/SoorinSecurity/Agentic_SOC/issues"
   }
 }

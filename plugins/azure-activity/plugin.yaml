@@ -10,7 +10,7 @@ description: >
   modifications, then forwards to AiSOC for cloud-plane detection coverage.
 author: AiSOC Core Team
 tags: [cloud, azure, activity, audit, control-plane, microsoft]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_activity.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/azure_activity.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

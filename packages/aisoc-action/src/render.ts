@@ -73,7 +73,7 @@ export function renderComment(result: TriageResult, notes: string[]): string {
   }
   lines.push(
     "",
-    "<sub>Triaged by the deterministic [AiSOC](https://github.com/beenuar/AiSOC) verdict engine — no LLM, no data leaves your CI. " +
+    "<sub>Triaged by the deterministic [AiSOC](https://github.com/SoorinSecurity/Agentic_SOC) verdict engine — no LLM, no data leaves your CI. " +
       "![AiSOC](https://img.shields.io/endpoint?url=https://tryaisoc.com/api/badge/triaged)</sub>",
   );
   return lines.join("\n");
@@ -98,6 +98,6 @@ export function renderDigest(result: TriageResult, previous: TriageResult | null
     "",
     ...(notes.length ? notes.map((n) => `> ${n}`) : []),
     "",
-    "<sub>Generated weekly by [AiSOC](https://github.com/beenuar/AiSOC). Deterministic; nothing leaves your CI.</sub>",
+    "<sub>Generated weekly by [AiSOC](https://github.com/SoorinSecurity/Agentic_SOC). Deterministic; nothing leaves your CI.</sub>",
   ].join("\n");
 }

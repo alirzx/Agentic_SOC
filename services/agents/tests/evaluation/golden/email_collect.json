@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-EMAIL-COLLECT",
+  "source": "SYNTHETIC",
+  "title": "Mailbox export rule created",
+  "description": "Synthetic golden case for MITRE T1114.",
+  "severity": "high",
+  "response_class": "disable_account",
+  "expected_techniques": [
+    "T1114"
+  ],
+  "expected_actions": [
+    "disable_account"
+  ],
+  "attack_stage": "collection",
+  "expected_soc_doc_playbook_id": "collection",
+  "expected_mitre_tactic_id": "TA0009",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1114"
+    }
+  ]
+}

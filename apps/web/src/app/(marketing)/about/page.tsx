@@ -28,26 +28,26 @@ export const metadata: Metadata = {
 };
 
 const FACTS: Array<{ label: string; value: string; href?: string }> = [
-  { label: 'Licence', value: 'MIT', href: 'https://github.com/beenuar/AiSOC/blob/main/LICENSE' },
+  { label: 'Licence', value: 'MIT', href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE' },
   {
     label: 'Source',
     value: 'github.com/beenuar/AiSOC',
-    href: 'https://github.com/beenuar/AiSOC',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC',
   },
   {
     label: 'Maintainers',
     value: 'AiSOC contributors',
-    href: 'https://github.com/beenuar/AiSOC/graphs/contributors',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/graphs/contributors',
   },
   {
     label: 'Security disclosures',
     value: 'security@tryaisoc.com',
-    href: 'https://github.com/beenuar/AiSOC/blob/main/SECURITY.md',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/SECURITY.md',
   },
   {
     label: 'Connector catalog',
     value: `${CONNECTOR_COUNT} first-party connectors`,
-    href: 'https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/__init__.py',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/connectors/app/connectors/__init__.py',
   },
 ];
 
@@ -94,7 +94,7 @@ export default function AboutPage() {
             . Sovereign and air-gapped deployments are quoted
             individually —{' '}
             <a
-              href="mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment"
+              href="mailto:info@soorinsec.ir?subject=AiSOC%20sovereign%20deployment"
               className="text-brand-300 underline decoration-brand-500/40 underline-offset-2"
             >
               hello@tryaisoc.com

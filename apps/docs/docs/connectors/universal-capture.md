@@ -163,7 +163,7 @@ constants:
 
 ## Email Inbox as last resort
 
-When the vendor can't be configured to push at all but **can** email alerts, run the [Email Inbox connector](https://github.com/beenuar/AiSOC/tree/main/plugins/email-inbox). It polls a dedicated mailbox over IMAPS, marks messages `\Seen`, and feeds each one through the `email-forwarded` template — the same pipeline `/v1/inbox/email` uses, just polled from your side instead of pushed from theirs.
+When the vendor can't be configured to push at all but **can** email alerts, run the [Email Inbox connector](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/plugins/email-inbox). It polls a dedicated mailbox over IMAPS, marks messages `\Seen`, and feeds each one through the `email-forwarded` template — the same pipeline `/v1/inbox/email` uses, just polled from your side instead of pushed from theirs.
 
 Required config:
 

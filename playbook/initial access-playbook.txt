@@ -1,0 +1,2 @@
+1. مقدمه
+Initial Access (TA0001) SOC playbook.

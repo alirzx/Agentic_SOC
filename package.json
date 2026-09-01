@@ -1,10 +1,10 @@
 {
-  "name": "aisoc-monorepo",
+  "name": "soorin-agentic-soc",
   "version": "1.0.0",
   "private": true,
-  "description": "AiSOC — Open-source AI-powered Security Operations Center (monorepo root). The publishable CLI package `aisoc` lives at packages/aisoc-lite.",
+  "description": "Soorin Agentic SOC — AI-powered Security Operations Center (monorepo). Maintained by Soorin Security.",
   "license": "MIT",
-  "author": "AiSOC contributors",
+  "author": "Soorin Security",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -36,7 +36,8 @@
     "marketplace:curate:check": "python3 scripts/curate_detections.py --check",
     "aisoc:lab": "bash scripts/lab.sh",
     "aisoc:doctor": "tsx scripts/aisoc-doctor.ts",
-    "aisoc:demo": "tsx scripts/aisoc-demo.ts",
+    "aisoc:demo": "tsx scripts/aisoc-demo.ts --rebuild",
+    "soorin:demo": "tsx scripts/aisoc-demo.ts --rebuild",
     "aisoc:demo:down": "docker compose -f infra/compose/docker-compose.demo.yml down -v",
     "aisoc:demo:logs": "docker compose -f infra/compose/docker-compose.demo.yml logs -f",
     "aisoc:acceptance": "tsx scripts/aisoc-acceptance.ts",

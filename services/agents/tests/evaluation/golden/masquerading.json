@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-MASQUERADE",
+  "source": "SYNTHETIC",
+  "title": "Process masquerading as svchost.exe",
+  "description": "Synthetic golden case for MITRE T1036.",
+  "severity": "high",
+  "response_class": "investigate",
+  "expected_techniques": [
+    "T1036"
+  ],
+  "expected_actions": [
+    "investigate"
+  ],
+  "attack_stage": "defense_evasion",
+  "expected_soc_doc_playbook_id": "defense-evasion",
+  "expected_mitre_tactic_id": "TA0005",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1036"
+    }
+  ]
+}

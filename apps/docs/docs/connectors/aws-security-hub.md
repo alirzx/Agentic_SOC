@@ -137,7 +137,7 @@ the configured security group:
   STS:AssumeRole into the target account before authorizing.
 - `ALLOW_IP` reverses the same rule via `RevokeSecurityGroupIngress`.
 
-See [`services/actions/app/clients/aws_security_groups.py`](https://github.com/beenuar/AiSOC/tree/main/services/actions/app/clients/aws_security_groups.py)
+See [`services/actions/app/clients/aws_security_groups.py`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/actions/app/clients/aws_security_groups.py)
 for the full client.
 
 ## Troubleshooting

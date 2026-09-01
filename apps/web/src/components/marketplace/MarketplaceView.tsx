@@ -911,7 +911,7 @@ export function MarketplaceView() {
         </select>
 
         <a
-          href="https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md#community-marketplace"
+          href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CONTRIBUTING.md#community-marketplace"
           target="_blank"
           rel="noopener noreferrer"
           className="ml-auto rounded-lg border border-blue-700/60 bg-blue-900/20 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-900/40"

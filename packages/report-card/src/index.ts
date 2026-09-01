@@ -143,7 +143,7 @@ export function renderCardMarkdown(data: ReportCardData): string {
         `- **${data.escalate}** escalate · **${data.review}** review · **${data.suppress}** suppressed`,
         `- **${data.elapsedSeconds.toFixed(1)}s** elapsed (${data.deterministic ? "deterministic, no LLM" : "LLM-assisted"})`,
         "",
-        "Reproduce: `npx aisoc triage --demo` · https://github.com/beenuar/AiSOC",
+        "Reproduce: `npx aisoc triage --demo` · https://github.com/SoorinSecurity/Agentic_SOC",
       ].join("\n");
     case "coverage":
       return [

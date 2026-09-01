@@ -114,9 +114,9 @@ const productJsonLd = {
   operatingSystem: 'Linux, macOS, Docker',
   license: 'https://opensource.org/licenses/MIT',
   url: siteUrl,
-  downloadUrl: 'https://github.com/beenuar/AiSOC',
+  downloadUrl: 'https://github.com/SoorinSecurity/Agentic_SOC',
   installUrl: docs('quickstart'),
-  releaseNotes: 'https://github.com/beenuar/AiSOC/releases',
+  releaseNotes: 'https://github.com/SoorinSecurity/Agentic_SOC/releases',
   description: `AiSOC is an MIT-licensed agentic Security Operations Center: four specialised agents (Detect, Triage, Hunt, Respond), ${CONNECTOR_COUNT} first-party connectors, a public 200-incident benchmark, and air-gap deploy on a single environment flag.`,
   featureList: [
     'Four specialised agents: Detect, Triage, Hunt, Respond',

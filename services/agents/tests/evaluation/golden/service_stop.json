@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-SERVICE-STOP",
+  "source": "SYNTHETIC",
+  "title": "Critical service stopped",
+  "description": "Synthetic golden case for MITRE T1489.",
+  "severity": "high",
+  "response_class": "investigate",
+  "expected_techniques": [
+    "T1489"
+  ],
+  "expected_actions": [
+    "investigate"
+  ],
+  "attack_stage": "impact",
+  "expected_soc_doc_playbook_id": "impact",
+  "expected_mitre_tactic_id": "TA0040",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1489"
+    }
+  ]
+}

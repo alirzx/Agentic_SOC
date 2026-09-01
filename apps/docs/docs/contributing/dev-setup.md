@@ -27,7 +27,7 @@ prebuilt GHCR images and is ready in under five minutes.
 ## 1. Clone & install
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 pnpm install
 ```
@@ -152,7 +152,7 @@ The other Python services (`fusion`, `actions`, `threatintel`, `ueba`,
 `honeytokens`, `purple-team`) follow the same pattern: activate the
 virtualenv and run `uvicorn app.main:app --reload --port <port>`.
 The canonical port mapping is in
-[`docker-compose.yml`](https://github.com/beenuar/AiSOC/blob/main/docker-compose.yml)
+[`docker-compose.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docker-compose.yml)
 and the [Architecture](../architecture#service-responsibilities) page.
 
 ## 7. Run tests
@@ -202,7 +202,7 @@ substrate self-consistency gates.
 ## 9. Hacking on content
 
 AiSOC ships a curated marketplace at
-[`marketplace/index.json`](https://github.com/beenuar/AiSOC/blob/main/marketplace/index.json)
+[`marketplace/index.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/marketplace/index.json)
 that aggregates 6,900+ detections (filtered by tier), 50+ playbooks, and
 15 first-party plugins. To add to the catalog:
 

@@ -39,7 +39,7 @@ export default function ToolsIndex() {
       <h1 style={{ fontSize: 34, fontWeight: 800, margin: 0 }}>Free tools for security analysts</h1>
       <p style={{ color: "#8b93b7", fontSize: 17, marginTop: 12, maxWidth: 640 }}>
         No login, no upload, no catch. Everything runs in your browser and is open source. Part of{" "}
-        <a href="https://github.com/beenuar/AiSOC" style={{ color: "#c4cae0" }}>
+        <a href="https://github.com/SoorinSecurity/Agentic_SOC" style={{ color: "#c4cae0" }}>
           AiSOC
         </a>
         .

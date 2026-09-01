@@ -19,10 +19,10 @@ deploying to production, see [Deployment options](./deployment/docker).
 
 ```bash
 # Linux + macOS (one-liner):
-curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.sh | bash
 
 # Windows (PowerShell as Administrator):
-iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.ps1 | iex
 ```
 
 When the installer finishes, your default browser opens at
@@ -103,12 +103,12 @@ running demo with `INC-RT-001` open in your browser.
 
 ```bash
 # Linux/macOS — clone to ~/work/aisoc instead of ~/aisoc:
-AISOC_DIR=$HOME/work/aisoc bash <(curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh)
+AISOC_DIR=$HOME/work/aisoc bash <(curl -fsSL https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.sh)
 ```
 
 ```powershell
 # Windows — clone to D:\src\aisoc instead of $HOME\aisoc:
-iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 -OutFile $env:TEMP\aisoc-install.ps1
+iwr -useb https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.ps1 -OutFile $env:TEMP\aisoc-install.ps1
 & $env:TEMP\aisoc-install.ps1 -AisocDir 'D:\src\aisoc'
 ```
 
@@ -117,18 +117,18 @@ iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 -OutF
 Recommended for production-adjacent machines. Both scripts live at the
 repo root and are short enough to read in one sitting:
 
-- [`install.sh`](https://github.com/beenuar/AiSOC/blob/main/install.sh) — Linux + macOS (~620 lines, pure POSIX-friendly bash)
-- [`install.ps1`](https://github.com/beenuar/AiSOC/blob/main/install.ps1) — Windows PowerShell
+- [`install.sh`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/install.sh) — Linux + macOS (~620 lines, pure POSIX-friendly bash)
+- [`install.ps1`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/install.ps1) — Windows PowerShell
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh
+curl -fsSLO https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.sh
 less install.sh         # read it
 shellcheck install.sh   # optional: confirm it's lint-clean
 bash install.sh
 ```
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 -OutFile install.ps1
+iwr -useb https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.ps1 -OutFile install.ps1
 notepad install.ps1     # read it
 .\install.ps1
 ```
@@ -223,7 +223,7 @@ The [troubleshooting page](./operations/troubleshooting) has runbooks
 for the most common stack-level failure modes (healthchecks red,
 Postgres OOM, Kafka cluster-id drift, …). For installer-specific bugs,
 file an issue with the installer's full output —
-[github.com/beenuar/AiSOC/issues](https://github.com/beenuar/AiSOC/issues).
+[github.com/beenuar/AiSOC/issues](https://github.com/SoorinSecurity/Agentic_SOC/issues).
 
 ## Security notes
 

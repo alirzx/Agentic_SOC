@@ -83,7 +83,7 @@ export default async function MeshPage() {
         <p style={{ color: "#8b93b7", fontSize: 15, marginTop: 8, maxWidth: 680 }}>
           The mesh is opt-in, the hub is open source, and <code>mesh preview</code> shows exactly what would leave your
           instance before you enable it. Read the{" "}
-          <a href="https://github.com/beenuar/AiSOC/blob/main/docs/architecture/mesh.md" style={{ color: "#c4cae0" }}>
+          <a href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/architecture/mesh.md" style={{ color: "#c4cae0" }}>
             threat model
           </a>
           .

@@ -11,12 +11,12 @@ agent quality.
 
 For end-to-end project standards (code style, connector contributions,
 community marketplace), see also the root-level
-[`CONTRIBUTING.md`](https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md).
+[`CONTRIBUTING.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CONTRIBUTING.md).
 
 ## Code of Conduct
 
 All contributors must follow our
-[Code of Conduct](https://github.com/beenuar/AiSOC/blob/main/CODE_OF_CONDUCT.md).
+[Code of Conduct](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CODE_OF_CONDUCT.md).
 Be respectful, constructive, and assume good faith.
 
 ## Branching Strategy
@@ -50,7 +50,7 @@ explicitly coordinating a stack of dependent PRs with a maintainer.
 ### PR Template
 
 Every pull request uses the
-[default PR template](https://github.com/beenuar/AiSOC/blob/main/.github/PULL_REQUEST_TEMPLATE/pull_request_template.md).
+[default PR template](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/PULL_REQUEST_TEMPLATE/pull_request_template.md).
 The required sections are:
 
 - **Summary** — 2–3 sentences describing what changed and why.
@@ -68,7 +68,7 @@ The required sections are:
   new linter warnings, no sensitive data in the diff.
 
 For new detection rules, use the dedicated
-[detection rule template](https://github.com/beenuar/AiSOC/blob/main/.github/PULL_REQUEST_TEMPLATE/detection_rule.md)
+[detection rule template](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/PULL_REQUEST_TEMPLATE/detection_rule.md)
 which prompts for MITRE ATT&CK technique IDs, fixture coverage, and false-positive
 notes.
 
@@ -112,7 +112,7 @@ pytest services/connectors/tests/
 
 New code requires new tests. New connectors require schema-contract,
 `normalize()`, and mocked `test_connection` + `fetch_alerts` tests at minimum.
-See [`CONTRIBUTING.md` → Adding New Connectors](https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md#adding-new-connectors)
+See [`CONTRIBUTING.md` → Adding New Connectors](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CONTRIBUTING.md#adding-new-connectors)
 for the exact shape.
 
 ### 3. Eval harness gate {#eval-harness-gate}
@@ -239,7 +239,7 @@ You don't need a plan for bug fixes, small features, or docs.
   passwords, customer hostnames, or sample payloads with PII.
 - Report security vulnerabilities **privately** via GitHub Security
   Advisories at
-  [github.com/beenuar/AiSOC/security/advisories/new](https://github.com/beenuar/AiSOC/security/advisories/new).
+  [github.com/beenuar/AiSOC/security/advisories/new](https://github.com/SoorinSecurity/Agentic_SOC/security/advisories/new).
   Do not open a public issue for vulnerabilities.
 
 See the [security operations guide](../operations/security) for the full
@@ -249,4 +249,4 @@ procedure.
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[MIT License](https://github.com/beenuar/AiSOC/blob/main/LICENSE).
+[MIT License](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE).

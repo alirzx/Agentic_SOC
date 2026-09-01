@@ -1,0 +1,4602 @@
+{
+  "version": "2.0.0",
+  "description": "MITRE ATT&CK Enterprise technique \u2192 SOC doc playbook mapping. Generated from official STIX bundle; 655 of ~655 mappable techniques.",
+  "source": {
+    "name": "MITRE ATT&CK Enterprise",
+    "stix_url": "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json",
+    "enterprise_totals": {
+      "parent_techniques": 207,
+      "sub_techniques": 448,
+      "mappable": 655
+    }
+  },
+  "min_techniques_per_tactic": 4,
+  "min_total_techniques": 655,
+  "techniques": [
+    {
+      "technique_id": "T1003",
+      "name": "OS Credential Dumping",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-CREDENTIAL-DUMPING"
+    },
+    {
+      "technique_id": "T1005",
+      "name": "Data from Local System",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-LOCAL-COLLECT"
+    },
+    {
+      "technique_id": "T1018",
+      "name": "Remote System Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-REMOTE-DISCOVERY"
+    },
+    {
+      "technique_id": "T1021.001",
+      "name": "Remote Desktop Protocol",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-LATERAL"
+    },
+    {
+      "technique_id": "T1021.002",
+      "name": "SMB/Windows Admin Shares",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-SMB-LATERAL"
+    },
+    {
+      "technique_id": "T1027",
+      "name": "Obfuscated Files or Information",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-OBFUSCATION"
+    },
+    {
+      "technique_id": "T1036",
+      "name": "Masquerading",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-MASQUERADE"
+    },
+    {
+      "technique_id": "T1041",
+      "name": "Exfiltration Over C2 Channel",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-EXFIL-C2"
+    },
+    {
+      "technique_id": "T1046",
+      "name": "Network Service Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-DISCOVERY"
+    },
+    {
+      "technique_id": "T1047",
+      "name": "Windows Management Instrumentation",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-WMI-EXEC"
+    },
+    {
+      "technique_id": "T1048",
+      "name": "Exfiltration Over Alternative Protocol",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-EXFIL-DNS"
+    },
+    {
+      "technique_id": "T1052.001",
+      "name": "Exfiltration over USB",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-EXFIL-USB"
+    },
+    {
+      "technique_id": "T1053.005",
+      "name": "Scheduled Task",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-SCHED-TASK-EXEC"
+    },
+    {
+      "technique_id": "T1055",
+      "name": "Process Injection",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-PROC-INJECT"
+    },
+    {
+      "technique_id": "T1059",
+      "name": "Command and Scripting Interpreter",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-SIEM-SYSMON"
+    },
+    {
+      "technique_id": "T1059.001",
+      "name": "PowerShell",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-PWSH"
+    },
+    {
+      "technique_id": "T1068",
+      "name": "Exploitation for Privilege Escalation",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-EXPLOIT-PRIVESC"
+    },
+    {
+      "technique_id": "T1071.001",
+      "name": "Web Protocols",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-C2"
+    },
+    {
+      "technique_id": "T1071.004",
+      "name": "DNS",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-C2-DNS"
+    },
+    {
+      "technique_id": "T1078",
+      "name": "Valid Accounts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-VALID-ACCOUNTS"
+    },
+    {
+      "technique_id": "T1082",
+      "name": "System Information Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-SYSINFO"
+    },
+    {
+      "technique_id": "T1087",
+      "name": "Account Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-DISCOVERY"
+    },
+    {
+      "technique_id": "T1105",
+      "name": "Ingress Tool Transfer",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-INGRESS-TOOL"
+    },
+    {
+      "technique_id": "T1110",
+      "name": "Brute Force",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-BRUTE"
+    },
+    {
+      "technique_id": "T1110.003",
+      "name": "Password Spraying",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-PASS-SPRAY"
+    },
+    {
+      "technique_id": "T1113",
+      "name": "Screen Capture",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-SCREEN-CAPTURE"
+    },
+    {
+      "technique_id": "T1114",
+      "name": "Email Collection",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-EMAIL-COLLECT"
+    },
+    {
+      "technique_id": "T1133",
+      "name": "External Remote Services",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-VPN-ACCESS"
+    },
+    {
+      "technique_id": "T1134",
+      "name": "Access Token Manipulation",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-TOKEN-MANIP"
+    },
+    {
+      "technique_id": "T1136.001",
+      "name": "Local Account",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-LOCAL-ACCOUNT"
+    },
+    {
+      "technique_id": "T1190",
+      "name": "Exploit Public-Facing Application",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-EXPLOIT-WEB"
+    },
+    {
+      "technique_id": "T1204",
+      "name": "User Execution",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-SIEM-SYSMON"
+    },
+    {
+      "technique_id": "T1486",
+      "name": "Data Encrypted for Impact",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-RANSOMWARE"
+    },
+    {
+      "technique_id": "T1489",
+      "name": "Service Stop",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-SERVICE-STOP"
+    },
+    {
+      "technique_id": "T1490",
+      "name": "Inhibit System Recovery",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-INHIBIT-RECOVERY"
+    },
+    {
+      "technique_id": "T1505.003",
+      "name": "Web Shell",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-WEBSHELL"
+    },
+    {
+      "technique_id": "T1529",
+      "name": "System Shutdown/Reboot",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-SYSTEM-SHUTDOWN"
+    },
+    {
+      "technique_id": "T1530",
+      "name": "Data from Cloud Storage",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-INSIDER"
+    },
+    {
+      "technique_id": "T1543.003",
+      "name": "Windows Service",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-SERVICE-PERSIST"
+    },
+    {
+      "technique_id": "T1547.001",
+      "name": "Registry Run Keys / Startup Folder",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-REG-RUNKEY"
+    },
+    {
+      "technique_id": "T1548.002",
+      "name": "Bypass User Account Control",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-PRIV-ESC"
+    },
+    {
+      "technique_id": "T1550.002",
+      "name": "Pass the Hash",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-PASS-THE-HASH"
+    },
+    {
+      "technique_id": "T1558.003",
+      "name": "Kerberoasting",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-KERBEROAST"
+    },
+    {
+      "technique_id": "T1566.001",
+      "name": "Spearphishing Attachment",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-PHISH"
+    },
+    {
+      "technique_id": "T1567",
+      "name": "Exfiltration Over Web Service",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-EXFIL"
+    },
+    {
+      "technique_id": "T1570",
+      "name": "Lateral Tool Transfer",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-TOOL-TRANSFER"
+    },
+    {
+      "technique_id": "T1573.001",
+      "name": "Symmetric Cryptography",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-C2-ENCRYPTED"
+    },
+    {
+      "technique_id": "T1001",
+      "name": "Data Obfuscation",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1001"
+    },
+    {
+      "technique_id": "T1006",
+      "name": "Direct Volume Access",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1006"
+    },
+    {
+      "technique_id": "T1007",
+      "name": "System Service Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1007"
+    },
+    {
+      "technique_id": "T1008",
+      "name": "Fallback Channels",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1008"
+    },
+    {
+      "technique_id": "T1010",
+      "name": "Application Window Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1010"
+    },
+    {
+      "technique_id": "T1011",
+      "name": "Exfiltration Over Other Network Medium",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1011"
+    },
+    {
+      "technique_id": "T1012",
+      "name": "Query Registry",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1012"
+    },
+    {
+      "technique_id": "T1014",
+      "name": "Rootkit",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1014"
+    },
+    {
+      "technique_id": "T1016",
+      "name": "System Network Configuration Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1016"
+    },
+    {
+      "technique_id": "T1020",
+      "name": "Automated Exfiltration",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1020"
+    },
+    {
+      "technique_id": "T1021",
+      "name": "Remote Services",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1021"
+    },
+    {
+      "technique_id": "T1025",
+      "name": "Data from Removable Media",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1025"
+    },
+    {
+      "technique_id": "T1029",
+      "name": "Scheduled Transfer",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1029"
+    },
+    {
+      "technique_id": "T1030",
+      "name": "Data Transfer Size Limits",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1030"
+    },
+    {
+      "technique_id": "T1033",
+      "name": "System Owner/User Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1033"
+    },
+    {
+      "technique_id": "T1037",
+      "name": "Boot or Logon Initialization Scripts",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1037"
+    },
+    {
+      "technique_id": "T1039",
+      "name": "Data from Network Shared Drive",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1039"
+    },
+    {
+      "technique_id": "T1040",
+      "name": "Network Sniffing",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1040"
+    },
+    {
+      "technique_id": "T1049",
+      "name": "System Network Connections Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1049"
+    },
+    {
+      "technique_id": "T1052",
+      "name": "Exfiltration Over Physical Medium",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1052"
+    },
+    {
+      "technique_id": "T1053",
+      "name": "Scheduled Task/Job",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1053"
+    },
+    {
+      "technique_id": "T1056",
+      "name": "Input Capture",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1056"
+    },
+    {
+      "technique_id": "T1057",
+      "name": "Process Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1057"
+    },
+    {
+      "technique_id": "T1069",
+      "name": "Permission Groups Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1069"
+    },
+    {
+      "technique_id": "T1070",
+      "name": "Indicator Removal",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070"
+    },
+    {
+      "technique_id": "T1071",
+      "name": "Application Layer Protocol",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1071"
+    },
+    {
+      "technique_id": "T1072",
+      "name": "Software Deployment Tools",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1072"
+    },
+    {
+      "technique_id": "T1074",
+      "name": "Data Staged",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1074"
+    },
+    {
+      "technique_id": "T1080",
+      "name": "Taint Shared Content",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1080"
+    },
+    {
+      "technique_id": "T1083",
+      "name": "File and Directory Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1083"
+    },
+    {
+      "technique_id": "T1090",
+      "name": "Proxy",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1090"
+    },
+    {
+      "technique_id": "T1091",
+      "name": "Replication Through Removable Media",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1091"
+    },
+    {
+      "technique_id": "T1092",
+      "name": "Communication Through Removable Media",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1092"
+    },
+    {
+      "technique_id": "T1095",
+      "name": "Non-Application Layer Protocol",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1095"
+    },
+    {
+      "technique_id": "T1098",
+      "name": "Account Manipulation",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098"
+    },
+    {
+      "technique_id": "T1102",
+      "name": "Web Service",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1102"
+    },
+    {
+      "technique_id": "T1104",
+      "name": "Multi-Stage Channels",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1104"
+    },
+    {
+      "technique_id": "T1106",
+      "name": "Native API",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1106"
+    },
+    {
+      "technique_id": "T1111",
+      "name": "Multi-Factor Authentication Interception",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1111"
+    },
+    {
+      "technique_id": "T1112",
+      "name": "Modify Registry",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1112"
+    },
+    {
+      "technique_id": "T1115",
+      "name": "Clipboard Data",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1115"
+    },
+    {
+      "technique_id": "T1119",
+      "name": "Automated Collection",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1119"
+    },
+    {
+      "technique_id": "T1120",
+      "name": "Peripheral Device Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1120"
+    },
+    {
+      "technique_id": "T1123",
+      "name": "Audio Capture",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1123"
+    },
+    {
+      "technique_id": "T1124",
+      "name": "System Time Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1124"
+    },
+    {
+      "technique_id": "T1125",
+      "name": "Video Capture",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1125"
+    },
+    {
+      "technique_id": "T1127",
+      "name": "Trusted Developer Utilities Proxy Execution",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1127"
+    },
+    {
+      "technique_id": "T1129",
+      "name": "Shared Modules",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1129"
+    },
+    {
+      "technique_id": "T1132",
+      "name": "Data Encoding",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1132"
+    },
+    {
+      "technique_id": "T1135",
+      "name": "Network Share Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1135"
+    },
+    {
+      "technique_id": "T1136",
+      "name": "Create Account",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1136"
+    },
+    {
+      "technique_id": "T1137",
+      "name": "Office Application Startup",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1137"
+    },
+    {
+      "technique_id": "T1140",
+      "name": "Deobfuscate/Decode Files or Information",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1140"
+    },
+    {
+      "technique_id": "T1176",
+      "name": "Software Extensions",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1176"
+    },
+    {
+      "technique_id": "T1185",
+      "name": "Browser Session Hijacking",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1185"
+    },
+    {
+      "technique_id": "T1187",
+      "name": "Forced Authentication",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1187"
+    },
+    {
+      "technique_id": "T1189",
+      "name": "Drive-by Compromise",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1189"
+    },
+    {
+      "technique_id": "T1195",
+      "name": "Supply Chain Compromise",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1195"
+    },
+    {
+      "technique_id": "T1197",
+      "name": "BITS Jobs",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1197"
+    },
+    {
+      "technique_id": "T1199",
+      "name": "Trusted Relationship",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1199"
+    },
+    {
+      "technique_id": "T1200",
+      "name": "Hardware Additions",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1200"
+    },
+    {
+      "technique_id": "T1201",
+      "name": "Password Policy Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1201"
+    },
+    {
+      "technique_id": "T1202",
+      "name": "Indirect Command Execution",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1202"
+    },
+    {
+      "technique_id": "T1203",
+      "name": "Exploitation for Client Execution",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1203"
+    },
+    {
+      "technique_id": "T1205",
+      "name": "Traffic Signaling",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1205"
+    },
+    {
+      "technique_id": "T1210",
+      "name": "Exploitation of Remote Services",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1210"
+    },
+    {
+      "technique_id": "T1211",
+      "name": "Exploitation for Stealth",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1211"
+    },
+    {
+      "technique_id": "T1212",
+      "name": "Exploitation for Credential Access",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1212"
+    },
+    {
+      "technique_id": "T1213",
+      "name": "Data from Information Repositories",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1213"
+    },
+    {
+      "technique_id": "T1216",
+      "name": "System Script Proxy Execution",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1216"
+    },
+    {
+      "technique_id": "T1217",
+      "name": "Browser Information Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1217"
+    },
+    {
+      "technique_id": "T1218",
+      "name": "System Binary Proxy Execution",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218"
+    },
+    {
+      "technique_id": "T1219",
+      "name": "Remote Access Tools",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1219"
+    },
+    {
+      "technique_id": "T1220",
+      "name": "XSL Script Processing",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1220"
+    },
+    {
+      "technique_id": "T1221",
+      "name": "Template Injection",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1221"
+    },
+    {
+      "technique_id": "T1480",
+      "name": "Execution Guardrails",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1480"
+    },
+    {
+      "technique_id": "T1482",
+      "name": "Domain Trust Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1482"
+    },
+    {
+      "technique_id": "T1484",
+      "name": "Domain or Tenant Policy Modification",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1484"
+    },
+    {
+      "technique_id": "T1485",
+      "name": "Data Destruction",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1485"
+    },
+    {
+      "technique_id": "T1491",
+      "name": "Defacement",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1491"
+    },
+    {
+      "technique_id": "T1495",
+      "name": "Firmware Corruption",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1495"
+    },
+    {
+      "technique_id": "T1496",
+      "name": "Resource Hijacking",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1496"
+    },
+    {
+      "technique_id": "T1497",
+      "name": "Virtualization/Sandbox Evasion",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1497"
+    },
+    {
+      "technique_id": "T1498",
+      "name": "Network Denial of Service",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1498"
+    },
+    {
+      "technique_id": "T1499",
+      "name": "Endpoint Denial of Service",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1499"
+    },
+    {
+      "technique_id": "T1505",
+      "name": "Server Software Component",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1505"
+    },
+    {
+      "technique_id": "T1518",
+      "name": "Software Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1518"
+    },
+    {
+      "technique_id": "T1525",
+      "name": "Implant Internal Image",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1525"
+    },
+    {
+      "technique_id": "T1526",
+      "name": "Cloud Service Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1526"
+    },
+    {
+      "technique_id": "T1528",
+      "name": "Steal Application Access Token",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1528"
+    },
+    {
+      "technique_id": "T1531",
+      "name": "Account Access Removal",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1531"
+    },
+    {
+      "technique_id": "T1534",
+      "name": "Internal Spearphishing",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1534"
+    },
+    {
+      "technique_id": "T1535",
+      "name": "Unused/Unsupported Cloud Regions",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1535"
+    },
+    {
+      "technique_id": "T1537",
+      "name": "Transfer Data to Cloud Account",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1537"
+    },
+    {
+      "technique_id": "T1538",
+      "name": "Cloud Service Dashboard",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1538"
+    },
+    {
+      "technique_id": "T1539",
+      "name": "Steal Web Session Cookie",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1539"
+    },
+    {
+      "technique_id": "T1542",
+      "name": "Pre-OS Boot",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1542"
+    },
+    {
+      "technique_id": "T1543",
+      "name": "Create or Modify System Process",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1543"
+    },
+    {
+      "technique_id": "T1546",
+      "name": "Event Triggered Execution",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546"
+    },
+    {
+      "technique_id": "T1547",
+      "name": "Boot or Logon Autostart Execution",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547"
+    },
+    {
+      "technique_id": "T1548",
+      "name": "Abuse Elevation Control Mechanism",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1548"
+    },
+    {
+      "technique_id": "T1550",
+      "name": "Use Alternate Authentication Material",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1550"
+    },
+    {
+      "technique_id": "T1552",
+      "name": "Unsecured Credentials",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552"
+    },
+    {
+      "technique_id": "T1554",
+      "name": "Compromise Host Software Binary",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1554"
+    },
+    {
+      "technique_id": "T1555",
+      "name": "Credentials from Password Stores",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1555"
+    },
+    {
+      "technique_id": "T1556",
+      "name": "Modify Authentication Process",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556"
+    },
+    {
+      "technique_id": "T1557",
+      "name": "Adversary-in-the-Middle",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1557"
+    },
+    {
+      "technique_id": "T1558",
+      "name": "Steal or Forge Kerberos Tickets",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1558"
+    },
+    {
+      "technique_id": "T1559",
+      "name": "Inter-Process Communication",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1559"
+    },
+    {
+      "technique_id": "T1560",
+      "name": "Archive Collected Data",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1560"
+    },
+    {
+      "technique_id": "T1561",
+      "name": "Disk Wipe",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1561"
+    },
+    {
+      "technique_id": "T1563",
+      "name": "Remote Service Session Hijacking",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1563"
+    },
+    {
+      "technique_id": "T1564",
+      "name": "Hide Artifacts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564"
+    },
+    {
+      "technique_id": "T1565",
+      "name": "Data Manipulation",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1565"
+    },
+    {
+      "technique_id": "T1566",
+      "name": "Phishing",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1566"
+    },
+    {
+      "technique_id": "T1568",
+      "name": "Dynamic Resolution",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1568"
+    },
+    {
+      "technique_id": "T1569",
+      "name": "System Services",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1569"
+    },
+    {
+      "technique_id": "T1571",
+      "name": "Non-Standard Port",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1571"
+    },
+    {
+      "technique_id": "T1572",
+      "name": "Protocol Tunneling",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1572"
+    },
+    {
+      "technique_id": "T1573",
+      "name": "Encrypted Channel",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1573"
+    },
+    {
+      "technique_id": "T1574",
+      "name": "Hijack Execution Flow",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574"
+    },
+    {
+      "technique_id": "T1580",
+      "name": "Cloud Infrastructure Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1580"
+    },
+    {
+      "technique_id": "T1583",
+      "name": "Acquire Infrastructure",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583"
+    },
+    {
+      "technique_id": "T1584",
+      "name": "Compromise Infrastructure",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584"
+    },
+    {
+      "technique_id": "T1585",
+      "name": "Establish Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1585"
+    },
+    {
+      "technique_id": "T1586",
+      "name": "Compromise Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1586"
+    },
+    {
+      "technique_id": "T1587",
+      "name": "Develop Capabilities",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1587"
+    },
+    {
+      "technique_id": "T1588",
+      "name": "Obtain Capabilities",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588"
+    },
+    {
+      "technique_id": "T1589",
+      "name": "Gather Victim Identity Information",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1589"
+    },
+    {
+      "technique_id": "T1590",
+      "name": "Gather Victim Network Information",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1590"
+    },
+    {
+      "technique_id": "T1591",
+      "name": "Gather Victim Org Information",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1591"
+    },
+    {
+      "technique_id": "T1592",
+      "name": "Gather Victim Host Information",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1592"
+    },
+    {
+      "technique_id": "T1593",
+      "name": "Search Open Websites/Domains",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1593"
+    },
+    {
+      "technique_id": "T1594",
+      "name": "Search Victim-Owned Websites",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1594"
+    },
+    {
+      "technique_id": "T1595",
+      "name": "Active Scanning",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1595"
+    },
+    {
+      "technique_id": "T1596",
+      "name": "Search Open Technical Databases",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1596"
+    },
+    {
+      "technique_id": "T1597",
+      "name": "Search Closed Sources",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1597"
+    },
+    {
+      "technique_id": "T1598",
+      "name": "Phishing for Information",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1598"
+    },
+    {
+      "technique_id": "T1602",
+      "name": "Data from Configuration Repository",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1602"
+    },
+    {
+      "technique_id": "T1606",
+      "name": "Forge Web Credentials",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1606"
+    },
+    {
+      "technique_id": "T1608",
+      "name": "Stage Capabilities",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1608"
+    },
+    {
+      "technique_id": "T1609",
+      "name": "Container Administration Command",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1609"
+    },
+    {
+      "technique_id": "T1610",
+      "name": "Deploy Container",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1610"
+    },
+    {
+      "technique_id": "T1611",
+      "name": "Escape to Host",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1611"
+    },
+    {
+      "technique_id": "T1612",
+      "name": "Build Image on Host",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1612"
+    },
+    {
+      "technique_id": "T1613",
+      "name": "Container and Resource Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1613"
+    },
+    {
+      "technique_id": "T1614",
+      "name": "System Location Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1614"
+    },
+    {
+      "technique_id": "T1615",
+      "name": "Group Policy Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1615"
+    },
+    {
+      "technique_id": "T1619",
+      "name": "Cloud Storage Object Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1619"
+    },
+    {
+      "technique_id": "T1620",
+      "name": "Reflective Code Loading",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1620"
+    },
+    {
+      "technique_id": "T1621",
+      "name": "Multi-Factor Authentication Request Generation",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1621"
+    },
+    {
+      "technique_id": "T1622",
+      "name": "Debugger Evasion",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1622"
+    },
+    {
+      "technique_id": "T1648",
+      "name": "Serverless Execution",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1648"
+    },
+    {
+      "technique_id": "T1649",
+      "name": "Steal or Forge Authentication Certificates",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1649"
+    },
+    {
+      "technique_id": "T1650",
+      "name": "Acquire Access",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1650"
+    },
+    {
+      "technique_id": "T1651",
+      "name": "Cloud Administration Command",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1651"
+    },
+    {
+      "technique_id": "T1652",
+      "name": "Device Driver Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1652"
+    },
+    {
+      "technique_id": "T1653",
+      "name": "Power Settings",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1653"
+    },
+    {
+      "technique_id": "T1654",
+      "name": "Log Enumeration",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1654"
+    },
+    {
+      "technique_id": "T1657",
+      "name": "Financial Theft",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1657"
+    },
+    {
+      "technique_id": "T1659",
+      "name": "Content Injection",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1659"
+    },
+    {
+      "technique_id": "T1665",
+      "name": "Hide Infrastructure",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1665"
+    },
+    {
+      "technique_id": "T1667",
+      "name": "Email Bombing",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1667"
+    },
+    {
+      "technique_id": "T1668",
+      "name": "Exclusive Control",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1668"
+    },
+    {
+      "technique_id": "T1669",
+      "name": "Wi-Fi Networks",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1669"
+    },
+    {
+      "technique_id": "T1671",
+      "name": "Cloud Application Integration",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1671"
+    },
+    {
+      "technique_id": "T1673",
+      "name": "Virtual Machine Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1673"
+    },
+    {
+      "technique_id": "T1674",
+      "name": "Input Injection",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1674"
+    },
+    {
+      "technique_id": "T1675",
+      "name": "ESXi Administration Command",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1675"
+    },
+    {
+      "technique_id": "T1677",
+      "name": "Poisoned Pipeline Execution",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1677"
+    },
+    {
+      "technique_id": "T1678",
+      "name": "Delay Execution",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1678"
+    },
+    {
+      "technique_id": "T1679",
+      "name": "Selective Exclusion",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1679"
+    },
+    {
+      "technique_id": "T1680",
+      "name": "Local Storage Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1680"
+    },
+    {
+      "technique_id": "T1681",
+      "name": "Search Threat Vendor Data",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1681"
+    },
+    {
+      "technique_id": "T1682",
+      "name": "Query Public AI Services",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1682"
+    },
+    {
+      "technique_id": "T1683",
+      "name": "Generate Content",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1683"
+    },
+    {
+      "technique_id": "T1684",
+      "name": "Social Engineering",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1684"
+    },
+    {
+      "technique_id": "T1001.001",
+      "name": "Junk Data",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1001-001"
+    },
+    {
+      "technique_id": "T1001.002",
+      "name": "Steganography",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1001-002"
+    },
+    {
+      "technique_id": "T1001.003",
+      "name": "Protocol or Service Impersonation",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1001-003"
+    },
+    {
+      "technique_id": "T1003.001",
+      "name": "LSASS Memory",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-001"
+    },
+    {
+      "technique_id": "T1003.002",
+      "name": "Security Account Manager",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-002"
+    },
+    {
+      "technique_id": "T1003.003",
+      "name": "NTDS",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-003"
+    },
+    {
+      "technique_id": "T1003.004",
+      "name": "LSA Secrets",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-004"
+    },
+    {
+      "technique_id": "T1003.005",
+      "name": "Cached Domain Credentials",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-005"
+    },
+    {
+      "technique_id": "T1003.006",
+      "name": "DCSync",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-006"
+    },
+    {
+      "technique_id": "T1003.007",
+      "name": "Proc Filesystem",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-007"
+    },
+    {
+      "technique_id": "T1003.008",
+      "name": "/etc/passwd and /etc/shadow",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1003-008"
+    },
+    {
+      "technique_id": "T1011.001",
+      "name": "Exfiltration Over Bluetooth",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1011-001"
+    },
+    {
+      "technique_id": "T1016.001",
+      "name": "Internet Connection Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1016-001"
+    },
+    {
+      "technique_id": "T1016.002",
+      "name": "Wi-Fi Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1016-002"
+    },
+    {
+      "technique_id": "T1020.001",
+      "name": "Traffic Duplication",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1020-001"
+    },
+    {
+      "technique_id": "T1021.003",
+      "name": "Distributed Component Object Model",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1021-003"
+    },
+    {
+      "technique_id": "T1021.004",
+      "name": "SSH",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1021-004"
+    },
+    {
+      "technique_id": "T1021.005",
+      "name": "VNC",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1021-005"
+    },
+    {
+      "technique_id": "T1021.006",
+      "name": "Windows Remote Management",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1021-006"
+    },
+    {
+      "technique_id": "T1021.007",
+      "name": "Cloud Services",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1021-007"
+    },
+    {
+      "technique_id": "T1021.008",
+      "name": "Direct Cloud VM Connections",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1021-008"
+    },
+    {
+      "technique_id": "T1027.001",
+      "name": "Binary Padding",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-001"
+    },
+    {
+      "technique_id": "T1027.002",
+      "name": "Software Packing",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-002"
+    },
+    {
+      "technique_id": "T1027.003",
+      "name": "Steganography",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-003"
+    },
+    {
+      "technique_id": "T1027.004",
+      "name": "Compile After Delivery",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-004"
+    },
+    {
+      "technique_id": "T1027.005",
+      "name": "Indicator Removal from Tools",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-005"
+    },
+    {
+      "technique_id": "T1027.006",
+      "name": "HTML Smuggling",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-006"
+    },
+    {
+      "technique_id": "T1027.007",
+      "name": "Dynamic API Resolution",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-007"
+    },
+    {
+      "technique_id": "T1027.008",
+      "name": "Stripped Payloads",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-008"
+    },
+    {
+      "technique_id": "T1027.009",
+      "name": "Embedded Payloads",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-009"
+    },
+    {
+      "technique_id": "T1027.010",
+      "name": "Command Obfuscation",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-010"
+    },
+    {
+      "technique_id": "T1027.011",
+      "name": "Fileless Storage",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-011"
+    },
+    {
+      "technique_id": "T1027.012",
+      "name": "LNK Icon Smuggling",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-012"
+    },
+    {
+      "technique_id": "T1027.013",
+      "name": "Encrypted/Encoded File",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-013"
+    },
+    {
+      "technique_id": "T1027.014",
+      "name": "Polymorphic Code",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-014"
+    },
+    {
+      "technique_id": "T1027.015",
+      "name": "Compression",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-015"
+    },
+    {
+      "technique_id": "T1027.016",
+      "name": "Junk Code Insertion",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-016"
+    },
+    {
+      "technique_id": "T1027.017",
+      "name": "SVG Smuggling",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-017"
+    },
+    {
+      "technique_id": "T1027.018",
+      "name": "Invisible Unicode",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1027-018"
+    },
+    {
+      "technique_id": "T1036.001",
+      "name": "Invalid Code Signature",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-001"
+    },
+    {
+      "technique_id": "T1036.002",
+      "name": "Right-to-Left Override",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-002"
+    },
+    {
+      "technique_id": "T1036.003",
+      "name": "Rename Legitimate Utilities",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-003"
+    },
+    {
+      "technique_id": "T1036.004",
+      "name": "Masquerade Task or Service",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-004"
+    },
+    {
+      "technique_id": "T1036.005",
+      "name": "Match Legitimate Resource Name or Location",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-005"
+    },
+    {
+      "technique_id": "T1036.006",
+      "name": "Space after Filename",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-006"
+    },
+    {
+      "technique_id": "T1036.007",
+      "name": "Double File Extension",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-007"
+    },
+    {
+      "technique_id": "T1036.008",
+      "name": "Masquerade File Type",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-008"
+    },
+    {
+      "technique_id": "T1036.009",
+      "name": "Break Process Trees",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-009"
+    },
+    {
+      "technique_id": "T1036.010",
+      "name": "Masquerade Account Name",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-010"
+    },
+    {
+      "technique_id": "T1036.011",
+      "name": "Overwrite Process Arguments",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-011"
+    },
+    {
+      "technique_id": "T1036.012",
+      "name": "Browser Fingerprint",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1036-012"
+    },
+    {
+      "technique_id": "T1037.001",
+      "name": "Logon Script (Windows)",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1037-001"
+    },
+    {
+      "technique_id": "T1037.002",
+      "name": "Login Hook",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1037-002"
+    },
+    {
+      "technique_id": "T1037.003",
+      "name": "Network Logon Script",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1037-003"
+    },
+    {
+      "technique_id": "T1037.004",
+      "name": "RC Scripts",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1037-004"
+    },
+    {
+      "technique_id": "T1037.005",
+      "name": "Startup Items",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1037-005"
+    },
+    {
+      "technique_id": "T1048.001",
+      "name": "Exfiltration Over Symmetric Encrypted Non-C2 Protocol",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1048-001"
+    },
+    {
+      "technique_id": "T1048.002",
+      "name": "Exfiltration Over Asymmetric Encrypted Non-C2 Protocol",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1048-002"
+    },
+    {
+      "technique_id": "T1048.003",
+      "name": "Exfiltration Over Unencrypted Non-C2 Protocol",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1048-003"
+    },
+    {
+      "technique_id": "T1053.002",
+      "name": "At",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1053-002"
+    },
+    {
+      "technique_id": "T1053.003",
+      "name": "Cron",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1053-003"
+    },
+    {
+      "technique_id": "T1053.006",
+      "name": "Systemd Timers",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1053-006"
+    },
+    {
+      "technique_id": "T1053.007",
+      "name": "Container Orchestration Job",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1053-007"
+    },
+    {
+      "technique_id": "T1055.001",
+      "name": "Dynamic-link Library Injection",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-001"
+    },
+    {
+      "technique_id": "T1055.002",
+      "name": "Portable Executable Injection",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-002"
+    },
+    {
+      "technique_id": "T1055.003",
+      "name": "Thread Execution Hijacking",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-003"
+    },
+    {
+      "technique_id": "T1055.004",
+      "name": "Asynchronous Procedure Call",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-004"
+    },
+    {
+      "technique_id": "T1055.005",
+      "name": "Thread Local Storage",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-005"
+    },
+    {
+      "technique_id": "T1055.008",
+      "name": "Ptrace System Calls",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-008"
+    },
+    {
+      "technique_id": "T1055.009",
+      "name": "Proc Memory",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-009"
+    },
+    {
+      "technique_id": "T1055.011",
+      "name": "Extra Window Memory Injection",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-011"
+    },
+    {
+      "technique_id": "T1055.012",
+      "name": "Process Hollowing",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-012"
+    },
+    {
+      "technique_id": "T1055.013",
+      "name": "Process Doppelg\u00e4nging",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-013"
+    },
+    {
+      "technique_id": "T1055.014",
+      "name": "VDSO Hijacking",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-014"
+    },
+    {
+      "technique_id": "T1055.015",
+      "name": "ListPlanting",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1055-015"
+    },
+    {
+      "technique_id": "T1056.001",
+      "name": "Keylogging",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1056-001"
+    },
+    {
+      "technique_id": "T1056.002",
+      "name": "GUI Input Capture",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1056-002"
+    },
+    {
+      "technique_id": "T1056.003",
+      "name": "Web Portal Capture",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1056-003"
+    },
+    {
+      "technique_id": "T1056.004",
+      "name": "Credential API Hooking",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1056-004"
+    },
+    {
+      "technique_id": "T1059.002",
+      "name": "AppleScript",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-002"
+    },
+    {
+      "technique_id": "T1059.003",
+      "name": "Windows Command Shell",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-003"
+    },
+    {
+      "technique_id": "T1059.004",
+      "name": "Unix Shell",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-004"
+    },
+    {
+      "technique_id": "T1059.005",
+      "name": "Visual Basic",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-005"
+    },
+    {
+      "technique_id": "T1059.006",
+      "name": "Python",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-006"
+    },
+    {
+      "technique_id": "T1059.007",
+      "name": "JavaScript",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-007"
+    },
+    {
+      "technique_id": "T1059.008",
+      "name": "Network Device CLI",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-008"
+    },
+    {
+      "technique_id": "T1059.009",
+      "name": "Cloud API",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-009"
+    },
+    {
+      "technique_id": "T1059.010",
+      "name": "AutoHotKey & AutoIT",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-010"
+    },
+    {
+      "technique_id": "T1059.011",
+      "name": "Lua",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-011"
+    },
+    {
+      "technique_id": "T1059.012",
+      "name": "Hypervisor CLI",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-012"
+    },
+    {
+      "technique_id": "T1059.013",
+      "name": "Container CLI/API",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1059-013"
+    },
+    {
+      "technique_id": "T1069.001",
+      "name": "Local Groups",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1069-001"
+    },
+    {
+      "technique_id": "T1069.002",
+      "name": "Domain Groups",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1069-002"
+    },
+    {
+      "technique_id": "T1069.003",
+      "name": "Cloud Groups",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1069-003"
+    },
+    {
+      "technique_id": "T1070.003",
+      "name": "Clear Command History",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-003"
+    },
+    {
+      "technique_id": "T1070.004",
+      "name": "File Deletion",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-004"
+    },
+    {
+      "technique_id": "T1070.005",
+      "name": "Network Share Connection Removal",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-005"
+    },
+    {
+      "technique_id": "T1070.006",
+      "name": "Timestomp",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-006"
+    },
+    {
+      "technique_id": "T1070.007",
+      "name": "Clear Network Connection History and Configurations",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-007"
+    },
+    {
+      "technique_id": "T1070.008",
+      "name": "Clear Mailbox Data",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-008"
+    },
+    {
+      "technique_id": "T1070.009",
+      "name": "Clear Persistence",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-009"
+    },
+    {
+      "technique_id": "T1070.010",
+      "name": "Relocate Malware",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1070-010"
+    },
+    {
+      "technique_id": "T1071.002",
+      "name": "File Transfer Protocols",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1071-002"
+    },
+    {
+      "technique_id": "T1071.003",
+      "name": "Mail Protocols",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1071-003"
+    },
+    {
+      "technique_id": "T1071.005",
+      "name": "Publish/Subscribe Protocols",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1071-005"
+    },
+    {
+      "technique_id": "T1074.001",
+      "name": "Local Data Staging",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1074-001"
+    },
+    {
+      "technique_id": "T1074.002",
+      "name": "Remote Data Staging",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1074-002"
+    },
+    {
+      "technique_id": "T1078.001",
+      "name": "Default Accounts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1078-001"
+    },
+    {
+      "technique_id": "T1078.002",
+      "name": "Domain Accounts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1078-002"
+    },
+    {
+      "technique_id": "T1078.003",
+      "name": "Local Accounts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1078-003"
+    },
+    {
+      "technique_id": "T1078.004",
+      "name": "Cloud Accounts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1078-004"
+    },
+    {
+      "technique_id": "T1087.001",
+      "name": "Local Account",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1087-001"
+    },
+    {
+      "technique_id": "T1087.002",
+      "name": "Domain Account",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1087-002"
+    },
+    {
+      "technique_id": "T1087.003",
+      "name": "Email Account",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1087-003"
+    },
+    {
+      "technique_id": "T1087.004",
+      "name": "Cloud Account",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1087-004"
+    },
+    {
+      "technique_id": "T1090.001",
+      "name": "Internal Proxy",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1090-001"
+    },
+    {
+      "technique_id": "T1090.002",
+      "name": "External Proxy",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1090-002"
+    },
+    {
+      "technique_id": "T1090.003",
+      "name": "Multi-hop Proxy",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1090-003"
+    },
+    {
+      "technique_id": "T1090.004",
+      "name": "Domain Fronting",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1090-004"
+    },
+    {
+      "technique_id": "T1098.001",
+      "name": "Additional Cloud Credentials",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098-001"
+    },
+    {
+      "technique_id": "T1098.002",
+      "name": "Additional Email Delegate Permissions",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098-002"
+    },
+    {
+      "technique_id": "T1098.003",
+      "name": "Additional Cloud Roles",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098-003"
+    },
+    {
+      "technique_id": "T1098.004",
+      "name": "SSH Authorized Keys",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098-004"
+    },
+    {
+      "technique_id": "T1098.005",
+      "name": "Device Registration",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098-005"
+    },
+    {
+      "technique_id": "T1098.006",
+      "name": "Additional Container Cluster Roles",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098-006"
+    },
+    {
+      "technique_id": "T1098.007",
+      "name": "Additional Local or Domain Groups",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1098-007"
+    },
+    {
+      "technique_id": "T1102.001",
+      "name": "Dead Drop Resolver",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1102-001"
+    },
+    {
+      "technique_id": "T1102.002",
+      "name": "Bidirectional Communication",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1102-002"
+    },
+    {
+      "technique_id": "T1102.003",
+      "name": "One-Way Communication",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1102-003"
+    },
+    {
+      "technique_id": "T1110.001",
+      "name": "Password Guessing",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1110-001"
+    },
+    {
+      "technique_id": "T1110.002",
+      "name": "Password Cracking",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1110-002"
+    },
+    {
+      "technique_id": "T1110.004",
+      "name": "Credential Stuffing",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1110-004"
+    },
+    {
+      "technique_id": "T1114.001",
+      "name": "Local Email Collection",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1114-001"
+    },
+    {
+      "technique_id": "T1114.002",
+      "name": "Remote Email Collection",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1114-002"
+    },
+    {
+      "technique_id": "T1114.003",
+      "name": "Email Forwarding Rule",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1114-003"
+    },
+    {
+      "technique_id": "T1127.001",
+      "name": "MSBuild",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1127-001"
+    },
+    {
+      "technique_id": "T1127.002",
+      "name": "ClickOnce",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1127-002"
+    },
+    {
+      "technique_id": "T1127.003",
+      "name": "JamPlus",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1127-003"
+    },
+    {
+      "technique_id": "T1132.001",
+      "name": "Standard Encoding",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1132-001"
+    },
+    {
+      "technique_id": "T1132.002",
+      "name": "Non-Standard Encoding",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1132-002"
+    },
+    {
+      "technique_id": "T1134.001",
+      "name": "Token Impersonation/Theft",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1134-001"
+    },
+    {
+      "technique_id": "T1134.002",
+      "name": "Create Process with Token",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1134-002"
+    },
+    {
+      "technique_id": "T1134.003",
+      "name": "Make and Impersonate Token",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1134-003"
+    },
+    {
+      "technique_id": "T1134.004",
+      "name": "Parent PID Spoofing",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1134-004"
+    },
+    {
+      "technique_id": "T1134.005",
+      "name": "SID-History Injection",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1134-005"
+    },
+    {
+      "technique_id": "T1136.002",
+      "name": "Domain Account",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1136-002"
+    },
+    {
+      "technique_id": "T1136.003",
+      "name": "Cloud Account",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1136-003"
+    },
+    {
+      "technique_id": "T1137.001",
+      "name": "Office Template Macros",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1137-001"
+    },
+    {
+      "technique_id": "T1137.002",
+      "name": "Office Test",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1137-002"
+    },
+    {
+      "technique_id": "T1137.003",
+      "name": "Outlook Forms",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1137-003"
+    },
+    {
+      "technique_id": "T1137.004",
+      "name": "Outlook Home Page",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1137-004"
+    },
+    {
+      "technique_id": "T1137.005",
+      "name": "Outlook Rules",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1137-005"
+    },
+    {
+      "technique_id": "T1137.006",
+      "name": "Add-ins",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1137-006"
+    },
+    {
+      "technique_id": "T1176.001",
+      "name": "Browser Extensions",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1176-001"
+    },
+    {
+      "technique_id": "T1176.002",
+      "name": "IDE Extensions",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1176-002"
+    },
+    {
+      "technique_id": "T1195.001",
+      "name": "Compromise Software Dependencies and Development Tools",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1195-001"
+    },
+    {
+      "technique_id": "T1195.002",
+      "name": "Compromise Software Supply Chain",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1195-002"
+    },
+    {
+      "technique_id": "T1195.003",
+      "name": "Compromise Hardware Supply Chain",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1195-003"
+    },
+    {
+      "technique_id": "T1204.001",
+      "name": "Malicious Link",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1204-001"
+    },
+    {
+      "technique_id": "T1204.002",
+      "name": "Malicious File",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1204-002"
+    },
+    {
+      "technique_id": "T1204.003",
+      "name": "Malicious Image",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1204-003"
+    },
+    {
+      "technique_id": "T1204.004",
+      "name": "Malicious Copy and Paste",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1204-004"
+    },
+    {
+      "technique_id": "T1204.005",
+      "name": "Malicious Library",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1204-005"
+    },
+    {
+      "technique_id": "T1205.001",
+      "name": "Port Knocking",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1205-001"
+    },
+    {
+      "technique_id": "T1205.002",
+      "name": "Socket Filters",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1205-002"
+    },
+    {
+      "technique_id": "T1213.001",
+      "name": "Confluence",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1213-001"
+    },
+    {
+      "technique_id": "T1213.002",
+      "name": "Sharepoint",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1213-002"
+    },
+    {
+      "technique_id": "T1213.003",
+      "name": "Code Repositories",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1213-003"
+    },
+    {
+      "technique_id": "T1213.004",
+      "name": "Customer Relationship Management Software",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1213-004"
+    },
+    {
+      "technique_id": "T1213.005",
+      "name": "Messaging Applications",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1213-005"
+    },
+    {
+      "technique_id": "T1213.006",
+      "name": "Databases",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1213-006"
+    },
+    {
+      "technique_id": "T1216.001",
+      "name": "PubPrn",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1216-001"
+    },
+    {
+      "technique_id": "T1216.002",
+      "name": "SyncAppvPublishingServer",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1216-002"
+    },
+    {
+      "technique_id": "T1218.001",
+      "name": "Compiled HTML File",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-001"
+    },
+    {
+      "technique_id": "T1218.002",
+      "name": "Control Panel",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-002"
+    },
+    {
+      "technique_id": "T1218.003",
+      "name": "CMSTP",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-003"
+    },
+    {
+      "technique_id": "T1218.004",
+      "name": "InstallUtil",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-004"
+    },
+    {
+      "technique_id": "T1218.005",
+      "name": "Mshta",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-005"
+    },
+    {
+      "technique_id": "T1218.007",
+      "name": "Msiexec",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-007"
+    },
+    {
+      "technique_id": "T1218.008",
+      "name": "Odbcconf",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-008"
+    },
+    {
+      "technique_id": "T1218.009",
+      "name": "Regsvcs/Regasm",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-009"
+    },
+    {
+      "technique_id": "T1218.010",
+      "name": "Regsvr32",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-010"
+    },
+    {
+      "technique_id": "T1218.011",
+      "name": "Rundll32",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-011"
+    },
+    {
+      "technique_id": "T1218.012",
+      "name": "Verclsid",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-012"
+    },
+    {
+      "technique_id": "T1218.013",
+      "name": "Mavinject",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-013"
+    },
+    {
+      "technique_id": "T1218.014",
+      "name": "MMC",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-014"
+    },
+    {
+      "technique_id": "T1218.015",
+      "name": "Electron Applications",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1218-015"
+    },
+    {
+      "technique_id": "T1219.001",
+      "name": "IDE Tunneling",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1219-001"
+    },
+    {
+      "technique_id": "T1219.002",
+      "name": "Remote Desktop Software",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1219-002"
+    },
+    {
+      "technique_id": "T1219.003",
+      "name": "Remote Access Hardware",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1219-003"
+    },
+    {
+      "technique_id": "T1480.001",
+      "name": "Environmental Keying",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1480-001"
+    },
+    {
+      "technique_id": "T1480.002",
+      "name": "Mutual Exclusion",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1480-002"
+    },
+    {
+      "technique_id": "T1484.001",
+      "name": "Group Policy Modification",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1484-001"
+    },
+    {
+      "technique_id": "T1484.002",
+      "name": "Trust Modification",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1484-002"
+    },
+    {
+      "technique_id": "T1485.001",
+      "name": "Lifecycle-Triggered Deletion",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1485-001"
+    },
+    {
+      "technique_id": "T1491.001",
+      "name": "Internal Defacement",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1491-001"
+    },
+    {
+      "technique_id": "T1491.002",
+      "name": "External Defacement",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1491-002"
+    },
+    {
+      "technique_id": "T1496.001",
+      "name": "Compute Hijacking",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1496-001"
+    },
+    {
+      "technique_id": "T1496.002",
+      "name": "Bandwidth Hijacking",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1496-002"
+    },
+    {
+      "technique_id": "T1496.003",
+      "name": "SMS Pumping",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1496-003"
+    },
+    {
+      "technique_id": "T1496.004",
+      "name": "Cloud Service Hijacking",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1496-004"
+    },
+    {
+      "technique_id": "T1497.001",
+      "name": "System Checks",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1497-001"
+    },
+    {
+      "technique_id": "T1497.002",
+      "name": "User Activity Based Checks",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1497-002"
+    },
+    {
+      "technique_id": "T1497.003",
+      "name": "Time Based Checks",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1497-003"
+    },
+    {
+      "technique_id": "T1498.001",
+      "name": "Direct Network Flood",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1498-001"
+    },
+    {
+      "technique_id": "T1498.002",
+      "name": "Reflection Amplification",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1498-002"
+    },
+    {
+      "technique_id": "T1499.001",
+      "name": "OS Exhaustion Flood",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1499-001"
+    },
+    {
+      "technique_id": "T1499.002",
+      "name": "Service Exhaustion Flood",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1499-002"
+    },
+    {
+      "technique_id": "T1499.003",
+      "name": "Application Exhaustion Flood",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1499-003"
+    },
+    {
+      "technique_id": "T1499.004",
+      "name": "Application or System Exploitation",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1499-004"
+    },
+    {
+      "technique_id": "T1505.001",
+      "name": "SQL Stored Procedures",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1505-001"
+    },
+    {
+      "technique_id": "T1505.002",
+      "name": "Transport Agent",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1505-002"
+    },
+    {
+      "technique_id": "T1505.004",
+      "name": "IIS Components",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1505-004"
+    },
+    {
+      "technique_id": "T1505.005",
+      "name": "Terminal Services DLL",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1505-005"
+    },
+    {
+      "technique_id": "T1505.006",
+      "name": "vSphere Installation Bundles",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1505-006"
+    },
+    {
+      "technique_id": "T1518.001",
+      "name": "Security Software Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1518-001"
+    },
+    {
+      "technique_id": "T1518.002",
+      "name": "Backup Software Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1518-002"
+    },
+    {
+      "technique_id": "T1542.001",
+      "name": "System Firmware",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1542-001"
+    },
+    {
+      "technique_id": "T1542.002",
+      "name": "Component Firmware",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1542-002"
+    },
+    {
+      "technique_id": "T1542.003",
+      "name": "Bootkit",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1542-003"
+    },
+    {
+      "technique_id": "T1542.004",
+      "name": "ROMMONkit",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1542-004"
+    },
+    {
+      "technique_id": "T1542.005",
+      "name": "TFTP Boot",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1542-005"
+    },
+    {
+      "technique_id": "T1543.001",
+      "name": "Launch Agent",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1543-001"
+    },
+    {
+      "technique_id": "T1543.002",
+      "name": "Systemd Service",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1543-002"
+    },
+    {
+      "technique_id": "T1543.004",
+      "name": "Launch Daemon",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1543-004"
+    },
+    {
+      "technique_id": "T1543.005",
+      "name": "Container Service",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1543-005"
+    },
+    {
+      "technique_id": "T1546.001",
+      "name": "Change Default File Association",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-001"
+    },
+    {
+      "technique_id": "T1546.002",
+      "name": "Screensaver",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-002"
+    },
+    {
+      "technique_id": "T1546.003",
+      "name": "Windows Management Instrumentation Event Subscription",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-003"
+    },
+    {
+      "technique_id": "T1546.004",
+      "name": "Unix Shell Configuration Modification",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-004"
+    },
+    {
+      "technique_id": "T1546.005",
+      "name": "Trap",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-005"
+    },
+    {
+      "technique_id": "T1546.006",
+      "name": "LC_LOAD_DYLIB Addition",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-006"
+    },
+    {
+      "technique_id": "T1546.007",
+      "name": "Netsh Helper DLL",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-007"
+    },
+    {
+      "technique_id": "T1546.008",
+      "name": "Accessibility Features",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-008"
+    },
+    {
+      "technique_id": "T1546.009",
+      "name": "AppCert DLLs",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-009"
+    },
+    {
+      "technique_id": "T1546.010",
+      "name": "AppInit DLLs",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-010"
+    },
+    {
+      "technique_id": "T1546.011",
+      "name": "Application Shimming",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-011"
+    },
+    {
+      "technique_id": "T1546.012",
+      "name": "Image File Execution Options Injection",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-012"
+    },
+    {
+      "technique_id": "T1546.013",
+      "name": "PowerShell Profile",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-013"
+    },
+    {
+      "technique_id": "T1546.014",
+      "name": "Emond",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-014"
+    },
+    {
+      "technique_id": "T1546.015",
+      "name": "Component Object Model Hijacking",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-015"
+    },
+    {
+      "technique_id": "T1546.016",
+      "name": "Installer Packages",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1546-016"
+    },
+    {
+      "technique_id": "T1546.017",
+      "name": "Udev Rules",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1546-017"
+    },
+    {
+      "technique_id": "T1546.018",
+      "name": "Python Startup Hooks",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1546-018"
+    },
+    {
+      "technique_id": "T1547.002",
+      "name": "Authentication Package",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-002"
+    },
+    {
+      "technique_id": "T1547.003",
+      "name": "Time Providers",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-003"
+    },
+    {
+      "technique_id": "T1547.004",
+      "name": "Winlogon Helper DLL",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-004"
+    },
+    {
+      "technique_id": "T1547.005",
+      "name": "Security Support Provider",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-005"
+    },
+    {
+      "technique_id": "T1547.006",
+      "name": "Kernel Modules and Extensions",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-006"
+    },
+    {
+      "technique_id": "T1547.007",
+      "name": "Re-opened Applications",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-007"
+    },
+    {
+      "technique_id": "T1547.008",
+      "name": "LSASS Driver",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-008"
+    },
+    {
+      "technique_id": "T1547.009",
+      "name": "Shortcut Modification",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-009"
+    },
+    {
+      "technique_id": "T1547.010",
+      "name": "Port Monitors",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-010"
+    },
+    {
+      "technique_id": "T1547.012",
+      "name": "Print Processors",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-012"
+    },
+    {
+      "technique_id": "T1547.013",
+      "name": "XDG Autostart Entries",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-013"
+    },
+    {
+      "technique_id": "T1547.014",
+      "name": "Active Setup",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-014"
+    },
+    {
+      "technique_id": "T1547.015",
+      "name": "Login Items",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1547-015"
+    },
+    {
+      "technique_id": "T1548.001",
+      "name": "Setuid and Setgid",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1548-001"
+    },
+    {
+      "technique_id": "T1548.003",
+      "name": "Sudo and Sudo Caching",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1548-003"
+    },
+    {
+      "technique_id": "T1548.004",
+      "name": "Elevated Execution with Prompt",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1548-004"
+    },
+    {
+      "technique_id": "T1548.005",
+      "name": "Temporary Elevated Cloud Access",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1548-005"
+    },
+    {
+      "technique_id": "T1548.006",
+      "name": "TCC Manipulation",
+      "mitre_tactic_id": "TA0004",
+      "playbook_id": "privilege-escalation",
+      "golden_case_id": "GOLDEN-T1548-006"
+    },
+    {
+      "technique_id": "T1550.001",
+      "name": "Application Access Token",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1550-001"
+    },
+    {
+      "technique_id": "T1550.003",
+      "name": "Pass the Ticket",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1550-003"
+    },
+    {
+      "technique_id": "T1550.004",
+      "name": "Web Session Cookie",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1550-004"
+    },
+    {
+      "technique_id": "T1552.001",
+      "name": "Credentials In Files",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-001"
+    },
+    {
+      "technique_id": "T1552.002",
+      "name": "Credentials in Registry",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-002"
+    },
+    {
+      "technique_id": "T1552.003",
+      "name": "Shell History",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-003"
+    },
+    {
+      "technique_id": "T1552.004",
+      "name": "Private Keys",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-004"
+    },
+    {
+      "technique_id": "T1552.005",
+      "name": "Cloud Instance Metadata API",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-005"
+    },
+    {
+      "technique_id": "T1552.006",
+      "name": "Group Policy Preferences",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-006"
+    },
+    {
+      "technique_id": "T1552.007",
+      "name": "Container API",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-007"
+    },
+    {
+      "technique_id": "T1552.008",
+      "name": "Chat Messages",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1552-008"
+    },
+    {
+      "technique_id": "T1555.001",
+      "name": "Keychain",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1555-001"
+    },
+    {
+      "technique_id": "T1555.002",
+      "name": "Securityd Memory",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1555-002"
+    },
+    {
+      "technique_id": "T1555.003",
+      "name": "Credentials from Web Browsers",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1555-003"
+    },
+    {
+      "technique_id": "T1555.004",
+      "name": "Windows Credential Manager",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1555-004"
+    },
+    {
+      "technique_id": "T1555.005",
+      "name": "Password Managers",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1555-005"
+    },
+    {
+      "technique_id": "T1555.006",
+      "name": "Cloud Secrets Management Stores",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1555-006"
+    },
+    {
+      "technique_id": "T1556.001",
+      "name": "Domain Controller Authentication",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-001"
+    },
+    {
+      "technique_id": "T1556.002",
+      "name": "Password Filter DLL",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-002"
+    },
+    {
+      "technique_id": "T1556.003",
+      "name": "Pluggable Authentication Modules",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-003"
+    },
+    {
+      "technique_id": "T1556.004",
+      "name": "Network Device Authentication",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-004"
+    },
+    {
+      "technique_id": "T1556.005",
+      "name": "Reversible Encryption",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-005"
+    },
+    {
+      "technique_id": "T1556.006",
+      "name": "Multi-Factor Authentication",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-006"
+    },
+    {
+      "technique_id": "T1556.007",
+      "name": "Hybrid Identity",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-007"
+    },
+    {
+      "technique_id": "T1556.008",
+      "name": "Network Provider DLL",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-008"
+    },
+    {
+      "technique_id": "T1556.009",
+      "name": "Conditional Access Policies",
+      "mitre_tactic_id": "TA0003",
+      "playbook_id": "persistence",
+      "golden_case_id": "GOLDEN-T1556-009"
+    },
+    {
+      "technique_id": "T1557.001",
+      "name": "Name Resolution Poisoning and SMB Relay",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1557-001"
+    },
+    {
+      "technique_id": "T1557.002",
+      "name": "ARP Cache Poisoning",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1557-002"
+    },
+    {
+      "technique_id": "T1557.003",
+      "name": "DHCP Spoofing",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1557-003"
+    },
+    {
+      "technique_id": "T1557.004",
+      "name": "Evil Twin",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1557-004"
+    },
+    {
+      "technique_id": "T1558.001",
+      "name": "Golden Ticket",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1558-001"
+    },
+    {
+      "technique_id": "T1558.002",
+      "name": "Silver Ticket",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1558-002"
+    },
+    {
+      "technique_id": "T1558.004",
+      "name": "AS-REP Roasting",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1558-004"
+    },
+    {
+      "technique_id": "T1558.005",
+      "name": "Ccache Files",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1558-005"
+    },
+    {
+      "technique_id": "T1559.001",
+      "name": "Component Object Model",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1559-001"
+    },
+    {
+      "technique_id": "T1559.002",
+      "name": "Dynamic Data Exchange",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1559-002"
+    },
+    {
+      "technique_id": "T1559.003",
+      "name": "XPC Services",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1559-003"
+    },
+    {
+      "technique_id": "T1560.001",
+      "name": "Archive via Utility",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1560-001"
+    },
+    {
+      "technique_id": "T1560.002",
+      "name": "Archive via Library",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1560-002"
+    },
+    {
+      "technique_id": "T1560.003",
+      "name": "Archive via Custom Method",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1560-003"
+    },
+    {
+      "technique_id": "T1561.001",
+      "name": "Disk Content Wipe",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1561-001"
+    },
+    {
+      "technique_id": "T1561.002",
+      "name": "Disk Structure Wipe",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1561-002"
+    },
+    {
+      "technique_id": "T1563.001",
+      "name": "SSH Hijacking",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1563-001"
+    },
+    {
+      "technique_id": "T1563.002",
+      "name": "RDP Hijacking",
+      "mitre_tactic_id": "TA0008",
+      "playbook_id": "lateral-movement",
+      "golden_case_id": "GOLDEN-T1563-002"
+    },
+    {
+      "technique_id": "T1564.001",
+      "name": "Hidden Files and Directories",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-001"
+    },
+    {
+      "technique_id": "T1564.002",
+      "name": "Hidden Users",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-002"
+    },
+    {
+      "technique_id": "T1564.003",
+      "name": "Hidden Window",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-003"
+    },
+    {
+      "technique_id": "T1564.004",
+      "name": "NTFS File Attributes",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-004"
+    },
+    {
+      "technique_id": "T1564.005",
+      "name": "Hidden File System",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-005"
+    },
+    {
+      "technique_id": "T1564.006",
+      "name": "Run Virtual Instance",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-006"
+    },
+    {
+      "technique_id": "T1564.007",
+      "name": "VBA Stomping",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-007"
+    },
+    {
+      "technique_id": "T1564.008",
+      "name": "Email Hiding Rules",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-008"
+    },
+    {
+      "technique_id": "T1564.009",
+      "name": "Resource Forking",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-009"
+    },
+    {
+      "technique_id": "T1564.010",
+      "name": "Process Argument Spoofing",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-010"
+    },
+    {
+      "technique_id": "T1564.011",
+      "name": "Ignore Process Interrupts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-011"
+    },
+    {
+      "technique_id": "T1564.012",
+      "name": "File/Path Exclusions",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-012"
+    },
+    {
+      "technique_id": "T1564.013",
+      "name": "Bind Mounts",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-013"
+    },
+    {
+      "technique_id": "T1564.014",
+      "name": "Extended Attributes",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1564-014"
+    },
+    {
+      "technique_id": "T1565.001",
+      "name": "Stored Data Manipulation",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1565-001"
+    },
+    {
+      "technique_id": "T1565.002",
+      "name": "Transmitted Data Manipulation",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1565-002"
+    },
+    {
+      "technique_id": "T1565.003",
+      "name": "Runtime Data Manipulation",
+      "mitre_tactic_id": "TA0040",
+      "playbook_id": "impact",
+      "golden_case_id": "GOLDEN-T1565-003"
+    },
+    {
+      "technique_id": "T1566.002",
+      "name": "Spearphishing Link",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1566-002"
+    },
+    {
+      "technique_id": "T1566.003",
+      "name": "Spearphishing via Service",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1566-003"
+    },
+    {
+      "technique_id": "T1566.004",
+      "name": "Spearphishing Voice",
+      "mitre_tactic_id": "TA0001",
+      "playbook_id": "initial-access",
+      "golden_case_id": "GOLDEN-T1566-004"
+    },
+    {
+      "technique_id": "T1567.001",
+      "name": "Exfiltration to Code Repository",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1567-001"
+    },
+    {
+      "technique_id": "T1567.002",
+      "name": "Exfiltration to Cloud Storage",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1567-002"
+    },
+    {
+      "technique_id": "T1567.003",
+      "name": "Exfiltration to Text Storage Sites",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1567-003"
+    },
+    {
+      "technique_id": "T1567.004",
+      "name": "Exfiltration Over Webhook",
+      "mitre_tactic_id": "TA0010",
+      "playbook_id": "exfiltration",
+      "golden_case_id": "GOLDEN-T1567-004"
+    },
+    {
+      "technique_id": "T1568.001",
+      "name": "Fast Flux DNS",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1568-001"
+    },
+    {
+      "technique_id": "T1568.002",
+      "name": "Domain Generation Algorithms",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1568-002"
+    },
+    {
+      "technique_id": "T1568.003",
+      "name": "DNS Calculation",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1568-003"
+    },
+    {
+      "technique_id": "T1569.001",
+      "name": "Launchctl",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1569-001"
+    },
+    {
+      "technique_id": "T1569.002",
+      "name": "Service Execution",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1569-002"
+    },
+    {
+      "technique_id": "T1569.003",
+      "name": "Systemctl",
+      "mitre_tactic_id": "TA0002",
+      "playbook_id": "execution",
+      "golden_case_id": "GOLDEN-T1569-003"
+    },
+    {
+      "technique_id": "T1573.002",
+      "name": "Asymmetric Cryptography",
+      "mitre_tactic_id": "TA0011",
+      "playbook_id": "command-and-control",
+      "golden_case_id": "GOLDEN-T1573-002"
+    },
+    {
+      "technique_id": "T1574.001",
+      "name": "DLL",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-001"
+    },
+    {
+      "technique_id": "T1574.004",
+      "name": "Dylib Hijacking",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-004"
+    },
+    {
+      "technique_id": "T1574.005",
+      "name": "Executable Installer File Permissions Weakness",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-005"
+    },
+    {
+      "technique_id": "T1574.006",
+      "name": "Dynamic Linker Hijacking",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-006"
+    },
+    {
+      "technique_id": "T1574.007",
+      "name": "Path Interception by PATH Environment Variable",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-007"
+    },
+    {
+      "technique_id": "T1574.008",
+      "name": "Path Interception by Search Order Hijacking",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-008"
+    },
+    {
+      "technique_id": "T1574.009",
+      "name": "Path Interception by Unquoted Path",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-009"
+    },
+    {
+      "technique_id": "T1574.010",
+      "name": "Services File Permissions Weakness",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-010"
+    },
+    {
+      "technique_id": "T1574.011",
+      "name": "Services Registry Permissions Weakness",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-011"
+    },
+    {
+      "technique_id": "T1574.012",
+      "name": "COR_PROFILER",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-012"
+    },
+    {
+      "technique_id": "T1574.013",
+      "name": "KernelCallbackTable",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-013"
+    },
+    {
+      "technique_id": "T1574.014",
+      "name": "AppDomainManager",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1574-014"
+    },
+    {
+      "technique_id": "T1583.001",
+      "name": "Domains",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-001"
+    },
+    {
+      "technique_id": "T1583.002",
+      "name": "DNS Server",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-002"
+    },
+    {
+      "technique_id": "T1583.003",
+      "name": "Virtual Private Server",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-003"
+    },
+    {
+      "technique_id": "T1583.004",
+      "name": "Server",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-004"
+    },
+    {
+      "technique_id": "T1583.005",
+      "name": "Botnet",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-005"
+    },
+    {
+      "technique_id": "T1583.006",
+      "name": "Web Services",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-006"
+    },
+    {
+      "technique_id": "T1583.007",
+      "name": "Serverless",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-007"
+    },
+    {
+      "technique_id": "T1583.008",
+      "name": "Malvertising",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1583-008"
+    },
+    {
+      "technique_id": "T1584.001",
+      "name": "Domains",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-001"
+    },
+    {
+      "technique_id": "T1584.002",
+      "name": "DNS Server",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-002"
+    },
+    {
+      "technique_id": "T1584.003",
+      "name": "Virtual Private Server",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-003"
+    },
+    {
+      "technique_id": "T1584.004",
+      "name": "Server",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-004"
+    },
+    {
+      "technique_id": "T1584.005",
+      "name": "Botnet",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-005"
+    },
+    {
+      "technique_id": "T1584.006",
+      "name": "Web Services",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-006"
+    },
+    {
+      "technique_id": "T1584.007",
+      "name": "Serverless",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-007"
+    },
+    {
+      "technique_id": "T1584.008",
+      "name": "Network Devices",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1584-008"
+    },
+    {
+      "technique_id": "T1585.001",
+      "name": "Social Media Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1585-001"
+    },
+    {
+      "technique_id": "T1585.002",
+      "name": "Email Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1585-002"
+    },
+    {
+      "technique_id": "T1585.003",
+      "name": "Cloud Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1585-003"
+    },
+    {
+      "technique_id": "T1586.001",
+      "name": "Social Media Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1586-001"
+    },
+    {
+      "technique_id": "T1586.002",
+      "name": "Email Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1586-002"
+    },
+    {
+      "technique_id": "T1586.003",
+      "name": "Cloud Accounts",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1586-003"
+    },
+    {
+      "technique_id": "T1587.001",
+      "name": "Malware",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1587-001"
+    },
+    {
+      "technique_id": "T1587.002",
+      "name": "Code Signing Certificates",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1587-002"
+    },
+    {
+      "technique_id": "T1587.003",
+      "name": "Digital Certificates",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1587-003"
+    },
+    {
+      "technique_id": "T1587.004",
+      "name": "Exploits",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1587-004"
+    },
+    {
+      "technique_id": "T1588.001",
+      "name": "Malware",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588-001"
+    },
+    {
+      "technique_id": "T1588.002",
+      "name": "Tool",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588-002"
+    },
+    {
+      "technique_id": "T1588.003",
+      "name": "Code Signing Certificates",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588-003"
+    },
+    {
+      "technique_id": "T1588.004",
+      "name": "Digital Certificates",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588-004"
+    },
+    {
+      "technique_id": "T1588.005",
+      "name": "Exploits",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588-005"
+    },
+    {
+      "technique_id": "T1588.006",
+      "name": "Vulnerabilities",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588-006"
+    },
+    {
+      "technique_id": "T1588.007",
+      "name": "Artificial Intelligence",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1588-007"
+    },
+    {
+      "technique_id": "T1589.001",
+      "name": "Credentials",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1589-001"
+    },
+    {
+      "technique_id": "T1589.002",
+      "name": "Email Addresses",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1589-002"
+    },
+    {
+      "technique_id": "T1589.003",
+      "name": "Employee Names",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1589-003"
+    },
+    {
+      "technique_id": "T1590.001",
+      "name": "Domain Properties",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1590-001"
+    },
+    {
+      "technique_id": "T1590.002",
+      "name": "DNS",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1590-002"
+    },
+    {
+      "technique_id": "T1590.003",
+      "name": "Network Trust Dependencies",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1590-003"
+    },
+    {
+      "technique_id": "T1590.004",
+      "name": "Network Topology",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1590-004"
+    },
+    {
+      "technique_id": "T1590.005",
+      "name": "IP Addresses",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1590-005"
+    },
+    {
+      "technique_id": "T1590.006",
+      "name": "Network Security Appliances",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1590-006"
+    },
+    {
+      "technique_id": "T1591.001",
+      "name": "Determine Physical Locations",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1591-001"
+    },
+    {
+      "technique_id": "T1591.002",
+      "name": "Business Relationships",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1591-002"
+    },
+    {
+      "technique_id": "T1591.003",
+      "name": "Identify Business Tempo",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1591-003"
+    },
+    {
+      "technique_id": "T1591.004",
+      "name": "Identify Roles",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1591-004"
+    },
+    {
+      "technique_id": "T1592.001",
+      "name": "Hardware",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1592-001"
+    },
+    {
+      "technique_id": "T1592.002",
+      "name": "Software",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1592-002"
+    },
+    {
+      "technique_id": "T1592.003",
+      "name": "Firmware",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1592-003"
+    },
+    {
+      "technique_id": "T1592.004",
+      "name": "Client Configurations",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1592-004"
+    },
+    {
+      "technique_id": "T1593.001",
+      "name": "Social Media",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1593-001"
+    },
+    {
+      "technique_id": "T1593.002",
+      "name": "Search Engines",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1593-002"
+    },
+    {
+      "technique_id": "T1593.003",
+      "name": "Code Repositories",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1593-003"
+    },
+    {
+      "technique_id": "T1595.001",
+      "name": "Scanning IP Blocks",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1595-001"
+    },
+    {
+      "technique_id": "T1595.002",
+      "name": "Vulnerability Scanning",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1595-002"
+    },
+    {
+      "technique_id": "T1595.003",
+      "name": "Wordlist Scanning",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1595-003"
+    },
+    {
+      "technique_id": "T1596.001",
+      "name": "DNS/Passive DNS",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1596-001"
+    },
+    {
+      "technique_id": "T1596.002",
+      "name": "WHOIS",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1596-002"
+    },
+    {
+      "technique_id": "T1596.003",
+      "name": "Digital Certificates",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1596-003"
+    },
+    {
+      "technique_id": "T1596.004",
+      "name": "CDNs",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1596-004"
+    },
+    {
+      "technique_id": "T1596.005",
+      "name": "Scan Databases",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1596-005"
+    },
+    {
+      "technique_id": "T1597.001",
+      "name": "Threat Intel Vendors",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1597-001"
+    },
+    {
+      "technique_id": "T1597.002",
+      "name": "Purchase Technical Data",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1597-002"
+    },
+    {
+      "technique_id": "T1598.001",
+      "name": "Spearphishing Service",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1598-001"
+    },
+    {
+      "technique_id": "T1598.002",
+      "name": "Spearphishing Attachment",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1598-002"
+    },
+    {
+      "technique_id": "T1598.003",
+      "name": "Spearphishing Link",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1598-003"
+    },
+    {
+      "technique_id": "T1598.004",
+      "name": "Spearphishing Voice",
+      "mitre_tactic_id": "TA0043",
+      "playbook_id": "reconnaissance",
+      "golden_case_id": "GOLDEN-T1598-004"
+    },
+    {
+      "technique_id": "T1602.001",
+      "name": "SNMP (MIB Dump)",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1602-001"
+    },
+    {
+      "technique_id": "T1602.002",
+      "name": "Network Device Configuration Dump",
+      "mitre_tactic_id": "TA0009",
+      "playbook_id": "collection",
+      "golden_case_id": "GOLDEN-T1602-002"
+    },
+    {
+      "technique_id": "T1606.001",
+      "name": "Web Cookies",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1606-001"
+    },
+    {
+      "technique_id": "T1606.002",
+      "name": "SAML Tokens",
+      "mitre_tactic_id": "TA0006",
+      "playbook_id": "credential-access",
+      "golden_case_id": "GOLDEN-T1606-002"
+    },
+    {
+      "technique_id": "T1608.001",
+      "name": "Upload Malware",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1608-001"
+    },
+    {
+      "technique_id": "T1608.002",
+      "name": "Upload Tool",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1608-002"
+    },
+    {
+      "technique_id": "T1608.003",
+      "name": "Install Digital Certificate",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1608-003"
+    },
+    {
+      "technique_id": "T1608.004",
+      "name": "Drive-by Target",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1608-004"
+    },
+    {
+      "technique_id": "T1608.005",
+      "name": "Link Target",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1608-005"
+    },
+    {
+      "technique_id": "T1608.006",
+      "name": "SEO Poisoning",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1608-006"
+    },
+    {
+      "technique_id": "T1614.001",
+      "name": "System Language Discovery",
+      "mitre_tactic_id": "TA0007",
+      "playbook_id": "discovery",
+      "golden_case_id": "GOLDEN-T1614-001"
+    },
+    {
+      "technique_id": "T1683.001",
+      "name": "Written Content",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1683-001"
+    },
+    {
+      "technique_id": "T1683.002",
+      "name": "Audio-Visual Content",
+      "mitre_tactic_id": "TA0042",
+      "playbook_id": "resource-development",
+      "golden_case_id": "GOLDEN-T1683-002"
+    },
+    {
+      "technique_id": "T1684.001",
+      "name": "Impersonation",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1684-001"
+    },
+    {
+      "technique_id": "T1684.002",
+      "name": "Email Spoofing",
+      "mitre_tactic_id": "TA0005",
+      "playbook_id": "defense-evasion",
+      "golden_case_id": "GOLDEN-T1684-002"
+    }
+  ]
+}

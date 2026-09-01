@@ -8,6 +8,8 @@
   "expected_techniques": ["T1071.001"],
   "expected_actions": ["block_ioc"],
   "iocs": ["evil-c2.example"],
-  "attack_stage": "c2",
+  "expected_soc_doc_playbook_id": "command-and-control",
+  "expected_mitre_tactic_id": "TA0011",
+  "attack_stage": "command_and_control",
   "telemetry": [{"source": "dns", "domain": "evil-c2.example"}]
 }

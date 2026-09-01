@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-PROC-INJECT",
+  "source": "SYNTHETIC",
+  "title": "Process injection into explorer.exe",
+  "description": "Synthetic golden case for MITRE T1055.",
+  "severity": "critical",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1055"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "privilege_escalation",
+  "expected_soc_doc_playbook_id": "privilege-escalation",
+  "expected_mitre_tactic_id": "TA0004",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1055"
+    }
+  ]
+}

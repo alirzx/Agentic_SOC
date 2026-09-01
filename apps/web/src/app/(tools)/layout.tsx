@@ -36,7 +36,7 @@ export default function ToolsLayout({ children }: { children: ReactNode }) {
           <Link href="/tools/noise" style={{ color: "#c4cae0", textDecoration: "none" }}>
             Noise
           </Link>
-          <a href="https://github.com/beenuar/AiSOC" style={{ color: "#7b2bbe", textDecoration: "none", fontWeight: 700 }}>
+          <a href="https://github.com/SoorinSecurity/Agentic_SOC" style={{ color: "#7b2bbe", textDecoration: "none", fontWeight: 700 }}>
             GitHub ★
           </a>
         </nav>
@@ -44,7 +44,7 @@ export default function ToolsLayout({ children }: { children: ReactNode }) {
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "40px 24px 64px" }}>{children}</div>
       <footer style={{ borderTop: "1px solid #232b4d", padding: "24px", textAlign: "center", color: "#6b7394", fontSize: 13 }}>
         Free & open source · part of{" "}
-        <a href="https://github.com/beenuar/AiSOC" style={{ color: "#8b93b7" }}>
+        <a href="https://github.com/SoorinSecurity/Agentic_SOC" style={{ color: "#8b93b7" }}>
           AiSOC
         </a>
         , the self-hostable AI SOC. Everything on this page runs in your browser — your rules never touch our servers.

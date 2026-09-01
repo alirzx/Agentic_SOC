@@ -10,7 +10,7 @@ description: >
   delivery. Push-driven — no API key required.
 author: AiSOC Core Team
 tags: [siem, runtime, kubernetes, linux, cncf, falco]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/falco.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/falco.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

@@ -40,7 +40,7 @@ If you've never contributed to AiSOC before, here's the shortest path from
    browser opens at `/cases/INC-RT-001?tab=ledger`, click through the
    Investigation Ledger so you've seen what the agent does.
 2. **Find a good first issue.** Browse the open
-   [`good first issue`](https://github.com/beenuar/AiSOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
+   [`good first issue`](https://github.com/SoorinSecurity/Agentic_SOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
    list and leave a comment on one saying you'd like to work on it. If
    nothing fits, look at:
    - [`detections/`](detections/) — new Sigma rules, with positive/negative
@@ -52,7 +52,7 @@ If you've never contributed to AiSOC before, here's the shortest path from
    ```bash
    gh repo fork beenuar/AiSOC --clone
    cd AiSOC
-   git remote add upstream https://github.com/beenuar/AiSOC.git
+   git remote add upstream https://github.com/SoorinSecurity/Agentic_SOC.git
    git checkout -b feature/<short-name>
    ```
 4. **Make the change, run the relevant validators / tests, and open the
@@ -61,14 +61,14 @@ If you've never contributed to AiSOC before, here's the shortest path from
    it in. The Eval-harness section is required for substrate, playbook,
    or detection changes; check the "Not applicable" box otherwise.
 
-If you get stuck, [open a Q&A discussion](https://github.com/beenuar/AiSOC/discussions/new?category=q-a)
+If you get stuck, [open a Q&A discussion](https://github.com/SoorinSecurity/Agentic_SOC/discussions/new?category=q-a)
 — don't suffer in silence.
 
 ## Getting Started
 
 1. Fork the repository on GitHub
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/AiSOC.git`
-3. Add the upstream remote: `git remote add upstream https://github.com/beenuar/AiSOC.git`
+3. Add the upstream remote: `git remote add upstream https://github.com/SoorinSecurity/Agentic_SOC.git`
 4. Create a feature branch: `git checkout -b feature/my-feature`
 
 ## Development Setup

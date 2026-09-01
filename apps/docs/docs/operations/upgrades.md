@@ -6,7 +6,7 @@ description: How AiSOC versions releases, what each digit means, the deprecation
 
 # Upgrades and versioning
 
-AiSOC follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) on a single shared version across the monorepo. The authoritative version lives in [`VERSION`](https://github.com/beenuar/AiSOC/blob/main/VERSION); every release tag, container image, and SDK package is stamped with the same number.
+AiSOC follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) on a single shared version across the monorepo. The authoritative version lives in [`VERSION`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/VERSION); every release tag, container image, and SDK package is stamped with the same number.
 
 This page is what you read before running `git pull` against a new release.
 
@@ -18,7 +18,7 @@ This page is what you read before running `git pull` against a new release.
 | **Minor** (`x.Y.0`) | ~Every 1–3 weeks | New connectors, new agents, new endpoints. Backwards compatible — your existing config keeps working. |
 | **Major** (`X.0.0`) | When breaking changes accumulate | Schema migrations that require downtime, removed endpoints, renamed env vars. |
 
-Every release ships with a [CHANGELOG.md](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md) entry that lists added features, behaviour changes, and any breaking notes. **Read it before upgrading across a major version.**
+Every release ships with a [CHANGELOG.md](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md) entry that lists added features, behaviour changes, and any breaking notes. **Read it before upgrading across a major version.**
 
 ## What "breaking" means in AiSOC
 
@@ -88,11 +88,11 @@ The v7.3.1 release made the close-to-7.x migrations (`005_compliance.sql`,
 `042_alerts_schema_drift_fix.sql`) idempotent. If a previous upgrade left
 your `alerts` table partially migrated, just re-run `aisoc db upgrade` —
 the migration only adds columns that are missing instead of failing on
-already-present ones. See the [CHANGELOG](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md#731)
+already-present ones. See the [CHANGELOG](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md#731)
 for the full column list.
 :::
 
-For Kubernetes deployments, the same flow applies: scale the API deployment to zero, run the migration as a `Job`, then scale back up. The Helm chart in [`infra/helm/`](https://github.com/beenuar/AiSOC/tree/main/infra/helm) exposes this as `helm upgrade --set runMigrations=true`.
+For Kubernetes deployments, the same flow applies: scale the API deployment to zero, run the migration as a `Job`, then scale back up. The Helm chart in [`infra/helm/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/helm) exposes this as `helm upgrade --set runMigrations=true`.
 
 ## Verifying the upgrade
 
@@ -134,8 +134,8 @@ That means you can upgrade the API service to `6.1.0` while connectors are still
 
 AiSOC does not currently offer formal LTS releases. The most recent major version is the supported version; security patches and CVE fixes are backported to the previous major for **90 days** after a new major lands, which is the window we expect operators to need to plan and execute their upgrade.
 
-If your environment requires a longer support window, raise it in [Discussions](https://github.com/beenuar/AiSOC/discussions) — we're happy to discuss commercial support arrangements with the community.
+If your environment requires a longer support window, raise it in [Discussions](https://github.com/SoorinSecurity/Agentic_SOC/discussions) — we're happy to discuss commercial support arrangements with the community.
 
 ## Pre-1.0 history
 
-Versions `1.0.0` through `5.x` shipped during the original feature build-out and are documented in the [CHANGELOG](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md). The `6.0.0` release in May 2026 was the first version we consider production-ready; new deployments should start from the latest tagged release (currently `v7.3.1`).
+Versions `1.0.0` through `5.x` shipped during the original feature build-out and are documented in the [CHANGELOG](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md). The `6.0.0` release in May 2026 was the first version we consider production-ready; new deployments should start from the latest tagged release (currently `v7.3.1`).

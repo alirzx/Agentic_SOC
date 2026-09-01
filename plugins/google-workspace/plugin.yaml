@@ -11,7 +11,7 @@ description: >
   the admin.reports.audit.readonly scope.
 author: AiSOC Core Team
 tags: [saas, google, workspace, gsuite, identity, audit]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/google_workspace.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/google_workspace.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

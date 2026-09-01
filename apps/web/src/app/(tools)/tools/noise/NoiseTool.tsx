@@ -42,7 +42,7 @@ export function NoiseTool() {
       <p style={{ color: "#6b7394", fontSize: 12, margin: 0 }}>
         Uses the AiSOC verdict engine&apos;s published deterministic-tier suppression rate (85.5%). This is a substrate
         self-consistency figure, not a claim about live-LLM accuracy — see the{" "}
-        <a href="https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/benchmark.md" style={{ color: "#8b93b7" }}>
+        <a href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/docs/docs/benchmark.md" style={{ color: "#8b93b7" }}>
           benchmark methodology
         </a>
         . Estimates only; your mileage varies with tuning and alert mix.

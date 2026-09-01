@@ -303,7 +303,7 @@
   three commands:`
 - **Code snippet:**
   ```bash
-  git clone https://github.com/beenuar/AiSOC.git
+  git clone https://github.com/SoorinSecurity/Agentic_SOC.git
   cd AiSOC
   pnpm aisoc:demo
   ```

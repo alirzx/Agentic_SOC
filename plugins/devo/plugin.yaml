@@ -9,7 +9,7 @@ description: >
   token.
 author: AiSOC Core Team
 tags: [siem, devo, connector]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/devo.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/devo.py
 license: MIT
 min_aisoc_version: "7.0.0"
 config_schema:

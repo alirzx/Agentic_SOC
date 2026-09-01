@@ -1,0 +1,2 @@
+1. مقدمه
+Discovery (TA0007) SOC playbook.

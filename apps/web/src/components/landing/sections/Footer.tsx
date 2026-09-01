@@ -59,11 +59,11 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
       { label: 'Blog', href: '/blog' },
       {
         label: 'Changelog',
-        href: 'https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md',
+        href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md',
       },
       {
         label: 'Roadmap',
-        href: 'https://github.com/beenuar/AiSOC/blob/main/ROADMAP.md',
+        href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/ROADMAP.md',
       },
     ],
   },
@@ -83,13 +83,13 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
     links: [
       {
         label: 'License (MIT)',
-        href: 'https://github.com/beenuar/AiSOC/blob/main/LICENSE',
+        href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE',
       },
       { label: 'Privacy', href: '/privacy' },
       { label: 'Terms', href: '/terms' },
       {
         label: 'Security policy',
-        href: 'https://github.com/beenuar/AiSOC/blob/main/SECURITY.md',
+        href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/SECURITY.md',
       },
     ],
   },
@@ -103,9 +103,9 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
     // 'Status & GitHub'.
     heading: 'GitHub & community',
     links: [
-      { label: 'GitHub repo', href: 'https://github.com/beenuar/AiSOC' },
-      { label: 'Discord', href: 'https://discord.gg/aisoc' },
-      { label: 'Releases', href: 'https://github.com/beenuar/AiSOC/releases' },
+      { label: 'GitHub repo', href: 'https://github.com/SoorinSecurity/Agentic_SOC' },
+      { label: 'Website', href: 'https://soorinsec.ir' },
+      { label: 'Releases', href: 'https://github.com/SoorinSecurity/Agentic_SOC/releases' },
     ],
   },
 ];
@@ -132,30 +132,12 @@ function FooterLink({ label, href }: LinkSpec) {
   );
 }
 
-function DiscordIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
-      <path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.07.07 0 0 0-.07.035c-.21.378-.443.872-.608 1.26a18.27 18.27 0 0 0-5.487 0 12.51 12.51 0 0 0-.617-1.26.07.07 0 0 0-.07-.035 19.74 19.74 0 0 0-4.885 1.515.064.064 0 0 0-.03.027C.533 9.046-.32 13.58.099 18.057a.084.084 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.07.07 0 0 0 .076-.026 14.21 14.21 0 0 0 1.226-1.994.07.07 0 0 0-.038-.098 13.13 13.13 0 0 1-1.872-.892.07.07 0 0 1-.007-.116c.126-.094.252-.192.371-.291a.07.07 0 0 1 .073-.01c3.927 1.793 8.18 1.793 12.062 0a.07.07 0 0 1 .074.009c.12.099.246.198.372.292a.07.07 0 0 1-.006.116 12.32 12.32 0 0 1-1.873.891.07.07 0 0 0-.038.099c.36.698.772 1.362 1.225 1.993a.07.07 0 0 0 .076.027 19.84 19.84 0 0 0 6-3.03.07.07 0 0 0 .032-.056c.5-5.177-.838-9.674-3.548-13.66a.061.061 0 0 0-.03-.027ZM8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419 0-1.333.956-2.418 2.157-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.956 2.419-2.157 2.419Zm7.974 0c-1.182 0-2.156-1.085-2.156-2.419 0-1.333.955-2.418 2.156-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419Z" />
-    </svg>
-  );
-}
-
-function XIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231ZM17.083 19.77h1.833L7.084 4.126H5.117L17.083 19.77Z" />
-    </svg>
-  );
-}
-
 const SOCIAL_LINKS: ReadonlyArray<{
   label: string;
   href: string;
   Icon: (props: SVGProps<SVGSVGElement>) => ReactElement;
 }> = [
-  { label: 'GitHub', href: 'https://github.com/beenuar/AiSOC', Icon: GithubMark },
-  { label: 'Discord', href: 'https://discord.gg/aisoc', Icon: DiscordIcon },
-  { label: 'X (Twitter)', href: 'https://twitter.com/tryaisoc', Icon: XIcon },
+  { label: 'GitHub', href: 'https://github.com/SoorinSecurity/Agentic_SOC', Icon: GithubMark },
 ];
 
 export function Footer() {
@@ -179,7 +161,7 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-velvet-border pt-8 sm:flex-row sm:items-center">
           <p className="text-xs text-velvet-content-tertiary">
-            © 2024–present AiSOC contributors · MIT-licensed · v{VERSION}
+            © {new Date().getFullYear()} Soorin Security · Agentic SOC · MIT-licensed · v{VERSION}
           </p>
           <ul className="flex items-center gap-3">
             {SOCIAL_LINKS.map(({ label, href, Icon }) => (
@@ -188,7 +170,7 @@ export function Footer() {
                   href={href}
                   rel="noreferrer"
                   target="_blank"
-                  aria-label={`AiSOC on ${label}`}
+                  aria-label={`Soorin on ${label}`}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-velvet-border text-velvet-content-tertiary transition-colors duration-200 hover:border-velvet-emerald/40 hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
                 >
                   <Icon className="h-4 w-4" />

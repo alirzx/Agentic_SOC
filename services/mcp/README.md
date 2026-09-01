@@ -2,9 +2,9 @@
 
 > The official [Model Context Protocol](https://modelcontextprotocol.io) server for **AiSOC** — connect Claude Desktop, Cursor, Cody, Continue, and any MCP-aware assistant to your alerts, cases, detections, and the agent decision ledger.
 
-[![license](https://img.shields.io/badge/license-MIT-22c55e.svg)](https://github.com/beenuar/AiSOC/blob/main/LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-22c55e.svg)](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE)
 [![status](https://img.shields.io/badge/status-monorepo--source--build-blue)](#install-from-source-today)
-[![npm release](https://img.shields.io/badge/npm-coming%20in%20v8.0-f59e0b)](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md)
+[![npm release](https://img.shields.io/badge/npm-coming%20in%20v8.0-f59e0b)](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md)
 [![tests](https://img.shields.io/badge/tests-50%20passing-brightgreen)](#development)
 
 > **Status — monorepo source build today; npm publish in v8.0.** Every command in this README that shows `npx -y @aisoc/mcp …` works once the package lands on npm. Until then, use the **source-build equivalents** shown right below each one — they call the same binary, take the same arguments, and write the same config files.
@@ -16,7 +16,7 @@ AiSOC is the open-source AI SOC where every agent decision is auditable. This pa
 ## Install from source (today)
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC/services/mcp
 pnpm install
 pnpm build           # writes dist/index.js (the executable bin)
@@ -204,7 +204,7 @@ npx -y @aisoc/mcp doctor
 ## Development
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC/services/mcp
 pnpm install
 pnpm test          # 50 unit tests covering config, installers, tool registry
@@ -219,6 +219,6 @@ Adding a tool? See [`src/tools/`](./src/tools) — each tool is a `ToolDefinitio
 
 ## License
 
-MIT — see [LICENSE](https://github.com/beenuar/AiSOC/blob/main/LICENSE).
+MIT — see [LICENSE](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE).
 
-Bug reports and PRs welcome at [github.com/beenuar/AiSOC](https://github.com/beenuar/AiSOC).
+Bug reports and PRs welcome at [github.com/beenuar/AiSOC](https://github.com/SoorinSecurity/Agentic_SOC).

@@ -126,7 +126,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             f"Ran {len(ledger)} steps in {elapsed_ms} ms.\n"
             "Ready for the real stack? `pnpm aisoc:demo` from a fresh clone of\n"
-            "  https://github.com/beenuar/AiSOC\n"
+            "  https://github.com/SoorinSecurity/Agentic_SOC\n"
         )
         return 0
 

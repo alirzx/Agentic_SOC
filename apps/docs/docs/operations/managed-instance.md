@@ -29,7 +29,7 @@ offering.
 | **Tenancy model** | Multi-tenant; each customer is a row in `tenants` with row-level isolation |
 | **Identity** | Email + magic-link invites; SSO available on the higher tiers |
 | **Source of truth** | This repository (`apps/`, `services/`, `detections/`) |
-| **Bootstrap stack** | [`infra/terraform/environments/managed/`](https://github.com/beenuar/AiSOC/tree/main/infra/terraform/environments/managed) |
+| **Bootstrap stack** | [`infra/terraform/environments/managed/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/environments/managed) |
 
 ## Why a managed offering at all
 
@@ -166,7 +166,7 @@ If you're operating the managed instance yourself, the relevant
 runbooks live here:
 
 - **Bootstrapping new infrastructure** —
-  [`infra/terraform/environments/managed/README.md`](https://github.com/beenuar/AiSOC/blob/main/infra/terraform/environments/managed/README.md)
+  [`infra/terraform/environments/managed/README.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/terraform/environments/managed/README.md)
   walks through `terraform init` / `plan` / `apply`, the `fly attach`
   /`fly secrets` / `fly deploy` sequence, and the post-apply
   smoke-test commands.

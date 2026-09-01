@@ -173,7 +173,7 @@ function PostFooter({ post }: { post: BlogPost }) {
             All posts
           </Link>
           <a
-            href="mailto:hello@tryaisoc.com"
+            href="mailto:info@soorinsec.ir"
             className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
           >
             Talk to {fm.author.split(',')[0]}

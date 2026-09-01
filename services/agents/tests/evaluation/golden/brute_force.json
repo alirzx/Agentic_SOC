@@ -10,5 +10,7 @@
   "expected_correlation_group": ["GOLDEN-BRUTE"],
   "iocs": ["185.1.2.3"],
   "attack_stage": "credential_access",
+  "expected_soc_doc_playbook_id": "credential-access",
+  "expected_mitre_tactic_id": "TA0006",
   "telemetry": [{"source": "vpn", "src_ip": "185.1.2.3", "failures": 50}]
 }

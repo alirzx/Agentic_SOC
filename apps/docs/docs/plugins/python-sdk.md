@@ -12,7 +12,7 @@ sidebar_position: 2
 
 ```bash
 # Today (monorepo source install):
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC && pip install -e packages/plugin-sdk-py
 
 # v8.0+ (once aisoc-plugin-sdk is on PyPI):

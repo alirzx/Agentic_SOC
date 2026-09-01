@@ -4,12 +4,12 @@ sidebar_position: 2
 
 # Kubernetes Deployment
 
-The supported way to run AiSOC on Kubernetes is the Helm chart shipped at [`infra/helm/aisoc/`](https://github.com/beenuar/AiSOC/tree/main/infra/helm/aisoc) in the repo. It deploys every service (api, agents, realtime, mcp, ingest, enrichment, web) plus optional bundled Postgres, Redis, NATS, and OpenSearch via subcharts.
+The supported way to run AiSOC on Kubernetes is the Helm chart shipped at [`infra/helm/aisoc/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/helm/aisoc) in the repo. It deploys every service (api, agents, realtime, mcp, ingest, enrichment, web) plus optional bundled Postgres, Redis, NATS, and OpenSearch via subcharts.
 
 ## Helm chart (in-repo)
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 
 helm dependency update infra/helm/aisoc
@@ -25,7 +25,7 @@ helm install aisoc infra/helm/aisoc \
   --set postgresql.auth.password=changeme
 ```
 
-Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/values.yaml). For production deployments, walk through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) before exposing the platform on the public internet.
+Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/helm/aisoc/values.yaml). For production deployments, walk through the [Hardening Runbook](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/HARDENING.md) before exposing the platform on the public internet.
 
 ## Container images
 
@@ -45,7 +45,7 @@ Verify a signature before deploying:
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
+  --certificate-identity-regexp '^https://github.com/SoorinSecurity/Agentic_SOC' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/beenuar/aisoc-api:v5.2.0
 ```

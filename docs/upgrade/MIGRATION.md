@@ -319,4 +319,4 @@ A: Restore the PostgreSQL backup from Step 1, then `docker compose pull` with
 the v3 image tags pinned in your `docker-compose.yml`.
 
 Q: Where do I get help?
-A: Open an issue at https://github.com/beenuar/AiSOC/issues.
+A: Open an issue at https://github.com/SoorinSecurity/Agentic_SOC/issues.

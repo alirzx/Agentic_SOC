@@ -11,7 +11,7 @@ description: >
   app.
 author: AiSOC Core Team
 tags: [saas, microsoft, m365, office365, audit, exchange, sharepoint, teams]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/m365_audit.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/m365_audit.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

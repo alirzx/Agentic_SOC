@@ -23,9 +23,9 @@ import { BorderBeam } from '@/components/magicui/BorderBeam';
 import { docs } from '@/lib/docs';
 import { GithubMark } from './icons';
 
-const REPO_URL = 'https://github.com/beenuar/AiSOC';
+const REPO_URL = 'https://github.com/SoorinSecurity/Agentic_SOC';
 const CONTRIBUTING_URL = docs('contributing/guidelines');
-const SNIPPET = `git clone https://github.com/beenuar/AiSOC.git
+const SNIPPET = `git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 pnpm aisoc:demo`;
 
@@ -148,7 +148,7 @@ export function OpenSourceMoment() {
                   <code className="block whitespace-pre font-mono">
                     <span className="select-none text-velvet-content-tertiary">$ </span>
                     <span className="text-velvet-emerald-mint">git clone</span>{' '}
-                    <span className="text-velvet-content-primary">https://github.com/beenuar/AiSOC.git</span>
+                    <span className="text-velvet-content-primary">https://github.com/SoorinSecurity/Agentic_SOC.git</span>
                     {'\n'}
                     <span className="select-none text-velvet-content-tertiary">$ </span>
                     <span className="text-velvet-emerald-mint">cd</span>{' '}

@@ -16,6 +16,7 @@ from app.llm.provider_errors import classify_llm_exception, is_auth_failure, is_
 from app.prompt_serialization import format_extra_fields_for_llm
 from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
 from app.runtime.contracts import AgentContext, AgentResult, Finding, NextTask
+from app.runtime.playbooks import playbook_guidance_for_context, resolve_soc_doc_playbook_from_context
 
 from .models import TriageResult
 from .prompts import TRIAGE_SYSTEM_PROMPT, triage_prompt_meta
@@ -61,8 +62,18 @@ async def run_llm_triage(
     tools = list_tools_for_agent(registry, agent_name)
     tool_names = [t["name"] for t in tools]
     alert_blob = _build_alert_context(context)
+    soc_playbook = resolve_soc_doc_playbook_from_context(context)
+    soc_playbook_guidance = playbook_guidance_for_context(context) or ""
+    if soc_playbook is not None:
+        context.metadata["soc_doc_playbook_id"] = soc_playbook.id
+        context.metadata["soc_doc_playbook_mitre"] = soc_playbook.mitre_id
+    if soc_playbook_guidance:
+        context.metadata["soc_doc_playbook_guidance"] = soc_playbook_guidance
+    playbook_section = ""
+    if soc_playbook_guidance:
+        playbook_section = f"\nSOC analyst playbook guidance:\n{soc_playbook_guidance}\n"
     user_prompt = (
-        f"{alert_blob}\n\nAvailable read-only tools: {', '.join(tool_names)}\n"
+        f"{alert_blob}{playbook_section}\n\nAvailable read-only tools: {', '.join(tool_names)}\n"
         "Respond with JSON only."
     )
     llm = make_chat_model("triage", temperature=0.0, max_tokens=768)

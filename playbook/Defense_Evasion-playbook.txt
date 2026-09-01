@@ -1,0 +1,2 @@
+1. مقدمه
+Defense Evasion (TA0005) SOC playbook.

@@ -7,6 +7,8 @@
   "response_class": "isolate_host",
   "expected_techniques": ["T1059.001"],
   "expected_actions": ["isolate_asset"],
+  "expected_soc_doc_playbook_id": "execution",
+  "expected_mitre_tactic_id": "TA0002",
   "attack_stage": "execution",
   "telemetry": [{"source": "sysmon", "Image": "powershell.exe", "CommandLine": "-enc"}]
 }

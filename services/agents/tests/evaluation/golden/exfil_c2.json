@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-EXFIL-C2",
+  "source": "SYNTHETIC",
+  "title": "Data exfil over C2 channel",
+  "description": "Synthetic golden case for MITRE T1041.",
+  "severity": "critical",
+  "response_class": "block_indicator",
+  "expected_techniques": [
+    "T1041"
+  ],
+  "expected_actions": [
+    "block_indicator"
+  ],
+  "attack_stage": "exfiltration",
+  "expected_soc_doc_playbook_id": "exfiltration",
+  "expected_mitre_tactic_id": "TA0010",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1041"
+    }
+  ]
+}

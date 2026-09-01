@@ -12,6 +12,8 @@
   "expected_correlation_group": ["GOLDEN-SIEM-SYSMON"],
   "iocs": [],
   "attack_stage": "execution",
+  "expected_soc_doc_playbook_id": "execution",
+  "expected_mitre_tactic_id": "TA0002",
   "entities": {
     "host": "DESKTOP-6I8VJRD",
     "platform": "windows",

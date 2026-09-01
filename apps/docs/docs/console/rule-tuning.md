@@ -47,7 +47,7 @@ The projection is a pure function: given a `DetectionRule`, the classifier walks
 | **Review stale** | Rule is active and either last fired more than 30 days ago, or has never fired but is older than 30 days. | `acknowledge` | "Last hit was N days ago (stale threshold is 30d)" |
 | **Healthy** | Nothing above matched. | — | Empty reasons; the row is included in the population so the summary tile counts remain meaningful. |
 
-All thresholds are exported from [`app/services/rule_tuning.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/rule_tuning.py) as module constants — `TUNING_FP_RATE_NOISY`, `TUNING_FP_RATE_BUMPABLE`, `TUNING_FP_RATE_DISABLE`, `TUNING_LOW_CONFIDENCE`, `TUNING_MIN_HITS_FOR_THRESHOLD`, `TUNING_STALE_DAYS` — so the docs page, the tests, and the production classifier share the same numbers. If product tuning changes one, every consumer updates with it.
+All thresholds are exported from [`app/services/rule_tuning.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/rule_tuning.py) as module constants — `TUNING_FP_RATE_NOISY`, `TUNING_FP_RATE_BUMPABLE`, `TUNING_FP_RATE_DISABLE`, `TUNING_LOW_CONFIDENCE`, `TUNING_MIN_HITS_FOR_THRESHOLD`, `TUNING_STALE_DAYS` — so the docs page, the tests, and the production classifier share the same numbers. If product tuning changes one, every consumer updates with it.
 
 ### Why we do not recompute live FP rates
 
@@ -233,15 +233,15 @@ The tenant filter is baked in at the SQLAlchemy layer — `_load_rule_for_tenant
 
 | Concern | File |
 |---|---|
-| Workbench page route | [`apps/web/src/app/(app)/detection/tuning/page.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/app/(app)/detection/tuning/page.tsx) |
-| Workbench component | [`apps/web/src/components/detections/RuleTuningView.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/detections/RuleTuningView.tsx) |
-| Back-compat redirect | [`apps/web/src/app/(app)/noise-tuning/page.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/app/(app)/noise-tuning/page.tsx) |
-| Sidebar entry | [`apps/web/src/components/layout/Sidebar.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/layout/Sidebar.tsx) (search for `Detection Tuning`) |
-| API client | [`apps/web/src/lib/api.ts`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/lib/api.ts) (search for `tuningApi`) |
-| Tuning endpoints | [`services/api/app/api/v1/endpoints/rule_tuning.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/rule_tuning.py) |
-| Projection + classifier + mutators | [`services/api/app/services/rule_tuning.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/rule_tuning.py) |
-| Backend tests | [`services/api/tests/test_rule_tuning.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/tests/test_rule_tuning.py) |
-| Frontend tests | [`apps/web/src/components/detections/RuleTuningView.test.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/detections/RuleTuningView.test.tsx) |
+| Workbench page route | [`apps/web/src/app/(app)/detection/tuning/page.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/app/(app)/detection/tuning/page.tsx) |
+| Workbench component | [`apps/web/src/components/detections/RuleTuningView.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/detections/RuleTuningView.tsx) |
+| Back-compat redirect | [`apps/web/src/app/(app)/noise-tuning/page.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/app/(app)/noise-tuning/page.tsx) |
+| Sidebar entry | [`apps/web/src/components/layout/Sidebar.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/layout/Sidebar.tsx) (search for `Detection Tuning`) |
+| API client | [`apps/web/src/lib/api.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/lib/api.ts) (search for `tuningApi`) |
+| Tuning endpoints | [`services/api/app/api/v1/endpoints/rule_tuning.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/api/v1/endpoints/rule_tuning.py) |
+| Projection + classifier + mutators | [`services/api/app/services/rule_tuning.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/rule_tuning.py) |
+| Backend tests | [`services/api/tests/test_rule_tuning.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/tests/test_rule_tuning.py) |
+| Frontend tests | [`apps/web/src/components/detections/RuleTuningView.test.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/detections/RuleTuningView.test.tsx) |
 
 ## Author
 

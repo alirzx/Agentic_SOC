@@ -51,7 +51,7 @@ simulator stays a single small package.
 
 ## Contributing a new scenario
 
-Open a [`good first issue`](https://github.com/beenuar/AiSOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
+Open a [`good first issue`](https://github.com/SoorinSecurity/Agentic_SOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
 or send a PR that adds:
 
 1. `examples/alerts/<id>.json` — production-shape fixture with at

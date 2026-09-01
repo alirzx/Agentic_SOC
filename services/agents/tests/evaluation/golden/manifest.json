@@ -1,6 +1,8 @@
 {
   "datasetId": "golden-benchmark-v1",
-  "version": "1.0",
+  "version": "2.0",
   "source": "SYNTHETIC",
-  "cases": 13
+  "cases": 655,
+  "handcrafted_json_cases": 47,
+  "bulk_jsonl_cases": 608
 }

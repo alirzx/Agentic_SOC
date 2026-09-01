@@ -1,0 +1,24 @@
+1.	مقدمه
+این Playbook با هدف مدیریت، تحلیل و پاسخ‌گویی ساخت‌یافته به رخدادهای مرتبط با تاکتیک Resource Development مطابق با چارچوب MITRE ATT&CK – TA0042 طراحی شده است. Resource Development شامل ایجاد، خرید یا به‌خط‌انداختن منابع مورد استفاده مهاجم قبل از حمله اصلی است (دامنه، زیرساخت، حساب، بدافزار، ایمیل).
+
+2.	شرایط اجرا Play book
+فعال می‌شود وقتی شواهدی از ثبت دامنه مشکوک، ایجاد زیرساخت C2، خرید حساب مخرب، یا staging بدافزار شناسایی شود.
+
+3.	بررسی اولیه
+فیلدهای کلیدی: resource_type، domain، registrar، hosting_provider، account_id، malware_family، certificate_fingerprint، first_seen، linked_iocs.
+
+4.	تشخیص False Positive
+ثبت دامنه توسط تیم marketing، محیط dev/staging، یا خرید سرویس ابری مجاز.
+
+5.	Investigation
+• ارتباط منبع با کمپین‌های شناخته‌شده
+• بررسی passive DNS و certificate transparency
+• همبستگی با فیشینگ یا C2 در مراحل بعدی
+
+6.	پاسخ
+• بلاک دامنه/IP در فایروال و ایمیل gateway
+• افزودن IOC به threat intel
+• هانت برای سایر دارایی‌های مرتبط با همان actor
+• اطلاع‌رسانی به تیم brand protection در صورت impersonation
+
+نمونه رخدادها: Acquire Infrastructure، Develop Capabilities، Obtain Capabilities، Stage Capabilities، Compromise Accounts

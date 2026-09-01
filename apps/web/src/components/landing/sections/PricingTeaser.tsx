@@ -40,7 +40,7 @@ const TIERS: ReadonlyArray<Tier> = [
       'Public benchmark harness',
       'Community Discord',
     ],
-    cta: { label: 'Clone on GitHub', href: 'https://github.com/beenuar/AiSOC' },
+    cta: { label: 'Clone on GitHub', href: 'https://github.com/SoorinSecurity/Agentic_SOC' },
   },
   {
     id: 'team',

@@ -52,7 +52,7 @@ agent performance**. Every table below is labelled with its class.
 >    corpus** — Sysmon / Windows Security / M365 audit / Azure sign-in /
 >    CloudTrail / Linux auditd / journald / EDR / DNS / web access /
 >    Kubernetes audit / GitHub audit / VPN / DB audit events — written to
->    [`synthetic_telemetry.jsonl`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_telemetry.jsonl).
+>    [`synthetic_telemetry.jsonl`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/eval_data/synthetic_telemetry.jsonl).
 >    Connector and Sigma PRs now have something concrete to wire against. See
 >    [Synthetic telemetry corpus](#5-synthetic-telemetry-corpus) below.
 > 2. Each of the substrate suites now reports a **per-template macro** alongside
@@ -88,10 +88,10 @@ opposite approach: ship a small harness, label which metrics are real
 measurements and which are substrate self-checks, and let anyone reproduce
 the numbers.
 
-1. **The dataset is in the repo** — [`services/agents/tests/eval_data/synthetic_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json) (200 cases, deterministic, drawn from 55 distinct templates) plus its companion [`synthetic_telemetry.jsonl`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_telemetry.jsonl) (361 backing events across 14 log sources). Both are regenerable from `scripts/generate_eval_incidents.py`. Three of the four offline suites use the incident dataset; the alert-reduction suite uses a separately generated 1 000-alert stream produced by `generate_noisy_alert_stream` in the test file.
-2. **The harness is in the repo** — five pytest suites under [`services/agents/tests/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/tests) (four scoring suites + a synthetic-telemetry schema/coverage gate).
-3. **The CI gate runs on every PR targeting `main` / `develop`** — [latest run](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml). (CI is currently scoped to those two branches; PRs to long-lived feature branches are not gated.)
-4. **Historical numbers are queryable** — every successful build pushes its report (written by `scripts/run_evals.py --out`) to the [`eval-results`](https://github.com/beenuar/AiSOC/tree/eval-results) branch as `eval/results/<commit_sha>.json`.
+1. **The dataset is in the repo** — [`services/agents/tests/eval_data/synthetic_incidents.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json) (200 cases, deterministic, drawn from 55 distinct templates) plus its companion [`synthetic_telemetry.jsonl`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/eval_data/synthetic_telemetry.jsonl) (361 backing events across 14 log sources). Both are regenerable from `scripts/generate_eval_incidents.py`. Three of the four offline suites use the incident dataset; the alert-reduction suite uses a separately generated 1 000-alert stream produced by `generate_noisy_alert_stream` in the test file.
+2. **The harness is in the repo** — five pytest suites under [`services/agents/tests/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/tests) (four scoring suites + a synthetic-telemetry schema/coverage gate).
+3. **The CI gate runs on every PR targeting `main` / `develop`** — [latest run](https://github.com/SoorinSecurity/Agentic_SOC/actions/workflows/ci.yml). (CI is currently scoped to those two branches; PRs to long-lived feature branches are not gated.)
+4. **Historical numbers are queryable** — every successful build pushes its report (written by `scripts/run_evals.py --out`) to the [`eval-results`](https://github.com/SoorinSecurity/Agentic_SOC/tree/eval-results) branch as `eval/results/<commit_sha>.json`.
 
 ## Latest results
 
@@ -129,7 +129,7 @@ every PR targeting `main` or `develop`.
 > dataset includes documented v1 coverage gaps. See [section 7](#7-playbook-completion-rate).
 
 These numbers move with the codebase. The current snapshot lives at
-[`eval-results/eval/results/latest.json`](https://github.com/beenuar/AiSOC/blob/eval-results/eval/results/latest.json).
+[`eval-results/eval/results/latest.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/eval-results/eval/results/latest.json).
 
 > **Weekly history:** the row above is the latest snapshot only. The full
 > append-only weekly history (date, agent version, MITRE accuracy, MTC
@@ -156,7 +156,7 @@ the table below is one command per dataset (see below).
 | Dataset | Source | OCSF class | Substrate accuracy | Substrate macro F1 | Rows scored | Run on |
 |---|---|---|---|---|---|---|
 | CICIDS-2017 (micro fixture)         | Network flow CSVs (Canadian Institute for Cybersecurity)            | `4001` Network Activity      | 100.0 % | 1.000 | 100 | 2026-06-27 |
-| CTU-13 (full, local-only)           | Argus binetflows (Stratosphere Lab, CTU)                            | `4001` Network Activity      | _local-only — see [expected_results.yaml](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/fidelity/expected_results.yaml)_ | _local-only_ | _local-only_ | — |
+| CTU-13 (full, local-only)           | Argus binetflows (Stratosphere Lab, CTU)                            | `4001` Network Activity      | _local-only — see [expected_results.yaml](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/fidelity/expected_results.yaml)_ | _local-only_ | _local-only_ | — |
 | AIT-LDS (micro fixture)             | Apache CLF + labels sidecar (Austrian Inst. of Technology)          | `6002` Web Resources Activity| 90.0 %  | 0.914 | 10  | 2026-06-27 |
 | MITRE Engenuity ATT&CK Evals (micro)| Round-7 procedure JSON shape (MITRE Engenuity)                      | `2004` Detection Finding     | 70.0 %  | 0.627 | 10  | 2026-06-27 |
 
@@ -309,7 +309,7 @@ will dominate end-to-end latency too.
 The three tables in the next subsection are a **wet eval** measurement
 — they require the live `services/agents` LangGraph orchestrator and
 real LLM calls, which is populated by the weekly wet-eval CI job
-([`.github/workflows/wet-eval.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/wet-eval.yml),
+([`.github/workflows/wet-eval.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/workflows/wet-eval.yml),
 landed by T5.5). T2.4's deterministic-substrate budget projection lives
 directly above and in the JSON report, but is **not** substituted into
 the wet-eval tables below because substrate timings would not be honest
@@ -320,7 +320,7 @@ The workflow runs every Monday at 07:00 UTC, dispatches the
 USD / latency metrics from the LLM provider's response metadata, then
 opens a PR titled `chore(bench): weekly wet-eval YYYY-MM-DD` with the
 refreshed numbers. Forks without billing configured see a clean
-no-op via the [preflight check](https://github.com/beenuar/AiSOC/blob/main/scripts/wet_eval_check.py).
+no-op via the [preflight check](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/scripts/wet_eval_check.py).
 The two CI secrets that drive it (`WET_EVAL_OPENAI_KEY` and
 `AISOC_BENCH_BOT_TOKEN`) are documented on the
 [Secrets and CI tokens](./operations/secrets.md) page; setup is a
@@ -434,7 +434,7 @@ macro is exactly the metric that surfaces them.
 You don't have to take our word for it. From a fresh clone:
 
 ```bash
-git clone https://github.com/beenuar/AiSOC && cd AiSOC
+git clone https://github.com/SoorinSecurity/Agentic_SOC && cd AiSOC
 python3 scripts/run_evals.py
 ```
 
@@ -485,7 +485,7 @@ python3 scripts/run_evals.py --ci --out report.json
 
 ### 1. Alert reduction ratio — `Real measurement`
 
-**Source:** [`services/agents/tests/test_alert_reduction.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_alert_reduction.py)
+**Source:** [`services/agents/tests/test_alert_reduction.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_alert_reduction.py)
 
 A 1 000-alert noisy stream — pure duplicates, near-duplicates within a
 30-minute host window, multi-host rule storms, and benign low-score chatter —
@@ -509,7 +509,7 @@ this fixed dataset. It is not tuned to match a marketing number.
 
 ### 2. MITRE ATT&CK tactic accuracy — `Substrate self-consistency`
 
-**Source:** [`services/agents/tests/test_mitre_accuracy.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_mitre_accuracy.py)
+**Source:** [`services/agents/tests/test_mitre_accuracy.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_mitre_accuracy.py)
 
 Each synthetic incident is generated with a labeled MITRE tactic and a
 description that is, by design, written to include keywords the **hand-curated
@@ -533,7 +533,7 @@ Treat it as a regression sentinel for the substrate, not a leaderboard score.
 
 ### 3. Investigation completeness — `Substrate self-consistency`
 
-**Source:** [`services/agents/tests/test_investigation_completeness.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_investigation_completeness.py)
+**Source:** [`services/agents/tests/test_investigation_completeness.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_investigation_completeness.py)
 
 Each synthetic incident ships with a list of `evidence_keywords`. A
 deterministic report **simulator** wraps the incident's `description` field
@@ -552,7 +552,7 @@ real value of this suite is catching template breakage — not LLM quality.
 
 ### 4. Response-plan quality — `Substrate self-consistency`
 
-**Source:** [`services/agents/tests/test_response_quality.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_response_quality.py)
+**Source:** [`services/agents/tests/test_response_quality.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_response_quality.py)
 
 A deterministic response-plan **synthesizer** produces a containment plan for
 each incident. By construction, the synthesizer embeds:
@@ -578,8 +578,8 @@ references from the synthesizer, or the rubric stops matching) — it is
 
 ### 5. Synthetic telemetry corpus — `Schema and coverage gate` {#5-synthetic-telemetry-corpus}
 
-**Source:** [`services/agents/tests/test_synthetic_telemetry.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_synthetic_telemetry.py)
-· **Output:** [`synthetic_telemetry.jsonl`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_telemetry.jsonl)
+**Source:** [`services/agents/tests/test_synthetic_telemetry.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_synthetic_telemetry.py)
+· **Output:** [`synthetic_telemetry.jsonl`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/eval_data/synthetic_telemetry.jsonl)
 
 Every synthetic incident now ships with at least one backing telemetry event
 written to a companion JSONL file. This addresses a real ask from the
@@ -607,7 +607,7 @@ Each event has its `{user}/{host}/{ip}/{campaign}` placeholders resolved
 against the parent incident, so an event for `INC-EVAL-044` carries the same
 user and host as the incident itself.
 
-The schema/coverage gate ([`test_synthetic_telemetry.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_synthetic_telemetry.py))
+The schema/coverage gate ([`test_synthetic_telemetry.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_synthetic_telemetry.py))
 checks five things on every CI run:
 
 1. **No unresolved placeholders** — every event survives a recursive walk
@@ -639,9 +639,9 @@ Each line is a self-contained event with `incident_id`, `template_id`,
 
 ### 6. AI-vs-AI adversary eval — `Graceful-degradation gate`
 
-**Source:** [`services/agents/tests/test_adversary_eval.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_adversary_eval.py)
-· **Dataset:** [`eval_data/adversary_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/adversary_incidents.json)
-· **Generator:** [`scripts/generate_adversary_incidents.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/generate_adversary_incidents.py)
+**Source:** [`services/agents/tests/test_adversary_eval.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_adversary_eval.py)
+· **Dataset:** [`eval_data/adversary_incidents.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/eval_data/adversary_incidents.json)
+· **Generator:** [`scripts/generate_adversary_incidents.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/scripts/generate_adversary_incidents.py)
 
 A deterministic attacker-LLM **mutator** rewrites every defender keyword in
 the 200-incident dataset into evasive synonyms, character obfuscation, and
@@ -676,9 +676,9 @@ python3 scripts/generate_adversary_incidents.py
 
 ### 7. Playbook completion rate — `Operational coverage gate` {#7-playbook-completion-rate}
 
-**Source:** [`services/agents/tests/test_playbook_completion_rate.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_playbook_completion_rate.py)
-· **Dataset:** [`eval_data/synthetic_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json)
-· **Pack under test:** [`playbooks/packs/v1/`](https://github.com/beenuar/AiSOC/tree/main/playbooks/packs/v1)
+**Source:** [`services/agents/tests/test_playbook_completion_rate.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/test_playbook_completion_rate.py)
+· **Dataset:** [`eval_data/synthetic_incidents.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json)
+· **Pack under test:** [`playbooks/packs/v1/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/playbooks/packs/v1)
 
 This suite is **not** a quality measurement of playbook execution — it is a
 coverage gate over the v1 playbook pack itself. For every one of the 200
@@ -729,7 +729,7 @@ python3 scripts/run_evals.py --json --out report.json
 ```
 
 Submissions go through a structured GitHub issue template
-([`.github/ISSUE_TEMPLATE/benchmark_submission.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/ISSUE_TEMPLATE/benchmark_submission.yml)).
+([`.github/ISSUE_TEMPLATE/benchmark_submission.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/ISSUE_TEMPLATE/benchmark_submission.yml)).
 Accepted entries are rendered on the [benchmark scoreboard](https://tryaisoc.com/benchmark) in the
 web console. Submission rules:
 
@@ -792,7 +792,7 @@ A few caveats:
 
 ## Historical results
 
-Every CI run on `main` writes a snapshot into the [`eval-results`](https://github.com/beenuar/AiSOC/tree/eval-results) branch:
+Every CI run on `main` writes a snapshot into the [`eval-results`](https://github.com/SoorinSecurity/Agentic_SOC/tree/eval-results) branch:
 
 ```text
 eval/results/<commit_sha>.json   # one snapshot per commit
@@ -801,7 +801,7 @@ eval/results/badge-*.json        # shields.io endpoints
 ```
 
 You can `git clone -b eval-results` to graph the trend yourself, or open the
-[Actions tab](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml) for
+[Actions tab](https://github.com/SoorinSecurity/Agentic_SOC/actions/workflows/ci.yml) for
 per-run job summaries.
 
 ## Help us harden the harness
@@ -819,7 +819,7 @@ Pull requests welcome. The fastest ways to make this harness honestly stronger:
   matching `INC-EVAL-*` cases. The corpus is exactly the contract you can
   develop against without provisioning a real tenant.
 - **Add a new template with backing telemetry.** Drop a new entry into
-  `_TEMPLATES` in [`scripts/generate_eval_incidents.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/generate_eval_incidents.py)
+  `_TEMPLATES` in [`scripts/generate_eval_incidents.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/scripts/generate_eval_incidents.py)
   with a unique `template_id` and a tuple of telemetry events. Re-run the
   generator and the per-template gate will keep us honest about whether the
   substrate handles the new class.
@@ -832,7 +832,7 @@ Pull requests welcome. The fastest ways to make this harness honestly stronger:
   are intentionally permissive in v1. PRs that add stricter evidence-grounding
   or that decouple the synthesizer from the judge keywords are highly welcome.
 
-See [`CONTRIBUTING.md`](https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md) for the full path.
+See [`CONTRIBUTING.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CONTRIBUTING.md) for the full path.
 
 ## Provenance {#provenance}
 
@@ -858,7 +858,7 @@ Until then, the cells are placeholders rather than imputed values — see the
 Reproduce these numbers locally:
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 pnpm eval:public        # runs run_evals.py + render_eval_charts.py
 ```

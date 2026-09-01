@@ -11,7 +11,7 @@ within ~30 s of the Codespace opening.)
 ## What's prebuilt
 
 The image is published at
-[`ghcr.io/beenuar/aisoc-devcontainer:latest`](https://github.com/beenuar/AiSOC/pkgs/container/aisoc-devcontainer)
+[`ghcr.io/beenuar/aisoc-devcontainer:latest`](https://github.com/SoorinSecurity/Agentic_SOC/pkgs/container/aisoc-devcontainer)
 on every push to `main`. It carries:
 
 - Node 20 + `pnpm@8.15.1` via `corepack`
@@ -27,9 +27,9 @@ on every push to `main`. It carries:
   resolves from cache rather than the network.
 
 The source lives at
-[`.devcontainer/Dockerfile`](https://github.com/beenuar/AiSOC/blob/main/.devcontainer/Dockerfile);
+[`.devcontainer/Dockerfile`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.devcontainer/Dockerfile);
 the publisher at
-[`.github/workflows/devcontainer-build.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/devcontainer-build.yml).
+[`.github/workflows/devcontainer-build.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/workflows/devcontainer-build.yml).
 
 ## Cold-start budget
 
@@ -45,7 +45,7 @@ acceptance gate.
 | Toolchain ready (every `--version` on PATH) | 30 s | `PHASE_TOOLCHAIN_BUDGET` |
 
 Both budgets are gated by
-[`.github/workflows/devcontainer-coldstart.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/devcontainer-coldstart.yml),
+[`.github/workflows/devcontainer-coldstart.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/workflows/devcontainer-coldstart.yml),
 which runs on every `main` push and on every successful devcontainer
 publish. A red run blocks the release that introduced the regression.
 
@@ -74,7 +74,7 @@ If you have
 installed, the same image works as a local dev environment:
 
 ```bash
-git clone https://github.com/beenuar/AiSOC && cd AiSOC
+git clone https://github.com/SoorinSecurity/Agentic_SOC && cd AiSOC
 devcontainer up --workspace-folder .
 devcontainer exec --workspace-folder . pnpm aisoc:demo --no-open
 ```
@@ -101,11 +101,11 @@ weekly cron job also tags `weekly` so an external dependency can pin to
 ## If something breaks
 
 1. The local fallback `build:` block in
-   [`.devcontainer/devcontainer.json`](https://github.com/beenuar/AiSOC/blob/main/.devcontainer/devcontainer.json)
+   [`.devcontainer/devcontainer.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.devcontainer/devcontainer.json)
    means contributors without GHCR pull access can still build the image
    locally — at the cost of the ~5 min initial assembly time.
 2. Open an [issue tagged
-   `devex/devcontainer`](https://github.com/beenuar/AiSOC/issues/new?labels=devex%2Fdevcontainer)
+   `devex/devcontainer`](https://github.com/SoorinSecurity/Agentic_SOC/issues/new?labels=devex%2Fdevcontainer)
    with the failing Codespace's name and the first error from the boot
    log. Most failures are dependency network blips, not image-content
    regressions.

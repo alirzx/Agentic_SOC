@@ -56,7 +56,7 @@ sets, and a `lab`+`crown-jewel` laundering attempt all hard-fail.
 ## The scoreboard
 
 Each campaign appends a row to
-[`apps/docs/static/data/selfplay-scoreboard.json`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/static/data/selfplay-scoreboard.json)
+[`apps/docs/static/data/selfplay-scoreboard.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/docs/static/data/selfplay-scoreboard.json)
 (techniques attempted/detected, detection rate, MTTV, new detections filed).
 Every row carries an explicit `synthetic` flag: the canned demo campaign is
 `synthetic: true`; a nightly live run against the seeded range is

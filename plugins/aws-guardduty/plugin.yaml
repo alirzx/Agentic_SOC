@@ -10,7 +10,7 @@ description: >
   patterns. One connector per region.
 author: AiSOC Core Team
 tags: [cloud, aws, guardduty, threat-detection, native]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/aws_guardduty.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/aws_guardduty.py
 license: MIT
 min_aisoc_version: "7.1.0"
 config_schema:

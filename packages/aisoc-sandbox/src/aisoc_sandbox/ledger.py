@@ -1,7 +1,7 @@
 """Investigation Ledger — the step-by-step record of one investigation run.
 
 The shape here mirrors the production `investigation_events` ledger
-written by [`services/agents/`](https://github.com/beenuar/AiSOC/tree/main/services/agents)
+written by [`services/agents/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents)
 so that an analyst who learns the sandbox can read a real ledger
 without re-learning the schema. Differences from production:
 

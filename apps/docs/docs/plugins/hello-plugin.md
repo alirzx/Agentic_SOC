@@ -35,7 +35,7 @@ plugins/community/_examples/hello-plugin/README.md
 packages/plugin-sdk-py/tests/test_hello_plugin_example.py
 ```
 
-The `_examples/` directory is **deliberately not** picked up by [`scripts/build_marketplace.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/build_marketplace.py). The marketplace builder scans `plugins/community/<id>/plugin.yaml`, and the tutorial avoids both signals on purpose:
+The `_examples/` directory is **deliberately not** picked up by [`scripts/build_marketplace.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/scripts/build_marketplace.py). The marketplace builder scans `plugins/community/<id>/plugin.yaml`, and the tutorial avoids both signals on purpose:
 
 1. It lives one directory deeper, under `_examples/hello-plugin/`.
 2. Its manifest is named `aisoc-plugin.yaml` (the SDK loader filename), not `plugin.yaml` (the marketplace filename).
@@ -70,7 +70,7 @@ The example uses `aisoc.hello-plugin` because the AiSOC project itself is the au
 
 ## Step 2 — Write the manifest
 
-The manifest is parsed by [`load_manifest`](https://github.com/beenuar/AiSOC/blob/main/packages/plugin-sdk-py/src/aisoc_plugin_sdk/loader.py) and validated against [`PluginManifest`](https://github.com/beenuar/AiSOC/blob/main/packages/plugin-sdk-py/src/aisoc_plugin_sdk/plugin.py). Anything that doesn't match the schema is rejected at load time with a `PluginLoadError`.
+The manifest is parsed by [`load_manifest`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/packages/plugin-sdk-py/src/aisoc_plugin_sdk/loader.py) and validated against [`PluginManifest`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/packages/plugin-sdk-py/src/aisoc_plugin_sdk/plugin.py). Anything that doesn't match the schema is rejected at load time with a `PluginLoadError`.
 
 ```yaml title="plugins/community/_examples/hello-plugin/aisoc-plugin.yaml"
 id: aisoc.hello-plugin

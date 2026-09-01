@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-VPN-ACCESS",
+  "source": "SYNTHETIC",
+  "title": "Suspicious VPN login from foreign IP",
+  "description": "Synthetic golden case for MITRE T1133.",
+  "severity": "high",
+  "response_class": "block_indicator",
+  "expected_techniques": [
+    "T1133"
+  ],
+  "expected_actions": [
+    "block_indicator"
+  ],
+  "attack_stage": "initial_access",
+  "expected_soc_doc_playbook_id": "initial-access",
+  "expected_mitre_tactic_id": "TA0001",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1133"
+    }
+  ]
+}

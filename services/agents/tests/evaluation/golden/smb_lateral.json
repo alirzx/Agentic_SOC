@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-SMB-LATERAL",
+  "source": "SYNTHETIC",
+  "title": "Lateral movement via admin share",
+  "description": "Synthetic golden case for MITRE T1021.002.",
+  "severity": "high",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1021.002"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "lateral_movement",
+  "expected_soc_doc_playbook_id": "lateral-movement",
+  "expected_mitre_tactic_id": "TA0008",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1021.002"
+    }
+  ]
+}

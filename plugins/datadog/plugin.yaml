@@ -12,7 +12,7 @@ description: >
   Signals use the separate datadog_cloud_siem connector.
 author: AiSOC Core Team
 tags: [siem, logs, datadog, apm, observability]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/datadog.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/datadog.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

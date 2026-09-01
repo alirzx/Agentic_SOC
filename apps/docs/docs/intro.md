@@ -90,7 +90,7 @@ for the full list.
 - **Compliance dashboards** — SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA evidence with MTTD / MTTR / MTTC SLA tracking.
 - **Public benchmark scoreboard** — live KPI bar (alert-to-incident ratio, MTTD, MTTR, FPR), per-suite eval results, and community submission leaderboard at `/benchmark`.
 - **AI-vs-AI adversary eval** — deterministic attacker-LLM mutator generates adversarial incidents to test detection resilience under synonym swap, leetspeak, zero-width injection, and fragmentation attacks.
-- **Marketplace** — 15 first-party plugins, 50+ playbooks, 6,900+ detections (filtered by tier: stable / beta / imported / community), surfaced in-app via [`marketplace/index.json`](https://github.com/beenuar/AiSOC/tree/main/marketplace).
+- **Marketplace** — 15 first-party plugins, 50+ playbooks, 6,900+ detections (filtered by tier: stable / beta / imported / community), surfaced in-app via [`marketplace/index.json`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/marketplace).
 - **SDKs** — Python, TypeScript, and Go SDKs for client and plugin development; Ed25519-signed publishing.
 - **Model Context Protocol** — `@aisoc/mcp` exposes 13 tools to Claude, Cursor, Continue, and Cody so analysts can replay agent decisions and run governed warm-tier SELECTs from inside their IDE ([MCP integration](./integrations/mcp)).
 

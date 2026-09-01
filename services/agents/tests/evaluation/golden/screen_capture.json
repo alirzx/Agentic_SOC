@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-SCREEN-CAPTURE",
+  "source": "SYNTHETIC",
+  "title": "Screen capture tool executed",
+  "description": "Synthetic golden case for MITRE T1113.",
+  "severity": "medium",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1113"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "collection",
+  "expected_soc_doc_playbook_id": "collection",
+  "expected_mitre_tactic_id": "TA0009",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1113"
+    }
+  ]
+}

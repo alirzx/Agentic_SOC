@@ -46,8 +46,8 @@ tool call, and rationale) is a `docker compose up` away, and there's a
 zero-dependency Python sandbox (`pip install -e packages/aisoc-sandbox`) if you
 don't want Docker.
 
-Repo: https://github.com/beenuar/AiSOC
-Benchmark methodology: https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/benchmark.md
+Repo: https://github.com/SoorinSecurity/Agentic_SOC
+Benchmark methodology: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/docs/docs/benchmark.md
 
 Happy to answer anything about the architecture, the eval design, or where it's
 still rough (autonomous response defaults to copilot/dry-run; live-LLM

@@ -5,7 +5,7 @@ Phase 2.5 — verify every `runbook_url` referenced from
 actually exists under ``docs/runbooks/``.
 
 The alert rules embed runbook URLs like
-``https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/
+``https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/
 service-down.md`` so Alertmanager's notification template can
 deep-link the on-call. If those files don't exist, the on-call
 gets a 404 at the worst possible moment.

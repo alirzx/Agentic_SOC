@@ -65,5 +65,5 @@ If you'd rather not bind the token to a human user, use a **group access token**
 
 ## Code
 
-- Connector class: [`services/connectors/app/connectors/gitlab.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/gitlab.py)
-- Tests: [`services/connectors/tests/connectors/test_gitlab.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/tests/connectors/test_gitlab.py)
+- Connector class: [`services/connectors/app/connectors/gitlab.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/connectors/app/connectors/gitlab.py)
+- Tests: [`services/connectors/tests/connectors/test_gitlab.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/connectors/tests/connectors/test_gitlab.py)

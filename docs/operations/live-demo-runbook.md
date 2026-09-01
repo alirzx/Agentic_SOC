@@ -22,7 +22,7 @@ that's the AiSOC console.
 If you have Docker locally, the same one-liner works on your machine:
 
 ```bash
-git clone https://github.com/beenuar/AiSOC && cd AiSOC && pnpm aisoc:demo
+git clone https://github.com/SoorinSecurity/Agentic_SOC && cd AiSOC && pnpm aisoc:demo
 ```
 
 ## What "down" usually means

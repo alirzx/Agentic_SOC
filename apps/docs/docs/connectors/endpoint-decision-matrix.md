@@ -56,7 +56,7 @@ correlated raw telemetry into alerts. AiSOC pulls the alert stream, normalises
 severity into the four-tier ladder (`info`/`low`/`medium`/`high`), and feeds it
 straight into detection routing.
 
-**Available today:** [CrowdStrike Falcon](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/crowdstrike.py),
+**Available today:** [CrowdStrike Falcon](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/connectors/app/connectors/crowdstrike.py),
 SentinelOne, [Microsoft Defender XDR](/docs/connectors/azure-defender),
 Palo Alto Cortex XDR, Cortex XSIAM, VMware Carbon Black, Trellix Helix,
 Trend Vision One.
@@ -181,7 +181,7 @@ ship:
   `detections/endpoint/auditd-*.yaml` rules that consume `auditd` events via
   the host-agent in `file_tail` mode.
 
-Both are tracked in the [community roadmap](https://github.com/beenuar/AiSOC/issues)
+Both are tracked in the [community roadmap](https://github.com/SoorinSecurity/Agentic_SOC/issues)
 and will get dedicated walkthrough pages on the same model as
 [osctrl](/docs/connectors/osctrl) and [FleetDM](/docs/connectors/fleetdm) when
 they merge. Until then, the four paths above cover every endpoint shape AiSOC

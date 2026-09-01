@@ -62,7 +62,7 @@ const TIERS: ReadonlyArray<Tier> = [
     ],
     cta: {
       label: 'Clone on GitHub',
-      href: 'https://github.com/beenuar/AiSOC',
+      href: 'https://github.com/SoorinSecurity/Agentic_SOC',
     },
   },
   {
@@ -101,7 +101,7 @@ const TIERS: ReadonlyArray<Tier> = [
     ],
     cta: {
       label: 'Talk to us',
-      href: 'mailto:hello@tryaisoc.com?subject=AiSOC%20enterprise%20enquiry',
+      href: 'mailto:info@soorinsec.ir?subject=AiSOC%20enterprise%20enquiry',
     },
   },
 ];

@@ -30,13 +30,13 @@ All four T-IDs landed via dedicated PRs (merged 2026-06-27):
 
 | T-ID | PR | Branch | Merged at (UTC) |
 |------|----|--------|-----------------|
-| T3.7 | [#330](https://github.com/beenuar/AiSOC/pull/330) | `feat/v8-t37-nl-playbook-drafter` | 08:55:22 |
-| T3.8 | [#331](https://github.com/beenuar/AiSOC/pull/331) | `feat/v8-t38-storybook-design-system` | 08:57:36 |
-| T5.3 | [#332](https://github.com/beenuar/AiSOC/pull/332) | `feat/v8-t53-aitlds-mitre-engenuity` | 08:53:48 |
-| T4 wave-3 | [#333](https://github.com/beenuar/AiSOC/pull/333) | `feat/v8-t4-wave3-connector-scaffolding` | 08:55:17 |
-| Tracker | [#334](https://github.com/beenuar/AiSOC/pull/334) | `docs/v8-progress-tracker` | 08:57:39 |
+| T3.7 | [#330](https://github.com/SoorinSecurity/Agentic_SOC/pull/330) | `feat/v8-t37-nl-playbook-drafter` | 08:55:22 |
+| T3.8 | [#331](https://github.com/SoorinSecurity/Agentic_SOC/pull/331) | `feat/v8-t38-storybook-design-system` | 08:57:36 |
+| T5.3 | [#332](https://github.com/SoorinSecurity/Agentic_SOC/pull/332) | `feat/v8-t53-aitlds-mitre-engenuity` | 08:53:48 |
+| T4 wave-3 | [#333](https://github.com/SoorinSecurity/Agentic_SOC/pull/333) | `feat/v8-t4-wave3-connector-scaffolding` | 08:55:17 |
+| Tracker | [#334](https://github.com/SoorinSecurity/Agentic_SOC/pull/334) | `docs/v8-progress-tracker` | 08:57:39 |
 
-Follow-up after merge: [`feat/v8-storybook-draftdialog-story`](https://github.com/beenuar/AiSOC/tree/feat/v8-storybook-draftdialog-story) re-introduces the
+Follow-up after merge: [`feat/v8-storybook-draftdialog-story`](https://github.com/SoorinSecurity/Agentic_SOC/tree/feat/v8-storybook-draftdialog-story) re-introduces the
 `DraftFromPromptDialog` Storybook story that was split out of #331
 because it imported a component that only existed on #330.
 

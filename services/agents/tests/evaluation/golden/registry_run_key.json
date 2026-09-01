@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-REG-RUNKEY",
+  "source": "SYNTHETIC",
+  "title": "Registry Run key persistence",
+  "description": "Synthetic golden case for MITRE T1547.001.",
+  "severity": "medium",
+  "response_class": "investigate",
+  "expected_techniques": [
+    "T1547.001"
+  ],
+  "expected_actions": [
+    "investigate"
+  ],
+  "attack_stage": "persistence",
+  "expected_soc_doc_playbook_id": "persistence",
+  "expected_mitre_tactic_id": "TA0003",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1547.001"
+    }
+  ]
+}

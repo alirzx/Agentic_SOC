@@ -52,7 +52,7 @@ Coolify dashboard → **+ New Project** → name it `aisoc` → **Create**.
 
 1. Inside the project: **+ New Resource** → **Docker Compose Empty**.
 2. **Source**: choose **Public Repository**.
-3. **Repository URL**: `https://github.com/beenuar/AiSOC`
+3. **Repository URL**: `https://github.com/SoorinSecurity/Agentic_SOC`
 4. **Branch**: `main`
 5. **Base Directory**: `/` (the repo root, where `docker-compose.yml` lives)
 6. **Docker Compose File Location**: `docker-compose.yml`

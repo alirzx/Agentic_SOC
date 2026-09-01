@@ -2,12 +2,12 @@
 
 > Run an AiSOC agent investigation **offline in under 30 seconds**. No Docker, no API key, no network.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](https://github.com/beenuar/AiSOC/blob/main/LICENSE)
-[![PyPI release](https://img.shields.io/badge/pypi-coming%20in%20v8.0-f59e0b)](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE)
+[![PyPI release](https://img.shields.io/badge/pypi-coming%20in%20v8.0-f59e0b)](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md)
 
-`aisoc-sandbox` is the quickest possible on-ramp to [AiSOC](https://github.com/beenuar/AiSOC). It walks one alert fixture through a four-stage agent funnel — **Detect → Triage → Hunt → Respond** — using a deterministic offline reasoner in place of a real LLM, and prints the resulting Investigation Ledger to your terminal.
+`aisoc-sandbox` is the quickest possible on-ramp to [AiSOC](https://github.com/SoorinSecurity/Agentic_SOC). It walks one alert fixture through a four-stage agent funnel — **Detect → Triage → Hunt → Respond** — using a deterministic offline reasoner in place of a real LLM, and prints the resulting Investigation Ledger to your terminal.
 
-It is the simulator-equivalent of the production [`services/agents/`](https://github.com/beenuar/AiSOC/tree/main/services/agents) graph, collapsed into a single zero-dependency Python package. **When you're ready to run the real stack: `pnpm aisoc:demo` from a fresh clone of [AiSOC](https://github.com/beenuar/AiSOC).**
+It is the simulator-equivalent of the production [`services/agents/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents) graph, collapsed into a single zero-dependency Python package. **When you're ready to run the real stack: `pnpm aisoc:demo` from a fresh clone of [AiSOC](https://github.com/SoorinSecurity/Agentic_SOC).**
 
 ## Why this exists
 
@@ -19,7 +19,7 @@ This package collapses the boot time to **< 5 seconds** and the disk footprint t
 
 ```bash
 # Today (from this monorepo):
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC && pip install -e packages/aisoc-sandbox
 
 # v8.0+ (once aisoc-sandbox lands on PyPI):
@@ -86,7 +86,7 @@ Step  1  TRIAGE  TriageAgent  (3 ms)
   ...
 ```
 
-The shape mirrors the production Investigation Rail at [`/alerts/[id]`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/console/investigation-rail.md). The four stages, the evidence chips, and the "Decision" lines are the same — only the LLM rationale and tool execution are simulated.
+The shape mirrors the production Investigation Rail at [`/alerts/[id]`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/docs/docs/console/investigation-rail.md). The four stages, the evidence chips, and the "Decision" lines are the same — only the LLM rationale and tool execution are simulated.
 
 ## Library use
 
@@ -124,4 +124,4 @@ This is on purpose. The sandbox is the **on-ramp**, not a replacement: it gives 
 
 ## License
 
-MIT — see the [repo LICENSE](https://github.com/beenuar/AiSOC/blob/main/LICENSE).
+MIT — see the [repo LICENSE](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE).

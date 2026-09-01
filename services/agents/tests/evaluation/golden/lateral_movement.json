@@ -9,5 +9,7 @@
   "expected_actions": ["isolate_asset"],
   "expected_correlation_group": ["GOLDEN-LATERAL", "GOLDEN-LATERAL-2"],
   "attack_stage": "lateral_movement",
+  "expected_soc_doc_playbook_id": "lateral-movement",
+  "expected_mitre_tactic_id": "TA0008",
   "telemetry": [{"source": "windows", "event": "rdp lateral movement"}]
 }

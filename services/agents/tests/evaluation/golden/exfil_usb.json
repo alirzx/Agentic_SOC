@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-EXFIL-USB",
+  "source": "SYNTHETIC",
+  "title": "Large copy to removable media",
+  "description": "Synthetic golden case for MITRE T1052.001.",
+  "severity": "high",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1052.001"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "exfiltration",
+  "expected_soc_doc_playbook_id": "exfiltration",
+  "expected_mitre_tactic_id": "TA0010",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1052.001"
+    }
+  ]
+}

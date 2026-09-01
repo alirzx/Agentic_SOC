@@ -3,9 +3,9 @@
 import { useMemo, useState } from 'react';
 
 const CONTRIBUTE_URL =
-  'https://github.com/beenuar/AiSOC/blob/main/.github/PULL_REQUEST_TEMPLATE/detection_rule.md';
+  'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/PULL_REQUEST_TEMPLATE/detection_rule.md';
 const DETECTIONS_URL =
-  'https://github.com/beenuar/AiSOC/tree/main/detections';
+  'https://github.com/SoorinSecurity/Agentic_SOC/tree/main/detections';
 
 interface Contributor {
   name: string;

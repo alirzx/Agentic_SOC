@@ -9,7 +9,7 @@ description: >
   auditlogs:read scope on an Org-level Slack app.
 author: AiSOC Core Team
 tags: [saas, slack, audit, collaboration]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/slack_audit.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/slack_audit.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

@@ -1,0 +1,2 @@
+1. مقدمه
+Privilege Escalation (TA0004) SOC playbook.

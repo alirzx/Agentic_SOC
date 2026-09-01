@@ -1,0 +1,2 @@
+1. مقدمه
+Execution (TA0002) SOC playbook.

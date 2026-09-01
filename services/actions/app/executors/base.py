@@ -20,7 +20,7 @@ _SIM_FUNNEL_CTA: str = (
     " | To wire in a live integration, see the Plugin SDK: "
     "https://docs.tryaisoc.com/plugins/overview"
     " | Want this integration co-authored? Open a request: "
-    "https://github.com/beenuar/AiSOC/issues/new"
+    "https://github.com/SoorinSecurity/Agentic_SOC/issues/new"
     "?labels=connector-request&template=connector_request.md"
 )
 

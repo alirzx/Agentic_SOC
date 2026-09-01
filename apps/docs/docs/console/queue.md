@@ -208,15 +208,15 @@ All queue endpoints run under the existing `alerts:read` and `alerts:write` perm
 
 | Concern | File |
 |---|---|
-| Workbench page route | [`apps/web/src/app/(app)/queue/page.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/app/(app)/queue/page.tsx) |
-| Workbench component | [`apps/web/src/components/queue/QueueView.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/queue/QueueView.tsx) |
-| Sidebar live badge | [`apps/web/src/components/layout/LiveQueueBadge.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/layout/LiveQueueBadge.tsx) |
-| API client | [`apps/web/src/lib/api.ts`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/lib/api.ts) (search for `queueApi`) |
-| Queue endpoint + claim/snooze | [`services/api/app/api/v1/endpoints/alerts.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/alerts.py) |
-| Queue builder, claim logic, SLA expression | [`services/api/app/services/alert_queue.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/alert_queue.py) |
-| SLA targets (default + per-tenant resolution) | [`services/api/app/services/sla.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/sla.py) |
-| Backend tests | [`services/api/tests/test_alert_queue.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/tests/test_alert_queue.py) |
-| Frontend tests | [`apps/web/src/components/queue/QueueView.test.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/queue/QueueView.test.tsx) · [`apps/web/src/components/layout/LiveQueueBadge.test.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/layout/LiveQueueBadge.test.tsx) |
+| Workbench page route | [`apps/web/src/app/(app)/queue/page.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/app/(app)/queue/page.tsx) |
+| Workbench component | [`apps/web/src/components/queue/QueueView.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/queue/QueueView.tsx) |
+| Sidebar live badge | [`apps/web/src/components/layout/LiveQueueBadge.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/layout/LiveQueueBadge.tsx) |
+| API client | [`apps/web/src/lib/api.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/lib/api.ts) (search for `queueApi`) |
+| Queue endpoint + claim/snooze | [`services/api/app/api/v1/endpoints/alerts.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/api/v1/endpoints/alerts.py) |
+| Queue builder, claim logic, SLA expression | [`services/api/app/services/alert_queue.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/alert_queue.py) |
+| SLA targets (default + per-tenant resolution) | [`services/api/app/services/sla.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/sla.py) |
+| Backend tests | [`services/api/tests/test_alert_queue.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/tests/test_alert_queue.py) |
+| Frontend tests | [`apps/web/src/components/queue/QueueView.test.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/queue/QueueView.test.tsx) · [`apps/web/src/components/layout/LiveQueueBadge.test.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/layout/LiveQueueBadge.test.tsx) |
 
 ## Author
 

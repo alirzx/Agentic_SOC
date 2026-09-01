@@ -73,7 +73,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'infra/compose/docker-compose.airgap.yml',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.airgap.yml',
+      'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/compose/docker-compose.airgap.yml',
   },
   {
     name: 'On-prem',
@@ -82,7 +82,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'Helm chart (infra/helm/aisoc)',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/Chart.yaml',
+      'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/helm/aisoc/Chart.yaml',
   },
   {
     name: 'Hybrid',
@@ -91,7 +91,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'Terraform (infra/terraform/byoc/)',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc',
+      'https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/byoc',
   },
   {
     // Top-level main.tf IS the AWS stack — there is no `aws/` subdir.
@@ -102,7 +102,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'Terraform root (infra/terraform/) + modules/eks',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/blob/main/infra/terraform/main.tf',
+      'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/terraform/main.tf',
   },
   {
     name: 'Public cloud — Azure',
@@ -111,7 +111,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'Terraform (infra/terraform/azure/) · Container Apps',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/tree/main/infra/terraform/azure',
+      'https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/azure',
   },
   {
     name: 'Public cloud — GCP',
@@ -120,7 +120,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'Terraform (infra/terraform/gcp/) · Cloud Run',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/tree/main/infra/terraform/gcp',
+      'https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/gcp',
   },
   {
     name: 'Managed SaaS (waitlist)',
@@ -128,7 +128,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     residency: 'EU · US · India',
     controlsAligned: 'SOC 2 (in progress) · GDPR (target)',
     artefact: 'tryaisoc.com',
-    artefactHref: 'mailto:hello@tryaisoc.com?subject=AiSOC%20managed%20waitlist',
+    artefactHref: 'mailto:info@soorinsec.ir?subject=AiSOC%20managed%20waitlist',
   },
 ];
 
@@ -228,7 +228,7 @@ export default function SovereignPage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href="mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment"
+              href="mailto:info@soorinsec.ir?subject=AiSOC%20sovereign%20deployment"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
             >
               Talk to us about sovereign deployment
@@ -242,7 +242,7 @@ export default function SovereignPage() {
               </svg>
             </a>
             <a
-              href="https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.airgap.yml"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/compose/docker-compose.airgap.yml"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
@@ -488,7 +488,7 @@ export default function SovereignPage() {
             Kubernetes clusters reachable from your operator network. The
             BYOC blueprint at{' '}
             <a
-              href="https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/byoc"
               target="_blank"
               rel="noreferrer"
               className="text-brand-300 underline decoration-brand-500/40 underline-offset-2 hover:text-brand-200"
@@ -512,31 +512,31 @@ export default function SovereignPage() {
             <RepoArtefact
               label="Air-gap overlay"
               path="infra/compose/docker-compose.airgap.yml"
-              href="https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.airgap.yml"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/compose/docker-compose.airgap.yml"
               body="Compose overlay that adds an Ollama sidecar with a pinned model and flips AISOC_AIRGAPPED=true on every service that calls an LLM."
             />
             <RepoArtefact
               label="Helm chart"
               path="infra/helm/aisoc/"
-              href="https://github.com/beenuar/AiSOC/tree/main/infra/helm/aisoc"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/helm/aisoc"
               body="Single Helm release for every backend service, the web console, and the realtime gateway. Production-shaped values for resource limits, secrets, and ingress."
             />
             <RepoArtefact
               label="Terraform configs"
               path="infra/terraform/"
-              href="https://github.com/beenuar/AiSOC/tree/main/infra/terraform"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform"
               body="Top-level main.tf for AWS (S3 backend + modules/eks + RDS + ElastiCache + MSK), azure/ for Container Apps, gcp/ for Cloud Run, byoc/ for every other cloud — consumes your VPC, KMS, IAM rather than reinventing them."
             />
             <RepoArtefact
               label="Credential vault"
               path="services/api/app/services/credentials.py"
-              href="https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/credentials.py"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/credentials.py"
               body="Fernet AES-128-CBC + HMAC-SHA256. Per-tenant LLM credentials, connector secrets, and webhook tokens never leave the vault in plaintext."
             />
             <RepoArtefact
               label="Investigation ledger"
               path="services/agents/app/ledger/"
-              href="https://github.com/beenuar/AiSOC/tree/main/services/agents/app/ledger"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/app/ledger"
               body="Every prompt, tool call, evidence row, and decision the agent makes — durable and replayable. The auditor reads the events directly, not a vendor summary."
             />
             <RepoArtefact
@@ -563,7 +563,7 @@ export default function SovereignPage() {
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
-              href="mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment"
+              href="mailto:info@soorinsec.ir?subject=AiSOC%20sovereign%20deployment"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
             >
               Email hello@tryaisoc.com
@@ -575,7 +575,7 @@ export default function SovereignPage() {
               See who runs it in production
             </Link>
             <a
-              href="https://github.com/beenuar/AiSOC"
+              href="https://github.com/SoorinSecurity/Agentic_SOC"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"

@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   },
 };
 
-const REPRODUCE_SNIPPET = `git clone https://github.com/beenuar/AiSOC && cd AiSOC
+const REPRODUCE_SNIPPET = `git clone https://github.com/SoorinSecurity/Agentic_SOC && cd AiSOC
 python3 scripts/run_evals.py --json --out report.json`;
 
 function fmtPct(value: number | undefined, digits = 1): string {
@@ -121,7 +121,7 @@ export default async function BenchmarkPage() {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href="https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
@@ -137,7 +137,7 @@ export default async function BenchmarkPage() {
               </svg>
             </a>
             <a
-              href="https://github.com/beenuar/AiSOC/tree/main/services/agents/tests"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/tests"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
@@ -153,7 +153,7 @@ export default async function BenchmarkPage() {
               </svg>
             </a>
             <a
-              href="https://github.com/beenuar/AiSOC/actions/workflows/ci.yml"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/actions/workflows/ci.yml"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
@@ -308,7 +308,7 @@ export default async function BenchmarkPage() {
             run where actual agent accuracy is measured. Tracking issue:{' '}
             <a
               className="underline decoration-dotted hover:text-gray-300"
-              href="https://github.com/beenuar/AiSOC/issues"
+              href="https://github.com/SoorinSecurity/Agentic_SOC/issues"
               target="_blank"
               rel="noreferrer"
             >

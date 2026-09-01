@@ -107,9 +107,9 @@ class DemoModeMiddleware(BaseHTTPMiddleware):
                     "This is the public AiSOC demo at tryaisoc.com. "
                     "Write actions are disabled here so every visitor sees "
                     "the same dataset. To run AiSOC for real, self-host it "
-                    "in 5 minutes — see https://github.com/beenuar/AiSOC."
+                    "in 5 minutes — see https://github.com/SoorinSecurity/Agentic_SOC."
                 ),
-                "self_host_url": "https://github.com/beenuar/AiSOC#quickstart",
+                "self_host_url": "https://github.com/SoorinSecurity/Agentic_SOC#quickstart",
                 "blocked_path": path,
                 "blocked_method": method,
             },

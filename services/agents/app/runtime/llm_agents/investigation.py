@@ -12,6 +12,7 @@ from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm.factory import make_chat_model
 from app.prompting.envelope import make_nonce
 from app.runtime.contracts import AgentContext, AgentResult, Finding, NextTask
+from app.runtime.playbooks import playbook_guidance_for_context, resolve_soc_doc_playbook_from_context
 
 from .execution_errors import InvestigationExecutionMeta, InvestigationStructuredOutputError
 from .limits import max_cost_per_incident, max_investigation_iterations, max_investigation_seconds, max_llm_calls
@@ -90,6 +91,13 @@ async def run_llm_investigation(
     )
     tools = list_tools_for_agent(registry, agent_name)
     tool_names = [t["name"] for t in tools]
+    soc_playbook = resolve_soc_doc_playbook_from_context(context)
+    soc_playbook_guidance = playbook_guidance_for_context(context) or ""
+    if soc_playbook is not None:
+        context.metadata["soc_doc_playbook_id"] = soc_playbook.id
+        context.metadata["soc_doc_playbook_mitre"] = soc_playbook.mitre_id
+    if soc_playbook_guidance:
+        context.metadata["soc_doc_playbook_guidance"] = soc_playbook_guidance
     nonce = make_nonce()
     llm = make_chat_model("investigation", temperature=0.0, max_tokens=1024)
     collected_evidence: list[Any] = list(context.evidence)
@@ -99,9 +107,13 @@ async def run_llm_investigation(
     step_index = 0
 
     while not _budget_exceeded(state, started, tool_call_count):
+        playbook_section = ""
+        if soc_playbook_guidance:
+            playbook_section = f"SOC analyst playbook guidance:\n{soc_playbook_guidance}\n"
         user_content = (
             f"Objective: {sanitize_text(context.objective or '')}\n"
             f"Allow-listed tools: {', '.join(tool_names)}\n"
+            f"{playbook_section}"
             f"{_state_summary(state, collected_evidence)}\n"
             "Respond with JSON only."
         )

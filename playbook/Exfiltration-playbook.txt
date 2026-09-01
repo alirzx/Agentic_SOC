@@ -1,0 +1,2 @@
+1. مقدمه
+Exfiltration (TA0010) SOC playbook.

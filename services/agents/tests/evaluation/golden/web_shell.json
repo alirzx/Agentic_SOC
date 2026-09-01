@@ -8,5 +8,7 @@
   "expected_techniques": ["T1505.003"],
   "expected_actions": ["isolate_asset"],
   "attack_stage": "persistence",
+  "expected_soc_doc_playbook_id": "persistence",
+  "expected_mitre_tactic_id": "TA0003",
   "telemetry": [{"source": "waf", "hostname": "WEB-01", "uri": "/shell.aspx"}]
 }

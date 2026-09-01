@@ -41,13 +41,13 @@ binary.
 # Example: Linux amd64
 VERSION=ext-v1.0.0
 curl -fsSL -o /opt/aisoc/aisoc-extension \
-  "https://github.com/beenuar/AiSOC/releases/download/${VERSION}/aisoc-extension-linux-amd64"
+  "https://github.com/SoorinSecurity/Agentic_SOC/releases/download/${VERSION}/aisoc-extension-linux-amd64"
 
 # Verify the signature (optional but recommended)
 cosign verify-blob \
   --certificate    "aisoc-extension-linux-amd64.pem" \
   --signature      "aisoc-extension-linux-amd64.sig" \
-  --certificate-identity-regexp "https://github.com/beenuar/AiSOC" \
+  --certificate-identity-regexp "https://github.com/SoorinSecurity/Agentic_SOC" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   "aisoc-extension-linux-amd64"
 
@@ -199,7 +199,7 @@ All endpoints accept `?host_identifier=<string>` and, for the alert cache,
 ## Building from source
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC/services/osquery-extensions
 
 # Run tests

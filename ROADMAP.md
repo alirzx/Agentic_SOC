@@ -237,7 +237,7 @@ Implemented and reviewed by Beenu Arora <beenu@cyble.com>.
 
 ## v7.0.x — Endpoint telemetry wave + hardening (2026-05-10)
 
-Six-PR feature wave that closes [#44](https://github.com/beenuar/AiSOC/issues/44)
+Six-PR feature wave that closes [#44](https://github.com/SoorinSecurity/Agentic_SOC/issues/44)
 ("osctrl connector for fleet-wide osquery telemetry") and significantly extends
 osquery coverage end to end. All six PRs were implemented sequentially as part of
 the v7.0 release window and then patched through 7.0.1 → 7.0.3.

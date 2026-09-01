@@ -1,0 +1,24 @@
+1.	مقدمه
+این Playbook با هدف مدیریت، تحلیل و پاسخ‌گویی ساخت‌یافته به رخدادهای مرتبط با تاکتیک Reconnaissance مطابق با چارچوب MITRE ATT&CK – TA0043 طراحی شده است. Reconnaissance فاز پیش از حمله است و شامل جمع‌آوری اطلاعات درباره سازمان، دارایی‌ها، کارکنان و زیرساخت از منابع عمومی یا نیمه‌عمومی می‌شود.
+
+2.	شرایط اجرا Play book
+این Playbook زمانی فعال می‌شود که Correlation Searchهای مرتبط با فعالیت‌های شناسایی/جستجوی اطلاعات (OSINT، اسکن، جستجوی دامنه، شبکه‌های اجتماعی) Notable ایجاد کنند.
+
+3.	بررسی اولیه
+فیلدهای کلیدی: recon_source، target_domain، src_ip، tool_signature، query_pattern، volume، geo_location، user_agent، timeframe.
+
+4.	تشخیص False Positive
+فعالیت‌های تیم امنیت (pentest مجاز)، اسکنرهای compliance، ربات‌های موتور جستجو، و مانیتورینگ خارجی قراردادی.
+
+5.	Investigation
+• آیا فعالیت با کمپین فیشینگ یا exploit بعدی هم‌زمان است؟
+• آیا دامنه/IP مبدا در threat intel شناخته‌شده است؟
+• آیا الگوی اسکن گسترده (spray) مشاهده می‌شود؟
+
+6.	پاسخ
+• مستندسازی برای threat hunting
+• مسدودسازی IP/دامنه در صورت اسکن مخرب مکرر
+• هشدار به تیم exposure management برای سرویس‌های public-facing
+• ارتباط با تیم قرمز در صورت فعالیت مجاز
+
+نمونه رخدادها: Active Scanning، Search Open Websites، Gather Victim Identity Information، Phishing for Information

@@ -11,7 +11,7 @@ description: >
   token with read:audit_log and security_events scopes.
 author: AiSOC Core Team
 tags: [vcs, github, audit, code-scanning, supply-chain, identity]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/github.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/github.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

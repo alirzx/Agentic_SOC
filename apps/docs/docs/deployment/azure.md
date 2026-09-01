@@ -5,7 +5,7 @@ sidebar_position: 4
 # Azure (Container Apps + Postgres Flexible Server)
 
 A serverless-first Terraform skeleton lives at
-[`infra/terraform/azure/`](https://github.com/beenuar/AiSOC/tree/main/infra/terraform/azure).
+[`infra/terraform/azure/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/azure).
 It mirrors the [GCP skeleton](./gcp) file-for-file on Azure: Container Apps for
 the customer-visible services (API, web, ingest), Azure Database for
 PostgreSQL Flexible Server 16, and Azure Cache for Redis — all on private
@@ -170,10 +170,10 @@ Postgres server and Redis cache are deleted with the rest of the stack.
 
 ## See also
 
-- [`infra/terraform/azure/README.md`](https://github.com/beenuar/AiSOC/blob/main/infra/terraform/azure/README.md) — operator runbook
+- [`infra/terraform/azure/README.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/terraform/azure/README.md) — operator runbook
 - [Environment variables reference](./env-vars) — what each Container App
   consumes
 - [GCP skeleton](./gcp) — equivalent skeleton on Google Cloud (Cloud Run +
   Cloud SQL + Memorystore)
-- [AWS BYOC module](https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc)
+- [AWS BYOC module](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/byoc)
   — equivalent skeleton for AWS (EKS + RDS + ElastiCache)

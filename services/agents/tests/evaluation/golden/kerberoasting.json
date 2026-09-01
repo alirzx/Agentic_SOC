@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-KERBEROAST",
+  "source": "SYNTHETIC",
+  "title": "Kerberoasting TGS requests",
+  "description": "Synthetic golden case for MITRE T1558.003.",
+  "severity": "high",
+  "response_class": "investigate",
+  "expected_techniques": [
+    "T1558.003"
+  ],
+  "expected_actions": [
+    "investigate"
+  ],
+  "attack_stage": "credential_access",
+  "expected_soc_doc_playbook_id": "credential-access",
+  "expected_mitre_tactic_id": "TA0006",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1558.003"
+    }
+  ]
+}

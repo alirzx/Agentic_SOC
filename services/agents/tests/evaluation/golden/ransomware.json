@@ -8,6 +8,8 @@
   "expected_techniques": ["T1486"],
   "expected_correlation_group": ["GOLDEN-RANSOMWARE"],
   "expected_actions": ["isolate_asset"],
+  "expected_soc_doc_playbook_id": "impact",
+  "expected_mitre_tactic_id": "TA0040",
   "attack_stage": "impact",
   "compromised": true,
   "hostname": "FIN-WS-12"

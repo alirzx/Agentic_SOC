@@ -180,7 +180,7 @@ export function resolveConfig(args: ParsedArgs, env: NodeJS.ProcessEnv = process
     apiKey,
     timeoutMs,
     verbose,
-    userAgent: `aisoc-mcp/${packageVersion()} (+https://github.com/beenuar/AiSOC)`,
+    userAgent: `aisoc-mcp/${packageVersion()} (+https://github.com/SoorinSecurity/Agentic_SOC)`,
   };
 }
 

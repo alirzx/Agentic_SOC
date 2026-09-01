@@ -58,7 +58,7 @@ export function Hero() {
               Open console
             </Link>
             <a
-              href="https://github.com/beenuar/AiSOC"
+              href="https://github.com/SoorinSecurity/Agentic_SOC"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-lg border border-velvet-content-primary/15 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-gray-200 transition hover:border-velvet-content-primary/30 hover:bg-white/[0.08]"

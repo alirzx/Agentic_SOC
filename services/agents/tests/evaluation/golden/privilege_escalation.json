@@ -7,6 +7,8 @@
   "response_class": "disable_account",
   "expected_techniques": ["T1548.002"],
   "expected_actions": ["disable_account"],
+  "expected_soc_doc_playbook_id": "privilege-escalation",
+  "expected_mitre_tactic_id": "TA0004",
   "attack_stage": "privilege_escalation",
   "telemetry": [{"source": "edr", "event": "uac bypass"}]
 }

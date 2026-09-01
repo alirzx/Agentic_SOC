@@ -10,7 +10,7 @@ description: >
   via the engine selector.
 author: AiSOC Core Team
 tags: [ndr, network, zeek, suricata, connector]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/zeek_suricata.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/zeek_suricata.py
 license: MIT
 min_aisoc_version: "7.0.0"
 config_schema:

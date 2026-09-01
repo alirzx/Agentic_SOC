@@ -49,7 +49,7 @@ If you only need a quick local demo, use [`pnpm aisoc:demo`](../../README.md#qui
 - [ ] Keep `securityContext.runAsNonRoot: true` and `readOnlyRootFilesystem: true` for every workload — these are the chart defaults; do not override unless you genuinely need to.
 - [ ] Run images with a read-only root filesystem and the minimum capability set (`drop: ["ALL"]`).
 - [ ] Enable `PodSecurityAdmission` in `restricted` mode on the namespace AiSOC runs in.
-- [ ] Subscribe to GitHub Security Advisories for [`beenuar/AiSOC`](https://github.com/beenuar/AiSOC/security/advisories) and patch within the SLA window in [`SECURITY.md`](../../SECURITY.md).
+- [ ] Subscribe to GitHub Security Advisories for [`beenuar/AiSOC`](https://github.com/SoorinSecurity/Agentic_SOC/security/advisories) and patch within the SLA window in [`SECURITY.md`](../../SECURITY.md).
 
 ## 5. Observability and audit
 

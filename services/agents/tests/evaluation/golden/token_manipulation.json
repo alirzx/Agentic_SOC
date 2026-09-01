@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-TOKEN-MANIP",
+  "source": "SYNTHETIC",
+  "title": "Access token manipulation detected",
+  "description": "Synthetic golden case for MITRE T1134.",
+  "severity": "high",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1134"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "privilege_escalation",
+  "expected_soc_doc_playbook_id": "privilege-escalation",
+  "expected_mitre_tactic_id": "TA0004",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1134"
+    }
+  ]
+}

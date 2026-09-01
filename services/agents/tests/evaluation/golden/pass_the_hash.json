@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-PASS-THE-HASH",
+  "source": "SYNTHETIC",
+  "title": "Pass-the-hash authentication",
+  "description": "Synthetic golden case for MITRE T1550.002.",
+  "severity": "critical",
+  "response_class": "disable_account",
+  "expected_techniques": [
+    "T1550.002"
+  ],
+  "expected_actions": [
+    "disable_account"
+  ],
+  "attack_stage": "lateral_movement",
+  "expected_soc_doc_playbook_id": "lateral-movement",
+  "expected_mitre_tactic_id": "TA0008",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1550.002"
+    }
+  ]
+}

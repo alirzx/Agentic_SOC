@@ -139,7 +139,7 @@ PostgreSQL  ──▶  /alerts console (lights up immediately)
 ```
 
 This is the path used by the `aisoc submit` CLI command and the
-[`examples/alerts/lateral-movement.json`](https://github.com/beenuar/AiSOC/tree/main/examples/alerts/lateral-movement.json)
+[`examples/alerts/lateral-movement.json`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/examples/alerts/lateral-movement.json)
 canonical payload. The classic Kafka-fed pipeline above is still the
 **production** path; the direct-write endpoint exists so a fresh clone of
 the repo, an `aisoc serve` process, and a single `aisoc submit` call are
@@ -254,11 +254,11 @@ prompt hash, and timestamp. The Case workspace renders this as a
 scrubbable timeline so analysts can replay the agent's reasoning.
 
 The schema is defined in
-[`services/api/migrations/008_investigation_ledger.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/008_investigation_ledger.sql).
+[`services/api/migrations/008_investigation_ledger.sql`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/migrations/008_investigation_ledger.sql).
 The agent-side writer lives in
-[`services/agents/app/investigator/ledger.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/investigator/ledger.py),
+[`services/agents/app/investigator/ledger.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/app/investigator/ledger.py),
 and the UI consumer is
-[`apps/web/src/components/cases/InvestigationLedger.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/cases/InvestigationLedger.tsx).
+[`apps/web/src/components/cases/InvestigationLedger.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/cases/InvestigationLedger.tsx).
 
 ### Prompt sanitization layer
 
@@ -266,7 +266,7 @@ Investigator agents (`recon`, `forensic`, `responder`, `report_writer`) consume
 attacker-influenced strings — enrichment payloads, dark-web excerpts, vendor
 descriptions, raw alert fields — and hand them to an LLM. Every one of those
 agents now routes its context through
-[`services/agents/app/investigator/prompt_sanitizer.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/investigator/prompt_sanitizer.py),
+[`services/agents/app/investigator/prompt_sanitizer.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/app/investigator/prompt_sanitizer.py),
 which strips known role / chat delimiters, redacts common jailbreak phrasings,
 caps field length, bounds list size and recursion depth, and wraps the result
 in explicit `<UNTRUSTED_DATA>` tags. The agents still validate the LLM's
@@ -277,17 +277,17 @@ for the threat model and defence-in-depth layers.
 ## Investigation Rail and correlation narrative
 
 The alert queue (`/alerts`) pairs the sortable table with an **Investigation Rail**
-([`InvestigationRail.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/alerts/InvestigationRail.tsx))
+([`InvestigationRail.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/alerts/InvestigationRail.tsx))
 fed by `GET /api/v1/alerts/{id}`. The response envelope is assembled in
-[`services/api/app/services/alert_rail.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/alert_rail.py)
+[`services/api/app/services/alert_rail.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/alert_rail.py)
 (narrative text, entity buckets, merged mini-timeline, recommended actions).
 
 **Narrative** — At fusion time, `services/fusion` runs the same deterministic
-builder as the API vendored copy ([`narrative.py`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/services/narrative.py))
+builder as the API vendored copy ([`narrative.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/fusion/app/services/narrative.py))
 so promoted alerts persist a short explanation of *which* signals correlated
 and *why*. Reads do not call an LLM. Alerts created before this shipped get a
 lazy projection on first detail fetch via
-[`narrative_projection.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/narrative_projection.py),
+[`narrative_projection.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/narrative_projection.py),
 then the text is cached on the row (see migration `041_alert_correlation_narrative.sql`).
 
 **Sync** — When the narrative builder changes, run `scripts/sync_vendored_narrative.py`
@@ -303,9 +303,9 @@ shows the on-call rotation, lists pending approvals, supports VAPID
 Web Push for high-severity alerts, and ships an offline shell.
 
 The schema is defined in
-[`009_responder_pwa.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/009_responder_pwa.sql).
+[`009_responder_pwa.sql`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/migrations/009_responder_pwa.sql).
 The push pipeline lives in
-[`services/realtime/src/push.ts`](https://github.com/beenuar/AiSOC/blob/main/services/realtime/src/push.ts).
+[`services/realtime/src/push.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/realtime/src/push.ts).
 
 ## Enterprise Security Controls
 

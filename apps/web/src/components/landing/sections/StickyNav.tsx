@@ -82,17 +82,17 @@ export function StickyNav() {
       >
         <Link
           href="/"
-          aria-label="AiSOC home"
+          aria-label="Soorin home"
           className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
         >
           <span
             aria-hidden="true"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-velvet-emerald-cta text-xs font-bold text-velvet-content-primary shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] motion-safe:shadow-glow-emerald-sm"
           >
-            Ai
+            S
           </span>
           <span className="font-velvet-display text-base font-normal tracking-tight text-velvet-content-primary">
-            AiSOC
+            Soorin
           </span>
         </Link>
 
@@ -111,10 +111,10 @@ export function StickyNav() {
 
         <div className="hidden items-center gap-2 lg:flex">
           <a
-            href="https://github.com/beenuar/AiSOC"
+            href="https://github.com/SoorinSecurity/Agentic_SOC"
             target="_blank"
             rel="noreferrer"
-            aria-label="Star AiSOC on GitHub"
+            aria-label="Star Soorin Agentic SOC on GitHub"
             className="inline-flex items-center gap-2 rounded-md border border-velvet-border bg-velvet-surface-raised/60 px-3 py-1.5 text-sm font-medium text-velvet-content-secondary transition-colors duration-150 ease-landing-out-quart hover:border-velvet-emerald/40 hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
             <GithubMark className="h-3.5 w-3.5" />
@@ -127,7 +127,7 @@ export function StickyNav() {
             Self-host
           </Link>
           <Link
-            href="https://tryaisoc.com/dashboard"
+            href="/dashboard"
             className="group inline-flex items-center gap-1 rounded-md bg-velvet-emerald-cta px-4 py-1.5 text-sm font-semibold text-velvet-content-primary shadow-[0_1px_0_rgba(255,255,255,0.18)_inset] transition-[filter,box-shadow] duration-200 ease-landing-out-quart hover:brightness-110 motion-safe:hover:shadow-glow-emerald-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
             Open dashboard
@@ -177,7 +177,7 @@ export function StickyNav() {
         </ul>
         <div className="flex gap-2 px-4 pb-4">
           <a
-            href="https://github.com/beenuar/AiSOC"
+            href="https://github.com/SoorinSecurity/Agentic_SOC"
             target="_blank"
             rel="noreferrer"
             className="flex-1 rounded-md border border-velvet-border bg-velvet-surface-raised/60 px-3 py-2 text-center text-sm font-medium text-velvet-content-secondary"
@@ -185,7 +185,7 @@ export function StickyNav() {
             Self-host
           </a>
           <Link
-            href="https://tryaisoc.com/dashboard"
+            href="/dashboard"
             onClick={() => setOpen(false)}
             className="flex-1 rounded-md bg-velvet-emerald-cta px-3 py-2 text-center text-sm font-semibold text-velvet-content-primary motion-safe:shadow-glow-emerald-sm"
           >

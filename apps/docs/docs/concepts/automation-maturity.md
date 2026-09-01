@@ -34,10 +34,10 @@ to the question, "what is allowed to run without a human in the loop?"
 ## The five tiers
 
 The implementation lives in
-[`services/actions/app/services/maturity.py`](https://github.com/beenuar/AiSOC/tree/main/services/actions/app/services/maturity.py),
+[`services/actions/app/services/maturity.py`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/actions/app/services/maturity.py),
 gated by `evaluate_gate()` against the action's blast radius. Blast radii are
 defined in
-[`services/actions/app/models/action.py`](https://github.com/beenuar/AiSOC/tree/main/services/actions/app/models/action.py)
+[`services/actions/app/models/action.py`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/actions/app/models/action.py)
 as `MINIMAL`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
 
 | Tier | Name | Auto-executed blast radius | Everything else | Default for | Honest MTTR target |

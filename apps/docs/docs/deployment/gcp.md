@@ -5,7 +5,7 @@ sidebar_position: 3
 # GCP (Cloud Run + Cloud SQL)
 
 A serverless-first Terraform skeleton lives at
-[`infra/terraform/gcp/`](https://github.com/beenuar/AiSOC/tree/main/infra/terraform/gcp).
+[`infra/terraform/gcp/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/gcp).
 It targets Google Cloud Run for the customer-visible services (API, web,
 ingest), Cloud SQL for PostgreSQL 16, and Memorystore for Redis 7.2 — all
 private-IP, peered through a dedicated VPC.
@@ -167,10 +167,10 @@ terraform destroy
 
 ## See also
 
-- [`infra/terraform/gcp/README.md`](https://github.com/beenuar/AiSOC/blob/main/infra/terraform/gcp/README.md) — operator runbook
+- [`infra/terraform/gcp/README.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/terraform/gcp/README.md) — operator runbook
 - [Environment variables reference](./env-vars) — what each Cloud Run service
   consumes
 - [Azure skeleton](./azure) — equivalent skeleton on Azure (Container Apps +
   Postgres Flexible Server + Cache for Redis)
-- [AWS BYOC module](https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc)
+- [AWS BYOC module](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/infra/terraform/byoc)
   — equivalent skeleton for AWS (EKS + RDS + ElastiCache)

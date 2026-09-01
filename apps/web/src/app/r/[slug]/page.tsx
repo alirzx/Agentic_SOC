@@ -58,7 +58,7 @@ export default async function ReplayPage({ params }: PageProps) {
 
         <footer style={{ marginTop: 48, borderTop: "1px solid #232b4d", paddingTop: 20, color: "#64748b", fontSize: 13 }}>
           Entity names, IPs, and identities are redacted. This is a read-only snapshot of an{" "}
-          <a href="https://github.com/beenuar/AiSOC" style={{ color: "#8b93b7" }}>
+          <a href="https://github.com/SoorinSecurity/Agentic_SOC" style={{ color: "#8b93b7" }}>
             open-source AiSOC
           </a>{" "}
           investigation. Reproduce the demo with <code>npx aisoc triage --demo</code>.

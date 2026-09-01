@@ -61,7 +61,7 @@
 .EXAMPLE
     # One-liner from PowerShell (run as your normal user, not Administrator —
     # winget will elevate per-package as needed):
-    iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+    iwr -useb https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.ps1 | iex
 
 .EXAMPLE
     # From inside a clone:
@@ -90,7 +90,7 @@
     present and the right version?" before doing anything.
 
 .LINK
-    https://github.com/beenuar/AiSOC
+    https://github.com/SoorinSecurity/Agentic_SOC
 #>
 
 [CmdletBinding()]
@@ -102,7 +102,7 @@ param(
     [switch]$SkipPreflight,
     [switch]$Diagnose,
     [switch]$NonInteractive,
-    [string]$CloneDir = (Join-Path $env:USERPROFILE 'aisoc'),
+    [string]$CloneDir = (Join-Path $env:USERPROFILE 'Agentic_SOC'),
     [string]$Branch = 'main'
 )
 
@@ -345,7 +345,7 @@ function Invoke-Preflight {
         # branch we're about to clone. We use a temp file rather than
         # `iex (iwr ...)` because dot-sourcing is cleaner and the file
         # has multiple functions we want in scope.
-        $url = "https://raw.githubusercontent.com/beenuar/AiSOC/$Branch/scripts/install/preflight.ps1"
+        $url = "https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/$Branch/scripts/install/preflight.ps1"
         $preflightLocal = Join-Path $env:TEMP "aisoc-preflight-$([guid]::NewGuid().ToString('N')).ps1"
         Write-Info "Fetching preflight.ps1 from $url ..."
         try {
@@ -424,7 +424,7 @@ Please either:
   1. Install Docker Desktop manually from https://docker.com/products/docker-desktop
      and re-run this installer, OR
   2. Re-run this installer from an interactive PowerShell window:
-       irm https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+       irm https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.ps1 | iex
 "@ 2
     }
 
@@ -551,7 +551,7 @@ Could not install pnpm via corepack OR npm.
 
 Workaround: install pnpm manually, then re-run this script:
   npm install -g pnpm@8.15.1
-  irm https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+  irm https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.ps1 | iex
 "@
         }
     }
@@ -627,7 +627,7 @@ function Resolve-Repo {
     $attempt     = 0
     while ($attempt -lt $maxAttempts) {
         $attempt++
-        & git clone --branch $Branch --depth 50 https://github.com/beenuar/AiSOC.git $CloneDir
+        & git clone --branch $Branch --depth 50 https://github.com/SoorinSecurity/Agentic_SOC.git $CloneDir
         if ($LASTEXITCODE -eq 0) {
             $script:RepoRoot = $CloneDir
             Write-Ok "Cloned AiSOC to $RepoRoot"
@@ -653,7 +653,7 @@ Common causes:
   * Corporate proxy not configured for git
     (try: git config --global http.proxy http://proxy:port)
   * Branch '$Branch' doesn't exist on the remote
-    (try: git ls-remote --heads https://github.com/beenuar/AiSOC.git)
+    (try: git ls-remote --heads https://github.com/SoorinSecurity/Agentic_SOC.git)
 
 Then re-run this installer.
 "@ 5
@@ -766,9 +766,9 @@ function Invoke-Main {
         Write-Host '    1. Re-run with: .\install.ps1 -Diagnose'
         Write-Host '       (preflight only — no installs)'
         Write-Host '    2. Read the troubleshooting guide:'
-        Write-Host '       https://github.com/beenuar/AiSOC/blob/main/docs/QUICK_INSTALL.md#troubleshooting'
+        Write-Host '       https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/QUICK_INSTALL.md#troubleshooting'
         Write-Host '    3. File an issue with the system info below:'
-        Write-Host '       https://github.com/beenuar/AiSOC/issues/new?template=installer-bug.md'
+        Write-Host '       https://github.com/SoorinSecurity/Agentic_SOC/issues/new?template=installer-bug.md'
         Write-Host ''
         Write-Host '  System info:' -ForegroundColor DarkGray
         try {

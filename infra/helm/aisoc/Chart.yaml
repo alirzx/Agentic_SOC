@@ -14,13 +14,13 @@ keywords:
   - xdr
   - mitre-attack
 
-home: https://github.com/beenuar/AiSOC
+home: https://github.com/SoorinSecurity/Agentic_SOC
 sources:
-  - https://github.com/beenuar/AiSOC
+  - https://github.com/SoorinSecurity/Agentic_SOC
 
 maintainers:
   - name: AiSOC Maintainers
-    url: https://github.com/beenuar/AiSOC
+    url: https://github.com/SoorinSecurity/Agentic_SOC
 
 dependencies:
   - name: postgresql

@@ -35,11 +35,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/beenuar/AiSOC"
+Homepage = "https://github.com/SoorinSecurity/Agentic_SOC"
 Documentation = "https://docs.tryaisoc.com"
-Source = "https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-sandbox"
-Issues = "https://github.com/beenuar/AiSOC/issues"
-Changelog = "https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md"
+Source = "https://github.com/SoorinSecurity/Agentic_SOC/tree/main/packages/aisoc-sandbox"
+Issues = "https://github.com/SoorinSecurity/Agentic_SOC/issues"
+Changelog = "https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md"
 
 [project.scripts]
 aisoc-sandbox = "aisoc_sandbox.cli:main"

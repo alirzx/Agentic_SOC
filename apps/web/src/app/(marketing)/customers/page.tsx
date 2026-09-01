@@ -128,7 +128,7 @@ export default function CustomersIndexPage() {
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">
               We&apos;d love to publish your numbers. Open an issue on{' '}
               <a
-                href="https://github.com/beenuar/AiSOC/issues"
+                href="https://github.com/SoorinSecurity/Agentic_SOC/issues"
                 target="_blank"
                 rel="noreferrer"
                 className="text-brand-300 underline underline-offset-2 hover:text-brand-200"
@@ -137,7 +137,7 @@ export default function CustomersIndexPage() {
               </a>{' '}
               or reach out to{' '}
               <a
-                href="mailto:hello@tryaisoc.com"
+                href="mailto:info@soorinsec.ir"
                 className="text-brand-300 underline underline-offset-2 hover:text-brand-200"
               >
                 hello@tryaisoc.com

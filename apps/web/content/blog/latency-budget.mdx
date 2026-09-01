@@ -174,7 +174,7 @@ With the ContextBundle on the working buffer, the orchestrator
 fans out to the sub-capabilities of `TriageAgent`. The four AiSOC
 agents — Detect, Triage, Hunt, Respond — are documented in the
 [four-agent reference](/architecture/agents) (covered in the
-[architecture doc](https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/architecture/agents.md));
+[architecture doc](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/docs/docs/architecture/agents.md));
 Triage is the first agent every alert meets, and inside it the
 phishing, identity, cloud, and insider-threat capabilities run in
 parallel where the ContextBundle's typed shape allows.
@@ -342,7 +342,7 @@ model, and where most of the operator-facing decisions about
 autonomous response actually live.
 
 The architecture reference for the four-agent surface is at
-[`apps/docs/docs/architecture/agents.md`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/architecture/agents.md).
+[`apps/docs/docs/architecture/agents.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/docs/docs/architecture/agents.md).
 The orchestrator code path that implements the budget lives in
 `services/agents/app/orchestrator/`; pull requests against the
 ContextBundle ranker, the parallel topology, or the input contract

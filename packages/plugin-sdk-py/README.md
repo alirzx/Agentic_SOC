@@ -9,7 +9,7 @@ response actions, and data-source connectors.
 
 ```bash
 # Today (from this monorepo):
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC && pip install -e "packages/plugin-sdk-py[dev]"
 
 # v8.0+ (once aisoc-plugin-sdk lands on PyPI):

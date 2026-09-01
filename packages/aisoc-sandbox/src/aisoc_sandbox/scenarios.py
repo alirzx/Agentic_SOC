@@ -3,7 +3,7 @@
 A :class:`Scenario` is the input to one investigation run. The
 sandbox ships five built-ins under ``src/aisoc_sandbox/scenarios/``
 that mirror the (deliberately broader) production fixture set under
-[`examples/`](https://github.com/beenuar/AiSOC/tree/main/examples). A
+[`examples/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/examples). A
 user can also supply an arbitrary JSON file from disk via
 ``aisoc-sandbox demo --file <path>`` if they want to walk their own
 alert through the funnel.

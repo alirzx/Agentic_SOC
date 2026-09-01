@@ -89,7 +89,7 @@ ${pc.bold("EXAMPLES")}
   cat rule.yml | npx aisoc translate --from sigma --to spl,kql
   npx aisoc up
 
-Open source · MIT · https://github.com/beenuar/AiSOC
+Open source · MIT · https://github.com/SoorinSecurity/Agentic_SOC
 `;
 
 async function main(): Promise<number> {

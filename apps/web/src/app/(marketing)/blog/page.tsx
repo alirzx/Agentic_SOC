@@ -117,14 +117,14 @@ export default function BlogIndexPage() {
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">
               Send a one-paragraph pitch to{' '}
               <a
-                href="mailto:hello@tryaisoc.com"
+                href="mailto:info@soorinsec.ir"
                 className="text-brand-300 underline underline-offset-2 hover:text-brand-200"
               >
                 hello@tryaisoc.com
               </a>{' '}
               or open an issue on{' '}
               <a
-                href="https://github.com/beenuar/AiSOC/issues"
+                href="https://github.com/SoorinSecurity/Agentic_SOC/issues"
                 target="_blank"
                 rel="noreferrer"
                 className="text-brand-300 underline underline-offset-2 hover:text-brand-200"

@@ -6,6 +6,7 @@ import { PwaBootstrap } from '@/components/pwa/PwaBootstrap';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { themeBootstrapScript } from '@/components/theme/themeScript';
 import { docs } from '@/lib/docs';
+import { BRAND } from '@/lib/brand';
 import { DISCOVERY_KEYWORDS, getPublicSiteUrl } from '@/lib/site';
 
 const inter = Inter({
@@ -27,25 +28,25 @@ const siteUrl = getPublicSiteUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  applicationName: 'AiSOC',
+  applicationName: BRAND.product,
   title: {
-    default: 'AiSOC — Open-Source AI Security Operations Center',
-    template: '%s | AiSOC',
+    default: `${BRAND.product} — ${BRAND.tagline}`,
+    template: `%s | ${BRAND.shortName}`,
   },
   description:
-    'AiSOC is a free, self-hostable AI-powered Security Operations Center (SOC). Real-time threat detection, alert fusion, purple-team exercises, MITRE ATT&CK-aware autonomous investigation, and detection-as-code — MIT-licensed and community-driven.',
+    `${BRAND.product} is a self-hostable AI-powered Security Operations Center from ${BRAND.company}. Real-time threat detection, alert fusion, MITRE ATT&CK-aware autonomous investigation, and detection-as-code.`,
   keywords: [...DISCOVERY_KEYWORDS],
-  authors: [{ name: 'AiSOC Community', url: 'https://github.com/beenuar/AiSOC' }],
-  creator: 'AiSOC Community',
-  publisher: 'AiSOC',
+  authors: [{ name: BRAND.company, url: BRAND.githubUrl }],
+  creator: BRAND.company,
+  publisher: BRAND.company,
   category: 'cybersecurity',
   classification: 'Security Software',
   openGraph: {
-    title: 'AiSOC — Free, Open-Source AI Security Operations Center',
+    title: `${BRAND.product} — ${BRAND.tagline}`,
     description:
-      'Self-hostable AI SOC with real-time threat detection, alert fusion, purple-team drills, MITRE ATT&CK investigation, and detection-as-code. MIT-licensed. Try the live demo at tryaisoc.com.',
+      `Self-hostable AI SOC from ${BRAND.company}: real-time threat detection, alert fusion, MITRE ATT&CK investigation, and detection-as-code.`,
     type: 'website',
-    siteName: 'AiSOC',
+    siteName: BRAND.product,
     url: siteUrl,
     locale: 'en_US',
     images: [
@@ -53,18 +54,16 @@ export const metadata: Metadata = {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'AiSOC — open-source AI SOC platform for security operations teams',
+        alt: `${BRAND.product} — AI SOC platform for security operations teams`,
         type: 'image/svg+xml',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AiSOC — Free Open-Source AI SOC Platform',
+    title: `${BRAND.product} — AI SOC Platform`,
     description:
-      'AI-powered SOC: threat detection, alert fusion, purple team, MITRE ATT&CK mapping, detection-as-code, and eval harness in CI. Self-host for free — tryaisoc.com.',
-    site: '@aisoc_dev',
-    creator: '@aisoc_dev',
+      `${BRAND.tagline}: threat detection, alert fusion, MITRE ATT&CK mapping, and detection-as-code. Self-host from ${BRAND.githubUrl}.`,
   },
   icons: {
     // Single SVG favicon — modern browsers (Chrome 80+, Safari 16+, Firefox 41+,
@@ -77,7 +76,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    title: 'AiSOC',
+    title: BRAND.shortName,
     statusBarStyle: 'black-translucent',
   },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
@@ -95,25 +94,26 @@ const jsonLd = {
   '@graph': [
     {
       '@type': 'Organization',
-      name: 'AiSOC',
+      name: BRAND.company,
       url: siteUrl,
       logo: `${siteUrl}/favicon.svg`,
       description:
-        'Community-driven, MIT-licensed AI security operations platform with a public demo and self-host path.',
+        `${BRAND.product} — self-hostable AI security operations platform from ${BRAND.company}.`,
       sameAs: [
-        'https://github.com/beenuar/AiSOC',
-        'https://tryaisoc.com',
+        BRAND.githubUrl,
+        BRAND.website,
+        BRAND.linkedin,
       ],
       contactPoint: {
         '@type': 'ContactPoint',
         contactType: 'technical support',
-        url: 'https://github.com/beenuar/AiSOC/issues',
+        url: 'https://github.com/SoorinSecurity/Agentic_SOC/issues',
       },
     },
     {
       '@type': 'SoftwareApplication',
-      name: 'AiSOC',
-      alternateName: ['AI SOC', 'AiSOC Platform', 'Open Source SOC'],
+      name: BRAND.product,
+      alternateName: ['Soorin', 'Agentic SOC', 'Soorin Security SOC'],
       applicationCategory: 'SecurityApplication',
       applicationSubCategory: 'Security Operations Center',
       operatingSystem: 'Linux, macOS, Docker',
@@ -125,9 +125,9 @@ const jsonLd = {
         description: 'Free, open-source, self-hostable',
       },
       url: siteUrl,
-      downloadUrl: 'https://github.com/beenuar/AiSOC',
+      downloadUrl: 'https://github.com/SoorinSecurity/Agentic_SOC',
       installUrl: docs('quickstart'),
-      releaseNotes: 'https://github.com/beenuar/AiSOC/releases',
+      releaseNotes: 'https://github.com/SoorinSecurity/Agentic_SOC/releases',
       featureList: [
         'Click-and-connect 26 security sources (EDR, SIEM, cloud, IAM, SaaS) with encrypted credential vault',
         'Real-time threat detection and alert fusion',
@@ -151,9 +151,9 @@ const jsonLd = {
     },
     {
       '@type': 'WebSite',
-      name: 'AiSOC',
+      name: BRAND.product,
       url: siteUrl,
-      description: 'Open-source AI-powered Security Operations Center — tryaisoc.com',
+      description: `${BRAND.product} — ${BRAND.tagline}`,
       potentialAction: {
         '@type': 'SearchAction',
         target: `${siteUrl}/search?q={search_term_string}`,

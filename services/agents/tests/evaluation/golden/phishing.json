@@ -8,6 +8,8 @@
   "expected_techniques": ["T1566.001"],
   "expected_actions": ["block_ioc"],
   "expected_correlation_group": ["GOLDEN-PHISH"],
+  "expected_soc_doc_playbook_id": "initial-access",
+  "expected_mitre_tactic_id": "TA0001",
   "attack_stage": "initial_access",
   "iocs": ["45.142.122.111"],
   "telemetry": [{"source": "m365", "User": "finance@corp.com", "ClientIP": "45.142.122.111"}]

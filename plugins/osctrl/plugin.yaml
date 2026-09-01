@@ -9,7 +9,7 @@ description: >
   osquery table queried so detection rules can promote interesting rows.
 author: AiSOC Core Team
 tags: [edr, osctrl, osquery, endpoint, open-source]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/osctrl.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/osctrl.py
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

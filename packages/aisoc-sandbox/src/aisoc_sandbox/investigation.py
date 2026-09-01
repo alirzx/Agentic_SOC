@@ -1,7 +1,7 @@
 """The four-stage investigation funnel — Detect → Triage → Hunt → Respond.
 
 This module is the simulator-equivalent of
-[`services/agents/app/agents/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/agents)
+[`services/agents/app/agents/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/app/agents)
 collapsed into one file. It exists so a reader can read the whole
 funnel in 5 minutes and see exactly what every step does.
 

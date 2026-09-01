@@ -22,7 +22,7 @@
 #
 # Usage:
 #   One-liner (no clone needed):
-#     curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh | bash
+#     curl -fsSL https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.sh | bash
 #
 #   From inside a clone:
 #     ./install.sh
@@ -109,8 +109,8 @@ die() { err "$*"; exit 1; }
 # how to file a useful bug report.
 
 INSTALLER_VERSION="2026.05"
-TROUBLESHOOT_URL="https://github.com/beenuar/AiSOC/blob/main/docs/QUICK_INSTALL.md#troubleshooting"
-ISSUES_URL="https://github.com/beenuar/AiSOC/issues/new?template=installer-failure.yml"
+TROUBLESHOOT_URL="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/QUICK_INSTALL.md#troubleshooting"
+ISSUES_URL="https://github.com/SoorinSecurity/Agentic_SOC/issues/new?template=installer-failure.yml"
 
 on_error() {
   local exit_code=$?
@@ -155,7 +155,7 @@ NO_LAUNCH=0
 SKIP_PREFLIGHT=0
 DIAGNOSE_ONLY=0
 NON_INTERACTIVE=0
-CLONE_DIR="${HOME}/aisoc"
+CLONE_DIR="${HOME}/Agentic_SOC"
 BRANCH="main"
 DEMO_FLAGS=()
 
@@ -338,7 +338,7 @@ run_preflight() {
     fi
     PREFLIGHT_TMP="$(mktemp 2>/dev/null || mktemp -t aisoc-preflight)"
     trap cleanup_preflight_tmp EXIT
-    local pf_url="https://raw.githubusercontent.com/beenuar/AiSOC/${BRANCH}/scripts/install/preflight.sh"
+    local pf_url="https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/${BRANCH}/scripts/install/preflight.sh"
     info "Fetching preflight checks from ${pf_url}..."
     if ! curl -fsSL "$pf_url" -o "$PREFLIGHT_TMP"; then
       warn "Couldn't fetch preflight.sh from $pf_url. Continuing without preflight."
@@ -500,7 +500,7 @@ ensure_docker() {
   curl -fsSL https://get.docker.com -o "$script" \
     || die "couldn't download get.docker.com (check your network)."
   $SUDO sh "$script" \
-    || die "Docker install script failed. See output above and report at https://github.com/beenuar/AiSOC/issues."
+    || die "Docker install script failed. See output above and report at https://github.com/SoorinSecurity/Agentic_SOC/issues."
   rm -f "$script"
 
   # Add user to docker group so we don't need sudo for `docker` commands.
@@ -677,15 +677,15 @@ ensure_repo() {
   # Verify candidate is actually AiSOC and not some other repo that
   # happened to ship an install.sh.
   if [ -n "$candidate" ] \
-     && grep -q '"name": "aisoc' "$candidate/package.json" 2>/dev/null; then
+     && grep -qE '"name": "(soorin-agentic-soc|aisoc)' "$candidate/package.json" 2>/dev/null; then
     REPO_ROOT="$candidate"
-    ok "Using existing AiSOC clone at $REPO_ROOT"
+    ok "Using existing Soorin Agentic SOC clone at $REPO_ROOT"
     return 0
   fi
 
   # Mode B: clone fresh.
   if [ -d "$CLONE_DIR" ]; then
-    if [ -d "$CLONE_DIR/.git" ] && grep -q '"name": "aisoc' "$CLONE_DIR/package.json" 2>/dev/null; then
+    if [ -d "$CLONE_DIR/.git" ] && grep -qE '"name": "(soorin-agentic-soc|aisoc)' "$CLONE_DIR/package.json" 2>/dev/null; then
       info "Updating existing clone at $CLONE_DIR..."
       ( cd "$CLONE_DIR" && git fetch --quiet origin && git checkout --quiet "$BRANCH" && git pull --ff-only --quiet ) \
         || warn "git pull failed; using whatever's on disk."
@@ -693,18 +693,18 @@ ensure_repo() {
       ok "Updated clone at $REPO_ROOT"
       return 0
     fi
-    die "$CLONE_DIR exists but isn't an AiSOC clone. Pass --clone-dir to choose a different location, or remove it first."
+    die "$CLONE_DIR exists but isn't a Soorin Agentic SOC clone. Pass --clone-dir to choose a different location, or remove it first."
   fi
-  info "Cloning AiSOC into $CLONE_DIR (branch: $BRANCH)..."
+  info "Cloning Soorin Agentic SOC into $CLONE_DIR (branch: $BRANCH)..."
   # Retry up to 3 times — transient DNS or partial-fetch failures are common
   # on flaky networks and we don't want to dump the user back to a bare prompt
   # after a single hiccup.
   local clone_attempts=0
   while [ $clone_attempts -lt 3 ]; do
     if git clone --branch "$BRANCH" --depth 50 \
-        https://github.com/beenuar/AiSOC.git "$CLONE_DIR" 2>&1; then
+        https://github.com/SoorinSecurity/Agentic_SOC.git "$CLONE_DIR" 2>&1; then
       REPO_ROOT="$CLONE_DIR"
-      ok "Cloned AiSOC to $REPO_ROOT"
+      ok "Cloned Soorin Agentic SOC to $REPO_ROOT"
       return 0
     fi
     clone_attempts=$((clone_attempts + 1))
@@ -715,7 +715,7 @@ ensure_repo() {
     fi
   done
   err "git clone failed after 3 attempts."
-  err "  Repo: https://github.com/beenuar/AiSOC.git (branch: $BRANCH)"
+  err "  Repo: https://github.com/SoorinSecurity/Agentic_SOC.git (branch: $BRANCH)"
   err "  Target: $CLONE_DIR"
   err "Possible causes:"
   err "  - Network firewall blocking github.com"

@@ -22,7 +22,7 @@ interface Vendor {
  */
 const VENDORS: Vendor[] = [
   {
-    name: 'AiSOC',
+    name: 'Soorin',
     type: 'open',
     reduction: '75.3% (measured on fixed noisy stream)',
     mitre: '97% (substrate regression gate)',

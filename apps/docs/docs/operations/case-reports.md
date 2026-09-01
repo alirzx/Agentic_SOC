@@ -102,7 +102,7 @@ The post-mortem is **explicitly blameless**:
   into individual feedback.
 
 This is the same property the testsuite enforces: see
-[`tests/test_case_postmortem.py::test_render_case_postmortem_html_omits_analyst_names`](https://github.com/beenuar/AiSOC/blob/main/services/api/tests/test_case_postmortem.py).
+[`tests/test_case_postmortem.py::test_render_case_postmortem_html_omits_analyst_names`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/tests/test_case_postmortem.py).
 
 ## Determinism & audit
 
@@ -130,12 +130,12 @@ review.
 
 | Concern | File |
 |---|---|
-| Auto-summary builder + Pydantic schema | [`services/api/app/services/case_summary.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/case_summary.py) |
-| Auto-summary HTML renderer | [`services/api/app/services/case_summary_html.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/case_summary_html.py) |
-| Post-mortem builder + Pydantic schema | [`services/api/app/services/case_postmortem.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/case_postmortem.py) |
-| Post-mortem HTML renderer | [`services/api/app/services/case_postmortem_html.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/case_postmortem_html.py) |
-| HTTP endpoints | [`services/api/app/api/v1/endpoints/cases.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/cases.py) |
-| Tests | [`services/api/tests/test_case_summary.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/tests/test_case_summary.py) · [`tests/test_case_postmortem.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/tests/test_case_postmortem.py) |
+| Auto-summary builder + Pydantic schema | [`services/api/app/services/case_summary.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/case_summary.py) |
+| Auto-summary HTML renderer | [`services/api/app/services/case_summary_html.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/case_summary_html.py) |
+| Post-mortem builder + Pydantic schema | [`services/api/app/services/case_postmortem.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/case_postmortem.py) |
+| Post-mortem HTML renderer | [`services/api/app/services/case_postmortem_html.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/case_postmortem_html.py) |
+| HTTP endpoints | [`services/api/app/api/v1/endpoints/cases.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/api/v1/endpoints/cases.py) |
+| Tests | [`services/api/tests/test_case_summary.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/tests/test_case_summary.py) · [`tests/test_case_postmortem.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/tests/test_case_postmortem.py) |
 
 ## Operational tip — automate the runbook archive
 

@@ -28,14 +28,14 @@ const QUOTE_LINES = [
 ];
 
 const QUOTABLE_ARTEFACTS: Array<{ label: string; href: string }> = [
-  { label: 'README + architecture', href: 'https://github.com/beenuar/AiSOC' },
+  { label: 'README + architecture', href: 'https://github.com/SoorinSecurity/Agentic_SOC' },
   {
     label: 'CHANGELOG (release-by-release diffs)',
-    href: 'https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md',
   },
   {
     label: 'ROADMAP',
-    href: 'https://github.com/beenuar/AiSOC/blob/main/ROADMAP.md',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/ROADMAP.md',
   },
   {
     label: 'Public benchmark methodology',
@@ -43,7 +43,7 @@ const QUOTABLE_ARTEFACTS: Array<{ label: string; href: string }> = [
   },
   {
     label: 'Security policy',
-    href: 'https://github.com/beenuar/AiSOC/blob/main/SECURITY.md',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/SECURITY.md',
   },
 ];
 

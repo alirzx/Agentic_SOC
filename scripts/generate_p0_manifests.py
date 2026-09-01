@@ -170,7 +170,7 @@ def _render_manifest(
     lines += [
         "author: AiSOC Core Team",
         f"tags: {tags_yaml}",
-        f"homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/{homepage_suffix}",
+        f"homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/{homepage_suffix}",
         "license: MIT",
         'min_aisoc_version: "4.0.0"',
         "config_schema:",

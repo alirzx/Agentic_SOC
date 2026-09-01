@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-SYSTEM-SHUTDOWN",
+  "source": "SYNTHETIC",
+  "title": "Forced system shutdown",
+  "description": "Synthetic golden case for MITRE T1529.",
+  "severity": "critical",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1529"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "impact",
+  "expected_soc_doc_playbook_id": "impact",
+  "expected_mitre_tactic_id": "TA0040",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1529"
+    }
+  ]
+}

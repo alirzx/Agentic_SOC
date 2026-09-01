@@ -1,0 +1,2 @@
+1. مقدمه
+Lateral Movement (TA0008) SOC playbook.

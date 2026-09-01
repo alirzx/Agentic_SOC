@@ -66,7 +66,7 @@ export function FinalCta() {
             />
           </Link>
           <Link
-            href="https://github.com/beenuar/AiSOC"
+            href="https://github.com/SoorinSecurity/Agentic_SOC"
             rel="noreferrer"
             target="_blank"
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-velvet-sapphire bg-transparent px-6 text-sm font-semibold text-velvet-sapphire-soft backdrop-blur-sm transition-[background-color,box-shadow] duration-200 hover:bg-velvet-sapphire/[0.12] motion-safe:hover:shadow-glow-sapphire-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-sapphire-soft focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"

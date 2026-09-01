@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Environment Variables
 
-This page is the source of truth for every environment variable AiSOC reads at runtime. Each section maps to a single service, mirroring the layout of [`services/`](https://github.com/beenuar/AiSOC/tree/main/services) in the repo.
+This page is the source of truth for every environment variable AiSOC reads at runtime. Each section maps to a single service, mirroring the layout of [`services/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services) in the repo.
 
 If you spot drift between this page and the code, please open a PR — the matching config files are linked at the top of every section.
 
@@ -12,7 +12,7 @@ If you spot drift between this page and the code, please open a PR — the match
 
 ## API service (`services/api`)
 
-Source: [`services/api/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/config.py)
+Source: [`services/api/app/core/config.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/core/config.py)
 
 The API uses bare environment variable names (no prefix). Booleans accept `true` / `false`; lists accept comma-separated strings.
 
@@ -38,7 +38,7 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 
 ### Migration runner
 
-Source: [`services/api/app/scripts/run_migrations.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/scripts/run_migrations.py)
+Source: [`services/api/app/scripts/run_migrations.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/scripts/run_migrations.py)
 
 The migration runner is invoked by deploy orchestrators (Fly's `release_command`, Render's `preDeployCommand`, the Kubernetes `Job` in the Helm chart) the moment a new API VM boots. It races against Postgres becoming reachable — these knobs control how that race is handled.
 
@@ -50,7 +50,7 @@ The Fly demo (`infra/fly/api/fly.toml`) sets `AISOC_MIGRATIONS_REQUIRED = "0"` a
 
 ### Audit log
 
-Source: [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py), [`services/api/app/core/trusted_proxy.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/trusted_proxy.py), [`services/api/app/services/audit_redaction.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit_redaction.py). Background: [Security operations → Audit logging](../operations/security#audit-logging).
+Source: [`services/api/app/services/audit.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/audit.py), [`services/api/app/core/trusted_proxy.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/core/trusted_proxy.py), [`services/api/app/services/audit_redaction.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/audit_redaction.py). Background: [Security operations → Audit logging](../operations/security#audit-logging).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -68,7 +68,7 @@ Source: [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/
 
 ### SSO — OIDC
 
-Source: [`services/api/app/auth/oidc.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/auth/oidc.py)
+Source: [`services/api/app/auth/oidc.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/auth/oidc.py)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -84,7 +84,7 @@ Source: [`services/api/app/auth/oidc.py`](https://github.com/beenuar/AiSOC/blob/
 
 ### SSO — SAML 2.0
 
-Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/auth/saml.py)
+Source: [`services/api/app/auth/saml.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/auth/saml.py)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -145,7 +145,7 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 
 ## Agents service (`services/agents`)
 
-Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app)
+Source: [`services/agents/app/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/app)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -178,7 +178,7 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 
 ## Realtime service (`services/realtime`)
 
-Source: [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob/main/services/realtime/src/index.ts)
+Source: [`services/realtime/src/index.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/realtime/src/index.ts)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -196,7 +196,7 @@ Source: [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob
 
 ## MCP server (`services/mcp`)
 
-Source: [`services/mcp/src/config.ts`](https://github.com/beenuar/AiSOC/blob/main/services/mcp/src/config.ts)
+Source: [`services/mcp/src/config.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/mcp/src/config.ts)
 
 The MCP server runs as a sidecar that exposes Investigation Ledger tools to LLM clients (Claude Desktop, Cursor, Copilot, …) via the Model Context Protocol.
 
@@ -213,7 +213,7 @@ The MCP server runs as a sidecar that exposes Investigation Ledger tools to LLM 
 
 ## Ingest service (`services/ingest`)
 
-Source: [`services/ingest/internal/config/config.go`](https://github.com/beenuar/AiSOC/blob/main/services/ingest/internal/config/config.go)
+Source: [`services/ingest/internal/config/config.go`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/ingest/internal/config/config.go)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -240,11 +240,11 @@ Source: [`services/ingest/internal/config/config.go`](https://github.com/beenuar
 
 ## UEBA service (`services/ueba`)
 
-Source: [`services/ueba/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/ueba/app/core/config.py)
+Source: [`services/ueba/app/core/config.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/ueba/app/core/config.py)
 
 Every variable in this section accepts **both** an unprefixed name (e.g. `DATABASE_URL`, `KAFKA_BOOTSTRAP_SERVERS`) and the legacy `UEBA_`-prefixed name (e.g. `UEBA_DATABASE_URL`, `UEBA_KAFKA_BOOTSTRAP_SERVERS`). When both are set, the **unprefixed form wins** — this matches the convention used by every other Python service in the repo and the `services/ueba` section of `docker-compose.yml`, which exports unprefixed names.
 
-The table below shows the canonical (unprefixed) name first and the legacy alias second. New deployments should prefer the unprefixed form. (See PR [#135](https://github.com/beenuar/AiSOC/pull/135) for the implementation and [Issue #134](https://github.com/beenuar/AiSOC/issues/134) for the original report.)
+The table below shows the canonical (unprefixed) name first and the legacy alias second. New deployments should prefer the unprefixed form. (See PR [#135](https://github.com/SoorinSecurity/Agentic_SOC/pull/135) for the implementation and [Issue #134](https://github.com/SoorinSecurity/Agentic_SOC/issues/134) for the original report.)
 
 | Variable | Legacy alias | Default | Description |
 |----------|--------------|---------|-------------|
@@ -268,7 +268,7 @@ The table below shows the canonical (unprefixed) name first and the legacy alias
 
 ## Honeytokens service (`services/honeytokens`)
 
-Source: [`services/honeytokens/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/honeytokens/app/core/config.py)
+Source: [`services/honeytokens/app/core/config.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/honeytokens/app/core/config.py)
 
 All variables use the `HONEYTOKEN_` prefix.
 
@@ -287,7 +287,7 @@ All variables use the `HONEYTOKEN_` prefix.
 
 ## Purple Team service (`services/purple-team`)
 
-Source: [`services/purple-team/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/purple-team/app/core/config.py)
+Source: [`services/purple-team/app/core/config.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/purple-team/app/core/config.py)
 
 All variables use the `PURPLE_TEAM_` prefix.
 
@@ -346,7 +346,7 @@ AISOC_CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 
 ### Production safety guard
 
-The Python helper at [`services/api/app/core/cors.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/cors.py) (vendored byte-identical into every Python service) and the TypeScript guard in [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob/main/services/realtime/src/index.ts) both **refuse to start** if the allow-list contains `*` while `allow_credentials` is `true` and any of `AISOC_ENV`, `ENVIRONMENT`, or `APP_ENV` equals `production` or `prod`. This catches the canonical CORS misconfiguration (wildcard + cookies / `Authorization` headers) before the deploy goes live.
+The Python helper at [`services/api/app/core/cors.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/core/cors.py) (vendored byte-identical into every Python service) and the TypeScript guard in [`services/realtime/src/index.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/realtime/src/index.ts) both **refuse to start** if the allow-list contains `*` while `allow_credentials` is `true` and any of `AISOC_ENV`, `ENVIRONMENT`, or `APP_ENV` equals `production` or `prod`. This catches the canonical CORS misconfiguration (wildcard + cookies / `Authorization` headers) before the deploy goes live.
 
 Outside production the same combination logs a warning and silently disables credentials — local dev stays usable when someone exports `CORS_ORIGINS=*`.
 
@@ -410,4 +410,4 @@ NEXT_PUBLIC_REALTIME_URL=ws://localhost:8086
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
 ```
 
-Before going to production, run through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) to make sure every secret has been rotated away from the example values above.
+Before going to production, run through the [Hardening Runbook](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/HARDENING.md) to make sure every secret has been rotated away from the example values above.

@@ -16,7 +16,7 @@ import pc from "picocolors";
 // Pinned to a released ref so the bundle is reproducible. The compose file is
 // fetched from the tagged raw URL (no clone). Bump on each release.
 const PINNED_REF = process.env.AISOC_UP_REF || "main";
-const COMPOSE_URL = `https://raw.githubusercontent.com/beenuar/AiSOC/${PINNED_REF}/infra/compose/docker-compose.demo.yml`;
+const COMPOSE_URL = `https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/${PINNED_REF}/infra/compose/docker-compose.demo.yml`;
 
 export interface UpFlags {
   ref?: string;
@@ -61,7 +61,7 @@ export async function runUp(flags: UpFlags, log: (s: string) => void = console.l
     composeText = await resp.text();
   } catch (err) {
     log(pc.red(`Could not fetch the compose bundle: ${(err as Error).message}`));
-    log(pc.dim("Falling back to the clone path: git clone https://github.com/beenuar/AiSOC && cd AiSOC && pnpm aisoc:demo"));
+    log(pc.dim("Falling back to the clone path: git clone https://github.com/SoorinSecurity/Agentic_SOC && cd AiSOC && pnpm aisoc:demo"));
     return 1;
   }
 

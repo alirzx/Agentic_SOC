@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-C2-ENCRYPTED",
+  "source": "SYNTHETIC",
+  "title": "Encrypted C2 channel over TLS",
+  "description": "Synthetic golden case for MITRE T1573.001.",
+  "severity": "high",
+  "response_class": "block_indicator",
+  "expected_techniques": [
+    "T1573.001"
+  ],
+  "expected_actions": [
+    "block_indicator"
+  ],
+  "attack_stage": "command_and_control",
+  "expected_soc_doc_playbook_id": "command-and-control",
+  "expected_mitre_tactic_id": "TA0011",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1573.001"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-SERVICE-PERSIST",
+  "source": "SYNTHETIC",
+  "title": "Malicious Windows service installed",
+  "description": "Synthetic golden case for MITRE T1543.003.",
+  "severity": "high",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1543.003"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "persistence",
+  "expected_soc_doc_playbook_id": "persistence",
+  "expected_mitre_tactic_id": "TA0003",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1543.003"
+    }
+  ]
+}

@@ -34,8 +34,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/beenuar/AiSOC"
-Repository = "https://github.com/beenuar/AiSOC"
+Homepage = "https://github.com/SoorinSecurity/Agentic_SOC"
+Repository = "https://github.com/SoorinSecurity/Agentic_SOC"
 
 [tool.hatch.build.targets.wheel]
 packages = ["aisoc_detections"]

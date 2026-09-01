@@ -45,7 +45,7 @@ const PILLARS: ReadonlyArray<Pillar> = [
       'MIT-licensed agent, public detection corpus, reproducible benchmark — every claim on this page maps to a file in the repo.',
     stat: '6,998',
     statLabel: 'public detection rules',
-    href: 'https://github.com/beenuar/AiSOC/blob/main/LICENSE',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE',
     linkLabel: 'Read the LICENSE',
   },
   {

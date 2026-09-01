@@ -1,0 +1,22 @@
+{
+  "id": "GOLDEN-DISCOVERY",
+  "source": "SYNTHETIC",
+  "title": "Internal network discovery via net commands",
+  "description": "Suspicious net user and net view commands from compromised workstation.",
+  "severity": "medium",
+  "response_class": "investigate",
+  "expected_techniques": ["T1087", "T1046"],
+  "expected_actions": ["investigate"],
+  "expected_correlation_group": ["GOLDEN-DISCOVERY"],
+  "attack_stage": "discovery",
+  "expected_soc_doc_playbook_id": "discovery",
+  "expected_mitre_tactic_id": "TA0007",
+  "telemetry": [
+    {
+      "source": "sysmon",
+      "Image": "net.exe",
+      "CommandLine": "net user /domain",
+      "host": "WS-42"
+    }
+  ]
+}

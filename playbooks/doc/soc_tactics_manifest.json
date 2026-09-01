@@ -1,0 +1,160 @@
+{
+  "version": "1.0.0",
+  "description": "SOC analyst doc playbooks (MITRE tactics) — maps playbook/*.txt to agent guidance",
+  "playbooks": [
+    {
+      "id": "reconnaissance",
+      "name": "Reconnaissance",
+      "mitre_id": "TA0043",
+      "attack_stages": ["reconnaissance", "recon", "osint"],
+      "source_file": "Reconnaissance-playbook.txt",
+      "initial_fields": ["recon_source", "target_domain", "src_ip", "tool_signature", "query_pattern", "volume", "geo_location"],
+      "investigation_focus": ["correlation with later attack stages", "threat intel on source", "scan/spray patterns", "public asset exposure"],
+      "response_actions": ["document for hunting", "block repeat offenders", "notify exposure management", "validate red team activity"],
+      "example_events": ["Active scanning", "OSINT gathering", "Victim identity search", "Phishing for information"]
+    },
+    {
+      "id": "resource-development",
+      "name": "Resource Development",
+      "mitre_id": "TA0042",
+      "attack_stages": ["resource_development", "resource development"],
+      "source_file": "Resource_Development-playbook.txt",
+      "initial_fields": ["resource_type", "domain", "registrar", "hosting_provider", "account_id", "malware_family", "certificate_fingerprint"],
+      "investigation_focus": ["passive DNS / CT logs", "link to known campaigns", "staging infrastructure", "brand impersonation"],
+      "response_actions": ["block domain/IP", "add IOCs to intel", "hunt related assets", "notify brand protection"],
+      "example_events": ["Malicious domain registration", "C2 staging server", "Compromised account purchase", "Malware staging"]
+    },
+    {
+      "id": "initial-access",
+      "name": "Initial Access",
+      "mitre_id": "TA0001",
+      "attack_stages": ["initial_access", "initial access", "phishing", "vpn", "exploit"],
+      "source_file": "initial access-playbook.txt",
+      "initial_fields": ["access_vector", "src_ip", "dest_host", "user", "status", "http_user_agent", "email_subject", "file_hash", "url", "geo_location"],
+      "investigation_focus": ["auth logs 4624/4625", "parent-child process if payload executed", "command line and payload hash", "phishing URL analysis"],
+      "response_actions": ["block source IP/domain", "disable compromised account", "collect email headers and malware sample", "IOC hunt", "restore clean image if infected"],
+      "example_events": ["Phishing", "Exploit public-facing app", "Valid accounts abuse", "Drive-by compromise"]
+    },
+    {
+      "id": "execution",
+      "name": "Execution",
+      "mitre_id": "TA0002",
+      "attack_stages": ["execution", "process", "powershell", "macro"],
+      "source_file": "execution-playbook.txt",
+      "initial_fields": ["process_name", "parent_process", "command_line", "user", "host", "hash", "image_path"],
+      "investigation_focus": ["process parent-child chain", "command line LOLBAS/encoding", "network from host", "IT validation"],
+      "response_actions": ["isolate host", "kill/quarantine process", "disable user", "block C2", "collect memory and disk evidence", "IOC hunt"],
+      "example_events": ["Suspicious PowerShell", "Office macro spawn", "WMI/scheduled task execution"]
+    },
+    {
+      "id": "persistence",
+      "name": "Persistence",
+      "mitre_id": "TA0003",
+      "attack_stages": ["persistence", "persistance"],
+      "source_file": "Persistance-playbook.txt",
+      "initial_fields": ["registry_path", "service_name", "scheduled_task", "user", "host", "file_path"],
+      "investigation_focus": ["persistence mechanism type", "survivability after reboot", "related execution chain"],
+      "response_actions": ["remove persistence artifact", "isolate host", "disable account", "IOC hunt on similar hosts"],
+      "example_events": ["Registry run key", "New service", "Scheduled task", "Startup folder"]
+    },
+    {
+      "id": "privilege-escalation",
+      "name": "Privilege Escalation",
+      "mitre_id": "TA0004",
+      "attack_stages": ["privilege_escalation", "privilege escalation", "privesc"],
+      "source_file": "Privilege_Escalation-playbook.txt",
+      "initial_fields": ["escalation_type", "object_path", "executable_path", "process_name", "parent_process", "user", "host", "hash"],
+      "investigation_focus": ["parent-child process chain", "command line (runas, UAC bypass, dump tools)", "network activity", "IT validation"],
+      "response_actions": ["isolate host", "disable user", "block malicious IP/domain", "collect evidence (memory/lsass paths)", "IOC hunt", "backup verify and restore"],
+      "example_events": ["Credential dump", "UAC bypass", "Scheduled task as SYSTEM", "Token manipulation"]
+    },
+    {
+      "id": "defense-evasion",
+      "name": "Defense Evasion",
+      "mitre_id": "TA0005",
+      "attack_stages": ["defense_evasion", "defense evasion"],
+      "source_file": "Defense_Evasion-playbook.txt",
+      "initial_fields": ["evasion_type", "process_name", "command_line", "log_cleared", "host", "user"],
+      "investigation_focus": ["log tampering indicators", "masquerading/process injection", "disabled security tools"],
+      "response_actions": ["isolate host", "preserve logs before cleanup", "disable account", "IOC hunt"],
+      "example_events": ["Log deletion", "Process masquerading", "AV/EDR tampering"]
+    },
+    {
+      "id": "credential-access",
+      "name": "Credential Access",
+      "mitre_id": "TA0006",
+      "attack_stages": ["credential_access", "credential access", "brute_force", "credential_dumping"],
+      "source_file": "Credential-Access-playbook.txt",
+      "initial_fields": ["access_type", "target_process", "source_process", "command_line", "user", "host", "access_mask"],
+      "investigation_focus": ["LSASS/SAM/NTDS access", "parent-child chain", "mimikatz-like command lines", "auth logs"],
+      "response_actions": ["disable account", "force password reset", "isolate host", "block C2", "collect memory dump", "IOC hunt"],
+      "example_events": ["LSASS dump", "Mimikatz", "Kerberos ticket abuse", "Brute force"]
+    },
+    {
+      "id": "discovery",
+      "name": "Discovery",
+      "mitre_id": "TA0007",
+      "attack_stages": ["discovery"],
+      "source_file": "Discovery-playbook.txt",
+      "initial_fields": ["command_line", "process_name", "user", "host", "target_system"],
+      "investigation_focus": ["LOLBAS discovery commands (net, whoami, ipconfig)", "correlation with lateral movement", "baseline comparison"],
+      "response_actions": ["if precursor to attack: isolate and hunt", "document for threat hunting", "block if combined with exploitation"],
+      "example_events": ["net user/view", "systeminfo", "domain enumeration"]
+    },
+    {
+      "id": "collection",
+      "name": "Collection",
+      "mitre_id": "TA0009",
+      "attack_stages": ["collection", "data_collection", "insider_threat"],
+      "source_file": "Collection-playbook.txt",
+      "initial_fields": ["collection_method", "src_user", "src_host", "data_source", "file_count", "bytes_accessed", "application", "sensitivity"],
+      "investigation_focus": ["volume vs user baseline", "sensitive data paths", "correlation with exfiltration", "DLP/UEBA signals"],
+      "response_actions": ["restrict user access", "isolate host if malware", "preserve access logs", "notify data owner", "hunt similar patterns"],
+      "example_events": ["Bulk cloud download", "Local file staging", "Email export", "Screen capture tool"]
+    },
+    {
+      "id": "lateral-movement",
+      "name": "Lateral Movement",
+      "mitre_id": "TA0008",
+      "attack_stages": ["lateral_movement", "lateral movement"],
+      "source_file": "Lateral-Movement-playbook.txt",
+      "initial_fields": ["src_host", "dest_host", "user", "logon_type", "protocol", "process_name"],
+      "investigation_focus": ["auth logs on source and destination", "RDP/SMB/WinRM/PsExec patterns", "credential reuse"],
+      "response_actions": ["isolate involved hosts", "disable compromised accounts", "block attacker IPs", "IOC hunt across network"],
+      "example_events": ["PsExec", "Pass-the-hash", "RDP spray", "Kerberoasting"]
+    },
+    {
+      "id": "exfiltration",
+      "name": "Exfiltration",
+      "mitre_id": "TA0010",
+      "attack_stages": ["exfiltration", "data_exfiltration", "data exfiltration"],
+      "source_file": "Exfiltration-playbook.txt",
+      "initial_fields": ["src_host", "dest_ip", "dest_domain", "bytes_out", "user", "protocol", "file_name"],
+      "investigation_focus": ["data volume and destination", "DNS/HTTP exfil patterns", "cloud upload paths"],
+      "response_actions": ["block destination", "isolate host", "disable account", "preserve evidence", "assess data sensitivity"],
+      "example_events": ["Large outbound transfer", "DNS tunneling", "Cloud sync abuse"]
+    },
+    {
+      "id": "command-and-control",
+      "name": "Command and Control",
+      "mitre_id": "TA0011",
+      "attack_stages": ["command_and_control", "c2", "c2_detected"],
+      "source_file": "Command and Control-playbook.txt",
+      "initial_fields": ["src_ip", "dest_ip", "dest_domain", "process_name", "user", "host", "bytes"],
+      "investigation_focus": ["beaconing patterns", "process spawning C2 traffic", "DNS/HTTP tunneling"],
+      "response_actions": ["block C2 IP/domain", "isolate host", "kill process", "IOC hunt", "collect network captures"],
+      "example_events": ["Web shell C2", "DNS tunnel", "HTTPS beacon"]
+    },
+    {
+      "id": "impact",
+      "name": "Impact",
+      "mitre_id": "TA0040",
+      "attack_stages": ["impact", "ransomware", "destruction"],
+      "source_file": "Impact-playbook.txt",
+      "initial_fields": ["impact_type", "host", "user", "process_name", "file_extension", "service"],
+      "investigation_focus": ["scope of encryption/destruction", "initial access vector", "lateral spread"],
+      "response_actions": ["immediate isolation", "disable accounts", "preserve evidence", "block C2", "backup restore assessment", "executive notification"],
+      "example_events": ["Ransomware encryption", "Data destruction", "Service stop/DoS"]
+    }
+  ]
+}

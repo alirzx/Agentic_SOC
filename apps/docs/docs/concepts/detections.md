@@ -20,7 +20,7 @@ the AiSOC engine can run as-is.
 The native tier is the strict-quality, AiSOC-authored layer (currently 800
 fixture-tested rules with 1,200 positive/negative fixtures). Imported tiers are
 normalized into the AiSOC schema by
-the source-specific importers under [`tools/detection_import/`](https://github.com/beenuar/AiSOC/blob/main/tools/detection_import/README.md)
+the source-specific importers under [`tools/detection_import/`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/tools/detection_import/README.md)
 and remain empty in a fresh checkout until you run them.
 
 ## Native rule format
@@ -106,7 +106,7 @@ provenance:
 ```
 
 The full attribution table for every redistributed corpus lives in the repo's
-[`.github/LICENSES.md`](https://github.com/beenuar/AiSOC/blob/main/.github/LICENSES.md).
+[`.github/LICENSES.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/LICENSES.md).
 
 ### Quarantine
 
@@ -119,7 +119,7 @@ are still indexed for coverage accounting and surfaced in the UI as
 
 ## CI validation
 
-The validator at [`scripts/validate_detections.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/validate_detections.py)
+The validator at [`scripts/validate_detections.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/scripts/validate_detections.py)
 classifies every rule by tier from its on-disk path and applies the right
 checks:
 
@@ -140,7 +140,7 @@ Validated 6913 rules — 6913 passed, 0 failed, 0 fixture warnings
 Counts move as importers refresh upstream sources; the line above is a
 sample from the November 2026 pull, not a hard target.
 
-CI integration is wired into the [`Validate Detection Rules`](https://github.com/beenuar/AiSOC/actions/workflows/validate-detections.yml)
+CI integration is wired into the [`Validate Detection Rules`](https://github.com/SoorinSecurity/Agentic_SOC/actions/workflows/validate-detections.yml)
 workflow.
 
 ## MITRE coverage
@@ -177,7 +177,7 @@ curl -X POST http://localhost:8000/api/v1/marketplace/install \
 
 ## Importing third-party rules
 
-The importers under [`tools/detection_import/`](https://github.com/beenuar/AiSOC/blob/main/tools/detection_import/README.md)
+The importers under [`tools/detection_import/`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/tools/detection_import/README.md)
 clone pinned upstream commits, normalize each rule into the AiSOC schema, and
 emit them into the matching `detections/<source>-imports/` tree with
 provenance attached.

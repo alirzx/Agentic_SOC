@@ -20,7 +20,7 @@ function HomepageHeader() {
           </Link>
           <Link
             className="button button--outline button--secondary button--lg"
-            href="https://github.com/beenuar/AiSOC">
+            href="https://github.com/SoorinSecurity/Agentic_SOC">
             GitHub
           </Link>
         </div>

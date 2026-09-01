@@ -598,6 +598,6 @@ always on. The operator owns the trust posture; AiSOC owns the gate.
 ---
 
 _The AiSOC project is MIT-licensed and community-maintained. The code
-underlying this paper is at <https://github.com/beenuar/AiSOC>;
+underlying this paper is at <https://github.com/SoorinSecurity/Agentic_SOC>;
 contributions to the maturity model — new action types, tier-aware
 playbook syntax, marketplace metadata — are welcome._

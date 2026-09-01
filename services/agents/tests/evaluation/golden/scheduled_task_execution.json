@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-SCHED-TASK-EXEC",
+  "source": "SYNTHETIC",
+  "title": "Malicious scheduled task execution",
+  "description": "Synthetic golden case for MITRE T1053.005.",
+  "severity": "high",
+  "response_class": "isolate_host",
+  "expected_techniques": [
+    "T1053.005"
+  ],
+  "expected_actions": [
+    "isolate_host"
+  ],
+  "attack_stage": "execution",
+  "expected_soc_doc_playbook_id": "execution",
+  "expected_mitre_tactic_id": "TA0002",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1053.005"
+    }
+  ]
+}

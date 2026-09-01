@@ -37,7 +37,7 @@ const PILLARS = [
   },
   {
     label: 'MIT, end-to-end',
-    href: 'https://github.com/beenuar/AiSOC/blob/main/LICENSE',
+    href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/LICENSE',
     body: 'No CLA, no SSPL, no BSL conversion clause, no open-core with the agent in a private repo. The licence permits audit, fork, air-gapped deployment, and building a competing product.',
   },
 ] as const;
@@ -450,7 +450,7 @@ export default function WhyOpenSourcePage() {
               Read the eval harness
             </Link>
             <a
-              href="https://github.com/beenuar/AiSOC"
+              href="https://github.com/SoorinSecurity/Agentic_SOC"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"

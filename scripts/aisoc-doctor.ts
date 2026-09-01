@@ -402,7 +402,7 @@ async function main() {
     console.log(
       c.red("\n  AiSOC is not healthy. ") +
         "See the failing checks above. " +
-        c.dim("Quickstart: https://github.com/beenuar/AiSOC#quickstart")
+        c.dim("Quickstart: https://github.com/SoorinSecurity/Agentic_SOC#quickstart")
     );
     process.exit(1);
   }

@@ -43,7 +43,7 @@ const CHANNELS: ContactChannel[] = [
       'You want AiSOC inside your VPC, an air-gapped network, or a sovereign-cloud region with custom data-residency requirements. We quote these individually.',
     cta: {
       label: 'hello@tryaisoc.com',
-      href: 'mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment',
+      href: 'mailto:info@soorinsec.ir?subject=AiSOC%20sovereign%20deployment',
     },
   },
   {
@@ -52,7 +52,7 @@ const CHANNELS: ContactChannel[] = [
       'You found a vulnerability. SECURITY.md spells out PGP keys and the disclosure window we commit to. Please do not file a public issue first.',
     cta: {
       label: 'Read SECURITY.md',
-      href: 'https://github.com/beenuar/AiSOC/blob/main/SECURITY.md',
+      href: 'https://github.com/SoorinSecurity/Agentic_SOC/blob/main/SECURITY.md',
     },
   },
   {
@@ -61,7 +61,7 @@ const CHANNELS: ContactChannel[] = [
       'You hit something while self-hosting and want a second pair of eyes. GitHub Issues is the fastest route; the Discord works for general chat.',
     cta: {
       label: 'github.com/beenuar/AiSOC/issues',
-      href: 'https://github.com/beenuar/AiSOC/issues',
+      href: 'https://github.com/SoorinSecurity/Agentic_SOC/issues',
     },
   },
   {

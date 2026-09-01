@@ -6,7 +6,7 @@ sidebar_position: 2
 
 Playbooks are reusable, declarative workflows that orchestrate investigation and
 response. They run inside the `services/agents` service via the
-[`PlaybookEngine`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/playbook/engine.py),
+[`PlaybookEngine`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/app/playbook/engine.py),
 emit realtime events, and can be authored as JSON or via the visual React Flow
 editor in the web app.
 
@@ -14,7 +14,7 @@ editor in the web app.
 
 A playbook is a Pydantic model with metadata, a trigger, and an ordered list of
 steps. The wire format is JSON; the runtime model is in
-[`services/agents/app/playbook/models.py`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/playbook/models.py).
+[`services/agents/app/playbook/models.py`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/app/playbook/models.py).
 
 ```json
 {
@@ -84,7 +84,7 @@ collapsed into this set in each connector's `normalize()`.
 ## Steps
 
 Each step has a `type` that maps to a handler in
-[`engine.py`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/playbook/engine.py).
+[`engine.py`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/app/playbook/engine.py).
 
 | `type` | What it does |
 |--------|--------------|
@@ -185,7 +185,7 @@ Channel format: `playbook:<run_id>`. Subscribe via WebSocket
 ## Starter templates
 
 AiSOC ships with starter playbooks under
-[`services/agents/data/playbooks/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/data/playbooks):
+[`services/agents/data/playbooks/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/data/playbooks):
 
 | Template | Trigger | Description |
 |----------|---------|-------------|

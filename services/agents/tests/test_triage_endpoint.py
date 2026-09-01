@@ -342,7 +342,7 @@ def test_post_accepts_minimal_body_with_only_case_path(
 
 # ---------------------------------------------------------------------------
 # Tenant isolation on GET — regression for PR review item
-# (https://github.com/beenuar/AiSOC/pull/139)
+# (https://github.com/SoorinSecurity/Agentic_SOC/pull/139)
 # ---------------------------------------------------------------------------
 
 

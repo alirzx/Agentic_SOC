@@ -1,0 +1,22 @@
+{
+  "id": "GOLDEN-DEF-EVAS",
+  "source": "SYNTHETIC",
+  "title": "Security log clearing on domain controller",
+  "description": "Event log cleared on WIN-DC01 — possible defense evasion before lateral movement.",
+  "severity": "critical",
+  "response_class": "isolate_host",
+  "expected_techniques": ["T1070.001"],
+  "expected_actions": ["isolate_asset"],
+  "expected_correlation_group": ["GOLDEN-DEF-EVAS"],
+  "attack_stage": "defense_evasion",
+  "expected_soc_doc_playbook_id": "defense-evasion",
+  "expected_mitre_tactic_id": "TA0005",
+  "telemetry": [
+    {
+      "source": "windows",
+      "event": "security log cleared",
+      "host": "WIN-DC01",
+      "EventID": 1102
+    }
+  ]
+}

@@ -9,7 +9,7 @@ description: Connect AiSOC to Claude Desktop, Cursor, Cody, and Continue.dev via
 The `@aisoc/mcp` server is the official [Model Context Protocol](https://modelcontextprotocol.io) bridge between AiSOC and modern AI assistants. Once installed, your assistant can list alerts, pull cases, run agent investigations, and **replay every step the agent took** — without leaving the chat or the IDE.
 
 :::info Status — monorepo today, npm in v8.0
-The MCP server ships from [`services/mcp/`](https://github.com/beenuar/AiSOC/tree/main/services/mcp) in this repository and is fully working today. The `npx -y @aisoc/mcp …` one-liner lands when the package is published to npm as part of v8.0. Until then, use the **build-from-source** path shown below — every install/serve/doctor command is otherwise identical.
+The MCP server ships from [`services/mcp/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/mcp) in this repository and is fully working today. The `npx -y @aisoc/mcp …` one-liner lands when the package is published to npm as part of v8.0. Until then, use the **build-from-source** path shown below — every install/serve/doctor command is otherwise identical.
 :::
 
 > **Why this matters.** MCP is becoming the substrate for "AI tools that work everywhere": Claude Desktop, Cursor, Cody, Continue, Zed, and counting. Every analyst who works in those tools gets AiSOC discovery for free.
@@ -17,7 +17,7 @@ The MCP server ships from [`services/mcp/`](https://github.com/beenuar/AiSOC/tre
 ## Build from source (today)
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC/services/mcp
 pnpm install
 pnpm build               # writes services/mcp/dist/index.js
@@ -226,4 +226,4 @@ npx -y @aisoc/mcp doctor
 
 ## Source & contributions
 
-The package source lives in [`services/mcp`](https://github.com/beenuar/AiSOC/tree/main/services/mcp). Tests, tool definitions, and the installer are all there. PRs welcome — the contract tests in [`tests/tools.test.ts`](https://github.com/beenuar/AiSOC/blob/main/services/mcp/tests/tools.test.ts) will tell you immediately if you forget metadata, ordering, or naming conventions on a new tool.
+The package source lives in [`services/mcp`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/mcp). Tests, tool definitions, and the installer are all there. PRs welcome — the contract tests in [`tests/tools.test.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/mcp/tests/tools.test.ts) will tell you immediately if you forget metadata, ordering, or naming conventions on a new tool.

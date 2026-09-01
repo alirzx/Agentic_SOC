@@ -18,7 +18,7 @@ This page documents the model, how to operate it, and what changes when you move
 | **Library** | `cryptography.fernet` from the `cryptography` package |
 | **Storage** | `connector_instances.auth_config` JSONB column, encrypted-at-write |
 | **Master key** | `AISOC_CREDENTIAL_KEY` environment variable, 32 url-safe base64 bytes |
-| **Implementation** | [`services/api/app/security/credential_vault.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/security/credential_vault.py) |
+| **Implementation** | [`services/api/app/security/credential_vault.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/security/credential_vault.py) |
 | **Plaintext exposure** | Only inside the connector microservice process at fetch time |
 
 ## Why application-layer encryption

@@ -20,10 +20,10 @@ Useful starting points:
 
 For questions, ideas, show-and-tell, and roadmap input:
 
-- **Q&A** — <https://github.com/beenuar/AiSOC/discussions/categories/q-a> (answers can be marked accepted)
-- **Show and tell** — <https://github.com/beenuar/AiSOC/discussions/categories/show-and-tell>
-- **Ideas** — <https://github.com/beenuar/AiSOC/discussions/categories/ideas>
-- **Announcements** — <https://github.com/beenuar/AiSOC/discussions/categories/announcements> (read-only for non-maintainers)
+- **Q&A** — <https://github.com/SoorinSecurity/Agentic_SOC/discussions/categories/q-a> (answers can be marked accepted)
+- **Show and tell** — <https://github.com/SoorinSecurity/Agentic_SOC/discussions/categories/show-and-tell>
+- **Ideas** — <https://github.com/SoorinSecurity/Agentic_SOC/discussions/categories/ideas>
+- **Announcements** — <https://github.com/SoorinSecurity/Agentic_SOC/discussions/categories/announcements> (read-only for non-maintainers)
 
 Please don't open a GitHub *issue* for a question — they're reserved for
 bugs, feature requests, detection-rule proposals, and benchmark
@@ -39,7 +39,7 @@ zero local install, runs in your browser.
 
 ## 4. File a bug
 
-If you've found a reproducible bug, open a [Bug report](https://github.com/beenuar/AiSOC/issues/new?template=bug_report.yml).
+If you've found a reproducible bug, open a [Bug report](https://github.com/SoorinSecurity/Agentic_SOC/issues/new?template=bug_report.yml).
 Please include:
 
 - AiSOC `VERSION` (from `VERSION` or the `/api/v1/version` endpoint)
@@ -50,7 +50,7 @@ Please include:
 ## 5. Report a security issue (privately)
 
 **Do not open a public issue or discussion for a security issue.**
-Use [GitHub Security Advisories](https://github.com/beenuar/AiSOC/security/advisories/new)
+Use [GitHub Security Advisories](https://github.com/SoorinSecurity/Agentic_SOC/security/advisories/new)
 or follow the [SECURITY.md](SECURITY.md) policy. We follow coordinated
 disclosure and credit reporters in [.github/CREDITS.md](.github/CREDITS.md).
 
@@ -58,7 +58,7 @@ disclosure and credit reporters in [.github/CREDITS.md](.github/CREDITS.md).
 
 If you have a fix or improvement to share, see [CONTRIBUTING.md](CONTRIBUTING.md).
 First-time contributors are welcome — pick a
-[`good first issue`](https://github.com/beenuar/AiSOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
+[`good first issue`](https://github.com/SoorinSecurity/Agentic_SOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
 
 ## Response expectations
 
@@ -68,5 +68,5 @@ AiSOC is community-maintained; response times are best-effort:
 - Bug reports: triaged within a week for most weeks.
 - Feature requests / discussions: no SLA — community traction (👍, replies,
   PRs) is what drives prioritisation. See the
-  [v8.0 roadmap discussion](https://github.com/beenuar/AiSOC/discussions/categories/announcements)
+  [v8.0 roadmap discussion](https://github.com/SoorinSecurity/Agentic_SOC/discussions/categories/announcements)
   for what's currently in flight.

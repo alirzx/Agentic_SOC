@@ -12,7 +12,7 @@
  * same way the latest report is.
  */
 const SUBMISSION_URL =
-  'https://github.com/beenuar/AiSOC/issues/new?template=benchmark_submission.yml';
+  'https://github.com/SoorinSecurity/Agentic_SOC/issues/new?template=benchmark_submission.yml';
 
 const RULES: { title: string; body: string }[] = [
   {

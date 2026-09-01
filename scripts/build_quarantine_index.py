@@ -160,7 +160,7 @@ def _issue_link(category: str) -> str:
     issue = QUARANTINE_TRACKING_ISSUES.get(category)
     if issue is None:
         return "**TBD** — umbrella issue not yet filed"
-    return f"[#{issue}](https://github.com/beenuar/AiSOC/issues/{issue})"
+    return f"[#{issue}](https://github.com/SoorinSecurity/Agentic_SOC/issues/{issue})"
 
 
 def _render_summary_table(by_cat: dict[str, list[QuarantineRule]]) -> list[str]:

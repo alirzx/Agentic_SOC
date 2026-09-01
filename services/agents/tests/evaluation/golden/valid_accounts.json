@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-VALID-ACCOUNTS",
+  "source": "SYNTHETIC",
+  "title": "Compromised valid account login",
+  "description": "Synthetic golden case for MITRE T1078.",
+  "severity": "high",
+  "response_class": "disable_account",
+  "expected_techniques": [
+    "T1078"
+  ],
+  "expected_actions": [
+    "disable_account"
+  ],
+  "attack_stage": "initial_access",
+  "expected_soc_doc_playbook_id": "initial-access",
+  "expected_mitre_tactic_id": "TA0001",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1078"
+    }
+  ]
+}

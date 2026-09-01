@@ -14,7 +14,7 @@ doesn't).
 ### Linux + macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.sh | bash
 ```
 
 ### Windows 10 / 11
@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh | bas
 Open PowerShell **as Administrator** and run:
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.ps1 | iex
 ```
 
 When the script finishes, your default browser opens at
@@ -399,7 +399,7 @@ packages** — that means `sudo` on Linux/macOS and Administrator on Windows.
 
 If you're piping `curl | bash` from the internet, you're trusting that:
 
-1. The script at `https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh`
+1. The script at `https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/install.sh`
    matches the script in this repo (you can inspect the source link).
 2. GitHub's TLS hasn't been MITM-ed.
 3. The repo's owner hasn't been compromised.
@@ -408,7 +408,7 @@ If any of those make you uneasy, the alternative is to clone first and
 inspect the script before running:
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 less install.sh        # or your editor of choice
 ./install.sh

@@ -6,7 +6,7 @@ walks one alert fixture through a Detect → Triage → Hunt → Respond
 agent funnel and prints a step-by-step Investigation Ledger to stdout.
 
 It is a deterministic, in-memory simulator of the production stack at
-[`services/agents/`](https://github.com/beenuar/AiSOC/tree/main/services/agents).
+[`services/agents/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents).
 The shape of the ledger, the funnel stages, the decision metadata, and
 the recommended actions all mirror what the real four-agent system in
 the monorepo emits. The simulator is intentionally NOT the production

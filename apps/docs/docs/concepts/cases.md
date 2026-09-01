@@ -35,7 +35,7 @@ Click **Investigate with AI** to launch the multi-agent investigation pipeline:
 5. **ReportWriterAgent** — generates the PDF / Markdown executive report
 
 The full graph lives under
-[`services/agents/app/investigator/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/investigator).
+[`services/agents/app/investigator/`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/agents/app/investigator).
 
 ## Investigation Ledger
 
@@ -77,15 +77,15 @@ For every agent step, the ledger captures:
 ### Where it lives
 
 - Schema:
-  [`services/api/migrations/008_investigation_ledger.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/008_investigation_ledger.sql)
+  [`services/api/migrations/008_investigation_ledger.sql`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/migrations/008_investigation_ledger.sql)
 - Model:
-  [`services/api/app/models/investigation.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/models/investigation.py)
+  [`services/api/app/models/investigation.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/models/investigation.py)
 - API endpoints:
-  [`services/api/app/api/v1/endpoints/investigations.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/investigations.py)
+  [`services/api/app/api/v1/endpoints/investigations.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/api/v1/endpoints/investigations.py)
 - Agent-side writer:
-  [`services/agents/app/investigator/ledger.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/investigator/ledger.py)
+  [`services/agents/app/investigator/ledger.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/agents/app/investigator/ledger.py)
 - UI:
-  [`apps/web/src/components/cases/InvestigationLedger.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/cases/InvestigationLedger.tsx)
+  [`apps/web/src/components/cases/InvestigationLedger.tsx`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/apps/web/src/components/cases/InvestigationLedger.tsx)
 
 ### REST surface
 

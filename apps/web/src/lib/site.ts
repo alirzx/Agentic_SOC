@@ -1,22 +1,24 @@
 /**
  * Canonical public URL for SEO, Open Graph, and sitemap.
- * Set NEXT_PUBLIC_SITE_URL at build/deploy (e.g. https://tryaisoc.com for the live demo).
+ * Set NEXT_PUBLIC_SITE_URL at build/deploy (e.g. https://soorinsec.ir).
  */
 export function getPublicSiteUrl(): string {
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (raw) {
     return raw.replace(/\/$/, "");
   }
-  return "https://tryaisoc.com";
+  return "https://soorinsec.ir";
 }
 
-/** Meta keywords for cyber/SOC discovery (tryaisoc.com demo + self-host). */
+/** Meta keywords for cyber/SOC discovery (Soorin + self-host). */
 export const DISCOVERY_KEYWORDS: readonly string[] = [
   // Brand
-  "AiSOC",
-  "AI SOC",
-  "tryaisoc",
-  "tryaisoc.com",
+  "Soorin",
+  "Soorin Security",
+  "Soorin Agentic SOC",
+  "Agentic SOC",
+  "soorinsec",
+  "soorinsec.ir",
   // Core value prop
   "open source SOC",
   "open-source security operations center",

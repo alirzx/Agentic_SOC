@@ -53,7 +53,7 @@ export function OpenSource() {
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <a
-                  href="https://github.com/beenuar/AiSOC"
+                  href="https://github.com/SoorinSecurity/Agentic_SOC"
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
@@ -95,7 +95,7 @@ export function OpenSource() {
                 </div>
                 <pre className="overflow-x-auto px-4 py-3 text-gray-300">
                   <span className="text-gray-500">$ </span>
-                  <span className="text-emerald-300">git clone</span> https://github.com/beenuar/AiSOC{'\n'}
+                  <span className="text-emerald-300">git clone</span> https://github.com/SoorinSecurity/Agentic_SOC{'\n'}
                   <span className="text-gray-500">$ </span>
                   <span className="text-emerald-300">cd</span> aisoc && <span className="text-emerald-300">make</span> up{'\n'}
                   <span className="text-gray-500">$ </span>

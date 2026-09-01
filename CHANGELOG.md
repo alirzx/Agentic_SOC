@@ -165,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wired via `POST /detection/tuning/auto-suggest`. Gates: `test_outcome_memory.py`,
   `test_memory_nudge.py`, `test_wave1_loop_edges.py`; claim-to-gate matrix +4.
 - **LLM gateway (LiteLLM) — task-based model routing + observability
-  ([#478](https://github.com/beenuar/AiSOC/issues/478), PR1).** New `litellm`
+  ([#478](https://github.com/SoorinSecurity/Agentic_SOC/issues/478), PR1).** New `litellm`
   service in `docker-compose.yml` as the single entry point for live LLM calls.
   AiSOC requests a **logical task alias** (`aisoc-triage`, `aisoc-recon`,
   `aisoc-investigation`, `aisoc-copilot`, `aisoc-summary`, `aisoc-report`,
@@ -183,7 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in-code callsites to request these aliases via `model_pins` and removes the
   hardcoded `gpt-4o-mini` default, closing #478.)
 - **LLM task-alias routing — no more shipped default model
-  ([#478](https://github.com/beenuar/AiSOC/issues/478), PR2).** Every live LLM
+  ([#478](https://github.com/SoorinSecurity/Agentic_SOC/issues/478), PR2).** Every live LLM
   call now asks for a **logical task alias** instead of a hardcoded model. New
   `services/agents/app/llm/factory.py` (`make_chat_model` / `resolve_model_alias`)
   resolves a task role to its `aisoc-<role>` alias + the gateway base URL;
@@ -490,7 +490,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [7.5.0] — 2026-06-29
 
 v8.0-milestone and trust-readiness release. Folds in the **AiSOC missing
-pieces — Phases 1–5** rollup (PR [#337](https://github.com/beenuar/AiSOC/pull/337);
+pieces — Phases 1–5** rollup (PR [#337](https://github.com/SoorinSecurity/Agentic_SOC/pull/337);
 25 commits, 188 files, +23 743 / -907), four named v8.0 milestones (T3.7
 NL→playbook, T3.8 design system v2, T4 wave-3 marketplace + 6 hardened
 connectors, T5.3 fidelity loaders), the marketing-shell unification on
@@ -500,7 +500,7 @@ Dependabot + security sweep that landed on `main` since v7.4.0.
 ### Highlights
 
 - **AiSOC missing pieces — Phases 1–5 rollup**
-  (PR [#337](https://github.com/beenuar/AiSOC/pull/337)). Closes every
+  (PR [#337](https://github.com/SoorinSecurity/Agentic_SOC/pull/337)). Closes every
   item in `plans/aisoc-missing-pieces/` in a single landing: trust-critical
   honesty fixes on `/sovereign` + Features + README, CI matrix expanded to
   7 previously-untested Python services (~971 new test signals), coverage
@@ -516,19 +516,19 @@ Dependabot + security sweep that landed on `main` since v7.4.0.
 - **v8.0 milestones — design system, playbook generator, wave-3
   connectors, fidelity loaders.**
   T3.7 NL → playbook generator
-  (PR [#330](https://github.com/beenuar/AiSOC/pull/330));
+  (PR [#330](https://github.com/SoorinSecurity/Agentic_SOC/pull/330));
   T3.8 design system v2 + Storybook
-  (PR [#331](https://github.com/beenuar/AiSOC/pull/331),
+  (PR [#331](https://github.com/SoorinSecurity/Agentic_SOC/pull/331),
   `DraftFromPromptDialog` story restored in
-  PR [#335](https://github.com/beenuar/AiSOC/pull/335),
+  PR [#335](https://github.com/SoorinSecurity/Agentic_SOC/pull/335),
   Storybook publicDir conflict fixed in
-  PR [#336](https://github.com/beenuar/AiSOC/pull/336));
+  PR [#336](https://github.com/SoorinSecurity/Agentic_SOC/pull/336));
   T4 wave-3 marketplace scaffolding + six hardened connectors
-  (PR [#333](https://github.com/beenuar/AiSOC/pull/333),
+  (PR [#333](https://github.com/SoorinSecurity/Agentic_SOC/pull/333),
   wave-1 parity hardening in
-  PR [#328](https://github.com/beenuar/AiSOC/pull/328));
+  PR [#328](https://github.com/SoorinSecurity/Agentic_SOC/pull/328));
   T5.3 AIT-LDS + MITRE Engenuity fidelity loaders
-  (PR [#332](https://github.com/beenuar/AiSOC/pull/332)).
+  (PR [#332](https://github.com/SoorinSecurity/Agentic_SOC/pull/332)).
 - **Threat-actor attribution — port fix + optional RBAC.** The
   investigation agent defaulted `AISOC_THREATINTEL_URL` to
   `http://threatintel:8083`, but the service binds **8005** — every
@@ -536,9 +536,9 @@ Dependabot + security sweep that landed on `main` since v7.4.0.
   `services/agents/app/agents/investigation_agent.py` therefore hit a port
   nothing listens on and silently degraded. Default corrected, docs +
   `AISOC_ATTRIBUTION_TIMEOUT_SECONDS` aligned, regression test added
-  (PR [#327](https://github.com/beenuar/AiSOC/pull/327)). Same release
+  (PR [#327](https://github.com/SoorinSecurity/Agentic_SOC/pull/327)). Same release
   ships an opt-in shared-secret gate
-  (PR [#329](https://github.com/beenuar/AiSOC/pull/329)): when
+  (PR [#329](https://github.com/SoorinSecurity/Agentic_SOC/pull/329)): when
   `AISOC_THREATINTEL_SERVICE_TOKEN` is set, every `/api/v1/actors/*` call
   must present `Authorization: Bearer <token>` (constant-time compared,
   `401` on mismatch); unset keeps the legacy unauthenticated behaviour
@@ -561,66 +561,66 @@ Dependabot + security sweep that landed on `main` since v7.4.0.
   SSR-whitespace bug on `/about` that rendered "the 69connectors"
   fixed by forcing an explicit `{' '}` token (`ISSUE-007`).
 - **Knowledge-base ingest — boundary-aware chunking with overlap**
-  (PR [#321](https://github.com/beenuar/AiSOC/pull/321), closes
-  [#277](https://github.com/beenuar/AiSOC/issues/277)). KB ingestion no
+  (PR [#321](https://github.com/SoorinSecurity/Agentic_SOC/pull/321), closes
+  [#277](https://github.com/SoorinSecurity/Agentic_SOC/issues/277)). KB ingestion no
   longer splits mid-sentence or mid-code-fence; the new chunker prefers
   paragraph / sentence / code-block boundaries, applies a configurable
   overlap so retrieval doesn't lose context across chunks, and keeps the
   produced chunks within the embedding model's hard token budget.
 - **Realtime — WS/SSE authenticated via short-lived tickets**
-  (PR [#246](https://github.com/beenuar/AiSOC/pull/246), closes
-  [#239](https://github.com/beenuar/AiSOC/issues/239)). The realtime
+  (PR [#246](https://github.com/SoorinSecurity/Agentic_SOC/pull/246), closes
+  [#239](https://github.com/SoorinSecurity/Agentic_SOC/issues/239)). The realtime
   service's WebSocket and SSE endpoints previously accepted any
   connection. They now require a short-lived signed ticket that the API
   mints for the authenticated session, closing the unauthenticated
   fan-out surface that lived between `services/realtime` and `apps/web`.
 - **`apps/web` — Create Case button wired on `/alerts/{id}`**
-  (PR [#294](https://github.com/beenuar/AiSOC/pull/294), closes
-  [#293](https://github.com/beenuar/AiSOC/issues/293)). The button on
+  (PR [#294](https://github.com/SoorinSecurity/Agentic_SOC/pull/294), closes
+  [#293](https://github.com/SoorinSecurity/Agentic_SOC/issues/293)). The button on
   alert detail rendered but did nothing; it now POSTs through the cases
   endpoint and navigates to the new case workspace.
 - **Infrastructure — Terraform CI + missing core modules.** Terraform
   workflow on every `infra/terraform/**` change
-  (PR [#251](https://github.com/beenuar/AiSOC/pull/251)) runs
+  (PR [#251](https://github.com/SoorinSecurity/Agentic_SOC/pull/251)) runs
   `terraform init -backend=false`, `terraform validate`, and
   `terraform fmt -check -recursive` against the AWS, GCP, Azure, and
   BYOC configurations; the three reusable modules the AWS and BYOC
   references were already importing — `rds`, `elasticache`, `kafka` —
   are now actually present in `infra/terraform/modules/`
-  (PR [#252](https://github.com/beenuar/AiSOC/pull/252)) so a fresh
+  (PR [#252](https://github.com/SoorinSecurity/Agentic_SOC/pull/252)) so a fresh
   `terraform init` against the multi-cloud skeletons no longer errors on
   missing sources. GCP sensitive-var taint cleared on `for_each`
-  (PR [#243](https://github.com/beenuar/AiSOC/pull/243)); Azure
+  (PR [#243](https://github.com/SoorinSecurity/Agentic_SOC/pull/243)); Azure
   Terraform skeleton documented
-  (PR [#247](https://github.com/beenuar/AiSOC/pull/247)).
+  (PR [#247](https://github.com/SoorinSecurity/Agentic_SOC/pull/247)).
 - **Dependency & CI maintenance.** ~15 Dependabot upgrades across the
   Python, JS, and Go services (FastAPI in `services/{api,actions,agents}`
-  via [#317](https://github.com/beenuar/AiSOC/pull/317),
-  [#319](https://github.com/beenuar/AiSOC/pull/319),
-  [#320](https://github.com/beenuar/AiSOC/pull/320);
+  via [#317](https://github.com/SoorinSecurity/Agentic_SOC/pull/317),
+  [#319](https://github.com/SoorinSecurity/Agentic_SOC/pull/319),
+  [#320](https://github.com/SoorinSecurity/Agentic_SOC/pull/320);
   `next` 16.2.7 → 16.2.9 in
-  [#323](https://github.com/beenuar/AiSOC/pull/323);
+  [#323](https://github.com/SoorinSecurity/Agentic_SOC/pull/323);
   `framer-motion` 11.18.2 → 12.40.0 in
-  [#307](https://github.com/beenuar/AiSOC/pull/307);
+  [#307](https://github.com/SoorinSecurity/Agentic_SOC/pull/307);
   `cryptography` in
-  [#301](https://github.com/beenuar/AiSOC/pull/301) /
-  [#302](https://github.com/beenuar/AiSOC/pull/302); Go `redis/go-redis`
-  in [#297](https://github.com/beenuar/AiSOC/pull/297) /
-  [#298](https://github.com/beenuar/AiSOC/pull/298);
+  [#301](https://github.com/SoorinSecurity/Agentic_SOC/pull/301) /
+  [#302](https://github.com/SoorinSecurity/Agentic_SOC/pull/302); Go `redis/go-redis`
+  in [#297](https://github.com/SoorinSecurity/Agentic_SOC/pull/297) /
+  [#298](https://github.com/SoorinSecurity/Agentic_SOC/pull/298);
   `strawberry-graphql` in
-  [#318](https://github.com/beenuar/AiSOC/pull/318);
+  [#318](https://github.com/SoorinSecurity/Agentic_SOC/pull/318);
   `actions/checkout` v6 → v7 in
-  [#316](https://github.com/beenuar/AiSOC/pull/316); plus
+  [#316](https://github.com/SoorinSecurity/Agentic_SOC/pull/316); plus
   `@xyflow/react`, `@types/node`, `tsx`, `@tailwindcss/postcss`); pnpm
   audit high/critical findings cleared
-  (PR [#322](https://github.com/beenuar/AiSOC/pull/322)) so the dep-bump
+  (PR [#322](https://github.com/SoorinSecurity/Agentic_SOC/pull/322)) so the dep-bump
   PR queue could actually merge; a duplicate `@mdx-js/react` key that
   was breaking `pnpm install` removed
-  (PR [#296](https://github.com/beenuar/AiSOC/pull/296)); `aiohttp` bumped
+  (PR [#296](https://github.com/SoorinSecurity/Agentic_SOC/pull/296)); `aiohttp` bumped
   to 3.14.1 to clear CVE-2026-34993 + CVE-2026-47265
-  (PR [#295](https://github.com/beenuar/AiSOC/pull/295)).
+  (PR [#295](https://github.com/SoorinSecurity/Agentic_SOC/pull/295)).
 
-### AiSOC missing pieces — Phases 1–5 (PR [#337](https://github.com/beenuar/AiSOC/pull/337))
+### AiSOC missing pieces — Phases 1–5 (PR [#337](https://github.com/SoorinSecurity/Agentic_SOC/pull/337))
 
 The largest single landing in this release. Twenty-five commits implement
 the entire `plans/aisoc-missing-pieces/` roadmap; nothing in the plan is
@@ -709,7 +709,7 @@ supersedes the old one.
 ### v8.0 milestones — design system v2, NL→playbook, wave-3 connectors, fidelity loaders
 
 **T3.7 — NL → playbook generator**
-(PR [#330](https://github.com/beenuar/AiSOC/pull/330)). Operators can
+(PR [#330](https://github.com/SoorinSecurity/Agentic_SOC/pull/330)). Operators can
 type a runbook in English and the agent emits a structured playbook YAML
 that fits the existing `services/actions` schema: graph of executors,
 inputs, and conditionals, with the same JSON-schema validation the
@@ -718,28 +718,28 @@ substrate as Phase 4.6 so the output stays parsable when the LLM goes
 sideways.
 
 **T3.8 — Design system v2 + Storybook**
-(PR [#331](https://github.com/beenuar/AiSOC/pull/331)). The console
+(PR [#331](https://github.com/SoorinSecurity/Agentic_SOC/pull/331)). The console
 finally has a single source of truth for tokens, primitives, and
 composites. `apps/web/src/components/ui/` is now organized as
 `tokens / primitives / patterns`, every component renders in Storybook,
 and the visual-regression CI gate from Phase 4.7 watches it.
 `DraftFromPromptDialog` was momentarily lost during the migration and
-restored in PR [#335](https://github.com/beenuar/AiSOC/pull/335). The
+restored in PR [#335](https://github.com/SoorinSecurity/Agentic_SOC/pull/335). The
 Vite `publicDir` copy that broke the Storybook build under the new
 config was disabled in PR
-[#336](https://github.com/beenuar/AiSOC/pull/336) so main CI stays
+[#336](https://github.com/SoorinSecurity/Agentic_SOC/pull/336) so main CI stays
 green.
 
 **T4 — Wave-3 marketplace scaffolding + six hardened connectors**
-(PR [#333](https://github.com/beenuar/AiSOC/pull/333)). The marketplace
+(PR [#333](https://github.com/SoorinSecurity/Agentic_SOC/pull/333)). The marketplace
 registry gains the schema + tooling for the third connector wave; six
 wave-2 connectors had their tests and fixtures hardened to wave-1 parity
-in PR [#328](https://github.com/beenuar/AiSOC/pull/328) so every
+in PR [#328](https://github.com/SoorinSecurity/Agentic_SOC/pull/328) so every
 first-party connector ships with the same shape of negative-path
 coverage.
 
 **T5.3 — AIT-LDS + MITRE Engenuity fidelity loaders**
-(PR [#332](https://github.com/beenuar/AiSOC/pull/332)).
+(PR [#332](https://github.com/SoorinSecurity/Agentic_SOC/pull/332)).
 Detection-fidelity scoring now ingests two canonical labelled datasets:
 the AI-Threats Labelled Dataset and the MITRE Engenuity ATT&CK
 evaluation set, both fronted by deterministic loaders so the
@@ -756,14 +756,14 @@ investigation agent could silently degrade.
 service table — every `POST /api/v1/actors/attribute` call therefore hit
 a port nothing listens on. The error path was soft-handled, so
 attribution wasn't 500-ing; it was returning empty
-attribution silently. PR [#327](https://github.com/beenuar/AiSOC/pull/327)
+attribution silently. PR [#327](https://github.com/SoorinSecurity/Agentic_SOC/pull/327)
 corrects the default to `http://threatintel:8005`, fixes the matching
 `docs/threat-actor-attribution.md` references, raises the stale
 `AISOC_ATTRIBUTION_TIMEOUT_SECONDS` default from `10` to `30`, and adds
 a regression test (`services/agents/tests/test_attribution_service_url.py`)
 that pins the URL and timeout so this can't drift again.
 
-PR [#329](https://github.com/beenuar/AiSOC/pull/329) layers an opt-in
+PR [#329](https://github.com/SoorinSecurity/Agentic_SOC/pull/329) layers an opt-in
 shared-secret gate on the actor-attribution router. When
 `AISOC_THREATINTEL_SERVICE_TOKEN` is set, every `/api/v1/actors/*` call
 must present `Authorization: Bearer <token>`; the comparison is
@@ -783,7 +783,7 @@ saw a degraded nav with hash-only anchors that misbehaved (e.g. `#pricing`
 on `/about` was a no-op rather than navigating to `/pricing`).
 
 The unification (commit
-[`77039a41`](https://github.com/beenuar/AiSOC/commit/77039a41)):
+[`77039a41`](https://github.com/SoorinSecurity/Agentic_SOC/commit/77039a41)):
 
 - `apps/web/src/app/(marketing)/layout.tsx` now imports `StickyNav`
   and `sections/Footer` and renders them around `{children}`. Every
@@ -819,8 +819,8 @@ Bundled in the same QA wave:
 
 ### Knowledge-base — boundary-aware chunking with overlap
 
-PR [#321](https://github.com/beenuar/AiSOC/pull/321) (closes
-[#277](https://github.com/beenuar/AiSOC/issues/277)). The previous
+PR [#321](https://github.com/SoorinSecurity/Agentic_SOC/pull/321) (closes
+[#277](https://github.com/SoorinSecurity/Agentic_SOC/issues/277)). The previous
 chunker split on a flat character budget, which routinely produced
 mid-sentence chunks and severed code fences. The new chunker walks the
 document with `paragraph → sentence → token` precedence, applies an
@@ -831,8 +831,8 @@ KB ingestion fixtures improved without any model change.
 
 ### Realtime — short-lived ticket auth on WS/SSE
 
-PR [#246](https://github.com/beenuar/AiSOC/pull/246) (closes
-[#239](https://github.com/beenuar/AiSOC/issues/239)). The realtime
+PR [#246](https://github.com/SoorinSecurity/Agentic_SOC/pull/246) (closes
+[#239](https://github.com/SoorinSecurity/Agentic_SOC/issues/239)). The realtime
 service previously accepted any WebSocket or SSE connection — there was
 no way to assert which tenant a stream belonged to except via the
 client's word for it. Connections now require a short-lived signed
@@ -843,21 +843,21 @@ fan-out surface that had been live since the realtime service shipped.
 
 ### Infrastructure — Terraform CI + missing core modules
 
-PR [#251](https://github.com/beenuar/AiSOC/pull/251) — every push that
+PR [#251](https://github.com/SoorinSecurity/Agentic_SOC/pull/251) — every push that
 touches `infra/terraform/**` now runs `terraform init -backend=false`,
 `terraform validate`, and `terraform fmt -check -recursive` against the
 AWS, GCP, Azure, and BYOC configurations. The same gates ran locally in
 the v7.4.0 deploys; they're now actually enforced.
 
-PR [#252](https://github.com/beenuar/AiSOC/pull/252) — the AWS and BYOC
+PR [#252](https://github.com/SoorinSecurity/Agentic_SOC/pull/252) — the AWS and BYOC
 references in v7.4.0 imported `infra/terraform/modules/rds`,
 `modules/elasticache`, and `modules/kafka` from sources that did not
 exist in the repo. The three modules are now actually present, so a
 fresh `terraform init` against the multi-cloud skeletons no longer
 errors on a missing source. PR
-[#243](https://github.com/beenuar/AiSOC/pull/243) drops the
+[#243](https://github.com/SoorinSecurity/Agentic_SOC/pull/243) drops the
 sensitive-var taint from `for_each` in the GCP module so the plan stays
-clean. PR [#247](https://github.com/beenuar/AiSOC/pull/247) documents
+clean. PR [#247](https://github.com/SoorinSecurity/Agentic_SOC/pull/247) documents
 the Azure Terraform skeleton end-to-end in `apps/docs/`.
 
 ### Dependency & CI maintenance
@@ -866,59 +866,59 @@ Around fifteen Dependabot landings since v7.4.0; the headline ones:
 
 - **FastAPI** updated in `services/api`, `services/actions`, and
   `services/agents` (PRs
-  [#317](https://github.com/beenuar/AiSOC/pull/317),
-  [#319](https://github.com/beenuar/AiSOC/pull/319),
-  [#320](https://github.com/beenuar/AiSOC/pull/320)).
+  [#317](https://github.com/SoorinSecurity/Agentic_SOC/pull/317),
+  [#319](https://github.com/SoorinSecurity/Agentic_SOC/pull/319),
+  [#320](https://github.com/SoorinSecurity/Agentic_SOC/pull/320)).
 - **`next`** 16.2.7 → 16.2.9 (PR
-  [#323](https://github.com/beenuar/AiSOC/pull/323)).
+  [#323](https://github.com/SoorinSecurity/Agentic_SOC/pull/323)).
 - **`framer-motion`** 11.18.2 → 12.40.0 (PR
-  [#307](https://github.com/beenuar/AiSOC/pull/307)).
+  [#307](https://github.com/SoorinSecurity/Agentic_SOC/pull/307)).
 - **`cryptography`** updated in `services/api` and `services/actions`
-  (PRs [#301](https://github.com/beenuar/AiSOC/pull/301),
-  [#302](https://github.com/beenuar/AiSOC/pull/302)).
+  (PRs [#301](https://github.com/SoorinSecurity/Agentic_SOC/pull/301),
+  [#302](https://github.com/SoorinSecurity/Agentic_SOC/pull/302)).
 - **`redis/go-redis/v9`** updated in `services/enrichment` and
   `services/ingest` (PRs
-  [#297](https://github.com/beenuar/AiSOC/pull/297),
-  [#298](https://github.com/beenuar/AiSOC/pull/298)).
+  [#297](https://github.com/SoorinSecurity/Agentic_SOC/pull/297),
+  [#298](https://github.com/SoorinSecurity/Agentic_SOC/pull/298)).
 - **`strawberry-graphql`** updated in `services/api`
-  (PR [#318](https://github.com/beenuar/AiSOC/pull/318)).
+  (PR [#318](https://github.com/SoorinSecurity/Agentic_SOC/pull/318)).
 - **`actions/checkout`** v6 → v7 across every workflow
-  (PR [#316](https://github.com/beenuar/AiSOC/pull/316)).
+  (PR [#316](https://github.com/SoorinSecurity/Agentic_SOC/pull/316)).
 - **`aiohttp`** 3.14.1 to clear CVE-2026-34993 + CVE-2026-47265
-  (PR [#295](https://github.com/beenuar/AiSOC/pull/295)).
+  (PR [#295](https://github.com/SoorinSecurity/Agentic_SOC/pull/295)).
 - **pnpm audit** cleared of all high/critical findings
-  (PR [#322](https://github.com/beenuar/AiSOC/pull/322)) so the dep-bump
+  (PR [#322](https://github.com/SoorinSecurity/Agentic_SOC/pull/322)) so the dep-bump
   queue could merge without the global gate failing on unrelated noise.
 - **`pnpm-lock.yaml`** duplicate `@mdx-js/react` key fixed
-  (PR [#296](https://github.com/beenuar/AiSOC/pull/296)) — was breaking
+  (PR [#296](https://github.com/SoorinSecurity/Agentic_SOC/pull/296)) — was breaking
   `pnpm install` on fresh clones.
 - Other dev/test bumps: `@xyflow/react` 12.10.2 → 12.11.0
-  (PR [#283](https://github.com/beenuar/AiSOC/pull/283)),
+  (PR [#283](https://github.com/SoorinSecurity/Agentic_SOC/pull/283)),
   `@types/node` 20.19.39 → 25.9.2
-  (PR [#285](https://github.com/beenuar/AiSOC/pull/285)),
+  (PR [#285](https://github.com/SoorinSecurity/Agentic_SOC/pull/285)),
   `tsx` 4.22.1 → 4.22.4 (PR
-  [#306](https://github.com/beenuar/AiSOC/pull/306)),
+  [#306](https://github.com/SoorinSecurity/Agentic_SOC/pull/306)),
   `@tailwindcss/postcss` 4.3.0 → 4.3.1 (PR
-  [#305](https://github.com/beenuar/AiSOC/pull/305)).
+  [#305](https://github.com/SoorinSecurity/Agentic_SOC/pull/305)).
 
 ### Docs
 
 - `AISOC_V8_PROGRESS.md` tracker re-introduced
-  (PR [#334](https://github.com/beenuar/AiSOC/pull/334)) so the v8.0
+  (PR [#334](https://github.com/SoorinSecurity/Agentic_SOC/pull/334)) so the v8.0
   milestone burn-down lives at the repo root again.
 - `AGENTS.md` updated to record AiSOC (`github.com/beenuar/AiSOC`) as the
   single source of truth — the older `AISOC-Cyble` mirror is now
-  archived (PR [#326](https://github.com/beenuar/AiSOC/pull/326);
+  archived (PR [#326](https://github.com/SoorinSecurity/Agentic_SOC/pull/326);
   archive-notice sync in PR
-  [#325](https://github.com/beenuar/AiSOC/pull/325); `plans/cyble-aisoc/`
+  [#325](https://github.com/SoorinSecurity/Agentic_SOC/pull/325); `plans/cyble-aisoc/`
   subtree merged for posterity in PR
-  [#324](https://github.com/beenuar/AiSOC/pull/324)).
+  [#324](https://github.com/SoorinSecurity/Agentic_SOC/pull/324)).
 - Marketing-page docs links repointed at the Docusaurus site
-  (PR [#245](https://github.com/beenuar/AiSOC/pull/245)).
+  (PR [#245](https://github.com/SoorinSecurity/Agentic_SOC/pull/245)).
 - Connector pages — Vault → Auth0/Okta cross-links unbroken
   (post-merge fix on `main`).
 - `README.md` synced to v7.4.0 ahead of this release
-  (PR [#246](https://github.com/beenuar/AiSOC/pull/246)).
+  (PR [#246](https://github.com/SoorinSecurity/Agentic_SOC/pull/246)).
 
 ### Changed
 
@@ -958,39 +958,39 @@ multi-agent routing, and multi-cloud infrastructure skeletons that landed on
 ### Highlights
 
 - **Security hardening.** Prompt-injection sanitizer wired into the
-  classification agents (PR [#219](https://github.com/beenuar/AiSOC/pull/219));
+  classification agents (PR [#219](https://github.com/SoorinSecurity/Agentic_SOC/pull/219));
   cross-tenant isolation enforced on the detection-loop suggestion lookups
-  (PR [#221](https://github.com/beenuar/AiSOC/pull/221)) and on the compliance,
+  (PR [#221](https://github.com/SoorinSecurity/Agentic_SOC/pull/221)) and on the compliance,
   phishing, and knowledge-base endpoints
-  (PR [#236](https://github.com/beenuar/AiSOC/pull/236)); nightly cross-tenant
-  RBAC regression gate (PR [#197](https://github.com/beenuar/AiSOC/pull/197));
+  (PR [#236](https://github.com/SoorinSecurity/Agentic_SOC/pull/236)); nightly cross-tenant
+  RBAC regression gate (PR [#197](https://github.com/SoorinSecurity/Agentic_SOC/pull/197));
   cryptography CVEs cleared and unfixable advisories time-boxed
-  (PR [#229](https://github.com/beenuar/AiSOC/pull/229)); CodeQL quality notes
-  resolved (PR [#224](https://github.com/beenuar/AiSOC/pull/224)).
+  (PR [#229](https://github.com/SoorinSecurity/Agentic_SOC/pull/229)); CodeQL quality notes
+  resolved (PR [#224](https://github.com/SoorinSecurity/Agentic_SOC/pull/224)).
 - **Multi-agent routing.** `DetectAgent.process` wired to the `FusionEngine`
-  over cross-service HTTP (PR [#198](https://github.com/beenuar/AiSOC/pull/198));
+  over cross-service HTTP (PR [#198](https://github.com/SoorinSecurity/Agentic_SOC/pull/198));
   `/investigate` swapped to the `RouterOrchestrator` behind the
-  `ROUTER_INVESTIGATE` flag (PR [#196](https://github.com/beenuar/AiSOC/pull/196));
+  `ROUTER_INVESTIGATE` flag (PR [#196](https://github.com/SoorinSecurity/Agentic_SOC/pull/196));
   Redis-backed scheduler singleton guard for in-process workers
-  (PR [#218](https://github.com/beenuar/AiSOC/pull/218)).
+  (PR [#218](https://github.com/SoorinSecurity/Agentic_SOC/pull/218)).
 - **Multi-cloud infrastructure.** Serverless-container Terraform skeletons for
   GCP (Cloud Run + Cloud SQL + Memorystore) and Azure (Container Apps +
   PostgreSQL Flexible Server + Cache for Redis), mirroring the AWS/EKS reference
-  file-for-file (PR [#240](https://github.com/beenuar/AiSOC/pull/240)).
+  file-for-file (PR [#240](https://github.com/SoorinSecurity/Agentic_SOC/pull/240)).
 - **Live dashboard & landing.** Real `/metrics` data restored on
-  `tryaisoc.com/dashboard` (PR [#192](https://github.com/beenuar/AiSOC/pull/192));
+  `tryaisoc.com/dashboard` (PR [#192](https://github.com/SoorinSecurity/Agentic_SOC/pull/192));
   API/agents machines kept warm so the dashboard no longer 500s
-  (PR [#234](https://github.com/beenuar/AiSOC/pull/234)); seed timestamps
+  (PR [#234](https://github.com/SoorinSecurity/Agentic_SOC/pull/234)); seed timestamps
   re-anchored so the live dashboard never goes empty
-  (PR [#235](https://github.com/beenuar/AiSOC/pull/235)); landing CTAs pointed at
-  the live dashboard (PR [#233](https://github.com/beenuar/AiSOC/pull/233)).
+  (PR [#235](https://github.com/SoorinSecurity/Agentic_SOC/pull/235)); landing CTAs pointed at
+  the live dashboard (PR [#233](https://github.com/SoorinSecurity/Agentic_SOC/pull/233)).
 - **Dependency & CI maintenance.** ~40 Dependabot upgrades across the Python,
   JS, and Go services plus CI stabilization (Ruff cleanup, OpenAPI export
   permissions, pnpm-lock dedupe).
 
 ### Bump `@vitejs/plugin-react` 4.7.0 → 6.0.2 in `apps/web`
 
-Dev-only dependency upgrade (PR [#178](https://github.com/beenuar/AiSOC/pull/178)).
+Dev-only dependency upgrade (PR [#178](https://github.com/SoorinSecurity/Agentic_SOC/pull/178)).
 `@vitejs/plugin-react@6` is built against vite@8, while vitest@4 (landed in
 PR #179) still ships its own internal vite@7. pnpm resolves both side-by-side
 without conflict: vitest@4 uses vite@7 for the test runtime, and `react()` is
@@ -1004,7 +1004,7 @@ production build succeeds.
 
 ### Bump `vitest` 2.1.9 → 4.1.6 across the workspace
 
-Dev-only dependency upgrade (PR [#179](https://github.com/beenuar/AiSOC/pull/179))
+Dev-only dependency upgrade (PR [#179](https://github.com/SoorinSecurity/Agentic_SOC/pull/179))
 across `apps/web`, `packages/sdk-ts`, and `services/mcp`. Vitest v3 and v4
 introduced two breaking changes that surfaced in our suite:
 
@@ -1026,7 +1026,7 @@ shipped web bundle.
 
 ### Wire `DetectAgent.process` to `FusionEngine` via cross-service HTTP (Issue #190)
 
-Closes [#190](https://github.com/beenuar/AiSOC/issues/190).
+Closes [#190](https://github.com/SoorinSecurity/Agentic_SOC/issues/190).
 
 Closes the missing edge in the four-agent façade: `DetectAgent` previously
 self-described as the public detection surface but had no synchronous entry
@@ -1080,7 +1080,7 @@ endpoint/method only fire when something explicitly invokes them.
 
 ### Cross-tenant RBAC regression suite (F013, security)
 
-Closes [#159](https://github.com/beenuar/AiSOC/issues/159).
+Closes [#159](https://github.com/SoorinSecurity/Agentic_SOC/issues/159).
 
 Pure-unit isolation suites that exercise the tenant boundary at the
 endpoint-function level (no live DB, no FastAPI request cycle) so the
@@ -2043,7 +2043,7 @@ clusters.
 
 ### Added — osctrl, FleetDM, aisoc-osquery-tls, aisoc-direct, native osquery detections, live-query playbook step, FIM, custom virtual tables
 
-Six-PR wave that closes [#44](https://github.com/beenuar/AiSOC/issues/44)
+Six-PR wave that closes [#44](https://github.com/SoorinSecurity/Agentic_SOC/issues/44)
 ("osctrl connector for fleet-wide osquery telemetry") and significantly extends
 osquery coverage end to end. Shipped in the v7.0 release window between the
 v7.0.0 baseline and the v7.0.1 hardening patch.
@@ -3257,7 +3257,7 @@ demo profile. Details below.
 - `services/enrichment/README.md` — full enrichment service documentation
 
 ### Changed
-- All GitHub repository references updated to `https://github.com/beenuar/AiSOC`
+- All GitHub repository references updated to `https://github.com/SoorinSecurity/Agentic_SOC`
 - Helm chart container images updated from `ghcr.io/cyble/aisoc-*` to `ghcr.io/beenuar/aisoc-*`
 - `.env.example` expanded with API keys for all commercial TI providers
 
@@ -3302,11 +3302,11 @@ demo profile. Details below.
 - Helm chart for Kubernetes deployment (`infra/helm/aisoc/`)
 - MIT License
 
-[Unreleased]: https://github.com/beenuar/AiSOC/compare/v5.2.0...HEAD
-[5.2.0]: https://github.com/beenuar/AiSOC/compare/v5.1.0...v5.2.0
-[5.1.0]: https://github.com/beenuar/AiSOC/compare/v5.0.0...v5.1.0
-[5.0.0]: https://github.com/beenuar/AiSOC/compare/v4.1.0...v5.0.0
-[4.1.0]: https://github.com/beenuar/AiSOC/compare/v3.0.0...v4.1.0
-[3.0.0]: https://github.com/beenuar/AiSOC/compare/v2.0.0...v3.0.0
-[2.0.0]: https://github.com/beenuar/AiSOC/compare/v1.0.0...v2.0.0
-[1.0.0]: https://github.com/beenuar/AiSOC/releases/tag/v1.0.0
+[Unreleased]: https://github.com/SoorinSecurity/Agentic_SOC/compare/v5.2.0...HEAD
+[5.2.0]: https://github.com/SoorinSecurity/Agentic_SOC/compare/v5.1.0...v5.2.0
+[5.1.0]: https://github.com/SoorinSecurity/Agentic_SOC/compare/v5.0.0...v5.1.0
+[5.0.0]: https://github.com/SoorinSecurity/Agentic_SOC/compare/v4.1.0...v5.0.0
+[4.1.0]: https://github.com/SoorinSecurity/Agentic_SOC/compare/v3.0.0...v4.1.0
+[3.0.0]: https://github.com/SoorinSecurity/Agentic_SOC/compare/v2.0.0...v3.0.0
+[2.0.0]: https://github.com/SoorinSecurity/Agentic_SOC/compare/v1.0.0...v2.0.0
+[1.0.0]: https://github.com/SoorinSecurity/Agentic_SOC/releases/tag/v1.0.0

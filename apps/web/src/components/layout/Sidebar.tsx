@@ -393,9 +393,9 @@ export function Sidebar() {
           </span>
         </div>
         <div>
-          <span className="text-fg-primary font-bold text-base tracking-tight">Ai</span>
-          <span className="text-brand-400 font-bold text-base tracking-tight">SOC</span>
-          <p className="text-xs text-fg-subtle -mt-0.5">open-source</p>
+          <span className="text-fg-primary font-bold text-base tracking-tight">Soorin</span>
+          <span className="text-brand-400 font-bold text-base tracking-tight"> SOC</span>
+          <p className="text-xs text-fg-subtle -mt-0.5">Agentic</p>
         </div>
         {/* Live indicator — decorative, status conveyed by the green dot label */}
           <div className="ml-auto flex items-center gap-1" aria-hidden="true">
@@ -454,7 +454,7 @@ export function Sidebar() {
           <span className="font-mono">v{APP_VERSION}</span>
           <span>·</span>
           <a
-            href="https://github.com/beenuar/AiSOC"
+            href="https://github.com/SoorinSecurity/Agentic_SOC"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-fg-muted transition-colors"

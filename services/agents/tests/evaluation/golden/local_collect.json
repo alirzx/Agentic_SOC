@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-LOCAL-COLLECT",
+  "source": "SYNTHETIC",
+  "title": "Staging sensitive files to temp folder",
+  "description": "Synthetic golden case for MITRE T1005.",
+  "severity": "medium",
+  "response_class": "investigate",
+  "expected_techniques": [
+    "T1005"
+  ],
+  "expected_actions": [
+    "investigate"
+  ],
+  "attack_stage": "collection",
+  "expected_soc_doc_playbook_id": "collection",
+  "expected_mitre_tactic_id": "TA0009",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1005"
+    }
+  ]
+}

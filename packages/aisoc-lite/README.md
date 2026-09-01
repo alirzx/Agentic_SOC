@@ -10,7 +10,7 @@ npx aisoc triage --demo
 ✓ AiSOC triaged 200 alerts: 12 TP, 171 FP suppressed (85.5% noise), 17 need review — in 0.1s [deterministic · no LLM]
 ```
 
-This is the zero-install front door to [AiSOC](https://github.com/beenuar/AiSOC), the open-source, self-hostable AI SOC. The full Docker stack is a ~3.5-minute commitment; this CLI gets you a verdict in under a minute.
+This is the zero-install front door to [AiSOC](https://github.com/SoorinSecurity/Agentic_SOC), the open-source, self-hostable AI SOC. The full Docker stack is a ~3.5-minute commitment; this CLI gets you a verdict in under a minute.
 
 ## Why it's trustworthy
 
@@ -84,4 +84,4 @@ console.log(summary.headline);
 
 ## License
 
-MIT — part of the [AiSOC](https://github.com/beenuar/AiSOC) project.
+MIT — part of the [AiSOC](https://github.com/SoorinSecurity/Agentic_SOC) project.

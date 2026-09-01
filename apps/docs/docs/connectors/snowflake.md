@@ -96,5 +96,5 @@ Update the thresholds via the connector's optional `anomaly_*` config keys (see 
 
 ## Related
 
-- [snowflake-events plugin reference](https://github.com/beenuar/AiSOC/tree/main/plugins/snowflake-events) — the Python + Go SDK example built against the same data. Useful as a template for community plugins; not for production.
+- [snowflake-events plugin reference](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/plugins/snowflake-events) — the Python + Go SDK example built against the same data. Useful as a template for community plugins; not for production.
 - [AWS CloudTrail](./aws-cloudtrail.md) — pair Snowflake exfil detections with `s3:GetObject` / `s3:PutObject` from CloudTrail to spot data leaving via both the data warehouse and the object store.

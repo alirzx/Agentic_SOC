@@ -2,11 +2,13 @@
   "id": "GOLDEN-INSIDER",
   "source": "SYNTHETIC",
   "title": "Insider bulk download of sensitive files",
-  "description": "Employee downloaded 10k files from SharePoint.",
+  "description": "Employee downloaded 10k files from SharePoint. MITRE T1530.",
   "severity": "medium",
   "response_class": "request_analyst_review",
   "expected_techniques": ["T1530"],
   "expected_actions": ["request_analyst_review"],
   "attack_stage": "collection",
+  "expected_soc_doc_playbook_id": "collection",
+  "expected_mitre_tactic_id": "TA0009",
   "telemetry": [{"source": "saas", "User": "insider@corp.com", "files": 10000}]
 }

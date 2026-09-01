@@ -102,7 +102,7 @@ export function KpiBar({ report }: KpiBarProps) {
           </p>
         </div>
         <a
-          href="https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/sla.py"
+          href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/services/sla.py"
           target="_blank"
           rel="noreferrer"
           className="text-xs text-gray-500 underline decoration-dotted hover:text-gray-300"

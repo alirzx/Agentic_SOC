@@ -42,11 +42,15 @@ def load_golden_dataset() -> EvaluationDataset:
     cases: list[dict[str, Any]] = []
     if _GOLDEN_ROOT.is_dir():
         for path in sorted(_GOLDEN_ROOT.glob("*.json")):
+            if path.name == "manifest.json":
+                continue
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
+            if isinstance(payload, dict) and payload.get("id"):
                 payload.setdefault("source", "SYNTHETIC")
                 cases.append(payload)
         for path in sorted(_GOLDEN_ROOT.glob("*.jsonl")):
+            if path.name.startswith("_"):
+                continue
             for line in path.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if not line:

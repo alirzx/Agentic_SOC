@@ -7,6 +7,8 @@
   "response_class": "isolate_host",
   "expected_techniques": ["T1567"],
   "expected_actions": ["isolate_asset"],
-  "attack_stage": "impact",
+  "expected_soc_doc_playbook_id": "exfiltration",
+  "expected_mitre_tactic_id": "TA0010",
+  "attack_stage": "exfiltration",
   "telemetry": [{"source": "dlp", "bytes_out": 500000000}]
 }

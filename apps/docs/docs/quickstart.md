@@ -43,7 +43,7 @@ with [Path 0 (One-click install)](./installation).
 ## Path A — one-shot demo
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 pnpm aisoc:demo
 ```
@@ -52,7 +52,7 @@ That single command:
 
 1. Pulls prebuilt images from `ghcr.io/beenuar/*` (≈90s on a warm cache).
 2. Brings up the slim demo profile defined in
-   [`infra/compose/docker-compose.demo.yml`](https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.demo.yml):
+   [`infra/compose/docker-compose.demo.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/infra/compose/docker-compose.demo.yml):
    `postgres`, `redis`, `kafka`, `api`, `agents`, `realtime`, `web`.
 3. Waits for healthchecks to go green.
 4. Seeds canonical demo data (tenants, users, alerts, IOCs, attack paths).
@@ -75,7 +75,7 @@ pnpm aisoc:demo:logs    # tails logs while the stack is up
 ```
 
 The orchestrator script lives at
-[`scripts/aisoc-demo.ts`](https://github.com/beenuar/AiSOC/blob/main/scripts/aisoc-demo.ts).
+[`scripts/aisoc-demo.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/scripts/aisoc-demo.ts).
 
 ### Acceptance gate
 
@@ -92,7 +92,7 @@ The harness wraps `aisoc:demo`, enforces the budget, and appends a JSONL entry
 to `.aisoc/acceptance-history.jsonl` per run so regressions are visible across
 commits. Exit codes — `0` pass, `3` over budget, `4` showcase case never
 reached — make it easy to wire into CI without parsing logs. Source:
-[`scripts/aisoc-acceptance.ts`](https://github.com/beenuar/AiSOC/blob/main/scripts/aisoc-acceptance.ts).
+[`scripts/aisoc-acceptance.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/scripts/aisoc-acceptance.ts).
 
 ## Path B — full development stack
 
@@ -102,7 +102,7 @@ exercise UEBA / Honeytokens / Purple Team / MCP.
 ### 1. Clone & configure
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 cp .env.example .env
 pnpm install
@@ -149,9 +149,9 @@ docker compose exec purple-team alembic upgrade head
 ```
 
 The `api` migrations include
-[`008_investigation_ledger.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/008_investigation_ledger.sql)
+[`008_investigation_ledger.sql`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/migrations/008_investigation_ledger.sql)
 (replayable agent decision log) and
-[`009_responder_pwa.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/009_responder_pwa.sql)
+[`009_responder_pwa.sql`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/migrations/009_responder_pwa.sql)
 (passkeys, on-call rotation, approvals).
 
 ### 4. Seed demo data
@@ -186,7 +186,7 @@ pytest services/agents/tests/test_mitre_accuracy.py
 The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`,
 which the [eval harness page](./benchmark) renders. The same harness runs in
 CI on every PR — see
-[`.github/workflows/ci.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/ci.yml).
+[`.github/workflows/ci.yml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/.github/workflows/ci.yml).
 
 > **Important**: the harness runs deterministic substrate code (extractors,
 > fusion, templates, judges) against synthetic data — it does **not** call
@@ -266,7 +266,7 @@ investigating" without remembering the `docker compose` / `alembic` /
 ### 1. Clone & install the CLI
 
 ```bash
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC
 cp .env.example .env
 
@@ -314,7 +314,7 @@ script against Postgres. It is idempotent — safe to re-run after each
 ### 4. Submit your first alert
 
 The repo ships a canonical OCSF / Okta System Log fixture under
-[`examples/alerts/lateral-movement.json`](https://github.com/beenuar/AiSOC/blob/main/examples/alerts/lateral-movement.json):
+[`examples/alerts/lateral-movement.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/examples/alerts/lateral-movement.json):
 two `user.session.start` events for the same user — first from a New York
 corporate IP, then from Saint Petersburg eight minutes later — designed to
 trip the impossible-travel detector.

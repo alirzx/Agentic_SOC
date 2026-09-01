@@ -16,7 +16,7 @@ The CLI source lives under `packages/aisoc-cli/`. Install it from the repo:
 
 ```bash
 # Today (from this monorepo):
-git clone https://github.com/beenuar/AiSOC.git
+git clone https://github.com/SoorinSecurity/Agentic_SOC.git
 cd AiSOC && pip install -e packages/aisoc-cli
 
 # v8.0+ (once aisoc-cli lands on PyPI):

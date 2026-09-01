@@ -134,7 +134,7 @@ steps:
         AiSOC isolated host {{ context.host }} after P0 alert {{ context.alert_id }}.
 ```
 
-Implementation: [`services/actions/app/executors/notification.py`](https://github.com/beenuar/AiSOC/blob/main/services/actions/app/executors/notification.py).
+Implementation: [`services/actions/app/executors/notification.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/actions/app/executors/notification.py).
 
 Failure mode is non-fatal but visible: if the webhook returns non-2xx the executor returns `ActionStatus.FAILED` with the underlying error string, the playbook step is marked failed, and the rest of the playbook runs as authored (typically with the failure path branching to `escalate_to_human`).
 

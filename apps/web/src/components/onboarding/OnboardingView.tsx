@@ -304,7 +304,7 @@ export function OnboardingView() {
         <NextStepCard
           title="Bring your own data"
           body="No connector for your tool? Push raw events into AiSOC over a tenant-scoped HTTPS endpoint."
-          href="https://beenuar.github.io/AiSOC/docs/operations/credentials/"
+          href="https://github.com/SoorinSecurity/Agentic_SOC/docs/operations/credentials/"
           cta="Push-ingest docs"
         />
         <NextStepCard

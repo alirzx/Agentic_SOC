@@ -3,7 +3,7 @@ import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 
 // Two deploy targets share this build:
-//   1. GitHub Pages (default): https://beenuar.github.io/AiSOC/
+//   1. GitHub Pages (default): https://github.com/SoorinSecurity/Agentic_SOC/
 //   2. Custom domain          : https://docs.tryaisoc.com/  (served behind cloudflared tunnel)
 //
 // Override at build time with:
@@ -60,11 +60,11 @@ const config: Config = {
       {
         docs: {
           sidebarPath: "./sidebars.ts",
-          editUrl: "https://github.com/beenuar/AiSOC/tree/main/apps/docs/",
+          editUrl: "https://github.com/SoorinSecurity/Agentic_SOC/tree/main/apps/docs/",
         },
         blog: {
           showReadingTime: true,
-          editUrl: "https://github.com/beenuar/AiSOC/tree/main/apps/docs/",
+          editUrl: "https://github.com/SoorinSecurity/Agentic_SOC/tree/main/apps/docs/",
         },
         theme: {
           customCss: "./src/css/custom.css",
@@ -90,7 +90,7 @@ const config: Config = {
         },
         { to: "/blog", label: "Blog", position: "left" },
         {
-          href: "https://github.com/beenuar/AiSOC",
+          href: "https://github.com/SoorinSecurity/Agentic_SOC",
           label: "GitHub",
           position: "right",
         },
@@ -112,11 +112,11 @@ const config: Config = {
           items: [
             {
               label: "GitHub Discussions",
-              href: "https://github.com/beenuar/AiSOC/discussions",
+              href: "https://github.com/SoorinSecurity/Agentic_SOC/discussions",
             },
             {
               label: "Issues",
-              href: "https://github.com/beenuar/AiSOC/issues",
+              href: "https://github.com/SoorinSecurity/Agentic_SOC/issues",
             },
           ],
         },
@@ -126,7 +126,7 @@ const config: Config = {
             { label: "Blog", to: "/blog" },
             {
               label: "GitHub",
-              href: "https://github.com/beenuar/AiSOC",
+              href: "https://github.com/SoorinSecurity/Agentic_SOC",
             },
           ],
         },

@@ -46,7 +46,7 @@ When running locally, interactive Swagger UI is available at:
 - **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - **OpenAPI JSON**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 
-The full spec is also committed at [`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml).
+The full spec is also committed at [`docs/openapi.yaml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/openapi.yaml).
 
 ## Endpoint Groups
 
@@ -165,7 +165,7 @@ the data model and rationale.
 ### Marketplace
 
 The marketplace surface is backed by the JSON index at
-[`marketplace/index.json`](https://github.com/beenuar/AiSOC/blob/main/marketplace/index.json)
+[`marketplace/index.json`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/marketplace/index.json)
 and re-published to the web app at `/marketplace/index.json`.
 
 | Method | Path | Description |
@@ -274,9 +274,9 @@ Response includes `"next_cursor"` when more pages exist.
 
 | Language | Package | Notes |
 |----------|---------|-------|
-| Python | [`packages/sdk-py`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-py) | Async client built on `httpx` |
-| TypeScript | [`packages/sdk-ts`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-ts) | Browser + Node, fetch-based |
-| Go | [`packages/sdk-go`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-go) | Typed models + thin client helpers |
+| Python | [`packages/sdk-py`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/packages/sdk-py) | Async client built on `httpx` |
+| TypeScript | [`packages/sdk-ts`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/packages/sdk-ts) | Browser + Node, fetch-based |
+| Go | [`packages/sdk-go`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/packages/sdk-go) | Typed models + thin client helpers |
 
 In addition, the [Model Context Protocol server](../integrations/mcp)
 (`@aisoc/mcp`) exposes 11 of these endpoints as IDE-side tools for

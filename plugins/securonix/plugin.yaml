@@ -9,7 +9,7 @@ description: >
   Auth is a tenant API token.
 author: AiSOC Core Team
 tags: [siem, ueba, securonix, connector]
-homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/securonix.py
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/securonix.py
 license: MIT
 min_aisoc_version: "7.0.0"
 config_schema:

@@ -8,7 +8,7 @@ description: Where every service, package, and config lives in the AiSOC monorep
 
 This page is the canonical map of the AiSOC monorepo. It used to live in `README.md`; it was extracted here so the front page stays focused on "what is AiSOC and how do I run it" while this page stays useful for anyone navigating the code.
 
-For the data-flow architecture (Kafka spine, fusion, agents, storage tier, surface) see [Architecture](../architecture.md). For the deeper system-design write-up (ML fusion, Neo4j-at-ingest schema, threat-intel pipeline) see [`docs/architecture/SYSTEM_DESIGN.md`](https://github.com/beenuar/AiSOC/blob/main/docs/architecture/SYSTEM_DESIGN.md).
+For the data-flow architecture (Kafka spine, fusion, agents, storage tier, surface) see [Architecture](../architecture.md). For the deeper system-design write-up (ML fusion, Neo4j-at-ingest schema, threat-intel pipeline) see [`docs/architecture/SYSTEM_DESIGN.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/architecture/SYSTEM_DESIGN.md).
 
 ## Monorepo layout
 
@@ -112,11 +112,11 @@ AiSOC/
 
 ## API surface
 
-The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml). Endpoint groups are summarised in [Architecture](../architecture.md#api-surface) and the interactive view is at `http://localhost:8000/docs` (Swagger) or `/redoc` (ReDoc) when you run the local stack.
+The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/openapi.yaml). Endpoint groups are summarised in [Architecture](../architecture.md#api-surface) and the interactive view is at `http://localhost:8000/docs` (Swagger) or `/redoc` (ReDoc) when you run the local stack.
 
 ## Next stops
 
 - [Architecture](../architecture.md) — data-flow + service interaction diagrams.
-- [`docs/architecture/SYSTEM_DESIGN.md`](https://github.com/beenuar/AiSOC/blob/main/docs/architecture/SYSTEM_DESIGN.md) — deeper write-up.
+- [`docs/architecture/SYSTEM_DESIGN.md`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/architecture/SYSTEM_DESIGN.md) — deeper write-up.
 - [`apps/docs/docs/intro.md`](../intro.md) — feature catalogue index.
 - [Plugin overview](../plugins/overview.md) — how to extend.

@@ -42,7 +42,7 @@ groups:
             container is running and listening on its declared
             metrics port (see scripts/audit_prometheus_targets.py
             for the source-of-truth port map).
-          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/service-down.md
+          runbook_url: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/service-down.md
 
   # ──────────────────────────────────────────────────────────────
   # FastAPI / HTTP latency — surfaces requests-per-second and
@@ -77,7 +77,7 @@ groups:
             `{{ $labels.job }}` has exceeded 1.5 seconds for the
             last 10 minutes. Check the upstream dependencies
             (Postgres, Redis, Kafka) and look for slow query logs.
-          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/http-latency-high.md
+          runbook_url: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/http-latency-high.md
 
       - alert: AisocHttpErrorRateHigh
         # 5xx rate > 5% of total requests over 5m, again
@@ -109,7 +109,7 @@ groups:
             `{{ $labels.job }}` is returning HTTP 5xx for more than
             5% of requests over the last 5 minutes. This is a
             customer-visible failure — page the on-call now.
-          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/http-5xx-high.md
+          runbook_url: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/http-5xx-high.md
 
   # ──────────────────────────────────────────────────────────────
   # Kafka consumer health — every event-driven service (fusion,
@@ -132,7 +132,7 @@ groups:
             messages behind on `{{ $labels.topic }}` for 10
             minutes. Either the consumer is slow or the partition
             count is too low for the current throughput.
-          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/kafka-consumer-lag.md
+          runbook_url: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/kafka-consumer-lag.md
 
   # ──────────────────────────────────────────────────────────────
   # Detection / response pipeline KPIs. These are the alerts that
@@ -163,7 +163,7 @@ groups:
             the rule engine has stopped evaluating, or the
             telemetry stream is empty. Check the detection-runtime
             logs and confirm the connector queue isn't backed up.
-          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/detection-pipeline-stalled.md
+          runbook_url: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/detection-pipeline-stalled.md
 
       - alert: AisocActionExecutorFailureRateHigh
         # Live-action dispatcher tracks failures via
@@ -192,4 +192,4 @@ groups:
             failed over the last 10 minutes. This blocks the
             "respond" loop end-to-end — analysts will see actions
             timing out in the UI.
-          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/action-executor-failures.md
+          runbook_url: https://github.com/SoorinSecurity/Agentic_SOC/blob/main/docs/runbooks/action-executor-failures.md

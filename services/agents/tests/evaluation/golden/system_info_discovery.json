@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-SYSINFO",
+  "source": "SYNTHETIC",
+  "title": "systeminfo command on endpoint",
+  "description": "Synthetic golden case for MITRE T1082.",
+  "severity": "low",
+  "response_class": "investigate",
+  "expected_techniques": [
+    "T1082"
+  ],
+  "expected_actions": [
+    "investigate"
+  ],
+  "attack_stage": "discovery",
+  "expected_soc_doc_playbook_id": "discovery",
+  "expected_mitre_tactic_id": "TA0007",
+  "telemetry": [
+    {
+      "source": "synthetic",
+      "technique": "T1082"
+    }
+  ]
+}

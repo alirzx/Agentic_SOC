@@ -238,7 +238,7 @@ gives cross-tenant aggregated KPIs and per-tenant risk scoring.
 ## Plugin & SDK
 
 **Marketplace** — In-app catalog (`/marketplace`) of plugins, playbooks,
-and detection packs, surfaced via [`marketplace/index.json`](https://github.com/beenuar/AiSOC/tree/main/marketplace)
+and detection packs, surfaced via [`marketplace/index.json`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/marketplace)
 and filterable by tier (`stable` / `beta` / `imported` / `community`).
 
 **Plugin manifest** — `plugin.yaml` mirroring a connector's `schema()`
