@@ -83,7 +83,7 @@ export default defineConfig({
       : IS_JOURNEY
         ? "http://localhost:3100"
         : IS_SCREENSHOTS
-          ? (process.env.AISOC_SCREENCAST_URL ?? "http://localhost:3000")
+          ? (process.env.AISOC_SCREENCAST_URL ?? "http://localhost:5000")
           : (process.env.AISOC_SCREENCAST_URL ?? "https://tryaisoc.com"),
     trace: IS_JOURNEY ? "retain-on-failure" : "off",
     screenshot: IS_JOURNEY ? "only-on-failure" : "off",

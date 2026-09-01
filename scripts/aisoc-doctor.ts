@@ -320,9 +320,9 @@ async function checkDocker() {
 async function checkPorts() {
   console.log(c.bold("\nPorts"));
   const ports: Array<[string, number]> = [
-    ["api", 8000],
-    ["agents", 8001],
-    ["web", 3000],
+    ["api", 8888],
+    ["agents", 8887],
+    ["web", 5000],
     ["postgres", 5432],
     ["redis", 6379],
     ["realtime ws", 8086],
@@ -336,7 +336,7 @@ async function checkPorts() {
 // ---------- Section 4: API health ----------
 async function checkApi() {
   console.log(c.bold("\nAPI health"));
-  const health = await fetchJson("http://localhost:8000/health");
+  const health = await fetchJson("http://localhost:8888/health");
   if (!health) {
     record("GET /health", "FAIL", "no response from api");
     return;
@@ -347,7 +347,7 @@ async function checkApi() {
   // (services/api/app/api/v1/router.py), not `/v1` — using the wrong
   // prefix here used to produce a permanent false FAIL after a clean
   // `pnpm aisoc:demo`.
-  const alerts = await fetchJson("http://localhost:8000/api/v1/alerts?limit=1");
+  const alerts = await fetchJson("http://localhost:8888/api/v1/alerts?limit=1");
   if (!alerts) {
     record(
       "demo data seeded",
@@ -372,7 +372,7 @@ async function checkApi() {
 async function checkWeb() {
   console.log(c.bold("\nWeb console"));
   try {
-    const res = await fetch("http://localhost:3000", { signal: AbortSignal.timeout(3000) });
+    const res = await fetch("http://localhost:5000", { signal: AbortSignal.timeout(3000) });
     record("GET /", res.ok ? "OK" : "FAIL", `status ${res.status}`);
   } catch (e: any) {
     record("GET /", "FAIL", e?.message ?? "no response");

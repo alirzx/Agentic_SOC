@@ -35,8 +35,8 @@ Or from inside a clone: `./install.sh`
 
 When it finishes, open:
 
-- Console: http://localhost:3000
-- Showcase case: http://localhost:3000/cases/INC-RT-001?tab=ledger
+- Console: http://localhost:5000
+- Showcase case: http://localhost:5000/cases/INC-RT-001?tab=ledger
 
 Stop with `pnpm aisoc:demo:down`. Health check: `pnpm aisoc:doctor`.
 
@@ -56,7 +56,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 Default seeded login (full stack): `admin@aisoc.local` / `changeme`. Demo path auto-logs in as `demo@tryaisoc.com`.
 
-Full Ubuntu walkthrough: [`docs/QUICK_INSTALL.md`](docs/QUICK_INSTALL.md) and [`docs/runbooks/LOCAL_DEVELOPMENT.md`](docs/runbooks/LOCAL_DEVELOPMENT.md).
+راهنمای نصب گام‌به‌گام روی اوبونتو ۲۲.۰۴: [`docs/INSTALL_UBUNTU.md`](docs/INSTALL_UBUNTU.md). نصب یک‌کلیکی: [`docs/QUICK_INSTALL.md`](docs/QUICK_INSTALL.md). توسعه سرویس‌به‌سرویس: [`docs/runbooks/LOCAL_DEVELOPMENT.md`](docs/runbooks/LOCAL_DEVELOPMENT.md).
 
 ---
 

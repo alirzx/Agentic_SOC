@@ -3287,7 +3287,7 @@ async def _run_full_seed() -> None:
         print(f"[seed] re-anchored demo timestamps forward by {reanchor_shift / 3600:.1f}h (newest alert = now)")
     else:
         print("[seed] demo timestamps already fresh — no re-anchor needed")
-    print("[seed] done — log into the console at http://localhost:3000")
+    print("[seed] done — log into the console at http://localhost:5000")
 
 
 async def _run_quick_seed(clock: datetime) -> None:
@@ -3311,7 +3311,7 @@ async def _run_quick_seed(clock: datetime) -> None:
     print(f"[seed] DEMO-* cases seeded: {cases}")
     print(f"[seed] DEMO-* alerts seeded: {alerts}")
     print(f"[seed] DEMO-* timelines seeded: {timelines}")
-    print("[seed] showcase case: DEMO-004 — http://localhost:3000/cases/DEMO-004?tab=ledger")
+    print("[seed] showcase case: DEMO-004 — http://localhost:5000/cases/DEMO-004?tab=ledger")
     print("[seed] done — four-case demo set is live")
 
 

@@ -307,6 +307,7 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list[str] = [
+        "http://localhost:5000",
         "http://localhost:3000",
         "http://localhost:3001",
         "https://tryaisoc.com",
@@ -384,6 +385,7 @@ class Settings(BaseSettings):
     PASSKEY_RP_ID: str = "localhost"
     PASSKEY_RP_NAME: str = "AiSOC"
     PASSKEY_RP_ORIGINS: list[str] = [
+        "http://localhost:5000",
         "http://localhost:3000",
         "http://localhost:3001",
     ]

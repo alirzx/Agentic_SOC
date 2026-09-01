@@ -47,8 +47,10 @@ from collections.abc import Iterable
 logger = logging.getLogger(__name__)
 
 DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
+    "http://localhost:5000",
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://127.0.0.1:5000",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
     "https://tryaisoc.com",

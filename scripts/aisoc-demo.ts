@@ -316,9 +316,9 @@ interface PortMap {
 }
 
 const DEFAULT_PORTS: PortMap = {
-  web: 3000,
-  api: 8000,
-  agents: 8001,
+  web: 5000,
+  api: 8888,
+  agents: 8887,
   realtime: 8086,
   postgres: 5432,
   redis: 6379,
@@ -368,7 +368,7 @@ async function allocatePorts(): Promise<{
   reassigned: Array<{ service: keyof PortMap; from: number; to: number }>;
 }> {
   // Allocate sequentially so each service can drift independently — a
-  // taken 3000 doesn't push api off 8000. Each starts from its canonical
+  // taken 5000 doesn't push api off 8888. Each starts from its canonical
   // default and only moves if forced.
   const ports = { ...DEFAULT_PORTS };
   const reserved = new Set<number>();
@@ -996,7 +996,7 @@ function runPlaywrightSpec(specGlob: string, outputDir: string, label: string): 
   ];
   const env = {
     ...process.env,
-    AISOC_SCREENCAST_URL: "http://localhost:3000",
+    AISOC_SCREENCAST_URL: `http://localhost:${allocatedPorts.web}`,
     AISOC_DISABLE_ANALYTICS: "1",
   };
   const r = spawnSync("pnpm", args, { cwd: ROOT, env, stdio: "inherit" });

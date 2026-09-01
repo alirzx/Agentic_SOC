@@ -79,7 +79,7 @@ export async function runUp(flags: UpFlags, log: (s: string) => void = console.l
 
   log("");
   log(pc.green("✓ AiSOC demo stack is starting."));
-  log("  Console:     " + pc.cyan("http://localhost:3000/cases/INC-RT-001?tab=ledger"));
+  log("  Console:     " + pc.cyan("http://localhost:5000/cases/INC-RT-001?tab=ledger"));
   log("  Stop it:     " + pc.dim(`docker compose -f ${file} down -v`));
   log("");
   return 0;

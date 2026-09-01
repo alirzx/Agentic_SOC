@@ -76,7 +76,7 @@ readonly _PF_DISK_REC_GB=20
 #
 # Using parallel arrays instead of an associative array because macOS still
 # ships Bash 3.2 by default and `declare -A` only works in 4+.
-readonly _PF_PORT_NUMS=(3000 5432 6379 8000 8001 8086 9092)
+readonly _PF_PORT_NUMS=(5000 5432 6379 8888 8887 8086 9092)
 readonly _PF_PORT_NAMES=("web console" "postgres" "redis" "api" "agents" "realtime ws" "kafka")
 
 # Hosts we curl during the connectivity probe. We hit specific endpoints

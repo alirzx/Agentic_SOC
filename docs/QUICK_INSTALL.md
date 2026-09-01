@@ -26,7 +26,7 @@ iwr -useb https://raw.githubusercontent.com/SoorinSecurity/Agentic_SOC/main/inst
 ```
 
 When the script finishes, your default browser opens at
-`http://localhost:3000/cases/INC-RT-001?tab=ledger` with `demo@tryaisoc.com`
+`http://localhost:5000/cases/INC-RT-001?tab=ledger` with `demo@tryaisoc.com`
 already auto-logged-in and a real LockBit 3.0 investigation mid-flight.
 
 ## What gets installed
@@ -156,9 +156,9 @@ that checks the things most likely to make AiSOC unhappy after install:
   appropriate package registry (`registry.npmjs.org`, `apt`/`dnf`/`brew`
   repos, etc.). Catches corp-proxy / firewall issues before you waste 10
   minutes pulling Docker images.
-- **Ports** — checks that the ports AiSOC binds to (`3000`, `5432`, `6379`,
-  `8000`, `8001`, `8086`, `9092`) are either free or already owned by an
-  AiSOC container. If port 3000 is taken by another `next-server`, you'll
+- **Ports** — checks that the ports AiSOC binds to (`5000`, `5432`, `6379`,
+  `8888`, `8887`, `8086`, `9092`) are either free or already owned by an
+  AiSOC container. If port 5000 is taken by another `next-server`, you'll
   see it in preflight rather than in a confusing demo crash later.
 - **macOS Docker Desktop memory budget** — checks Docker Desktop has at
   least 4 GB allocated, and tells you exactly which menu to open if not.
@@ -171,7 +171,7 @@ Run `./install.sh --diagnose` (Linux/macOS) or `.\install.ps1 -Diagnose`
 on a production machine — preflight is read-only.
 
 If preflight reports a problem you've decided to ignore (for example, port
-3000 is in use by a dev server you'll kill before launch), use
+5000 is in use by a dev server you'll kill before launch), use
 `--skip-preflight` / `-SkipPreflight` to bypass the gate.
 
 ## Common cases
@@ -271,19 +271,19 @@ AiSOC binds these host ports by default:
 
 | Port | Container | Override env var |
 | --- | --- | --- |
-| `3000` | `aisoc-web` (Next.js dashboard) | `AISOC_WEB_PORT` |
+| `5000` | `aisoc-web` (Next.js dashboard) | `AISOC_WEB_PORT` |
 | `5432` | `aisoc-postgres` | `AISOC_POSTGRES_PORT` |
 | `6379` | `aisoc-redis` | `AISOC_REDIS_PORT` |
-| `8000` | `aisoc-api` (FastAPI) | `AISOC_API_PORT` |
-| `8001` | `aisoc-realtime` (WebSocket fan-out) | `AISOC_REALTIME_PORT` |
-| `8086` | `aisoc-influx` (telemetry sink) | `AISOC_INFLUX_PORT` |
+| `8888` | `aisoc-api` (FastAPI) | `AISOC_API_PORT` |
+| `8887` | `aisoc-agents` | `AISOC_AGENTS_PORT` |
+| `8086` | `aisoc-realtime` (WebSocket fan-out) | `AISOC_REALTIME_PORT` |
 | `9092` | `aisoc-kafka` | `AISOC_KAFKA_PORT` |
 
 If preflight flags one of these as in use:
 
 1. Find what's holding it:
-   - Linux/macOS: `lsof -nP -iTCP:3000 -sTCP:LISTEN`
-   - Windows: `Get-NetTCPConnection -LocalPort 3000 | Select OwningProcess; Get-Process -Id <pid>`
+   - Linux/macOS: `lsof -nP -iTCP:5000 -sTCP:LISTEN`
+   - Windows: `Get-NetTCPConnection -LocalPort 5000 | Select OwningProcess; Get-Process -Id <pid>`
 2. Either stop that process, or set the matching `AISOC_*_PORT` env var
    in `.env` (or in your shell) and re-run `pnpm aisoc:demo`.
 
@@ -372,7 +372,7 @@ then re-run the installer.
 The installer launches your browser via `xdg-open` (Linux), `open` (macOS),
 or `Start-Process` (Windows). If your environment doesn't have a browser
 configured (e.g. SSH session, headless CI), open
-`http://localhost:3000/cases/INC-RT-001?tab=ledger` in any browser on the
+`http://localhost:5000/cases/INC-RT-001?tab=ledger` in any browser on the
 host yourself.
 
 ### `pnpm aisoc:demo` fails after a successful install

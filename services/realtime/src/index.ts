@@ -41,8 +41,10 @@ const PUSH_REDIS = new Redis(REDIS_URL);
 // allow-list to "*" we refuse to start in production rather than silently
 // turn /sse into a cross-origin CSRF target.
 const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:5000',
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://127.0.0.1:5000',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
   'https://tryaisoc.com',

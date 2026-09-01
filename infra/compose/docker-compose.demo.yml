@@ -144,7 +144,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${AISOC_API_PORT:-8000}:8000"
+      - "127.0.0.1:${AISOC_API_PORT:-8888}:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
@@ -156,7 +156,7 @@ services:
       # Browser → api CORS origin tracks the web host port so a fallback
       # publish (e.g. 3001) still passes the api's CORS preflight when a
       # caller hits the api directly.
-      CORS_ORIGINS: http://localhost:${AISOC_WEB_PORT:-3000}
+      CORS_ORIGINS: http://localhost:${AISOC_WEB_PORT:-5000}
       # The agents service listens on port 8084 inside the Docker network
       # (see its Dockerfile + the agents service block below). Without this
       # the api defaults to `http://agents:8000` and every playbook / case
@@ -188,7 +188,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${AISOC_AGENTS_PORT:-8001}:8084"
+      - "127.0.0.1:${AISOC_AGENTS_PORT:-8887}:8084"
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
@@ -304,7 +304,7 @@ services:
       - agents
       - realtime
     ports:
-      - "127.0.0.1:${AISOC_WEB_PORT:-3000}:3000"
+      - "127.0.0.1:${AISOC_WEB_PORT:-5000}:3000"
     environment:
       # Server-side rewrite targets (used by the Next.js Node process).
       # These never reach the browser — only the proxy layer in next.config.js.

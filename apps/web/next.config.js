@@ -13,8 +13,8 @@ const path = require('path');
 // Docker DNS names (`http://api:8000`, `http://agents:8084`,
 // `http://realtime:4000`).
 const REALTIME_HOST = process.env.REALTIME_URL || 'http://localhost:8086';
-const API_HOST = process.env.API_URL || 'http://localhost:8000';
-const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8001';
+const API_HOST = process.env.API_URL || 'http://localhost:8888';
+const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8887';
 // Fusion service exposes /entity-risk/*, /ml/*, /metrics, /health at root.
 // We surface those to the browser under the same-origin namespace
 // /api/v1/fusion/* so the bundle stays host-agnostic.

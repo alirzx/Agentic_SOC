@@ -23,7 +23,7 @@
         5.  Internet reachability (api.github.com, ghcr.io, npmjs.org)
         6.  WSL2 is installed and has a default distro
         7.  Docker Desktop service / engine is reachable (best effort)
-        8.  Required ports (3000/5432/6379/8000/8001/8086/9092) are free
+        8.  Required ports (5000/5432/6379/8888/8887/8086/9092) are free
             OR held by an existing AiSOC container we can reuse
         9.  No leftover/conflicting AiSOC containers from a prior run
         10. Hyper-V vs WSL2 sanity check (warn if both seem half-on)
@@ -75,11 +75,11 @@ if (-not $InstallRoot) {
 # These ports must match infra/compose/docker-compose.demo.yml. If you change ports
 # there, change them here, otherwise users get false negatives.
 $script:PfRequiredPorts = @(
-    @{ Port = 3000; Name = "web console"      },
+    @{ Port = 5000; Name = "web console"      },
     @{ Port = 5432; Name = "postgres"         },
     @{ Port = 6379; Name = "redis"            },
-    @{ Port = 8000; Name = "api"              },
-    @{ Port = 8001; Name = "agents"           },
+    @{ Port = 8888; Name = "api"              },
+    @{ Port = 8887; Name = "agents"           },
     @{ Port = 8086; Name = "realtime ws"      },
     @{ Port = 9092; Name = "kafka"            }
 )
