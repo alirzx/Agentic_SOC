@@ -8,20 +8,20 @@ import type * as Preset from "@docusaurus/preset-classic";
 //
 // Override at build time with:
 //   DOCS_URL=https://docs.tryaisoc.com DOCS_BASE_URL=/ pnpm --filter @aisoc/docs build
-const DOCS_URL = process.env.DOCS_URL || "https://beenuar.github.io";
-const DOCS_BASE_URL = process.env.DOCS_BASE_URL || "/AiSOC/";
+const DOCS_URL = process.env.DOCS_URL || "https://github.com/SoorinSecurity";
+const DOCS_BASE_URL = process.env.DOCS_BASE_URL || "/Agentic_SOC/";
 
 const config: Config = {
-  title: "AiSOC",
+  title: "Soorin Agentic SOC",
   tagline:
-    "Open-source AI SOC platform. Agent decisions are recorded in an investigation ledger and a public eval harness runs in CI. MIT-licensed and self-hostable.",
+    "AI-powered SOC platform from Soorin Security. Agent decisions are recorded in an investigation ledger. Self-hostable.",
   favicon: "img/favicon.ico",
 
   url: DOCS_URL,
   baseUrl: DOCS_BASE_URL,
 
-  organizationName: "beenuar",
-  projectName: "AiSOC",
+  organizationName: "SoorinSecurity",
+  projectName: "Agentic_SOC",
 
   headTags: [
     {
@@ -76,9 +76,9 @@ const config: Config = {
   themeConfig: {
     image: "img/aisoc-social-card.png",
     navbar: {
-      title: "AiSOC",
+      title: "Soorin Agentic SOC",
       logo: {
-        alt: "AiSOC Logo",
+        alt: "Soorin Logo",
         src: "img/logo.svg",
       },
       items: [
@@ -131,7 +131,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} AiSOC Contributors. MIT License.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Soorin Security. MIT License.`,
     },
     prism: {
       theme: prismThemes.github,

@@ -79,7 +79,7 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
           .split('-')
           .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join(' ')
-      : 'AiSOC';
+      : 'Soorin';
     return { title, description: '' };
   })();
 

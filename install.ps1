@@ -576,9 +576,9 @@ function Resolve-Repo {
     $selfDir = $PSScriptRoot
     if ($selfDir -and (Test-Path (Join-Path $selfDir '.git')) -and (Test-Path (Join-Path $selfDir 'package.json'))) {
         $pkgJson = Get-Content (Join-Path $selfDir 'package.json') -Raw
-        if ($pkgJson -match '"name":\s*"aisoc') {
+        if ($pkgJson -match '"name":\s*"(soorin-agentic-soc|aisoc)') {
             $script:RepoRoot = $selfDir
-            Write-Ok "Using existing AiSOC clone at $RepoRoot"
+            Write-Ok "Using existing Soorin Agentic SOC clone at $RepoRoot"
             return
         }
     }
@@ -586,7 +586,7 @@ function Resolve-Repo {
     if (Test-Path $CloneDir) {
         $hasGit  = Test-Path (Join-Path $CloneDir '.git')
         $hasPkg  = Test-Path (Join-Path $CloneDir 'package.json')
-        if ($hasGit -and $hasPkg -and ((Get-Content (Join-Path $CloneDir 'package.json') -Raw) -match '"name":\s*"aisoc')) {
+        if ($hasGit -and $hasPkg -and ((Get-Content (Join-Path $CloneDir 'package.json') -Raw) -match '"name":\s*"(soorin-agentic-soc|aisoc)')) {
             Write-Info "Updating existing clone at $CloneDir..."
             Push-Location $CloneDir
             try {
@@ -704,7 +704,7 @@ function Start-Demo {
     Write-Info "stack, seed the showcase ransomware case, and open your browser."
     Write-Host ''
 
-    $demoArgs = @()
+    $demoArgs = @('--rebuild')
     if ($NoPull)  { $demoArgs += '--no-pull' }
     if ($Rebuild) { $demoArgs += '--rebuild' }
 

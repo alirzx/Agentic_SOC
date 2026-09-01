@@ -1,13 +1,13 @@
 # Quick install — zero-prerequisite bootstrap
 
-AiSOC ships with two one-click bootstrap installers. They take a freshly-imaged
-machine to a running AiSOC dashboard in your browser, with **zero assumed
-prerequisites**, in a single command.
+Soorin Agentic SOC ships with two one-click bootstrap installers. They take a
+freshly-imaged machine to a running dashboard in your browser, with **zero
+assumed prerequisites**, in a single command.
 
 If you already have Docker, Node 20, pnpm 8+, and git installed, you don't need
-these scripts — just run `pnpm aisoc:demo` from a clone. These installers exist
-for the case where you don't (or you're handing the repo to someone who
-doesn't).
+these scripts — clone https://github.com/SoorinSecurity/Agentic_SOC and run
+`pnpm aisoc:demo` (builds images from **this** repo). These installers exist
+for the case where you don't.
 
 ## TL;DR
 
@@ -31,7 +31,7 @@ already auto-logged-in and a real LockBit 3.0 investigation mid-flight.
 
 ## What gets installed
 
-The installer is **surgical**. It installs only the four things AiSOC actually
+The installer is **surgical**. It installs only the four things Soorin Agentic SOC actually
 needs, and only if they are missing or too old:
 
 | Tool                   | Linux / macOS source              | Windows source         | Why                              |
@@ -96,7 +96,7 @@ the `docker` group to take effect.
 --no-pull           Forwarded to aisoc:demo to skip image pull.
 --rebuild           Forwarded to aisoc:demo to build images from source.
 --clone-dir DIR     Where to clone the repo when running as a one-liner.
-                    Default: $HOME/aisoc
+                    Default: $HOME/Agentic_SOC
 --branch BR         Git branch to clone. Default: main.
 --skip-preflight    Skip the up-front environment checks and dive straight in.
                     Use only if you know your machine is fine and preflight is
@@ -409,7 +409,7 @@ inspect the script before running:
 
 ```bash
 git clone https://github.com/SoorinSecurity/Agentic_SOC.git
-cd AiSOC
+cd Agentic_SOC
 less install.sh        # or your editor of choice
 ./install.sh
 ```

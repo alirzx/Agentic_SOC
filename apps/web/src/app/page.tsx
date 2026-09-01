@@ -107,7 +107,7 @@ export const metadata: Metadata = {
 const productJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
-  name: 'AiSOC',
+  name: 'Soorin Agentic SOC',
   alternateName: ['AI SOC', 'AiSOC Platform', 'Agentic SOC'],
   applicationCategory: 'SecurityApplication',
   applicationSubCategory: 'Security Operations Center',

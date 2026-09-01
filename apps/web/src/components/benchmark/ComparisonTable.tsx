@@ -79,7 +79,7 @@ export function ComparisonTable() {
         </thead>
         <tbody className="divide-y divide-white/5">
           {VENDORS.map((vendor) => {
-            const isUs = vendor.name === 'AiSOC';
+            const isUs = vendor.name === 'Soorin';
             return (
               <tr
                 key={vendor.name}

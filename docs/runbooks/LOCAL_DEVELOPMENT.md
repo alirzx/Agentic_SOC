@@ -25,7 +25,7 @@ Memory budget: the full stack uses **~6 GB RAM** with all services running. If y
 
 ```bash
 git clone https://github.com/SoorinSecurity/Agentic_SOC.git
-cd AiSOC
+cd Agentic_SOC
 cp .env.example .env
 ```
 
