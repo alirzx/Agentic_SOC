@@ -30,6 +30,13 @@ import { axe } from 'vitest-axe';
 
 // Shared mocks ----------------------------------------------------------
 
+vi.mock('next/image', () => ({
+  default: (props: { alt: string } & Record<string, unknown>) => (
+    // Decorative hero art; tests only need a stand-in img node.
+    <img alt={props.alt ?? ''} />
+  ),
+}));
+
 vi.mock('next/link', () => ({
   default: ({
     children,
@@ -108,6 +115,7 @@ vi.mock('../../../package.json', () => ({
 
 // Component imports go after the mocks so the mocks are resolved first.
 import { Hero } from '../components/landing/Hero';
+import { SoorinHero } from '../components/landing/SoorinHero';
 import { StartHero } from '../components/onboarding/StartHero';
 import { ThemeToggle } from '../components/theme/ThemeToggle';
 import { ThemeProvider } from '../components/theme/ThemeProvider';
@@ -134,6 +142,12 @@ const axeOptions = {
 describe('WCAG 2.1 AA — high-traffic surfaces', () => {
   it('Landing Hero has no accessibility violations', async () => {
     const { container } = render(<Hero />);
+    const results = await axe(container, axeOptions);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('Soorin splash hero has no accessibility violations', async () => {
+    const { container } = render(<SoorinHero />);
     const results = await axe(container, axeOptions);
     expect(results).toHaveNoViolations();
   });
