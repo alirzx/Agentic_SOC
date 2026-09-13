@@ -569,15 +569,38 @@ function portEnv(ports: PortMap): NodeJS.ProcessEnv {
   };
 }
 
+/**
+ * Drop leftover `aisoc-demo-*` containers, including the hashed rename
+ * leftovers compose leaves after an interrupted recreate
+ * (`654d4028c29f_aisoc-demo-postgres`). Named volumes are kept.
+ */
+function removeStaleDemoContainers(): void {
+  const listed = runCaptured("docker", ["ps", "-aq", "--filter", "name=aisoc-demo"]);
+  const ids = listed.output
+    .split(/\s+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (ids.length === 0) {
+    log(c.green("ok") + " no leftover demo containers");
+    return;
+  }
+  log(`removing ${ids.length} leftover demo container(s)`);
+  const removed = runCaptured("docker", ["rm", "-f", ...ids]);
+  if (removed.code !== 0) {
+    log(c.yellow("warn") + " could not remove some leftover demo containers");
+  }
+}
+
 async function startStack(flags: Flags): Promise<boolean> {
   step(3, 7, "Starting AiSOC demo stack");
+  removeStaleDemoContainers();
 
   // Pick host ports BEFORE compose up so any conflict (lingering
   // aisoc-demo-* container, unrelated dev server, local Postgres) is
   // surfaced in the script's own output instead of buried in a docker
   // compose error wall. Module-level so the rest of the script can read
   // the resolved values without threading them through every signature.
-  const args = ["compose", "-f", COMPOSE_FILE, "up", "-d"];
+  const args = ["compose", "-f", COMPOSE_FILE, "up", "-d", "--remove-orphans"];
   if (flags.rebuild) args.push("--build");
 
   const maxAttempts = 3;
@@ -612,6 +635,12 @@ async function startStack(flags: Flags): Promise<boolean> {
       /address already in use|port is already allocated|failed to bind host port/i.test(
         result.output
       );
+    const nameConflict = /The container name .* is already in use/i.test(result.output);
+    if (nameConflict && attempt < maxAttempts) {
+      log(c.yellow("stale container name; removing leftovers and retrying"));
+      removeStaleDemoContainers();
+      continue;
+    }
     if (!portConflict || attempt === maxAttempts) {
       console.error(c.red("docker compose up failed. See output above."));
       return false;

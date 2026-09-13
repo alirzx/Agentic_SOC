@@ -305,6 +305,57 @@ docker compose down -v       # همه volumeها پاک می‌شود
 5. **گروه docker در همان سشن اعمال نشده**  
    `newgrp docker` یا logout/login.
 
+6. **`Invalid package.json in package.json`**  
+   این خطا یعنی pnpm نتوانست ریشهٔ پروژه را بخواند؛ معمولاً JSON خراب است یا pnpm ۱۱ به‌جای ۸.۱۵ نصب شده. روی VM:
+
+   ```bash
+   python3 -m json.tool package.json >/dev/null && echo "JSON OK"
+   pnpm -v
+   which -a pnpm
+   ```
+
+   اگر JSON خراب بود:
+
+   ```bash
+   git checkout -- package.json
+   ```
+
+   اگر `pnpm -v` با `11.` شروع می‌شود، برگردید به ۸.۱۵.۱:
+
+   ```bash
+   corepack enable
+   corepack prepare pnpm@8.15.1 --activate
+   hash -r
+   pnpm -v
+   ```
+
+   اسکریپت را با `run` صدا بزنید (نه `pnpm aisoc:demo` خالی):
+
+   ```bash
+   pnpm run aisoc:demo
+   ```
+
+   اگر `node_modules` از قبل هست، بدون pnpm:
+
+   ```bash
+   ./node_modules/.bin/tsx scripts/aisoc-demo.ts --rebuild
+   ```
+
+   فقط بازسازی وب:
+
+   ```bash
+   docker compose -f infra/compose/docker-compose.demo.yml up -d --build web
+   ```
+
+7. **`The container name "/…_aisoc-demo-postgres" is already in use`**  
+   recreate قبلی وسط کار قطع شده و یک کانتینر با نام هش‌شده مانده. دادهٔ دیتابیس در volume می‌ماند؛ فقط کانتینرها را پاک کنید:
+
+   ```bash
+   docker ps -a --filter name=aisoc-demo --format '{{.ID}} {{.Names}} {{.Status}}'
+   docker rm -f $(docker ps -aq --filter name=aisoc-demo)
+   docker compose -f infra/compose/docker-compose.demo.yml up -d --remove-orphans --build
+   ```
+
 ---
 
 ## لینک‌های مرتبط

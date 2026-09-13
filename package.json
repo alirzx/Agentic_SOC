@@ -36,6 +36,7 @@
     "marketplace:curate:check": "python3 scripts/curate_detections.py --check",
     "aisoc:lab": "bash scripts/lab.sh",
     "aisoc:doctor": "tsx scripts/aisoc-doctor.ts",
+    "demo": "tsx scripts/aisoc-demo.ts --rebuild",
     "aisoc:demo": "tsx scripts/aisoc-demo.ts --rebuild",
     "soorin:demo": "tsx scripts/aisoc-demo.ts --rebuild",
     "aisoc:demo:down": "docker compose -f infra/compose/docker-compose.demo.yml down -v",
