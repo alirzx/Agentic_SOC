@@ -121,7 +121,7 @@ function SecretDisclosureModal({
         exit={{ opacity: 0 }}
       >
         <motion.div
-          className="w-full max-w-xl rounded-xl border border-amber-500/30 bg-gray-900 p-5 shadow-2xl"
+          className="w-full max-w-xl rounded-xl border border-amber-500/30 bg-dark-70 p-5 shadow-2xl"
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 20, opacity: 0 }}
@@ -154,13 +154,13 @@ function SecretDisclosureModal({
             <input
               readOnly
               value={secret.inbox_url}
-              className="flex-1 bg-gray-950 border border-gray-700 rounded-md px-2 py-1.5 text-xs text-gray-100 font-mono"
+              className="flex-1 bg-dark-80 border border-[#333A47] rounded-md px-2 py-1.5 text-xs text-gray-100 font-mono"
               onFocus={(e) => e.currentTarget.select()}
             />
             <button
               type="button"
               onClick={() => handleCopy(secret.inbox_url, 'URL')}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-md"
+              className="bg-brand-600 hover:bg-brand-500 text-white text-xs px-3 py-1.5 rounded-md"
             >
               Copy URL
             </button>
@@ -173,7 +173,7 @@ function SecretDisclosureModal({
             <input
               readOnly
               value={secret.token}
-              className="flex-1 bg-gray-950 border border-gray-700 rounded-md px-2 py-1.5 text-xs text-gray-100 font-mono"
+              className="flex-1 bg-dark-80 border border-[#333A47] rounded-md px-2 py-1.5 text-xs text-gray-100 font-mono"
               onFocus={(e) => e.currentTarget.select()}
             />
             <button
@@ -193,7 +193,7 @@ function SecretDisclosureModal({
             </p>
           )}
 
-          <div className="flex justify-end pt-2 border-t border-gray-800">
+          <div className="flex justify-end pt-2 border-t border-[#374151]">
             <button
               type="button"
               onClick={onClose}
@@ -291,7 +291,7 @@ function MintForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 space-y-4"
+      className="rounded-xl border border-[#374151] bg-dark-70/80 p-4 space-y-4"
     >
       <div>
         <label className="block text-xs text-gray-400 mb-1.5">
@@ -300,7 +300,7 @@ function MintForm({
         <select
           value={templateId}
           onChange={(e) => setTemplateId(e.target.value)}
-          className="w-full bg-gray-950 border border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-100"
+          className="w-full bg-dark-80 border border-[#333A47] rounded-md px-2 py-1.5 text-sm text-gray-100"
         >
           {orderedCategories.map((cat) => (
             <optgroup key={cat} label={categoryLabel(cat)}>
@@ -326,7 +326,7 @@ function MintForm({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="PagerDuty on-call"
-          className="w-full bg-gray-950 border border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-100"
+          className="w-full bg-dark-80 border border-[#333A47] rounded-md px-2 py-1.5 text-sm text-gray-100"
         />
         <p className="text-xs text-gray-500 mt-1">
           Helps you tell tokens apart when the same template is used by
@@ -354,14 +354,14 @@ function MintForm({
             value={hmacSecret}
             onChange={(e) => setHmacSecret(e.target.value)}
             placeholder="Shared secret (≥ 16 chars)"
-            className="mt-2 w-full bg-gray-950 border border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-100 font-mono"
+            className="mt-2 w-full bg-dark-80 border border-[#333A47] rounded-md px-2 py-1.5 text-sm text-gray-100 font-mono"
             minLength={16}
             maxLength={512}
           />
         )}
       </div>
 
-      <div className="flex justify-end pt-2 border-t border-gray-800">
+      <div className="flex justify-end pt-2 border-t border-[#374151]">
         <button
           type="submit"
           disabled={submitting || !templateId}
@@ -369,7 +369,7 @@ function MintForm({
             'text-sm px-4 py-1.5 rounded-md text-white transition-colors',
             submitting || !templateId
               ? 'bg-blue-700/50 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-500',
+              : 'bg-brand-600 hover:bg-brand-500',
           )}
         >
           {submitting ? 'Minting…' : 'Mint URL'}
@@ -402,7 +402,7 @@ function TokensTable({
 
   if (tokens.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-800 bg-gray-900/30 p-6 text-center">
+      <div className="rounded-xl border border-dashed border-[#374151] bg-dark-70/50 p-6 text-center">
         <p className="text-sm text-gray-400">No inbox URLs yet.</p>
         <p className="text-xs text-gray-500 mt-1">
           Mint one above to give a vendor a place to push alerts.
@@ -412,9 +412,9 @@ function TokensTable({
   }
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/40 overflow-hidden">
+    <div className="rounded-xl border border-[#374151] bg-dark-70/80 overflow-hidden">
       <table className="w-full text-xs">
-        <thead className="bg-gray-900/80 text-gray-500 uppercase tracking-wide">
+        <thead className="bg-dark-70/80 text-gray-500 uppercase tracking-wide">
           <tr>
             <th className="text-left px-3 py-2 font-medium">Template</th>
             <th className="text-left px-3 py-2 font-medium">Label</th>
@@ -460,8 +460,8 @@ function TokensTable({
                       className={clsx(
                         'text-xs px-2 py-1 rounded-md',
                         busy
-                          ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                          : 'bg-gray-800 hover:bg-gray-700 text-gray-200',
+                          ? 'bg-dark-20 text-gray-500 cursor-not-allowed'
+                          : 'bg-dark-20 hover:bg-gray-700 text-gray-200',
                       )}
                       title="Mint a new token with the same template/label/HMAC and revoke this one"
                     >
@@ -474,7 +474,7 @@ function TokensTable({
                       className={clsx(
                         'text-xs px-2 py-1 rounded-md',
                         busy
-                          ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                          ? 'bg-dark-20 text-gray-500 cursor-not-allowed'
                           : 'bg-red-600/20 hover:bg-red-600/30 text-red-300',
                       )}
                       title="Permanently revoke this token. Vendor traffic will be rejected."
@@ -610,7 +610,7 @@ export function InboxTokensPanel() {
   );
 
   return (
-    <div className="rounded-xl border border-gray-800/60 bg-gray-900/40">
+    <div className="rounded-xl border border-[#374151]/60 bg-dark-70/80">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -621,7 +621,7 @@ export function InboxTokensPanel() {
           <span
             className={clsx(
               'inline-flex h-7 w-7 items-center justify-center rounded-md',
-              'bg-blue-500/15 text-blue-300',
+              'bg-brand-500/15 text-brand-300',
             )}
           >
             <svg
@@ -676,7 +676,7 @@ export function InboxTokensPanel() {
             transition={{ duration: 0.18 }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 space-y-4 border-t border-gray-800/60 pt-4">
+            <div className="px-4 pb-4 space-y-4 border-t border-[#374151]/60 pt-4">
               {loadError && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
                   {loadError}{' '}

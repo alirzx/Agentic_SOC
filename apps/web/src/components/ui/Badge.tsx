@@ -1,14 +1,5 @@
 /**
- * T3.8 — AiSOC console Badge primitive.
- *
- * The console scatters ~30 inline ``<span class="text-xs ...">`` badges
- * with subtly different palettes. This component codifies the five
- * semantic tones we actually use (info / success / warning / danger /
- * neutral) plus the AiSOC-specific severity tones (low / medium / high
- * / critical) that mirror the OCSF severity ladder.
- *
- * Use this anywhere you would have inlined a label pill: alert
- * severity, run status, MITRE tactic, connector mode, etc.
+ * Console Badge primitive — AssetManagement chip tones.
  */
 import { clsx } from 'clsx';
 import type { HTMLAttributes, ReactNode } from 'react';
@@ -26,14 +17,14 @@ export type BadgeTone =
   | 'severity-critical';
 
 const TONE_CLASSES: Record<BadgeTone, string> = {
-  neutral: 'bg-gray-800/80 text-gray-300 border-gray-700',
-  info: 'bg-blue-900/40 text-blue-300 border-blue-800',
-  success: 'bg-green-900/40 text-green-300 border-green-800',
-  warning: 'bg-amber-900/40 text-amber-200 border-amber-800',
+  neutral: 'bg-dark-20 text-amgray-30 border-[#333A47]',
+  info: 'bg-teal-20/10 text-teal-20 border-teal-20/30',
+  success: 'bg-[#64FF99]/10 text-[#64FF99] border-[#64FF99]/30',
+  warning: 'bg-[#F0BC56]/10 text-[#F0BC56] border-[#F0BC56]/30',
   danger: 'bg-red-900/40 text-red-300 border-red-800',
-  'severity-info': 'bg-slate-800 text-slate-300 border-slate-700',
-  'severity-low': 'bg-blue-900/40 text-blue-300 border-blue-800',
-  'severity-medium': 'bg-amber-900/40 text-amber-200 border-amber-800',
+  'severity-info': 'bg-dark-20 text-amgray-30 border-[#333A47]',
+  'severity-low': 'bg-[#3163CF]/15 text-[#7BA3F0] border-[#3163CF]/40',
+  'severity-medium': 'bg-[#F0BC56]/15 text-[#F0BC56] border-[#F0BC56]/40',
   'severity-high': 'bg-orange-900/50 text-orange-300 border-orange-800',
   'severity-critical': 'bg-red-900/60 text-red-200 border-red-700',
 };
@@ -56,7 +47,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium',
+        'inline-flex items-center gap-1.5 rounded-[6px] border px-2 py-0.5 text-[11px] font-medium',
         TONE_CLASSES[tone],
         className,
       )}

@@ -1,20 +1,8 @@
 /**
- * T3.8 — AiSOC console Button primitive.
+ * Console Button primitive — AssetManagement visual language.
  *
- * The console already had ~40 inline ``<button className="...">``s with
- * subtly different padding, radius, and hover colours. This component
- * codifies the canonical set so the Storybook design system has a
- * single source of truth.
- *
- * Variants:
- *   - primary   — solid blue, the main CTA on a page
- *   - secondary — subtle gray, supporting actions
- *   - destructive — solid red, irreversible actions (block IP, etc.)
- *   - ghost     — transparent until hovered
- *   - outline   — bordered, for low-emphasis actions next to a primary
- *
- * Sizes follow the 4-token ladder (xs / sm / md / lg) the rest of the
- * console uses for tap-target heights.
+ * Variants mirror AssetManagment_Front PrimaryButton / shadcn button:
+ * teal primary CTA, dark secondary panels, soft outline borders.
  */
 import { clsx } from 'clsx';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
@@ -31,22 +19,22 @@ export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    'bg-blue-600 text-white hover:bg-blue-500 active:bg-blue-700 disabled:bg-blue-600/40',
+    'bg-teal-20 text-dark-80 shadow-glow-teal hover:bg-teal-10 active:bg-brand-600 disabled:bg-teal-20/40',
   secondary:
-    'bg-gray-800 text-gray-200 hover:bg-gray-700 active:bg-gray-700 disabled:bg-gray-800/40 disabled:text-gray-500',
+    'bg-dark-10 text-amgray-30 border border-[#374151] hover:text-white hover:bg-dark-20 active:bg-dark-20 disabled:opacity-40',
   destructive:
     'bg-red-600 text-white hover:bg-red-500 active:bg-red-700 disabled:bg-red-600/40',
   ghost:
-    'bg-transparent text-gray-300 hover:bg-gray-800/60 hover:text-gray-100 disabled:text-gray-600',
+    'bg-transparent text-amgray-30 hover:bg-dark-20/60 hover:text-white disabled:text-amgray-50',
   outline:
-    'bg-transparent text-gray-300 border border-gray-700 hover:border-gray-600 hover:bg-gray-800/40 disabled:opacity-50',
+    'bg-transparent text-teal-20 border border-teal-20/40 hover:bg-teal-20/10 hover:border-teal-20 disabled:opacity-50',
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  xs: 'h-7 px-2 text-xs gap-1.5',
-  sm: 'h-8 px-3 text-xs gap-1.5',
-  md: 'h-9 px-4 text-sm gap-2',
-  lg: 'h-11 px-5 text-sm font-medium gap-2',
+  xs: 'h-7 px-2 text-xs gap-1.5 rounded-[6px]',
+  sm: 'h-8 px-3 text-xs gap-1.5 rounded-[6px]',
+  md: 'h-9 px-4 text-sm gap-2 rounded-[6px]',
+  lg: 'h-10 px-8 text-sm font-semibold gap-2 rounded-[6px]',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -89,10 +77,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       aria-pressed={pressed}
       aria-busy={loading || undefined}
       className={clsx(
-        'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-20/60 disabled:cursor-not-allowed',
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
-        pressed && 'ring-1 ring-blue-500/40',
+        pressed && 'ring-1 ring-teal-20/40',
         className,
       )}
       {...rest}

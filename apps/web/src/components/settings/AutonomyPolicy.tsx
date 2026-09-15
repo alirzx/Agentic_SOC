@@ -47,7 +47,7 @@ const BLAST_TONE: Record<AutonomyBlastRadius, string> = {
   medium: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
   high: 'bg-orange-500/10 text-orange-300 ring-orange-500/30',
   critical: 'bg-red-500/10 text-red-300 ring-red-500/30',
-  custom: 'bg-blue-500/10 text-blue-300 ring-blue-500/30',
+  custom: 'bg-brand-500/10 text-brand-300 ring-brand-500/30',
   unknown: 'bg-gray-500/10 text-gray-300 ring-gray-500/30',
 };
 
@@ -114,7 +114,7 @@ export function AutonomyPolicyPanel() {
         ) : null}
 
         {/* Legend */}
-        <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4 text-xs text-gray-400">
+        <div className="rounded-lg border border-[#374151] bg-dark-80/40 p-4 text-xs text-gray-400">
           <p className="font-medium text-gray-300">How tiers map</p>
           <ul className="mt-2 space-y-1">
             <li>
@@ -251,7 +251,7 @@ function ActionRow({
   };
 
   const overrideTag = action.overridden ? (
-    <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-300 ring-1 ring-blue-500/30">
+    <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] font-medium text-brand-300 ring-1 ring-brand-500/30">
       tenant override
     </span>
   ) : (
@@ -261,8 +261,8 @@ function ActionRow({
   );
 
   return (
-    <li className="rounded-lg border border-gray-800 bg-gray-950/40 p-4 transition-colors hover:border-gray-700">
-      <div className="flex flex-col gap-1 border-b border-gray-800 pb-3 sm:flex-row sm:items-start sm:justify-between">
+    <li className="rounded-lg border border-[#374151] bg-dark-80/40 p-4 transition-colors hover:border-[#333A47]">
+      <div className="flex flex-col gap-1 border-b border-[#374151] pb-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-mono text-sm font-semibold text-gray-100">
@@ -297,10 +297,10 @@ function ActionRow({
               onClick={onResetClick}
               disabled={resetting}
               className={clsx(
-                'rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200',
+                'rounded-lg border border-[#333A47] bg-dark-70 px-3 py-1.5 text-xs text-gray-200',
                 resetting
                   ? 'cursor-not-allowed opacity-60'
-                  : 'hover:bg-gray-800',
+                  : 'hover:bg-dark-20',
               )}
             >
               {resetting ? 'Resetting…' : 'Reset to default'}
@@ -349,7 +349,7 @@ function ActionRow({
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            className="mt-3 flex flex-col gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3 sm:flex-row sm:items-end"
+            className="mt-3 flex flex-col gap-2 rounded-lg border border-[#374151] bg-dark-80/40 p-3 sm:flex-row sm:items-end"
           >
             <label className="flex flex-1 flex-col gap-1.5">
               <span className="text-xs font-medium text-gray-300">
@@ -363,8 +363,8 @@ function ActionRow({
                 onChange={(e) => setReason(e.target.value)}
                 placeholder='e.g. "Lower auto threshold during incident response window"'
                 className={clsx(
-                  'w-full rounded-lg border border-gray-700 bg-gray-950/60 px-3 py-2 text-sm text-gray-100',
-                  'placeholder:text-gray-600 focus:border-blue-500/60 focus:outline-none focus:ring-1 focus:ring-blue-500/40',
+                  'w-full rounded-lg border border-[#333A47] bg-dark-80/60 px-3 py-2 text-sm text-gray-100',
+                  'placeholder:text-gray-600 focus:border-brand-500/60 focus:outline-none focus:ring-1 focus:ring-brand-500/40',
                 )}
                 maxLength={500}
               />
@@ -376,7 +376,7 @@ function ActionRow({
                   setDraft(action.thresholds);
                   setReason('');
                 }}
-                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800"
+                className="rounded-lg border border-[#333A47] bg-dark-70 px-3 py-2 text-sm text-gray-200 hover:bg-dark-20"
               >
                 Discard
               </button>
@@ -387,8 +387,8 @@ function ActionRow({
                 className={clsx(
                   'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
                   canSave
-                    ? 'bg-blue-600 text-white hover:bg-blue-500'
-                    : 'cursor-not-allowed bg-gray-800 text-gray-500',
+                    ? 'bg-brand-600 text-white hover:bg-brand-500'
+                    : 'cursor-not-allowed bg-dark-20 text-gray-500',
                 )}
               >
                 {saving ? 'Saving…' : 'Save thresholds'}
@@ -432,7 +432,7 @@ function ThresholdInput({
   const dirty = Math.abs(value - remote) > 1e-9;
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+    <div className="rounded-lg border border-[#374151] bg-dark-80/60 p-3">
       <div className="flex items-center justify-between">
         <span className={clsx('text-xs font-semibold', tones[tone])}>
           {label}
@@ -440,7 +440,7 @@ function ThresholdInput({
         <span
           className={clsx(
             'font-mono text-sm tabular-nums',
-            dirty ? 'text-blue-300' : 'text-gray-200',
+            dirty ? 'text-brand-300' : 'text-gray-200',
           )}
         >
           {formatPct(value)}
@@ -473,7 +473,7 @@ function ThresholdBand({ draft }: { draft: AutonomyThresholdTriple }) {
 
   return (
     <div className="mt-3" aria-hidden>
-      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-gray-900 ring-1 ring-gray-800">
+      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-dark-70 ring-1 ring-gray-800">
         {/* refuse */}
         <div
           className="absolute inset-y-0 bg-red-500/30"
@@ -545,7 +545,7 @@ function PanelHeader({
   description: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-gray-800 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 border-b border-[#374151] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h2 className="text-lg font-semibold text-gray-100">{title}</h2>
         <p className="mt-1 max-w-xl text-sm text-gray-500">{description}</p>

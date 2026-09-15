@@ -30,7 +30,7 @@ export function ShadowRunsView() {
   }, []);
 
   if (loading) {
-    return <p className="p-6 text-sm text-zinc-400">Loading shadow runs…</p>;
+    return <p className="p-6 text-sm text-amgray-40">Loading shadow runs…</p>;
   }
   if (error) {
     return <ErrorState error={error} />;
@@ -48,13 +48,13 @@ export function ShadowRunsView() {
     <div className="p-6 space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Agentic SOC — Shadow Runs</h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-amgray-50">
           Parallel investigations. Production Case/Alert status is never modified.
         </p>
       </div>
-      <div className="overflow-x-auto rounded border border-zinc-800">
+      <div className="overflow-x-auto rounded border border-[#374151]">
         <table className="min-w-full text-sm">
-          <thead className="bg-zinc-900 text-left text-zinc-400">
+          <thead className="bg-dark-70 text-left text-amgray-40">
             <tr>
               <th className="px-3 py-2">Case</th>
               <th className="px-3 py-2">Alert</th>
@@ -71,7 +71,7 @@ export function ShadowRunsView() {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="border-t border-zinc-800">
+              <tr key={row.id} className="border-t border-[#374151]">
                 <td className="px-3 py-2">
                   <Link className="text-sky-400 hover:underline" href={`/agentic/shadow-runs/${row.id}`}>
                     {row.case_id || '—'}

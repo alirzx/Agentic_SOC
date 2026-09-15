@@ -62,7 +62,7 @@ const SEVERITY_COLORS: Record<Severity, string> = {
   critical: 'bg-red-500/20 text-red-300 border border-red-500/30',
   high: 'bg-orange-500/20 text-orange-300 border border-orange-500/30',
   medium: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30',
-  low: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+  low: 'bg-brand-500/20 text-brand-300 border border-brand-500/30',
   info: 'bg-gray-500/20 text-gray-300 border border-gray-500/30',
 };
 
@@ -235,7 +235,7 @@ export function LiveFeedPanel() {
   const pill = statusToLabel(status, hasReal);
 
   return (
-    <div className="bg-[#111620] border border-gray-800/60 rounded-lg p-4">
+    <div className="bg-[#111620] border border-[#374151]/60 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
           <span
@@ -253,7 +253,7 @@ export function LiveFeedPanel() {
             'text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border',
             pill.tone === 'live' && 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
             pill.tone === 'reconnect' && 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-            pill.tone === 'demo' && 'bg-gray-500/10 text-gray-400 border-gray-700',
+            pill.tone === 'demo' && 'bg-gray-500/10 text-gray-400 border-[#333A47]',
           )}
           title={
             pill.tone === 'demo'

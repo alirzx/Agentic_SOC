@@ -122,7 +122,7 @@ const LANG_LABEL: Record<DetectionLanguage, string> = {
 };
 
 const LANG_BADGE: Record<DetectionLanguage, string> = {
-  sigma: 'bg-blue-500/10 text-blue-300 ring-blue-500/30',
+  sigma: 'bg-brand-500/10 text-brand-300 ring-brand-500/30',
   yara: 'bg-purple-500/10 text-purple-300 ring-purple-500/30',
   kql: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
   eql: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
@@ -134,7 +134,7 @@ const SEVERITY_BADGE: Record<string, string> = {
   critical: 'bg-red-500/10 text-red-300 ring-red-500/40',
   high: 'bg-orange-500/10 text-orange-300 ring-orange-500/40',
   medium: 'bg-yellow-500/10 text-yellow-300 ring-yellow-500/40',
-  low: 'bg-blue-500/10 text-blue-300 ring-blue-500/40',
+  low: 'bg-brand-500/10 text-brand-300 ring-brand-500/40',
   info: 'bg-slate-500/10 text-slate-300 ring-slate-500/40',
 };
 
@@ -365,13 +365,13 @@ export function DetectionsView() {
         <div className="flex items-center gap-2">
           <Link
             href="/detection/proposals"
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-[#374151] px-3 py-2 text-sm text-gray-300 hover:bg-dark-20"
           >
             Proposals
           </Link>
           <Link
             href="/detection/new"
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-600"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-600"
           >
             <svg
               className="h-4 w-4"
@@ -389,7 +389,7 @@ export function DetectionsView() {
 
       {/* Tabs */}
       <div
-        className="flex gap-1 rounded-md border border-gray-800 bg-gray-950 p-0.5 text-sm"
+        className="flex gap-1 rounded-md border border-[#374151] bg-dark-80 p-0.5 text-sm"
         role="tablist"
         aria-label="Detection management views"
       >
@@ -406,7 +406,7 @@ export function DetectionsView() {
             className={clsx(
               'flex-1 rounded px-3 py-1.5 transition-colors sm:flex-none sm:min-w-[7rem]',
               tab === t.id
-                ? 'bg-gray-800 text-gray-100'
+                ? 'bg-dark-20 text-gray-100'
                 : 'text-gray-400 hover:text-gray-200',
             )}
           >
@@ -426,13 +426,13 @@ export function DetectionsView() {
       {tab === 'rules' && (
         <>
           {/* Filters */}
-          <div className="flex flex-col gap-3 rounded-lg border border-gray-800 bg-gray-900/40 p-3 lg:flex-row lg:items-center">
+          <div className="flex flex-col gap-3 rounded-lg border border-[#374151] bg-dark-70/80 p-3 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name, tag, or technique (T1059, lolbin, identity)…"
-                className="w-full rounded-md border border-gray-800 bg-gray-950 px-9 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none transition-colors focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/40"
+                className="w-full rounded-md border border-[#374151] bg-dark-80 px-9 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none transition-colors focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/40"
               />
               <svg
                 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
@@ -451,7 +451,7 @@ export function DetectionsView() {
               onChange={(e) =>
                 setLanguage(e.target.value as DetectionLanguage | 'all')
               }
-              className="rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 outline-none focus:border-blue-500/60"
+              className="rounded-md border border-[#374151] bg-dark-80 px-3 py-2 text-sm text-gray-300 outline-none focus:border-brand-500/60"
             >
               <option value="all">All languages</option>
               <option value="sigma">Sigma</option>
@@ -462,7 +462,7 @@ export function DetectionsView() {
               <option value="regex">Regex</option>
             </select>
 
-            <div className="inline-flex rounded-md border border-gray-800 bg-gray-950 p-0.5 text-xs">
+            <div className="inline-flex rounded-md border border-[#374151] bg-dark-80 p-0.5 text-xs">
               {(['all', 'on', 'off'] as const).map((opt) => (
                 <button
                   key={opt}
@@ -471,7 +471,7 @@ export function DetectionsView() {
                   className={clsx(
                     'rounded px-3 py-1.5 transition-colors',
                     enabledFilter === opt
-                      ? 'bg-gray-800 text-gray-100'
+                      ? 'bg-dark-20 text-gray-100'
                       : 'text-gray-400 hover:text-gray-200',
                   )}
                 >
@@ -484,11 +484,11 @@ export function DetectionsView() {
           {/* Bulk action bar — appears when rules are selected. */}
           {selected.size > 0 && (
             <div
-              className="flex flex-wrap items-center gap-3 rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-2.5 text-sm"
+              className="flex flex-wrap items-center gap-3 rounded-md border border-brand-500/30 bg-brand-500/5 px-4 py-2.5 text-sm"
               role="toolbar"
               aria-label="Bulk rule actions"
             >
-              <span className="text-blue-200">
+              <span className="text-brand-200">
                 <span className="font-mono font-semibold">{selected.size}</span>{' '}
                 rule{selected.size === 1 ? '' : 's'} selected
               </span>
@@ -513,7 +513,7 @@ export function DetectionsView() {
                   type="button"
                   onClick={clearSelection}
                   disabled={bulkPending}
-                  className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-60"
+                  className="rounded-md border border-[#333A47] px-3 py-1.5 text-xs text-gray-300 hover:bg-dark-20 disabled:opacity-60"
                 >
                   Clear
                 </button>
@@ -537,7 +537,7 @@ export function DetectionsView() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href="/detection/new"
-                      className="rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
+                      className="rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
                     >
                       Create a rule
                     </Link>
@@ -545,7 +545,7 @@ export function DetectionsView() {
                       type="button"
                       disabled
                       title="Starter pack import is planned for v1.1"
-                      className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-500 cursor-not-allowed select-none"
+                      className="rounded-md border border-[#333A47] px-4 py-2 text-sm text-gray-500 cursor-not-allowed select-none"
                     >
                       Import starter pack
                     </button>
@@ -567,7 +567,7 @@ export function DetectionsView() {
                       setLanguage('all');
                       setEnabledFilter('all');
                     }}
-                    className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                    className="rounded-md border border-[#333A47] px-4 py-2 text-sm text-gray-300 hover:bg-dark-20"
                   >
                     Clear filters
                   </button>
@@ -587,7 +587,7 @@ export function DetectionsView() {
                       ? 'Deselect all visible rules'
                       : 'Select all visible rules'
                   }
-                  className="h-3.5 w-3.5 cursor-pointer rounded border-gray-700 bg-gray-950 accent-blue-500"
+                  className="h-3.5 w-3.5 cursor-pointer rounded border-[#333A47] bg-dark-80 accent-blue-500"
                 />
                 <span>
                   {allFilteredSelected
@@ -648,10 +648,10 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
     <Link
       href={`/detection/${rule.id}`}
       className={clsx(
-        'group block rounded-lg border bg-gray-900/40 p-4 transition-colors',
+        'group block rounded-lg border bg-dark-70/80 p-4 transition-colors',
         selected
-          ? 'border-blue-500/50 bg-blue-500/5 hover:bg-blue-500/10'
-          : 'border-gray-800 hover:border-gray-700 hover:bg-gray-900/70',
+          ? 'border-brand-500/50 bg-brand-500/5 hover:bg-brand-500/10'
+          : 'border-[#374151] hover:border-[#333A47] hover:bg-dark-60',
       )}
     >
       <div className="flex items-start gap-4">
@@ -670,7 +670,7 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
               // Click handler does the work; keep onChange to satisfy React.
             }}
             aria-label={`Select rule ${rule.name}`}
-            className="h-3.5 w-3.5 cursor-pointer rounded border-gray-700 bg-gray-950 accent-blue-500"
+            className="h-3.5 w-3.5 cursor-pointer rounded border-[#333A47] bg-dark-80 accent-blue-500"
           />
           <span
             className={clsx(
@@ -685,7 +685,7 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
         {/* Body */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-gray-100 group-hover:text-blue-300">
+            <h3 className="truncate text-sm font-semibold text-gray-100 group-hover:text-brand-300">
               {rule.name}
             </h3>
             <span
@@ -700,7 +700,7 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
               <span
                 className={clsx(
                   'rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1',
-                  SEVERITY_BADGE[rule.severity] ?? 'bg-gray-800 text-gray-300',
+                  SEVERITY_BADGE[rule.severity] ?? 'bg-dark-20 text-gray-300',
                 )}
               >
                 {rule.severity}
@@ -718,7 +718,7 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
             {rule.mitre?.slice(0, 4).map((id) => (
               <span
                 key={id}
-                className="rounded-md bg-gray-800/60 px-1.5 py-0.5 font-mono text-[11px] text-gray-300"
+                className="rounded-md bg-dark-20/60 px-1.5 py-0.5 font-mono text-[11px] text-gray-300"
               >
                 {id}
               </span>
@@ -726,7 +726,7 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
             {rule.tags?.slice(0, 5).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-gray-800/40 px-2 py-0.5 text-[11px] text-gray-400"
+                className="rounded-full bg-dark-20/40 px-2 py-0.5 text-[11px] text-gray-400"
               >
                 #{tag}
               </span>

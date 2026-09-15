@@ -70,7 +70,7 @@ export default function MSSPDashboardView() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-4">
+          <div key={c.label} className="rounded-xl border border-[#374151]/60 bg-dark-70/80 p-4">
             <p className="text-xs text-gray-400 uppercase tracking-wider">{c.label}</p>
             <p className="mt-1 text-2xl font-semibold text-white">{c.value}</p>
           </div>
@@ -78,8 +78,8 @@ export default function MSSPDashboardView() {
       </div>
 
       {/* Tenant Table */}
-      <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800/60 flex flex-wrap items-center justify-between gap-3">
+      <div className="rounded-xl border border-[#374151]/60 bg-dark-70/80 overflow-hidden">
+        <div className="px-5 py-4 border-b border-[#374151]/60 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Tenant Overview</h2>
           <div className="flex items-center gap-3">
             <span className="text-xs font-medium uppercase tracking-wider text-gray-500">SLA</span>
@@ -97,7 +97,7 @@ export default function MSSPDashboardView() {
             ))}
             <button
               onClick={() => toast.success('Report exported for all tenants')}
-              className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              className="text-sm px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white transition-colors"
             >
               Export Report
             </button>
@@ -112,7 +112,7 @@ export default function MSSPDashboardView() {
               <button
                 type="button"
                 onClick={() => setSlaFilter('all')}
-                className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                className="rounded-lg bg-dark-20 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
               >
                 Show all tenants
               </button>
@@ -122,7 +122,7 @@ export default function MSSPDashboardView() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800/60 text-left text-gray-400">
+              <tr className="border-b border-[#374151]/60 text-left text-gray-400">
                 <th className="px-5 py-3 font-medium">Tenant</th>
                 <th className="px-5 py-3 font-medium text-right">Active Alerts</th>
                 <th className="px-5 py-3 font-medium text-right">Open Cases</th>
@@ -138,7 +138,7 @@ export default function MSSPDashboardView() {
               {filteredTenants.map((t) => {
                 const sla = SLA_STYLES[t.slaStatus];
                 return (
-                  <tr key={t.name} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
+                  <tr key={t.name} className="border-b border-[#374151]/40 hover:bg-dark-20/30 transition-colors">
                     <td className="px-5 py-3 font-medium text-white">{t.name}</td>
                     <td className="px-5 py-3 text-right text-gray-300">{t.activeAlerts}</td>
                     <td className="px-5 py-3 text-right text-gray-300">{t.openCases}</td>

@@ -85,7 +85,7 @@ export function AutonomyScorecard({ actions }: { actions: AutonomyActionPolicy[]
 
   return (
     <div
-      className="rounded-lg border border-gray-800 bg-gray-950/40 p-4"
+      className="rounded-lg border border-[#374151] bg-dark-80/40 p-4"
       role="group"
       aria-label="Autonomy posture scorecard"
     >
@@ -123,7 +123,7 @@ export function AutonomyScorecard({ actions }: { actions: AutonomyActionPolicy[]
           .map(([blast, n]) => (
             <span
               key={blast}
-              className="rounded-full border border-gray-700 bg-gray-900 px-2.5 py-1 text-[11px] text-gray-300"
+              className="rounded-full border border-[#333A47] bg-dark-70 px-2.5 py-1 text-[11px] text-gray-300"
             >
               {blast}: <span className="font-mono text-gray-100">{n}</span>
             </span>

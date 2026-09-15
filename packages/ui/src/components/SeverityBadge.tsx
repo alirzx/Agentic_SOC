@@ -27,8 +27,8 @@ const SEVERITY_CONFIG: Record<string, { label: string; dot: string; badge: strin
   },
   low: {
     label: 'Low',
-    dot: 'bg-blue-500',
-    badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+    dot: 'bg-brand-500',
+    badge: 'bg-brand-500/20 text-brand-400 border border-brand-500/30',
   },
   info: {
     label: 'Info',

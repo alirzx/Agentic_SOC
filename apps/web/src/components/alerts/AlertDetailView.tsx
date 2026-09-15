@@ -28,12 +28,12 @@ const SEVERITY_CONFIG = {
   critical: { label: 'Critical', badge: 'bg-red-500/10 text-red-400 ring-red-500/20', dot: 'bg-red-500' },
   high: { label: 'High', badge: 'bg-orange-500/10 text-orange-400 ring-orange-500/20', dot: 'bg-orange-500' },
   medium: { label: 'Medium', badge: 'bg-yellow-500/10 text-yellow-400 ring-yellow-500/20', dot: 'bg-yellow-500' },
-  low: { label: 'Low', badge: 'bg-blue-500/10 text-blue-400 ring-blue-500/20', dot: 'bg-blue-500' },
+  low: { label: 'Low', badge: 'bg-brand-500/10 text-brand-400 ring-brand-500/20', dot: 'bg-brand-500' },
   info: { label: 'Info', badge: 'bg-gray-500/10 text-gray-400 ring-gray-500/20', dot: 'bg-gray-500' },
 } as const;
 
 const STATUS_CONFIG = {
-  new: { label: 'New', badge: 'bg-blue-500/10 text-blue-400 ring-blue-500/20' },
+  new: { label: 'New', badge: 'bg-brand-500/10 text-brand-400 ring-brand-500/20' },
   triaged: { label: 'Triaged', badge: 'bg-purple-500/10 text-purple-400 ring-purple-500/20' },
   investigating: { label: 'Investigating', badge: 'bg-yellow-500/10 text-yellow-400 ring-yellow-500/20' },
   resolved: { label: 'Resolved', badge: 'bg-green-500/10 text-green-400 ring-green-500/20' },
@@ -139,7 +139,7 @@ const MOCK_ALERT: Alert = {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
       <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">{title}</h3>
       {children}
     </div>
@@ -161,7 +161,7 @@ function IOCBadge({ type, value, malicious }: { type: string; value: string; mal
       'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-mono',
       malicious
         ? 'bg-red-500/10 border border-red-500/20 text-red-300'
-        : 'bg-gray-800/60 border border-gray-700/60 text-gray-300'
+        : 'bg-dark-20/60 border border-[#333A47]/60 text-gray-300'
     )}>
       <span className={clsx(
         'px-1.5 py-0.5 rounded text-xs font-bold uppercase',
@@ -206,7 +206,7 @@ function ConfidenceFactorBar({ factor }: { factor: ConfidenceFactor }) {
           +{factor.contribution.toFixed(2)} / {factor.weight.toFixed(2)}
         </span>
       </div>
-      <div className="h-1.5 bg-gray-800 rounded overflow-hidden">
+      <div className="h-1.5 bg-dark-20 rounded overflow-hidden">
         <div
           className="h-full bg-emerald-500/70"
           style={{ width: `${widthPct}%` }}
@@ -253,7 +253,7 @@ function ConfidenceExplainability({
         </div>
 
         {sortedRationale.length > 0 && (
-          <div className="space-y-3 pt-2 border-t border-gray-800/60">
+          <div className="space-y-3 pt-2 border-t border-[#374151]/60">
             <p className="text-xs font-medium text-gray-400">
               Why this score
             </p>
@@ -266,7 +266,7 @@ function ConfidenceExplainability({
         )}
 
         {ledgerRunId && (
-          <div className="pt-3 border-t border-gray-800/60">
+          <div className="pt-3 border-t border-[#374151]/60">
             <LedgerEvidenceChain runId={ledgerRunId} />
           </div>
         )}
@@ -287,7 +287,7 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
         <p className="text-xs font-medium text-gray-400">Investigation Ledger evidence chain</p>
         <Link
           href={`/investigations/${runId}`}
-          className="text-xs text-blue-400 hover:text-blue-300"
+          className="text-xs text-brand-400 hover:text-brand-300"
         >
           Open full ledger →
         </Link>
@@ -314,14 +314,14 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
           {data.items.map((event) => (
             <li key={event.id} className="flex gap-3">
               <div className="flex flex-col items-center shrink-0 pt-1">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                <span className="w-1.5 h-1.5 bg-brand-500 rounded-full" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">
                   <span className="text-[10px] font-mono text-gray-600 shrink-0">
                     #{event.seq}
                   </span>
-                  <span className="text-xs font-mono text-blue-400 shrink-0">
+                  <span className="text-xs font-mono text-brand-400 shrink-0">
                     {event.kind}
                   </span>
                   <span className="text-xs text-gray-200 truncate">
@@ -407,7 +407,7 @@ The PowerShell execution event represents a multi-stage attack with C2 communica
         <button
           onClick={startInvestigation}
           disabled={isRunning}
-          className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isRunning ? (
             <span className="flex items-center gap-2">
@@ -429,14 +429,14 @@ The PowerShell execution event represents a multi-stage attack with C2 communica
           <span className={clsx(
             'w-2 h-2 rounded-full',
             investigation.status === 'completed' ? 'bg-green-500' :
-            investigation.status === 'running' ? 'bg-blue-500 animate-pulse' :
+            investigation.status === 'running' ? 'bg-brand-500 animate-pulse' :
             'bg-red-500'
           )} />
           <span className="text-xs text-gray-400 capitalize">{investigation.status}</span>
         </div>
         <button
           onClick={startInvestigation}
-          className="text-xs text-blue-400 hover:text-blue-300"
+          className="text-xs text-brand-400 hover:text-brand-300"
         >
           Re-investigate
         </button>
@@ -444,7 +444,7 @@ The PowerShell execution event represents a multi-stage attack with C2 communica
 
       {/* Findings */}
       {investigation.findings && (
-        <div className="bg-gray-950/60 rounded-lg p-4 text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
+        <div className="bg-dark-80/60 rounded-lg p-4 text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
           {investigation.findings}
         </div>
       )}
@@ -455,7 +455,7 @@ The PowerShell execution event represents a multi-stage attack with C2 communica
           <p className="text-xs font-medium text-gray-400">Recommended Actions</p>
           {investigation.recommendations.map((rec, i) => (
             <div key={i} className="flex items-start gap-2 text-xs text-gray-300">
-              <span className="text-blue-400 shrink-0 mt-0.5">→</span>
+              <span className="text-brand-400 shrink-0 mt-0.5">→</span>
               {rec}
             </div>
           ))}
@@ -467,13 +467,13 @@ The PowerShell execution event represents a multi-stage attack with C2 communica
         <div className="space-y-2">
           <p className="text-xs font-medium text-gray-400">Automated Actions Available</p>
           {investigation.actions.map((action, i) => (
-            <div key={i} className="flex items-center justify-between bg-gray-800/60 rounded-lg px-3 py-2">
+            <div key={i} className="flex items-center justify-between bg-dark-20/60 rounded-lg px-3 py-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-blue-400 font-mono">{action.type}</span>
+                <span className="text-xs text-brand-400 font-mono">{action.type}</span>
                 <span className="text-xs text-gray-500">→</span>
                 <span className="text-xs text-gray-300 font-mono">{action.target}</span>
               </div>
-              <button className="text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-2 py-1 rounded transition-colors">
+              <button className="text-xs bg-brand-600/20 text-brand-400 hover:bg-brand-600/40 px-2 py-1 rounded transition-colors">
                 Execute
               </button>
             </div>
@@ -660,7 +660,7 @@ function AnalystOverridePanel({
                 'text-left p-2.5 rounded-md ring-1 transition-colors',
                 active
                   ? `${opt.badge} ring-inset`
-                  : 'bg-gray-900/40 text-gray-300 ring-gray-800 hover:bg-gray-900/80 hover:ring-gray-700',
+                  : 'bg-dark-70/80 text-gray-300 ring-gray-800 hover:bg-dark-70/80 hover:ring-gray-700',
               )}
             >
               <div className="text-xs font-medium">{opt.label}</div>
@@ -686,7 +686,7 @@ function AnalystOverridePanel({
           onChange={(e) => setReason(e.target.value)}
           placeholder="e.g. matches our weekly vuln-scanner sweep — known benign"
           rows={2}
-          className="w-full bg-gray-900/60 border border-gray-800 rounded-md px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full bg-dark-60 border border-[#374151] rounded-md px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-brand-500 resize-none"
         />
       </div>
 
@@ -697,8 +697,8 @@ function AnalystOverridePanel({
         className={clsx(
           'w-full text-sm font-medium px-3 py-2 rounded-md transition-colors',
           !verdict || submitting
-            ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-500 text-white',
+            ? 'bg-dark-20 text-gray-500 cursor-not-allowed'
+            : 'bg-brand-600 hover:bg-brand-500 text-white',
         )}
       >
         {submitting ? 'Recording…' : 'Record correction'}
@@ -711,7 +711,7 @@ function AnalystOverridePanel({
       )}
 
       {candidates.length > 0 && (
-        <div className="space-y-2 pt-3 border-t border-gray-800">
+        <div className="space-y-2 pt-3 border-t border-[#374151]">
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-xs font-medium text-amber-300">
@@ -727,7 +727,7 @@ function AnalystOverridePanel({
               <button
                 type="button"
                 onClick={selectAll}
-                className="text-blue-400 hover:text-blue-300"
+                className="text-brand-400 hover:text-brand-300"
               >
                 all
               </button>
@@ -751,8 +751,8 @@ function AnalystOverridePanel({
                   className={clsx(
                     'flex items-start gap-2 p-2 rounded-md ring-1 cursor-pointer transition-colors',
                     checked
-                      ? 'bg-blue-500/5 ring-blue-500/40'
-                      : 'bg-gray-900/40 ring-gray-800 hover:bg-gray-900/80',
+                      ? 'bg-brand-500/5 ring-brand-500/40'
+                      : 'bg-dark-70/80 ring-gray-800 hover:bg-dark-70/80',
                   )}
                 >
                   <input
@@ -787,7 +787,7 @@ function AnalystOverridePanel({
                     <Link
                       href={`/alerts/${c.alert_id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="text-xs text-gray-200 hover:text-blue-300 line-clamp-2 leading-snug block"
+                      className="text-xs text-gray-200 hover:text-brand-300 line-clamp-2 leading-snug block"
                     >
                       {c.title}
                     </Link>
@@ -804,7 +804,7 @@ function AnalystOverridePanel({
             className={clsx(
               'w-full text-xs font-medium px-3 py-2 rounded-md transition-colors',
               selectedIds.size === 0 || applying
-                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                ? 'bg-dark-20 text-gray-500 cursor-not-allowed'
                 : 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 ring-1 ring-amber-500/30',
             )}
           >
@@ -896,7 +896,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           <select
             value={alert.status}
             onChange={(e) => handleStatusChange(e.target.value as Alert['status'])}
-            className="bg-gray-800 border border-gray-700 text-sm text-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-dark-20 border border-[#333A47] text-sm text-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-500"
           >
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
               <option key={key} value={key}>{cfg.label}</option>
@@ -933,7 +933,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           <button
             type="button"
             onClick={() => setCreateCaseOpen(true)}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+            className="bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
           >
             Create Case
           </button>
@@ -941,7 +941,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-gray-800">
+      <div className="flex items-center gap-1 border-b border-[#374151]">
         {(['overview', 'timeline', 'raw'] as const).map((tab) => (
           <button
             key={tab}
@@ -949,7 +949,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
             className={clsx(
               'px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px',
               activeTab === tab
-                ? 'text-blue-400 border-blue-400'
+                ? 'text-brand-400 border-blue-400'
                 : 'text-gray-500 border-transparent hover:text-gray-300'
             )}
           >
@@ -1015,7 +1015,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
                   <Field label="Tags" value={
                     <div className="flex flex-wrap gap-1">
                       {alert.tags.map((tag) => (
-                        <span key={tag} className="px-2 py-0.5 bg-gray-800 text-gray-300 text-xs rounded">{tag}</span>
+                        <span key={tag} className="px-2 py-0.5 bg-dark-20 text-gray-300 text-xs rounded">{tag}</span>
                       ))}
                     </div>
                   } />
@@ -1074,8 +1074,8 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
             ].map((event, i) => (
               <div key={i} className="flex gap-4">
                 <div className="flex flex-col items-center">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 shrink-0" />
-                  {i < 1 && <div className="w-px flex-1 bg-gray-800 mt-1" />}
+                  <div className="w-2 h-2 bg-brand-500 rounded-full mt-1.5 shrink-0" />
+                  {i < 1 && <div className="w-px flex-1 bg-dark-20 mt-1" />}
                 </div>
                 <div className="pb-4">
                   <div className="text-sm font-medium text-gray-200">{event.title}</div>
@@ -1090,7 +1090,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
 
       {activeTab === 'raw' && (
         <Section title="Raw Event Data">
-          <pre className="text-xs text-gray-400 font-mono bg-gray-950/60 rounded-lg p-4 overflow-x-auto">
+          <pre className="text-xs text-gray-400 font-mono bg-dark-80/60 rounded-lg p-4 overflow-x-auto">
             {JSON.stringify(alert.rawEvent || { message: 'Raw event data not available for this alert.' }, null, 2)}
           </pre>
         </Section>

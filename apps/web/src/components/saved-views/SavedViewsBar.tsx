@@ -213,7 +213,7 @@ export function SavedViewsBar<TFilters extends object>({
 
   return (
     <div
-      className="flex items-center gap-2 flex-wrap py-2 px-3 bg-gray-900/40 border border-gray-800/60 rounded-xl"
+      className="flex items-center gap-2 flex-wrap py-2 px-3 bg-dark-70/80 border border-[#374151]/60 rounded-xl"
       data-testid="saved-views-bar"
     >
       <span className="text-xs text-gray-500 mr-1 shrink-0">Saved views</span>
@@ -243,8 +243,8 @@ export function SavedViewsBar<TFilters extends object>({
               className={clsx(
                 'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-l-lg transition-colors border-l border-y',
                 activeViewId === view.id
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'text-gray-300 hover:bg-gray-800/60 border-gray-800/60',
+                  ? 'bg-brand-600 text-white border-brand-600'
+                  : 'text-gray-300 hover:bg-dark-20/60 border-[#374151]/60',
               )}
               title={
                 view.is_default
@@ -269,8 +269,8 @@ export function SavedViewsBar<TFilters extends object>({
               className={clsx(
                 'inline-flex items-center text-xs px-1.5 py-1 rounded-r-lg transition-colors border-r border-y',
                 activeViewId === view.id
-                  ? 'bg-blue-700 text-white border-blue-600'
-                  : 'text-gray-400 hover:bg-gray-800/60 border-gray-800/60',
+                  ? 'bg-blue-700 text-white border-brand-600'
+                  : 'text-gray-400 hover:bg-dark-20/60 border-[#374151]/60',
               )}
               aria-label={`Actions for ${view.name}`}
               aria-haspopup="menu"
@@ -284,7 +284,7 @@ export function SavedViewsBar<TFilters extends object>({
           {openMenuId === view.id && (
             <div
               role="menu"
-              className="absolute z-20 top-full left-0 mt-1 w-48 bg-gray-900 border border-gray-800 rounded-lg shadow-xl py-1"
+              className="absolute z-20 top-full left-0 mt-1 w-48 bg-dark-70 border border-[#374151] rounded-lg shadow-xl py-1"
               onClick={(e) => e.stopPropagation()}
             >
               <MenuItem onClick={() => handleSetDefault(view)}>
@@ -313,7 +313,7 @@ export function SavedViewsBar<TFilters extends object>({
         <button
           type="button"
           onClick={() => setSaveDialogOpen(true)}
-          className="text-xs px-2.5 py-1 rounded-lg border border-dashed border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
+          className="text-xs px-2.5 py-1 rounded-lg border border-dashed border-[#333A47] text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
           data-testid="save-current-view-btn"
         >
           + Save current view
@@ -348,7 +348,7 @@ function MenuItem({
         'w-full text-left text-xs px-3 py-1.5 transition-colors',
         danger
           ? 'text-red-400 hover:bg-red-500/10'
-          : 'text-gray-300 hover:bg-gray-800',
+          : 'text-gray-300 hover:bg-dark-20',
       )}
     >
       {children}
@@ -384,7 +384,7 @@ function RenameInput({
           if (e.key === 'Escape') onCancel();
         }}
         maxLength={120}
-        className="text-xs px-2 py-1 rounded bg-gray-900 border border-blue-500/50 text-gray-200 focus:outline-none focus:border-blue-400 w-40"
+        className="text-xs px-2 py-1 rounded bg-dark-70 border border-brand-500/50 text-gray-200 focus:outline-none focus:border-blue-400 w-40"
         aria-label="Rename saved view"
       />
     </form>
@@ -421,7 +421,7 @@ function SaveViewDialog({
         }}
         placeholder="View name"
         maxLength={120}
-        className="text-xs px-2 py-1 rounded bg-gray-900 border border-blue-500/50 text-gray-200 focus:outline-none focus:border-blue-400 w-44"
+        className="text-xs px-2 py-1 rounded bg-dark-70 border border-brand-500/50 text-gray-200 focus:outline-none focus:border-blue-400 w-44"
         aria-label="New saved view name"
       />
       <label className="inline-flex items-center gap-1 text-xs text-gray-400 select-none">
@@ -436,7 +436,7 @@ function SaveViewDialog({
       <button
         type="submit"
         disabled={!name.trim()}
-        className="text-xs px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+        className="text-xs px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Save
       </button>

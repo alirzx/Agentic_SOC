@@ -376,7 +376,7 @@ function SignalMap() {
   };
   const nodeStroke: Record<string, string> = {
     edge: '#475569',
-    host: '#3b82f6',
+    host: '#4FD2C2',
     'host-warn': '#f97316',
     'host-crit': '#ef4444',
     idp: '#60a5fa',

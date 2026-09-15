@@ -81,7 +81,7 @@ function KpiCard({
   color?: string;
 }) {
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 flex flex-col gap-1">
+    <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4 flex flex-col gap-1">
       <span className="text-xs text-gray-400 uppercase tracking-wider">{label}</span>
       <span className={`text-2xl font-bold ${color ?? "text-white"}`}>
         {value}
@@ -102,7 +102,7 @@ const TACTIC_COLORS: Record<string, string> = {
   "Lateral Movement": "bg-cyan-900",
   Collection: "bg-sky-900",
   Exfiltration: "bg-blue-900",
-  "Command and Control": "bg-indigo-900",
+  "Command and Control": "bg-teal-900",
   Impact: "bg-purple-900",
 };
 
@@ -133,7 +133,7 @@ function AttackHeatmap({ cells }: { cells: AttackHeatmapCell[] }) {
           <div className="flex flex-wrap gap-1">
             {techniques.map((cell) => {
               const intensity = Math.max(0.15, cell.count / maxCount);
-              const bgClass = TACTIC_COLORS[tactic] ?? "bg-gray-800";
+              const bgClass = TACTIC_COLORS[tactic] ?? "bg-dark-20";
               return (
                 <div
                   key={cell.technique}
@@ -199,7 +199,7 @@ export function SOCMetricsDashboard() {
         <h2 className="text-lg font-semibold text-white">SOC Performance Metrics</h2>
         <button
           onClick={refresh}
-          className="text-xs text-gray-400 hover:text-gray-200 px-3 py-1 border border-gray-700 rounded transition-colors"
+          className="text-xs text-gray-400 hover:text-gray-200 px-3 py-1 border border-[#333A47] rounded transition-colors"
         >
           Refresh
         </button>
@@ -295,12 +295,12 @@ export function SOCMetricsDashboard() {
           <KpiCard
             label="Analyst Overrides (7d)"
             value={kpis?.analyst_overrides_7d ?? "—"}
-            color="text-blue-400"
+            color="text-brand-400"
           />
         </div>
 
       {/* Confidence Calibration Curve */}
-      <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+      <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4">
         <h3 className="text-sm font-semibold text-gray-300 mb-1">
           Agent Confidence Calibration (7d)
         </h3>
@@ -312,7 +312,7 @@ export function SOCMetricsDashboard() {
       </div>
 
       {/* ATT&CK Heatmap */}
-      <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+      <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4">
         <h3 className="text-sm font-semibold text-gray-300 mb-4">
           ATT&amp;CK Technique Heatmap
         </h3>
@@ -356,7 +356,7 @@ function CostTelemetryPanel() {
         : null;
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+    <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4">
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-semibold text-gray-300">
           Investigation Cost Telemetry (30d)
@@ -378,7 +378,7 @@ function CostTelemetryPanel() {
       )}
 
       {isLoading && !resolved ? (
-        <div className="h-32 animate-pulse bg-gray-800 rounded" />
+        <div className="h-32 animate-pulse bg-dark-20 rounded" />
       ) : !totals || totals.runs === 0 ? (
         <div className="text-gray-500 text-sm flex items-center justify-center h-24">
           No investigation runs with cost telemetry in the last 30 days.
@@ -422,7 +422,7 @@ function CostTelemetryPanel() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead>
-                <tr className="text-gray-500 border-b border-gray-800">
+                <tr className="text-gray-500 border-b border-[#374151]">
                   <th className="text-left py-2 pr-4 font-medium">Model</th>
                   <th className="text-right py-2 pr-4 font-medium">Runs</th>
                   <th className="text-right py-2 pr-4 font-medium">Calls</th>
@@ -438,7 +438,7 @@ function CostTelemetryPanel() {
                   return (
                     <tr
                       key={row.model}
-                      className="border-b border-gray-800/50 last:border-0"
+                      className="border-b border-[#374151]/50 last:border-0"
                     >
                       <td className="py-2 pr-4 text-gray-200 font-mono">
                         {row.model}
@@ -459,7 +459,7 @@ function CostTelemetryPanel() {
                         {formatUsd(row.total_cost_usd)}
                       </td>
                       <td className="py-2 min-w-[120px]">
-                        <div className="h-2 bg-gray-800 rounded overflow-hidden">
+                        <div className="h-2 bg-dark-20 rounded overflow-hidden">
                           <div
                             className="h-full bg-blue-700"
                             style={{ width: `${sharePct}%` }}
@@ -527,7 +527,7 @@ function CalibrationCurve({ buckets }: { buckets: CalibrationBucket[] }) {
             <div className="col-span-3 text-gray-400">
               {lo}-{hi}%
             </div>
-            <div className="col-span-6 relative h-5 bg-gray-800 rounded">
+            <div className="col-span-6 relative h-5 bg-dark-20 rounded">
               {/* Predicted band */}
               <div
                 className="absolute top-0 bottom-0 bg-blue-900 opacity-40 rounded"

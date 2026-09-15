@@ -132,7 +132,7 @@ export function FimDashboard() {
           <select
             value={since}
             onChange={(e) => handleSinceChange(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-teal-20 focus:outline-none focus:ring-1 focus:ring-teal-20"
           >
             {SINCE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -148,7 +148,7 @@ export function FimDashboard() {
           <select
             value={action}
             onChange={(e) => handleActionChange(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-teal-20 focus:outline-none focus:ring-1 focus:ring-teal-20"
           >
             {ACTION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -168,7 +168,7 @@ export function FimDashboard() {
             value={pathPrefix}
             onChange={(e) => handlePathChange(e.target.value)}
             placeholder="/etc/, /home/, C:\\…"
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-teal-20 focus:outline-none focus:ring-1 focus:ring-teal-20"
           />
         </div>
       </div>

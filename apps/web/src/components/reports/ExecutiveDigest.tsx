@@ -34,7 +34,7 @@ const SEVERITY_TEXT: Record<string, string> = {
   critical: 'text-red-300',
   high: 'text-orange-300',
   medium: 'text-yellow-300',
-  low: 'text-blue-300',
+  low: 'text-brand-300',
   info: 'text-gray-300',
 };
 
@@ -150,7 +150,7 @@ export function ExecutiveDigest() {
           <select
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
-            className="rounded border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white"
+            className="rounded border border-gray-600 bg-dark-20 px-3 py-1.5 text-sm text-white"
           >
             {PERIOD_PRESETS.map((p) => (
               <option key={p.days} value={p.days}>
@@ -161,7 +161,7 @@ export function ExecutiveDigest() {
           <button
             type="button"
             onClick={() => mutate()}
-            className="rounded border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+            className="rounded border border-gray-600 bg-dark-20 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
           >
             Refresh
           </button>
@@ -188,7 +188,7 @@ export function ExecutiveDigest() {
       )}
 
       {isLoading && !data && (
-        <div className="rounded-xl border border-gray-700 bg-gray-900 p-6 text-sm text-gray-400">
+        <div className="rounded-xl border border-[#333A47] bg-dark-70 p-6 text-sm text-gray-400">
           Computing digest…
         </div>
       )}
@@ -241,7 +241,7 @@ function DigestBody({ digest }: { digest: ExecutiveDigestPayload }) {
               return (
                 <div key={sev} className="flex items-center gap-3 text-sm">
                   <span className={`w-20 capitalize ${SEVERITY_TEXT[sev]}`}>{sev}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-800">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-dark-20">
                     <div
                       className="h-full rounded-full bg-violet-500"
                       style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
@@ -322,7 +322,7 @@ function DigestBody({ digest }: { digest: ExecutiveDigestPayload }) {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
-                <tr className="border-b border-gray-700 text-xs uppercase tracking-wide text-gray-500">
+                <tr className="border-b border-[#333A47] text-xs uppercase tracking-wide text-gray-500">
                   <th className="py-2 pr-4 font-medium">Title</th>
                   <th className="py-2 pr-4 font-medium">Severity</th>
                   <th className="py-2 pr-4 font-medium">AI score</th>
@@ -332,7 +332,7 @@ function DigestBody({ digest }: { digest: ExecutiveDigestPayload }) {
               </thead>
               <tbody>
                 {digest.high_risk_alerts.map((a) => (
-                  <tr key={a.alert_id} className="border-b border-gray-800/80">
+                  <tr key={a.alert_id} className="border-b border-[#374151]/80">
                     <td className="py-2.5 pr-4 text-gray-100">{a.title || a.alert_id}</td>
                     <td className={`py-2.5 pr-4 capitalize ${SEVERITY_TEXT[a.severity] ?? 'text-gray-300'}`}>
                       {a.severity}
@@ -391,7 +391,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-gray-700 bg-gray-900 p-5">
+    <div className="rounded-xl border border-[#333A47] bg-dark-70 p-5">
       <div className="mb-4">
         <h2 className="text-base font-semibold text-white">{title}</h2>
         {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
@@ -411,7 +411,7 @@ function KpiCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
+    <div className="rounded-lg border border-[#333A47] bg-dark-20 p-4">
       <p className="text-xs text-gray-400">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-white tabular-nums">{value}</p>
       {sub && <p className="mt-1 text-xs text-gray-500">{sub}</p>}

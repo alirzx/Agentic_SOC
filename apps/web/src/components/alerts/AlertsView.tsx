@@ -33,14 +33,14 @@ const SEVERITY_CONFIG = {
   critical: { label: 'Critical', dot: 'bg-red-500', text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
   high: { label: 'High', dot: 'bg-orange-500', text: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
   medium: { label: 'Medium', dot: 'bg-yellow-500', text: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
-  low: { label: 'Low', dot: 'bg-blue-500', text: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+  low: { label: 'Low', dot: 'bg-brand-500', text: 'text-brand-400', bg: 'bg-brand-500/10 border-brand-500/20' },
   info: { label: 'Info', dot: 'bg-gray-500', text: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' },
 };
 
 const STATUS_CONFIG = {
   new: { label: 'New', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
   triaged: { label: 'Triaged', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
-  investigating: { label: 'Investigating', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  investigating: { label: 'Investigating', color: 'text-brand-400 bg-brand-500/10 border-brand-500/20' },
   resolved: { label: 'Resolved', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
   false_positive: { label: 'False Positive', color: 'text-gray-400 bg-gray-500/10 border-gray-500/20' },
 };
@@ -146,7 +146,7 @@ function FiltersBar({
   const statuses = ['all', 'new', 'investigating', 'resolved', 'false_positive'] as const;
 
   return (
-    <div className="flex items-center gap-3 flex-wrap py-3 px-4 bg-gray-900/40 border border-gray-800/60 rounded-xl">
+    <div className="flex items-center gap-3 flex-wrap py-3 px-4 bg-dark-70/80 border border-[#374151]/60 rounded-xl">
       <div className="flex items-center gap-1">
         {severities.map((s) => (
           <button
@@ -155,8 +155,8 @@ function FiltersBar({
             className={clsx(
               'text-xs px-2.5 py-1 rounded-lg transition-colors capitalize',
               (s === 'all' && !filters.severity) || filters.severity === s
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+                ? 'bg-brand-600 text-white'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-dark-20/60'
             )}
           >
             {s}
@@ -173,7 +173,7 @@ function FiltersBar({
               'text-xs px-2.5 py-1 rounded-lg transition-colors',
               (s === 'all' && !filters.status) || filters.status === s
                 ? 'bg-gray-700 text-gray-200'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-dark-20/60'
             )}
           >
             {s === 'all' ? 'All status' : s.replace('_', ' ')}
@@ -213,10 +213,10 @@ function AlertRow({
       }}
       aria-current={selected ? 'true' : undefined}
       className={clsx(
-        'flex items-center gap-4 px-4 py-3 transition-colors border-b border-gray-800/40 last:border-0 border-l-2',
+        'flex items-center gap-4 px-4 py-3 transition-colors border-b border-[#374151]/40 last:border-0 border-l-2',
         selected
-          ? 'border-l-blue-500 bg-blue-500/5 hover:bg-blue-500/10'
-          : 'border-l-transparent hover:bg-gray-800/20',
+          ? 'border-l-blue-500 bg-brand-500/5 hover:bg-brand-500/10'
+          : 'border-l-transparent hover:bg-dark-20/20',
       )}
     >
       <SeverityDot severity={alert.severity} />
@@ -303,7 +303,7 @@ export function AlertsView() {
           <div
             role="tablist"
             aria-label="View mode"
-            className="inline-flex items-center bg-gray-900/60 border border-gray-800/60 rounded-lg p-0.5"
+            className="inline-flex items-center bg-dark-60 border border-[#374151]/60 rounded-lg p-0.5"
           >
             <button
               type="button"
@@ -313,7 +313,7 @@ export function AlertsView() {
               className={clsx(
                 'text-xs px-3 py-1.5 rounded-md transition-colors',
                 viewMode === 'entities'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-brand-600 text-white'
                   : 'text-gray-400 hover:text-gray-200',
               )}
             >
@@ -407,7 +407,7 @@ function AlertsTable({
           { label: 'High', value: highCount, color: 'text-orange-400' },
           { label: 'Unresolved', value: newCount, color: 'text-purple-400' },
         ].map((stat) => (
-          <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
+          <div key={stat.label} className="bg-dark-60 border border-[#374151]/60 rounded-xl px-4 py-3">
             <p className="text-xs text-gray-500">{stat.label}</p>
             <p className={clsx('text-2xl font-bold mt-1', stat.color)}>{stat.value}</p>
           </div>
@@ -492,8 +492,8 @@ function AlertsTableGrid({
   onFilterChange: (f: AlertFilters) => void;
 }) {
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
-      <div className="flex items-center px-4 py-2 border-b border-gray-800/60 bg-gray-900/80">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl overflow-hidden">
+      <div className="flex items-center px-4 py-2 border-b border-[#374151]/60 bg-dark-70/80">
         <span className="text-xs text-gray-500 flex-1 pl-2">ALERT</span>
         <span className="text-xs text-gray-500 w-20">SEVERITY</span>
         <span className="text-xs text-gray-500 w-24">STATUS</span>
@@ -502,7 +502,7 @@ function AlertsTableGrid({
 
       {isLoading ? (
         <div className="flex items-center justify-center h-32">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : error ? (
         <div className="p-4">
@@ -527,7 +527,7 @@ function AlertsTableGrid({
               action={
                 <button
                   onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25 })}
-                  className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+                  className="text-xs px-3 py-1.5 rounded-md border border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 transition-colors"
                 >
                   Clear filters
                 </button>
@@ -575,7 +575,7 @@ function AlertsPagination({
         <button
           onClick={() => onFilterChange({ ...filters, page: Math.max(1, (filters.page || 1) - 1) })}
           disabled={(filters.page || 1) <= 1}
-          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-2 py-1 rounded bg-dark-20 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Prev
         </button>
@@ -583,7 +583,7 @@ function AlertsPagination({
         <button
           onClick={() => onFilterChange({ ...filters, page: (filters.page || 1) + 1 })}
           disabled={alerts.length < (filters.pageSize || 25)}
-          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-2 py-1 rounded bg-dark-20 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Next
         </button>

@@ -56,8 +56,8 @@ import { EnabledToggle, RunButton, deletePlaybook } from './rowActions';
 
 const TRIGGER_COLORS: Record<string, string> = {
   alert:    'bg-red-900/40 text-red-300 border-red-800',
-  case:     'bg-blue-900/40 text-blue-300 border-blue-800',
-  manual:   'bg-gray-800 text-gray-400 border-gray-700',
+  case:     'bg-brand-900/40 text-brand-300 border-brand-800',
+  manual:   'bg-dark-20 text-gray-400 border-[#333A47]',
   schedule: 'bg-purple-900/40 text-purple-300 border-purple-800',
 };
 
@@ -206,12 +206,12 @@ export function PlaybooksGallery({ playbooks, initialFilters }: PlaybooksGallery
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search playbooks by name, tag, description…"
             aria-label="Search playbooks"
-            className="flex-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded-lg border border-[#333A47] bg-dark-70 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-brand-500 focus:outline-none"
           />
         </div>
 
         <div
-          className="flex gap-1 rounded-lg border border-gray-700 bg-gray-900 p-1"
+          className="flex gap-1 rounded-lg border border-[#333A47] bg-dark-70 p-1"
           role="tablist"
           aria-label="Playbook source"
         >
@@ -239,7 +239,7 @@ export function PlaybooksGallery({ playbooks, initialFilters }: PlaybooksGallery
         {hasActiveFilters && (
           <button
             onClick={clearAllFilters}
-            className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded border border-gray-800 hover:border-red-900"
+            className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded border border-[#374151] hover:border-red-900"
           >
             Clear filters
           </button>
@@ -306,8 +306,8 @@ export function PlaybooksGallery({ playbooks, initialFilters }: PlaybooksGallery
           const n = severityCounts[sev];
           if (n === 0) return null;
           const COLOR_MAP: Record<SeverityLevel, string> = {
-            info:     'bg-blue-900/40 text-blue-300 border-blue-800',
-            low:      'bg-gray-800/60 text-gray-300 border-gray-600',
+            info:     'bg-brand-900/40 text-brand-300 border-brand-800',
+            low:      'bg-dark-20/60 text-gray-300 border-gray-600',
             medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-800',
             high:     'bg-orange-900/40 text-orange-300 border-orange-800',
             critical: 'bg-red-900/60 text-red-200 border-red-700',
@@ -365,7 +365,7 @@ export function PlaybooksGallery({ playbooks, initialFilters }: PlaybooksGallery
           </div>
           <Link
             href="/playbooks/new"
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm transition-colors"
+            className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-sm transition-colors"
           >
             Create a playbook
           </Link>
@@ -416,8 +416,8 @@ function FacetPill({
       className={clsx(
         'rounded-full px-3 py-0.5 text-xs font-medium border transition-colors',
         active
-          ? activeClass ?? 'bg-blue-900/40 text-blue-200 border-blue-700'
-          : 'border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-700',
+          ? activeClass ?? 'bg-brand-900/40 text-brand-200 border-brand-700'
+          : 'border-[#374151] text-gray-500 hover:text-gray-300 hover:border-[#333A47]',
       )}
     >
       {label}
@@ -450,7 +450,7 @@ function SourcePill({
         active
           ? tone === 'pack'
             ? 'bg-purple-700 text-white'
-            : 'bg-blue-600 text-white'
+            : 'bg-brand-600 text-white'
           : 'text-gray-400 hover:text-gray-200',
       )}
     >
@@ -470,13 +470,13 @@ function CategoryPill({
   onClick: () => void;
   tone?: PackCategory;
 }) {
-  const activeClasses = tone ? categoryBadgeClass(tone) : 'bg-blue-900/40 text-blue-200 border-blue-700';
+  const activeClasses = tone ? categoryBadgeClass(tone) : 'bg-brand-900/40 text-brand-200 border-brand-700';
   return (
     <button
       onClick={onClick}
       className={clsx(
         'rounded-full px-3 py-1 text-xs font-medium border transition-colors',
-        active ? activeClasses : 'border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-700',
+        active ? activeClasses : 'border-[#374151] text-gray-500 hover:text-gray-300 hover:border-[#333A47]',
       )}
     >
       {label}
@@ -505,8 +505,8 @@ function PlaybookRow({
   const integrations = integrationsOf(playbook);
 
   const SEVERITY_MINI: Record<SeverityLevel, string> = {
-    info:     'bg-blue-900/40 text-blue-400 border-blue-800',
-    low:      'bg-gray-800/60 text-gray-400 border-gray-700',
+    info:     'bg-brand-900/40 text-brand-400 border-brand-800',
+    low:      'bg-dark-20/60 text-gray-400 border-[#333A47]',
     medium:   'bg-yellow-900/40 text-yellow-400 border-yellow-800',
     high:     'bg-orange-900/40 text-orange-400 border-orange-800',
     critical: 'bg-red-900/50 text-red-300 border-red-800',
@@ -515,8 +515,8 @@ function PlaybookRow({
   return (
     <div
       className={clsx(
-        'bg-gray-900/60 border rounded-xl px-5 py-4 flex items-center gap-4 transition-colors',
-        playbook.enabled ? 'border-gray-800 hover:border-gray-700' : 'border-gray-800/40 opacity-70',
+        'bg-dark-60 border rounded-xl px-5 py-4 flex items-center gap-4 transition-colors',
+        playbook.enabled ? 'border-[#374151] hover:border-[#333A47]' : 'border-[#374151]/40 opacity-70',
       )}
     >
       <EnabledToggle playbook={playbook} />
@@ -540,7 +540,7 @@ function PlaybookRow({
           )}
           <Link
             href={`/playbooks/${playbook.id}`}
-            className="text-white font-medium hover:text-blue-300 transition-colors truncate"
+            className="text-white font-medium hover:text-brand-300 transition-colors truncate"
           >
             {playbook.name}
           </Link>
@@ -552,7 +552,7 @@ function PlaybookRow({
             {triggerOn}
           </span>
           {!playbook.enabled && (
-            <span className="text-xs px-1.5 py-0.5 rounded border border-gray-700 text-gray-500">
+            <span className="text-xs px-1.5 py-0.5 rounded border border-[#333A47] text-gray-500">
               disabled
             </span>
           )}
@@ -609,7 +609,7 @@ function PlaybookRow({
         <button
           onClick={onPreview}
           aria-label={`Preview DAG for ${playbook.name}`}
-          className="text-xs px-2.5 py-1 rounded border border-gray-700 text-gray-300 hover:text-blue-300 hover:border-blue-800 transition-colors"
+          className="text-xs px-2.5 py-1 rounded border border-[#333A47] text-gray-300 hover:text-brand-300 hover:border-brand-800 transition-colors"
         >
           Preview
         </button>
@@ -626,13 +626,13 @@ function PlaybookRow({
           <>
             <Link
               href={`/playbooks/${playbook.id}`}
-              className="text-xs px-2.5 py-1 rounded border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors"
+              className="text-xs px-2.5 py-1 rounded border border-[#333A47] text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors"
             >
               Edit
             </Link>
             <button
               onClick={() => deletePlaybook(playbook.id)}
-              className="text-xs px-2.5 py-1 rounded border border-gray-800 text-gray-600 hover:text-red-400 hover:border-red-900 transition-colors"
+              className="text-xs px-2.5 py-1 rounded border border-[#374151] text-gray-600 hover:text-red-400 hover:border-red-900 transition-colors"
               aria-label={`Delete ${playbook.name}`}
             >
               Delete

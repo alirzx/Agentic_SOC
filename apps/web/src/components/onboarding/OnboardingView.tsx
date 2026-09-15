@@ -174,7 +174,7 @@ export function OnboardingView() {
         transition={{ duration: 0.25, ease: 'easeOut' }}
         className="mb-10"
       >
-        <p className="text-xs uppercase tracking-wider text-blue-400/80 mb-2">
+        <p className="text-xs uppercase tracking-wider text-brand-400/80 mb-2">
           Getting started
         </p>
         <h1 className="text-3xl font-semibold text-gray-100 mb-3">
@@ -248,7 +248,7 @@ export function OnboardingView() {
             <button
               type="button"
               onClick={() => openPicker()}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
             >
               Browse all {totalConnectorTypes} connectors →
             </button>
@@ -282,8 +282,8 @@ export function OnboardingView() {
                 onClick={() => openPicker(undefined, c)}
                 className={clsx(
                   'px-3 py-2 rounded-lg text-sm border transition-colors',
-                  'border-gray-800 bg-gray-900 text-gray-200 hover:border-blue-500/40 hover:bg-gray-900/80',
-                  activeCategory === c && 'border-blue-500/60 bg-blue-500/10',
+                  'border-[#374151] bg-dark-70 text-gray-200 hover:border-brand-500/40 hover:bg-dark-70/80',
+                  activeCategory === c && 'border-brand-500/60 bg-brand-500/10',
                 )}
               >
                 {CATEGORY_LABEL[c] ?? c}
@@ -350,7 +350,7 @@ function Stat({
         'rounded-xl border px-4 py-3',
         tone === 'good'
           ? 'border-green-500/20 bg-green-500/5'
-          : 'border-gray-800 bg-gray-900/60',
+          : 'border-[#374151] bg-dark-60',
       )}
     >
       <div className="text-xs text-gray-500 uppercase tracking-wider">{label}</div>
@@ -386,7 +386,7 @@ function PopularTile({
     <button
       type="button"
       onClick={onClick}
-      className="group relative text-left rounded-xl border border-gray-800 bg-gray-900/60 hover:bg-gray-900 hover:border-blue-500/40 px-4 py-4 transition-colors"
+      className="group relative text-left rounded-xl border border-[#374151] bg-dark-60 hover:bg-dark-70 hover:border-brand-500/40 px-4 py-4 transition-colors"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -436,12 +436,12 @@ function NextStepCard({
   // markup otherwise so the visual treatment stays identical.
   const isExternal = /^https?:\/\//i.test(href);
   const className =
-    'block rounded-xl border border-gray-800 bg-gray-900/40 hover:bg-gray-900 hover:border-blue-500/40 p-5 transition-colors';
+    'block rounded-xl border border-[#374151] bg-dark-70/80 hover:bg-dark-70 hover:border-brand-500/40 p-5 transition-colors';
   const inner = (
     <>
       <div className="text-sm font-medium text-gray-100 mb-1">{title}</div>
       <p className="text-sm text-gray-500 mb-3 leading-relaxed">{body}</p>
-      <span className="text-xs text-blue-400 group-hover:text-blue-300">{cta} →</span>
+      <span className="text-xs text-brand-400 group-hover:text-brand-300">{cta} →</span>
     </>
   );
   if (isExternal) {

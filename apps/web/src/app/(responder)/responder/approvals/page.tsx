@@ -83,7 +83,7 @@ export default function ResponderApprovalsPage() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Approvals</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="text-xs text-amgray-50 mt-0.5">
             {sorted.length} pending
           </p>
         </div>
@@ -92,7 +92,7 @@ export default function ResponderApprovalsPage() {
           onClick={() => void load('refresh')}
           disabled={refreshing}
           aria-label="Refresh approvals"
-          className="w-9 h-9 rounded-full border border-zinc-800 hover:border-zinc-700 disabled:opacity-60 flex items-center justify-center text-zinc-300"
+          className="w-9 h-9 rounded-full border border-[#374151] hover:border-[#333A47] disabled:opacity-60 flex items-center justify-center text-amgray-20"
         >
           <svg
             className={clsx('w-4 h-4', refreshing && 'animate-spin')}
@@ -112,7 +112,7 @@ export default function ResponderApprovalsPage() {
 
       {/* Scope toggle: mine vs everyone. Defaults to "mine" since most of the
           time the on-call cares about their own queue. */}
-      <div className="mb-3 inline-flex rounded-full bg-zinc-900/70 border border-zinc-800 p-0.5 text-xs">
+      <div className="mb-3 inline-flex rounded-full bg-dark-60 border border-[#374151] p-0.5 text-xs">
         {(['mine', 'all'] as ScopeFilter[]).map((s) => (
           <button
             key={s}
@@ -122,7 +122,7 @@ export default function ResponderApprovalsPage() {
               'px-3 py-1.5 rounded-full transition',
               scope === s
                 ? 'bg-zinc-100 text-zinc-900 font-medium'
-                : 'text-zinc-400 hover:text-zinc-200',
+                : 'text-amgray-40 hover:text-amgray-10',
             )}
           >
             {s === 'mine' ? 'Mine' : 'All'}
@@ -218,16 +218,16 @@ function ApprovalCard({
   return (
     <div
       className={clsx(
-        'rounded-xl bg-zinc-900/70 border border-zinc-800/80 border-l-4 px-4 py-3',
+        'rounded-xl bg-dark-60 border border-[#374151]/80 border-l-4 px-4 py-3',
         tone.border,
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-medium text-zinc-100 leading-snug line-clamp-2">
+          <h2 className="text-sm font-medium text-white leading-snug line-clamp-2">
             {req.title}
           </h2>
-          <p className="mt-1 text-xs text-zinc-400 leading-relaxed line-clamp-3">
+          <p className="mt-1 text-xs text-amgray-40 leading-relaxed line-clamp-3">
             {req.summary}
           </p>
         </div>
@@ -242,7 +242,7 @@ function ApprovalCard({
         </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-amgray-50">
         <span>requested by {req.requested_by}</span>
         <span aria-hidden>·</span>
         <span>opened {formatRelative(req.created_at)}</span>
@@ -287,7 +287,7 @@ function ApprovalCard({
                 : '#'
           }
           className={clsx(
-            'h-10 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900/60 text-zinc-300 text-xs font-medium transition active:scale-[0.97] flex items-center justify-center',
+            'h-10 rounded-lg border border-[#374151] hover:border-[#333A47] bg-dark-70/60 text-amgray-20 text-xs font-medium transition active:scale-[0.97] flex items-center justify-center',
             !req.case_id && !req.alert_id && 'opacity-40 pointer-events-none',
           )}
         >
@@ -304,16 +304,16 @@ function SkeletonList() {
       {Array.from({ length: 3 }).map((_, i) => (
         <li
           key={i}
-          className="rounded-xl bg-zinc-900/40 border border-zinc-800/60 border-l-4 border-l-zinc-800 px-4 py-3"
+          className="rounded-xl bg-dark-70/40 border border-[#374151]/60 border-l-4 border-l-zinc-800 px-4 py-3"
         >
-          <div className="h-3.5 w-2/3 bg-zinc-800/80 rounded animate-pulse" />
-          <div className="h-3 w-full bg-zinc-800/60 rounded mt-2 animate-pulse" />
-          <div className="h-2.5 w-1/2 bg-zinc-800/60 rounded mt-3 animate-pulse" />
+          <div className="h-3.5 w-2/3 bg-dark-20/80 rounded animate-pulse" />
+          <div className="h-3 w-full bg-dark-20/60 rounded mt-2 animate-pulse" />
+          <div className="h-2.5 w-1/2 bg-dark-20/60 rounded mt-3 animate-pulse" />
           <div className="mt-3 grid grid-cols-3 gap-2">
             {Array.from({ length: 3 }).map((__, j) => (
               <div
                 key={j}
-                className="h-10 rounded-lg bg-zinc-800/40 animate-pulse"
+                className="h-10 rounded-lg bg-dark-20/40 animate-pulse"
               />
             ))}
           </div>
@@ -325,7 +325,7 @@ function SkeletonList() {
 
 function EmptyState() {
   return (
-    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 px-6 py-12 text-center">
+    <div className="rounded-xl border border-[#374151]/80 bg-dark-70/30 px-6 py-12 text-center">
       <div className="w-10 h-10 mx-auto rounded-full bg-emerald-500/15 flex items-center justify-center mb-3">
         <svg
           className="w-5 h-5 text-emerald-400"
@@ -341,8 +341,8 @@ function EmptyState() {
           />
         </svg>
       </div>
-      <p className="text-sm text-zinc-300">Nothing to approve.</p>
-      <p className="text-xs text-zinc-500 mt-1">
+      <p className="text-sm text-amgray-20">Nothing to approve.</p>
+      <p className="text-xs text-amgray-50 mt-1">
         Agent isn&apos;t blocked on you. Nice.
       </p>
     </div>

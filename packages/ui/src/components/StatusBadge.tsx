@@ -17,7 +17,7 @@ interface StatusBadgeProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
-  new: { label: 'New', badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
+  new: { label: 'New', badge: 'bg-brand-500/20 text-brand-400 border border-brand-500/30' },
   open: { label: 'Open', badge: 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' },
   in_progress: { label: 'In Progress', badge: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' },
   pending_action: { label: 'Pending', badge: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },

@@ -159,7 +159,7 @@ const SEVERITY_BADGE: Record<CaseSeverity, string> = {
   critical: 'bg-red-500/15 text-red-300 ring-red-500/30',
   high: 'bg-orange-500/15 text-orange-300 ring-orange-500/30',
   medium: 'bg-yellow-500/15 text-yellow-300 ring-yellow-500/30',
-  low: 'bg-blue-500/15 text-blue-300 ring-blue-500/30',
+  low: 'bg-brand-500/15 text-brand-300 ring-brand-500/30',
 };
 
 const STATUS_LABEL: Record<CaseStatus, string> = {
@@ -172,7 +172,7 @@ const STATUS_LABEL: Record<CaseStatus, string> = {
 
 const STATUS_DOT: Record<CaseStatus, string> = {
   open: 'bg-slate-400',
-  in_progress: 'bg-blue-400 animate-pulse',
+  in_progress: 'bg-brand-400 animate-pulse',
   pending: 'bg-amber-400',
   resolved: 'bg-emerald-400',
   closed: 'bg-slate-600',
@@ -180,7 +180,7 @@ const STATUS_DOT: Record<CaseStatus, string> = {
 
 const TASK_STATUS_BADGE: Record<CaseTask['status'], string> = {
   todo: 'bg-slate-500/15 text-slate-300 ring-slate-500/30',
-  in_progress: 'bg-blue-500/15 text-blue-300 ring-blue-500/30',
+  in_progress: 'bg-brand-500/15 text-brand-300 ring-brand-500/30',
   done: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
 };
 
@@ -265,7 +265,7 @@ function TaskRow({ task, onChangeStatus }: TaskRowProps) {
           task.status === 'done'
             ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
             : task.status === 'in_progress'
-              ? 'border-blue-500/40 bg-blue-500/15 text-blue-300'
+              ? 'border-brand-500/40 bg-brand-500/15 text-brand-300'
               : 'border-slate-600 text-slate-500 hover:border-slate-400',
         )}
         aria-label={`Mark task ${next}`}
@@ -739,12 +739,12 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                 'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors',
                 summaryDownloading || !caseRecord
                   ? 'cursor-not-allowed border-slate-700/40 bg-slate-800/40 text-slate-500'
-                  : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20',
+                  : 'border-teal-20/40 bg-teal-20/10 text-teal-20 hover:bg-teal-20/20',
               )}
               title="Open a print-ready case summary (HTML → Save as PDF)"
             >
               {summaryDownloading && (
-                <span className="h-3 w-3 animate-spin rounded-full border border-indigo-500/30 border-t-indigo-400" />
+                <span className="h-3 w-3 animate-spin rounded-full border border-teal-20/30 border-t-indigo-400" />
               )}
               {summaryDownloading ? 'Generating…' : 'Summary'}
             </button>
@@ -1129,7 +1129,7 @@ function InvestigationPanel({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Recon */}
         <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-300">Recon</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-brand-300">Recon</h4>
           {recon?.summary != null && <p className="text-xs text-slate-400">{String(recon.summary)}</p>}
           {Array.isArray(recon?.iocs) && recon.iocs.length > 0 && (
             <div>
@@ -1891,12 +1891,12 @@ function ReportPanel({
                 'flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
                 pdfDownloading
                   ? 'cursor-not-allowed text-slate-500'
-                  : 'bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40',
+                  : 'bg-teal-20/20 text-teal-10 hover:bg-teal-20/40',
               )}
             >
               {pdfDownloading ? (
                 <>
-                  <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+                  <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                   Generating…
                 </>
               ) : (

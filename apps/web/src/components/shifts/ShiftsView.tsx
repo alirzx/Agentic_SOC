@@ -22,7 +22,7 @@ const PRIORITY_CONFIG = {
   critical: { label: 'Critical', className: 'text-red-400 bg-red-500/10 border-red-500/20' },
   high: { label: 'High', className: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   medium: { label: 'Medium', className: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
-  low: { label: 'Low', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  low: { label: 'Low', className: 'text-brand-400 bg-brand-500/10 border-brand-500/20' },
 };
 
 const MOCK_HANDOFF_ITEMS: HandoffItem[] = [
@@ -67,7 +67,7 @@ export function ShiftsView() {
         </div>
         <button
           onClick={handleGenerateReport}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -77,7 +77,7 @@ export function ShiftsView() {
       </div>
 
       {/* Current Shift Status */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+      <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
           <h2 className="text-sm font-semibold text-gray-200">Active Shift</h2>
@@ -105,12 +105,12 @@ export function ShiftsView() {
       {/* Shift Summary */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Alerts Triaged', value: SHIFT_SUMMARY.alertsTriaged, color: 'text-blue-400' },
+          { label: 'Alerts Triaged', value: SHIFT_SUMMARY.alertsTriaged, color: 'text-brand-400' },
           { label: 'Cases Opened', value: SHIFT_SUMMARY.casesOpened, color: 'text-orange-400' },
           { label: 'Escalations', value: SHIFT_SUMMARY.escalations, color: 'text-red-400' },
           { label: 'Auto-Resolved', value: SHIFT_SUMMARY.autoResolved, color: 'text-green-400' },
         ].map((stat) => (
-          <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
+          <div key={stat.label} className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4">
             <p className={clsx('text-2xl font-bold', stat.color)}>{stat.value}</p>
             <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
           </div>
@@ -118,8 +118,8 @@ export function ShiftsView() {
       </div>
 
       {/* Open Handoff Items */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800/60 flex flex-wrap items-center gap-3">
+      <div className="bg-dark-60 border border-[#374151]/60 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-[#374151]/60 flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-gray-200">Open Handoff Items</h2>
             <p className="text-xs text-gray-500 mt-0.5">{filteredItems.length} items require attention from the incoming shift</p>
@@ -132,8 +132,8 @@ export function ShiftsView() {
                 className={clsx(
                   'text-xs px-3 py-1 rounded-lg border transition-colors capitalize',
                   priorityFilter === f
-                    ? 'bg-blue-600/15 text-blue-300 border-blue-600/30'
-                    : 'text-gray-400 border-gray-800 hover:border-gray-700',
+                    ? 'bg-brand-600/15 text-brand-300 border-brand-600/30'
+                    : 'text-gray-400 border-[#374151] hover:border-[#333A47]',
                 )}
               >
                 {f === 'all' ? 'All' : PRIORITY_CONFIG[f].label}
@@ -144,7 +144,7 @@ export function ShiftsView() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800/40">
+              <tr className="border-b border-[#374151]/40">
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Priority</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Alert / Case</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Status</th>
@@ -164,7 +164,7 @@ export function ShiftsView() {
                         <button
                           type="button"
                           onClick={() => setPriorityFilter('all')}
-                          className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                          className="rounded-lg bg-dark-20 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
                         >
                           Show all items
                         </button>
@@ -176,7 +176,7 @@ export function ShiftsView() {
                 filteredItems.map((item) => {
                   const prio = PRIORITY_CONFIG[item.priority];
                   return (
-                    <tr key={item.id} className="border-b border-gray-800/30 hover:bg-gray-800/30 transition-colors">
+                    <tr key={item.id} className="border-b border-[#374151]/30 hover:bg-dark-20/30 transition-colors">
                       <td className="px-5 py-3">
                         <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', prio.className)}>
                           {prio.label}

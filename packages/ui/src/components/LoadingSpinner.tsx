@@ -14,7 +14,7 @@ const SIZE_CONFIG = {
 };
 
 const COLOR_CONFIG = {
-  blue: 'border-blue-500 border-t-transparent',
+  blue: 'border-brand-500 border-t-transparent',
   white: 'border-white border-t-transparent',
   gray: 'border-gray-400 border-t-transparent',
 };

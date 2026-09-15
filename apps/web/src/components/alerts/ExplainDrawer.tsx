@@ -330,7 +330,7 @@ export function ExplainDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="Explain alert"
-        className="w-full max-w-2xl h-full bg-gray-950 border-l border-gray-800 shadow-2xl flex flex-col"
+        className="w-full max-w-2xl h-full bg-dark-80 border-l border-[#374151] shadow-2xl flex flex-col"
       >
         <DrawerHeader
           alert={alert}
@@ -513,10 +513,10 @@ function DrawerHeader({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between border-b border-gray-800 px-6 py-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+    <div className="flex items-start justify-between border-b border-[#374151] px-6 py-4 bg-gradient-to-r from-brand-500/10 to-purple-500/10">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
+          <span className="text-xs font-semibold uppercase tracking-wider text-brand-400">
             Explain
           </span>
           <StatusBadge status={status} />
@@ -535,7 +535,7 @@ function DrawerHeader({
           <button
             type="button"
             onClick={onRetry}
-            className="text-xs px-3 py-1.5 rounded-md bg-gray-800 text-gray-200 hover:bg-gray-700 transition"
+            className="text-xs px-3 py-1.5 rounded-md bg-dark-20 text-gray-200 hover:bg-gray-700 transition"
           >
             Retry
           </button>
@@ -571,11 +571,11 @@ function StatusBadge({ status }: { status: DrawerState['status'] }) {
     idle: { label: 'Idle', cls: 'bg-gray-500/10 text-gray-400 ring-gray-500/20' },
     loading: {
       label: 'Loading…',
-      cls: 'bg-blue-500/10 text-blue-300 ring-blue-500/20',
+      cls: 'bg-brand-500/10 text-brand-300 ring-brand-500/20',
     },
     streaming: {
       label: 'Streaming',
-      cls: 'bg-blue-500/10 text-blue-300 ring-blue-500/20',
+      cls: 'bg-brand-500/10 text-brand-300 ring-brand-500/20',
     },
     done: {
       label: 'Done',
@@ -653,7 +653,7 @@ function SummarySection({
       <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">
         {text || (status === 'loading' ? 'Generating explanation…' : '—')}
         {showCursor && text && (
-          <span className="inline-block w-1.5 h-4 ml-0.5 bg-blue-400 animate-pulse align-middle" />
+          <span className="inline-block w-1.5 h-4 ml-0.5 bg-brand-400 animate-pulse align-middle" />
         )}
       </p>
     </section>
@@ -665,14 +665,14 @@ function OcsfSection({ frame }: { frame: ExplainOcsfFrame }) {
   return (
     <section>
       <SectionHeading>OCSF mapping</SectionHeading>
-      <div className="rounded-md border border-gray-800 bg-gray-900/60 p-4 space-y-2">
+      <div className="rounded-md border border-[#374151] bg-dark-60 p-4 space-y-2">
         <div className="flex flex-wrap gap-3 text-xs">
           <Tag label="Category" value={`${frame.category} (${frame.category_uid})`} />
           <Tag label="Class" value={`${frame.class} (${frame.class_uid})`} />
           <Tag label="Activity" value={frame.activity} />
         </div>
         {hasFields && (
-          <dl className="grid grid-cols-[max-content,1fr] gap-x-3 gap-y-1 text-xs pt-2 border-t border-gray-800/80">
+          <dl className="grid grid-cols-[max-content,1fr] gap-x-3 gap-y-1 text-xs pt-2 border-t border-[#374151]/80">
             {Object.entries(frame.fields).map(([k, v]) => (
               <FieldRow key={k} label={k} value={String(v)} />
             ))}
@@ -766,7 +766,7 @@ function NextStepsSection({
         {steps.map((s, i) => (
           <div
             key={`${s.title}-${i}`}
-            className="rounded-md border border-gray-800 bg-gray-900/60 p-3"
+            className="rounded-md border border-[#374151] bg-dark-60 p-3"
           >
             <div className="flex items-start justify-between gap-2 mb-1">
               <h4 className="text-sm font-medium text-gray-100">{s.title}</h4>
@@ -774,7 +774,7 @@ function NextStepsSection({
                 <button
                   type="button"
                   onClick={() => onRunPlaybook(s.playbook_id!)}
-                  className="text-xs px-2.5 py-1 rounded bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 ring-1 ring-inset ring-blue-500/30 transition"
+                  className="text-xs px-2.5 py-1 rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/25 ring-1 ring-inset ring-brand-500/30 transition"
                 >
                   Run playbook
                 </button>
@@ -817,7 +817,7 @@ function RuleLineageSection({ lineage }: { lineage: RuleLineage }) {
     return (
       <section>
         <SectionHeading>Detection rule</SectionHeading>
-        <div className="rounded-md border border-gray-800 bg-gray-900/40 p-3 text-xs text-gray-500">
+        <div className="rounded-md border border-[#374151] bg-dark-70/80 p-3 text-xs text-gray-500">
           No matching rule could be identified for this alert. The signal
           may have come from an ad-hoc query or a deprecated rule.
         </div>
@@ -828,7 +828,7 @@ function RuleLineageSection({ lineage }: { lineage: RuleLineage }) {
   return (
     <section>
       <SectionHeading>Detection rule</SectionHeading>
-      <div className="rounded-md border border-gray-800 bg-gray-900/60 p-3 space-y-2">
+      <div className="rounded-md border border-[#374151] bg-dark-60 p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h4 className="text-sm font-medium text-gray-100 truncate">
@@ -853,7 +853,7 @@ function RuleLineageSection({ lineage }: { lineage: RuleLineage }) {
             {lineage.rule_description}
           </p>
         )}
-        <div className="flex flex-wrap gap-3 text-[11px] pt-1 border-t border-gray-800/80">
+        <div className="flex flex-wrap gap-3 text-[11px] pt-1 border-t border-[#374151]/80">
           {lineage.rule_severity && (
             <Tag label="Severity" value={lineage.rule_severity} />
           )}
@@ -902,7 +902,7 @@ function FpRateSection({ fpr }: { fpr: HistoricalFpRate }) {
   return (
     <section>
       <SectionHeading>Historical false-positive rate</SectionHeading>
-      <div className="rounded-md border border-gray-800 bg-gray-900/60 p-3 space-y-1.5">
+      <div className="rounded-md border border-[#374151] bg-dark-60 p-3 space-y-1.5">
         <div className="flex items-baseline gap-3">
           <span className={clsx('text-2xl font-semibold tabular-nums', rateColor)}>
             {pct}%
@@ -953,7 +953,7 @@ function SuggestedActionsSection({
         {sorted.map((a, i) => (
           <div
             key={`${a.title}-${i}`}
-            className="rounded-md border border-gray-800 bg-gray-900/60 p-3"
+            className="rounded-md border border-[#374151] bg-dark-60 p-3"
           >
             <div className="flex items-start justify-between gap-2 mb-1">
               <div className="flex items-center gap-2 min-w-0">
@@ -973,7 +973,7 @@ function SuggestedActionsSection({
                 <button
                   type="button"
                   onClick={() => onRunPlaybook(a.playbook_id!)}
-                  className="shrink-0 text-xs px-2.5 py-1 rounded bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 ring-1 ring-inset ring-blue-500/30 transition"
+                  className="shrink-0 text-xs px-2.5 py-1 rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/25 ring-1 ring-inset ring-brand-500/30 transition"
                 >
                   Run playbook
                 </button>
@@ -1019,7 +1019,7 @@ function LlmDisclosure({
       })
     : null;
   return (
-    <div className="text-[11px] text-gray-500 border-t border-gray-800/80 pt-3 space-y-0.5">
+    <div className="text-[11px] text-gray-500 border-t border-[#374151]/80 pt-3 space-y-0.5">
       <div className="flex items-center gap-2">
         <span
           className={clsx(

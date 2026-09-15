@@ -252,7 +252,7 @@ export function RuleBuilder({ onAppend }: RuleBuilderProps) {
         type="button"
         onClick={handleAppend}
         disabled={!canSubmit}
-        className="mt-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-1 rounded-md bg-teal-20 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-10 disabled:cursor-not-allowed disabled:opacity-60"
       >
         Append rule to editor
       </button>
@@ -278,7 +278,7 @@ function Field({ label, children }: FieldProps) {
 }
 
 const inputCls =
-  "rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 normal-case tracking-normal focus:border-indigo-500 focus:outline-none";
+  "rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 normal-case tracking-normal focus:border-teal-20 focus:outline-none";
 
 /**
  * Quote a YAML scalar only when needed (contains special chars or whitespace).

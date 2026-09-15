@@ -102,7 +102,7 @@ export function CostDashboardView() {
             id="cost-window"
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
-            className="rounded border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white"
+            className="rounded border border-gray-600 bg-dark-20 px-3 py-1.5 text-sm text-white"
           >
             {WINDOW_PRESETS.map((p) => (
               <option key={p.days} value={p.days}>
@@ -113,7 +113,7 @@ export function CostDashboardView() {
           <button
             type="button"
             onClick={() => mutate()}
-            className="rounded border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+            className="rounded border border-gray-600 bg-dark-20 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
           >
             Refresh
           </button>
@@ -127,7 +127,7 @@ export function CostDashboardView() {
       )}
 
       {isLoading && !data && (
-        <div className="rounded-xl border border-gray-700 bg-gray-900 p-6 text-sm text-gray-400">
+        <div className="rounded-xl border border-[#333A47] bg-dark-70 p-6 text-sm text-gray-400">
           Computing cost snapshot…
         </div>
       )}
@@ -248,7 +248,7 @@ function ModelTable({ data }: { data: CostDashboard }) {
         <div className="overflow-x-auto" data-testid="model-table">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-700 text-xs uppercase tracking-wide text-gray-500">
+              <tr className="border-b border-[#333A47] text-xs uppercase tracking-wide text-gray-500">
                 <th className="py-2 pr-4 font-medium">Model</th>
                 <th className="py-2 pr-4 font-medium text-right">Calls</th>
                 <th className="py-2 pr-4 font-medium text-right">Prompt tokens</th>
@@ -260,7 +260,7 @@ function ModelTable({ data }: { data: CostDashboard }) {
             </thead>
             <tbody>
               {by_model.map((m) => (
-                <tr key={m.model} className="border-b border-gray-800/80">
+                <tr key={m.model} className="border-b border-[#374151]/80">
                   <td className="py-2.5 pr-4 font-mono text-xs text-gray-100">{m.model}</td>
                   <td className="py-2.5 pr-4 text-right text-gray-200 tabular-nums">
                     {fmtNumber(m.calls)}
@@ -335,7 +335,7 @@ function ByokPanel({ data }: { data: CostDashboard }) {
   const { byok_savings: b } = data;
   const accent = b.is_byok_active
     ? 'border-emerald-500/30 bg-emerald-950/20'
-    : 'border-gray-700 bg-gray-900';
+    : 'border-[#333A47] bg-dark-70';
   const badge = b.is_byok_active
     ? { text: 'BYOK active', cls: 'bg-emerald-500/20 text-emerald-200' }
     : { text: 'Hosted provider', cls: 'bg-gray-700/60 text-gray-300' };
@@ -387,7 +387,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-gray-700 bg-gray-900 p-5">
+    <div className="rounded-xl border border-[#333A47] bg-dark-70 p-5">
       <div className="mb-4">
         <h2 className="text-base font-semibold text-white">{title}</h2>
         {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
@@ -407,7 +407,7 @@ function KpiCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
+    <div className="rounded-lg border border-[#333A47] bg-dark-20 p-4">
       <p className="text-xs text-gray-400">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-white tabular-nums">{value}</p>
       {sub && <p className="mt-1 text-xs text-gray-500">{sub}</p>}

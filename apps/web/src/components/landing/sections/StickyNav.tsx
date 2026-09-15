@@ -33,6 +33,8 @@ import { ArrowRight, Menu, X } from 'lucide-react';
 import { GithubMark } from './icons';
 import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { BRAND } from '@/lib/brand';
 
 // All hrefs are absolute (`/#section` or `/page`) so the nav works on
 // every route. `Benchmark` and `Pricing` point at the real standalone
@@ -82,18 +84,10 @@ export function StickyNav() {
       >
         <Link
           href="/"
-          aria-label="Soorin home"
+          aria-label={`${BRAND.shortName} home`}
           className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
         >
-          <span
-            aria-hidden="true"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-velvet-emerald-cta text-xs font-bold text-velvet-content-primary shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] motion-safe:shadow-glow-emerald-sm"
-          >
-            S
-          </span>
-          <span className="font-velvet-display text-base font-normal tracking-tight text-velvet-content-primary">
-            Soorin
-          </span>
+          <BrandLogo variant="nav" size={32} priority />
         </Link>
 
         <ul className="hidden items-center gap-1 lg:flex">
@@ -128,7 +122,7 @@ export function StickyNav() {
           </Link>
           <Link
             href="/dashboard"
-            className="group inline-flex items-center gap-1 rounded-md bg-velvet-emerald-cta px-4 py-1.5 text-sm font-semibold text-velvet-content-primary shadow-[0_1px_0_rgba(255,255,255,0.18)_inset] transition-[filter,box-shadow] duration-200 ease-landing-out-quart hover:brightness-110 motion-safe:hover:shadow-glow-emerald-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
+            className="group inline-flex items-center gap-1 rounded-[6px] bg-teal-20 px-4 py-1.5 text-sm font-gilroy-semibold text-dark-80 shadow-glow-teal transition-[filter,box-shadow] duration-200 ease-landing-out-quart hover:bg-teal-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-10 focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
             Open dashboard
             <ArrowRight
@@ -187,7 +181,7 @@ export function StickyNav() {
           <Link
             href="/dashboard"
             onClick={() => setOpen(false)}
-            className="flex-1 rounded-md bg-velvet-emerald-cta px-3 py-2 text-center text-sm font-semibold text-velvet-content-primary motion-safe:shadow-glow-emerald-sm"
+            className="flex-1 rounded-[6px] bg-teal-20 px-3 py-2 text-center text-sm font-gilroy-semibold text-dark-80 shadow-glow-teal"
           >
             Open dashboard
           </Link>

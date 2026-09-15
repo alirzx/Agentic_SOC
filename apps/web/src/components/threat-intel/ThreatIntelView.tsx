@@ -90,7 +90,7 @@ const MOCK_INDICATORS: ThreatIndicator[] = [
 
 const TYPE_CONFIG: Record<IndicatorType, { label: string; color: string }> = {
   ip: { label: 'IP', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-  domain: { label: 'Domain', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  domain: { label: 'Domain', color: 'text-brand-400 bg-brand-500/10 border-brand-500/20' },
   hash: { label: 'Hash', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
   url: { label: 'URL', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   email: { label: 'Email', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
@@ -100,7 +100,7 @@ const SEVERITY_CONFIG: Record<AlertSeverity, string> = {
   critical: 'text-red-400 bg-red-500/10 border-red-500/20',
   high: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
   medium: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-  low: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  low: 'text-brand-400 bg-brand-500/10 border-brand-500/20',
   info: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
 };
 
@@ -128,7 +128,7 @@ function LookupForm() {
   };
 
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
       <h3 className="text-sm font-medium text-gray-300 mb-3">IOC Lookup</h3>
       <div className="flex gap-2">
         <input
@@ -137,12 +137,12 @@ function LookupForm() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
           placeholder="Enter IP, domain, hash, or URL…"
-          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 placeholder-gray-600 px-3 py-2 focus:outline-none focus:border-blue-500/50"
+          className="flex-1 bg-dark-20 border border-[#333A47] rounded-lg text-sm text-gray-300 placeholder-gray-600 px-3 py-2 focus:outline-none focus:border-brand-500/50"
         />
         <button
           onClick={handleLookup}
           disabled={isLooking || !query.trim()}
-          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+          className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors"
         >
           {isLooking ? 'Looking up…' : 'Lookup'}
         </button>
@@ -166,7 +166,7 @@ function LookupForm() {
           ) : null}
           <div className="flex flex-wrap gap-1">
             {(result.tags ?? []).map((t) => (
-              <span key={t} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{t}</span>
+              <span key={t} className="text-xs bg-dark-20 text-gray-400 px-1.5 py-0.5 rounded">{t}</span>
             ))}
           </div>
           <div className="text-xs text-gray-500">
@@ -184,7 +184,7 @@ function IOCRow({ ioc }: { ioc: ThreatIndicator }) {
   const typeCfg = TYPE_CONFIG[ioc.type] || TYPE_CONFIG.ip;
 
   return (
-    <div className="flex items-center gap-4 py-3 border-b border-gray-800/60 last:border-0 hover:bg-gray-800/20 px-4 -mx-4 transition-colors rounded-lg">
+    <div className="flex items-center gap-4 py-3 border-b border-[#374151]/60 last:border-0 hover:bg-dark-20/20 px-4 -mx-4 transition-colors rounded-lg">
       <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border shrink-0', typeCfg.color)}>
         {typeCfg.label}
       </span>
@@ -217,7 +217,7 @@ function IOCRow({ ioc }: { ioc: ThreatIndicator }) {
 
       <div className="flex flex-wrap gap-1 max-w-32 shrink-0">
         {ioc.sources.slice(0, 2).map((src) => (
-          <span key={src} className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded">
+          <span key={src} className="text-xs bg-dark-20 text-gray-500 px-1.5 py-0.5 rounded">
             {src}
           </span>
         ))}
@@ -273,12 +273,12 @@ export function ThreatIntelView() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total IOCs', value: allIndicators.length, color: 'text-blue-400' },
+          { label: 'Total IOCs', value: allIndicators.length, color: 'text-brand-400' },
           { label: 'Malicious', value: allIndicators.filter(i => i.malicious).length, color: 'text-red-400' },
           { label: 'High Confidence', value: allIndicators.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
           { label: 'Added Today', value: 3, color: 'text-green-400' },
         ].map((stat) => (
-          <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
+          <div key={stat.label} className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4">
             <p className={clsx('text-2xl font-bold mb-1', stat.color)}>{stat.value}</p>
             <p className="text-xs text-gray-500">{stat.label}</p>
           </div>
@@ -299,7 +299,7 @@ export function ThreatIntelView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search indicators…"
-            className="w-full pl-9 pr-4 py-2 bg-gray-900/60 border border-gray-800 rounded-lg text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500/50"
+            className="w-full pl-9 pr-4 py-2 bg-dark-60 border border-[#374151] rounded-lg text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-brand-500/50"
           />
         </div>
 
@@ -311,8 +311,8 @@ export function ThreatIntelView() {
               className={clsx(
                 'text-xs px-3 py-1.5 rounded-lg transition-colors',
                 typeFilter === t
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 bg-gray-800/60 hover:bg-gray-800'
+                  ? 'bg-brand-600 text-white'
+                  : 'text-gray-400 bg-dark-20/60 hover:bg-dark-20'
               )}
             >
               {t === 'all' ? 'All' : t.toUpperCase()} ({typeCounts[t] ?? 0})
@@ -322,7 +322,7 @@ export function ThreatIntelView() {
       </div>
 
       {/* IOC List */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
+      <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-gray-300">Indicators of Compromise</h3>
           <span className="text-xs text-gray-500">{indicators.length} indicators</span>
@@ -343,7 +343,7 @@ export function ThreatIntelView() {
                     setTypeFilter('all');
                     setSearch('');
                   }}
-                  className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+                  className="text-xs px-3 py-1.5 rounded-md border border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 transition-colors"
                 >
                   Clear filters
                 </button>

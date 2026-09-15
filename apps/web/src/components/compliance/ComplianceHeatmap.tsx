@@ -18,7 +18,7 @@ interface HeatmapData {
 
 const STATUS_COLORS: Record<string, string> = {
   approved: 'bg-green-600',
-  collected: 'bg-blue-500',
+  collected: 'bg-brand-500',
   review: 'bg-yellow-500',
   rejected: 'bg-red-500',
   missing: 'bg-gray-700',
@@ -86,7 +86,7 @@ export function ComplianceHeatmap({ framework }: Props) {
   const maxCount = Math.max(...allCounts, 1);
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 overflow-x-auto">
+    <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4 overflow-x-auto">
       <h3 className="text-white font-semibold text-base mb-4">
         {data.framework_name} — Control Coverage Heatmap
       </h3>
@@ -144,7 +144,7 @@ export function ComplianceHeatmap({ framework }: Props) {
                           {count}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center justify-center w-full h-7 rounded text-gray-600 bg-gray-800">
+                        <span className="inline-flex items-center justify-center w-full h-7 rounded text-gray-600 bg-dark-20">
                           —
                         </span>
                       )}

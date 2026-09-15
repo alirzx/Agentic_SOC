@@ -50,14 +50,14 @@ const SEVERITY_CONFIG: Record<
   critical: { label: 'CRIT', dot: 'bg-red-500', text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
   high: { label: 'HIGH', dot: 'bg-orange-500', text: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
   medium: { label: 'MED', dot: 'bg-yellow-500', text: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
-  low: { label: 'LOW', dot: 'bg-blue-500', text: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+  low: { label: 'LOW', dot: 'bg-brand-500', text: 'text-brand-400', bg: 'bg-brand-500/10 border-brand-500/20' },
   info: { label: 'INFO', dot: 'bg-gray-500', text: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' },
 };
 
 const RISK_CONFIG = {
   high: { dot: 'bg-red-500', text: 'text-red-400' },
   medium: { dot: 'bg-yellow-500', text: 'text-yellow-400' },
-  low: { dot: 'bg-blue-500', text: 'text-blue-400' },
+  low: { dot: 'bg-brand-500', text: 'text-brand-400' },
 } as const;
 
 const OWNER_OPTIONS: { value: QueueOwner; label: string }[] = [
@@ -172,7 +172,7 @@ function OwnerToggle({
     <div
       role="tablist"
       aria-label="Queue owner filter"
-      className="inline-flex items-center bg-gray-900/60 border border-gray-800/60 rounded-lg p-0.5"
+      className="inline-flex items-center bg-dark-60 border border-[#374151]/60 rounded-lg p-0.5"
     >
       {OWNER_OPTIONS.map((opt) => {
         const active = value === opt.value;
@@ -193,7 +193,7 @@ function OwnerToggle({
             onClick={() => onChange(opt.value)}
             className={clsx(
               'text-xs px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5',
-              active ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200',
+              active ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200',
             )}
           >
             {opt.label}
@@ -202,7 +202,7 @@ function OwnerToggle({
                 aria-live="polite"
                 className={clsx(
                   'text-[10px] font-mono px-1.5 py-px rounded-full',
-                  active ? 'bg-white/15 text-white' : 'bg-gray-800 text-gray-400',
+                  active ? 'bg-white/15 text-white' : 'bg-dark-20 text-gray-400',
                 )}
               >
                 {count > 99 ? '99+' : count}
@@ -223,7 +223,7 @@ function PeriodFilter({
   onChange: (next: QueuePeriod) => void;
 }) {
   return (
-    <div className="inline-flex items-center bg-gray-900/40 border border-gray-800/60 rounded-lg p-0.5">
+    <div className="inline-flex items-center bg-dark-70/80 border border-[#374151]/60 rounded-lg p-0.5">
       {PERIOD_OPTIONS.map((opt) => (
         <button
           key={opt.value}
@@ -284,7 +284,7 @@ function SuggestedActionBadge({ item }: { item: QueueItem }) {
   const cfg = RISK_CONFIG[item.suggested_action.risk];
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] text-gray-400 bg-gray-800/60 border border-gray-700/60 px-1.5 py-0.5 rounded"
+      className="inline-flex items-center gap-1 text-[10px] text-gray-400 bg-dark-20/60 border border-[#333A47]/60 px-1.5 py-0.5 rounded"
       title={`Suggested next action (risk: ${item.suggested_action.risk})`}
     >
       <span className={clsx('w-1.5 h-1.5 rounded-full', cfg.dot)} aria-hidden />
@@ -296,13 +296,13 @@ function SuggestedActionBadge({ item }: { item: QueueItem }) {
 function BucketBadge({ bucket }: { bucket: 'mine' | 'unassigned' }) {
   if (bucket === 'mine') {
     return (
-      <span className="text-[10px] font-medium text-blue-300 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">
+      <span className="text-[10px] font-medium text-brand-300 bg-brand-500/10 border border-brand-500/20 px-1.5 py-0.5 rounded">
         Mine
       </span>
     );
   }
   return (
-    <span className="text-[10px] font-medium text-gray-400 bg-gray-700/40 border border-gray-700/60 px-1.5 py-0.5 rounded">
+    <span className="text-[10px] font-medium text-gray-400 bg-gray-700/40 border border-[#333A47]/60 px-1.5 py-0.5 rounded">
       Unassigned
     </span>
   );
@@ -345,7 +345,7 @@ function QueueRowActions({
             onClaim(item.id);
           }}
           disabled={busyAction === 'claim'}
-          className="text-[11px] font-medium px-2 py-1 rounded border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="text-[11px] font-medium px-2 py-1 rounded border border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 hover:border-brand-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busyAction === 'claim' ? 'Claiming…' : 'Claim'}
         </button>
@@ -360,7 +360,7 @@ function QueueRowActions({
             onRelease(item.id);
           }}
           disabled={busyAction === 'release'}
-          className="text-[11px] font-medium px-2 py-1 rounded border border-gray-700/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="text-[11px] font-medium px-2 py-1 rounded border border-[#333A47]/60 text-gray-300 hover:bg-dark-20/60 hover:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busyAction === 'release' ? 'Releasing…' : 'Release'}
         </button>
@@ -374,14 +374,14 @@ function QueueRowActions({
             // we stop propagation only and let the native disclosure run.
             e.stopPropagation();
           }}
-          className="list-none cursor-pointer text-[11px] font-medium px-2 py-1 rounded border border-gray-700/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-600 transition-colors select-none"
+          className="list-none cursor-pointer text-[11px] font-medium px-2 py-1 rounded border border-[#333A47]/60 text-gray-300 hover:bg-dark-20/60 hover:border-gray-600 transition-colors select-none"
           aria-label="Snooze options"
         >
           {busyAction === 'snooze' ? 'Snoozing…' : 'Snooze'}
         </summary>
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1 z-20 flex flex-col bg-gray-900 border border-gray-800 rounded-lg shadow-xl p-1 min-w-[8rem]"
+          className="absolute right-0 top-full mt-1 z-20 flex flex-col bg-dark-70 border border-[#374151] rounded-lg shadow-xl p-1 min-w-[8rem]"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -399,7 +399,7 @@ function QueueRowActions({
                 onSnooze(item.id, preset.minutes);
                 closeSnoozeMenu();
               }}
-              className="text-left text-xs px-2 py-1 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+              className="text-left text-xs px-2 py-1 rounded text-gray-300 hover:bg-dark-20 hover:text-white transition-colors"
             >
               {preset.label}
             </button>
@@ -428,10 +428,10 @@ function QueueRow({ item, generatedAt, isMine, busyAction, onClaim, onRelease, o
     <Link
       href={`/alerts/${item.id}`}
       className={clsx(
-        'group flex items-start gap-3 px-4 py-3 border-b border-gray-800/40 last:border-0 transition-colors',
+        'group flex items-start gap-3 px-4 py-3 border-b border-[#374151]/40 last:border-0 transition-colors',
         breached
           ? 'bg-red-950/20 hover:bg-red-950/30 border-l-2 border-l-red-500/60'
-          : 'hover:bg-gray-800/30',
+          : 'hover:bg-dark-20/30',
       )}
       aria-label={`Investigate ${item.title}`}
     >
@@ -497,7 +497,7 @@ function QueueRow({ item, generatedAt, isMine, busyAction, onClaim, onRelease, o
 
 function QueueSkeleton() {
   return (
-    <div className="border border-gray-800/60 rounded-xl divide-y divide-gray-800/40 overflow-hidden">
+    <div className="border border-[#374151]/60 rounded-xl divide-y divide-gray-800/40 overflow-hidden">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-start gap-3 px-4 py-3">
           <div className="flex-1 min-w-0 space-y-2">
@@ -688,7 +688,7 @@ export function QueueView() {
       )}
 
       {!error && items.length > 0 && (
-        <div className="border border-gray-800/60 rounded-xl divide-y divide-gray-800/40 overflow-hidden bg-gray-950/40">
+        <div className="border border-[#374151]/60 rounded-xl divide-y divide-gray-800/40 overflow-hidden bg-dark-80/40">
           {items.map((item) => (
             <QueueRow
               key={item.id}
@@ -773,7 +773,7 @@ function Pagination({
           type="button"
           onClick={() => onChange(Math.max(1, page - 1))}
           disabled={page <= 1}
-          className="px-2 py-1 rounded border border-gray-800 text-gray-400 hover:bg-gray-800/60 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-2 py-1 rounded border border-[#374151] text-gray-400 hover:bg-dark-20/60 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           ← Prev
         </button>
@@ -784,7 +784,7 @@ function Pagination({
           type="button"
           onClick={() => onChange(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
-          className="px-2 py-1 rounded border border-gray-800 text-gray-400 hover:bg-gray-800/60 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-2 py-1 rounded border border-[#374151] text-gray-400 hover:bg-dark-20/60 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Next →
         </button>

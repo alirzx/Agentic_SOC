@@ -235,14 +235,14 @@ export function CommandPalette() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -8, opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.14, ease: 'easeOut' }}
-            className="relative w-full max-w-xl rounded-xl border border-gray-700/70 bg-[#0d121b] shadow-2xl shadow-black/50 overflow-hidden"
+            className="relative w-full max-w-xl rounded-xl border border-[#333A47]/70 bg-[#0d121b] shadow-2xl shadow-black/50 overflow-hidden"
           >
             <Command
               label="Soorin command palette"
               loop
               className="flex flex-col"
             >
-              <div className="flex items-center gap-2 border-b border-gray-800/80 px-4 py-3">
+              <div className="flex items-center gap-2 border-b border-[#374151]/80 px-4 py-3">
                 <svg
                   className="w-4 h-4 text-gray-500 shrink-0"
                   fill="none"
@@ -261,7 +261,7 @@ export function CommandPalette() {
                   placeholder="Type a command, search a page, or ask the Copilot…"
                   className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-500 outline-none"
                 />
-                <kbd className="rounded border border-gray-700 bg-gray-900/70 px-1.5 py-0.5 text-[10px] font-mono text-gray-500">
+                <kbd className="rounded border border-[#333A47] bg-dark-60 px-1.5 py-0.5 text-[10px] font-mono text-gray-500">
                   ESC
                 </kbd>
               </div>
@@ -284,11 +284,11 @@ export function CommandPalette() {
                         onSelect={() => {
                           void item.perform();
                         }}
-                        className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-300 cursor-pointer aria-selected:bg-blue-600/15 aria-selected:text-blue-200"
+                        className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-300 cursor-pointer aria-selected:bg-brand-600/15 aria-selected:text-brand-200"
                       >
                         <span className="flex-1 truncate">{item.label}</span>
                         {item.hint && (
-                          <span className="text-[11px] text-gray-600 group-aria-selected:text-blue-300/80 truncate max-w-[40%] text-right">
+                          <span className="text-[11px] text-gray-600 group-aria-selected:text-brand-300/80 truncate max-w-[40%] text-right">
                             {item.hint}
                           </span>
                         )}
@@ -297,7 +297,7 @@ export function CommandPalette() {
                             {item.shortcut.map((key) => (
                               <kbd
                                 key={key}
-                                className="rounded border border-gray-700 bg-gray-900/60 px-1 py-0.5 text-[10px] font-mono text-gray-400"
+                                className="rounded border border-[#333A47] bg-dark-60 px-1 py-0.5 text-[10px] font-mono text-gray-400"
                               >
                                 {key}
                               </kbd>
@@ -310,15 +310,15 @@ export function CommandPalette() {
                 ))}
               </Command.List>
 
-              <div className="flex items-center justify-between border-t border-gray-800/80 px-4 py-2 text-[11px] text-gray-600">
+              <div className="flex items-center justify-between border-t border-[#374151]/80 px-4 py-2 text-[11px] text-gray-600">
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1">
-                    <kbd className="rounded border border-gray-700 bg-gray-900/70 px-1 py-0.5 font-mono text-gray-500">↑</kbd>
-                    <kbd className="rounded border border-gray-700 bg-gray-900/70 px-1 py-0.5 font-mono text-gray-500">↓</kbd>
+                    <kbd className="rounded border border-[#333A47] bg-dark-60 px-1 py-0.5 font-mono text-gray-500">↑</kbd>
+                    <kbd className="rounded border border-[#333A47] bg-dark-60 px-1 py-0.5 font-mono text-gray-500">↓</kbd>
                     navigate
                   </span>
                   <span className="flex items-center gap-1">
-                    <kbd className="rounded border border-gray-700 bg-gray-900/70 px-1 py-0.5 font-mono text-gray-500">↵</kbd>
+                    <kbd className="rounded border border-[#333A47] bg-dark-60 px-1 py-0.5 font-mono text-gray-500">↵</kbd>
                     select
                   </span>
                 </div>

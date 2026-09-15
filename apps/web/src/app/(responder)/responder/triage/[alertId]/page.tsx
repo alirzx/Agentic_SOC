@@ -152,7 +152,7 @@ export default function ResponderAlertDetailPage() {
       <button
         type="button"
         onClick={() => router.back()}
-        className="-ml-2 mb-2 inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-200"
+        className="-ml-2 mb-2 inline-flex items-center gap-1 text-sm text-amgray-40 hover:text-amgray-10"
       >
         <svg
           className="w-4 h-4"
@@ -183,12 +183,12 @@ export default function ResponderAlertDetailPage() {
           {/* Header card */}
           <div
             className={clsx(
-              'rounded-xl bg-zinc-900/70 border border-zinc-800/80 border-l-4 px-4 py-3',
+              'rounded-xl bg-dark-60 border border-[#374151]/80 border-l-4 px-4 py-3',
               tone.border,
             )}
           >
             <div className="flex items-start justify-between gap-3">
-              <h1 className="text-base font-semibold leading-snug text-zinc-100">
+              <h1 className="text-base font-semibold leading-snug text-white">
                 {alert.title}
               </h1>
               <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -212,7 +212,7 @@ export default function ResponderAlertDetailPage() {
                 </span>
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-amgray-50">
               <span>{alert.source}</span>
               <span aria-hidden>·</span>
               <span>{formatRelative(alert.createdAt)}</span>
@@ -224,7 +224,7 @@ export default function ResponderAlertDetailPage() {
               ) : null}
             </div>
             {alert.description ? (
-              <p className="mt-2 text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+              <p className="mt-2 text-sm text-amgray-20 leading-relaxed whitespace-pre-wrap">
                 {alert.description}
               </p>
             ) : null}
@@ -301,12 +301,12 @@ export default function ResponderAlertDetailPage() {
           </ActionGrid>
 
           {/* Snooze row — three preset windows that match how on-calls actually use it */}
-          <div className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 px-4 py-3">
+          <div className="mt-3 rounded-xl border border-[#374151]/80 bg-dark-70/40 px-4 py-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs uppercase tracking-wider text-zinc-500">
+              <h2 className="text-xs uppercase tracking-wider text-amgray-50">
                 Snooze
               </h2>
-              <span className="text-[10px] text-zinc-600">
+              <span className="text-[10px] text-amgray-50">
                 returns to queue when window ends
               </span>
             </div>
@@ -319,7 +319,7 @@ export default function ResponderAlertDetailPage() {
                   onClick={() => void snooze(w)}
                   className={clsx(
                     'h-10 rounded-lg text-sm font-medium border transition active:scale-[0.97]',
-                    'bg-zinc-900/60 hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-200',
+                    'bg-dark-70/60 hover:bg-dark-70 border-[#374151] hover:border-[#333A47] text-amgray-10',
                     busyAction === `snooze-${w.label}` && 'opacity-60',
                   )}
                 >
@@ -338,8 +338,8 @@ export default function ResponderAlertDetailPage() {
                     key={m.techniqueId}
                     className="flex items-center justify-between text-sm"
                   >
-                    <span className="text-zinc-300 truncate">{m.technique}</span>
-                    <span className="ml-2 text-[11px] font-mono text-indigo-300">
+                    <span className="text-amgray-20 truncate">{m.technique}</span>
+                    <span className="ml-2 text-[11px] font-mono text-teal-10">
                       {m.techniqueId}
                     </span>
                   </li>
@@ -360,10 +360,10 @@ export default function ResponderAlertDetailPage() {
                     className="py-2 flex items-center justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                      <div className="text-[10px] uppercase tracking-wider text-amgray-50">
                         {ioc.type}
                       </div>
-                      <div className="text-sm font-mono text-zinc-200 truncate">
+                      <div className="text-sm font-mono text-amgray-10 truncate">
                         {ioc.value}
                       </div>
                     </div>
@@ -382,18 +382,18 @@ export default function ResponderAlertDetailPage() {
           {alert.caseId ? (
             <Link
               href={`/responder/case/${alert.caseId}`}
-              className="mt-3 flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/40 px-4 py-3 hover:bg-zinc-900 active:scale-[0.99] transition"
+              className="mt-3 flex items-center justify-between rounded-xl border border-[#374151]/80 bg-dark-70/40 px-4 py-3 hover:bg-dark-70 active:scale-[0.99] transition"
             >
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                <div className="text-[10px] uppercase tracking-wider text-amgray-50">
                   Linked case
                 </div>
-                <div className="text-sm font-medium text-indigo-300">
+                <div className="text-sm font-medium text-teal-10">
                   {alert.caseId}
                 </div>
               </div>
               <svg
-                className="w-4 h-4 text-zinc-500"
+                className="w-4 h-4 text-amgray-50"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -452,8 +452,8 @@ function ActionButton({
       className={clsx(
         'h-16 rounded-xl border text-xs font-medium flex flex-col items-center justify-center gap-1 transition active:scale-[0.97]',
         tone === 'primary'
-          ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-200'
-          : 'bg-zinc-900/60 hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-200',
+          ? 'bg-teal-20/15 hover:bg-teal-10/25 border-teal-20/30 text-teal-20'
+          : 'bg-dark-70/60 hover:bg-dark-70 border-[#374151] hover:border-[#333A47] text-amgray-10',
         (disabled || busy) && 'opacity-50 active:scale-100',
       )}
     >
@@ -471,8 +471,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 px-4 py-3">
-      <h2 className="text-xs uppercase tracking-wider text-zinc-500 mb-2">
+    <section className="mt-3 rounded-xl border border-[#374151]/80 bg-dark-70/40 px-4 py-3">
+      <h2 className="text-xs uppercase tracking-wider text-amgray-50 mb-2">
         {title}
       </h2>
       {children}
@@ -483,16 +483,16 @@ function Section({
 function DetailSkeleton() {
   return (
     <div aria-hidden>
-      <div className="rounded-xl bg-zinc-900/40 border border-zinc-800/60 border-l-4 border-l-zinc-800 px-4 py-3">
-        <div className="h-4 w-3/4 bg-zinc-800/80 rounded animate-pulse" />
-        <div className="h-3 w-1/2 bg-zinc-800/60 rounded mt-3 animate-pulse" />
-        <div className="h-12 bg-zinc-800/40 rounded mt-3 animate-pulse" />
+      <div className="rounded-xl bg-dark-70/40 border border-[#374151]/60 border-l-4 border-l-zinc-800 px-4 py-3">
+        <div className="h-4 w-3/4 bg-dark-20/80 rounded animate-pulse" />
+        <div className="h-3 w-1/2 bg-dark-20/60 rounded mt-3 animate-pulse" />
+        <div className="h-12 bg-dark-20/40 rounded mt-3 animate-pulse" />
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="h-16 rounded-xl bg-zinc-900/40 border border-zinc-800/60 animate-pulse"
+            className="h-16 rounded-xl bg-dark-70/40 border border-[#374151]/60 animate-pulse"
           />
         ))}
       </div>

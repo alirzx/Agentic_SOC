@@ -120,7 +120,7 @@ interface FieldInputProps {
 
 function FieldInput({ field, value, onChange }: FieldInputProps) {
   const baseClass =
-    'w-full bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-colors';
+    'w-full bg-dark-80/60 border border-[#374151] rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/30 transition-colors';
 
   switch (field.type) {
     case 'secret':
@@ -169,7 +169,7 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
             type="checkbox"
             checked={Boolean(value)}
             onChange={(e) => onChange(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-700 bg-gray-900 text-blue-500 focus:ring-blue-500/30"
+            className="h-4 w-4 rounded border-[#333A47] bg-dark-70 text-brand-500 focus:ring-brand-500/30"
           />
           <span className="text-sm text-gray-300">{field.placeholder ?? 'Enabled'}</span>
         </label>
@@ -376,7 +376,7 @@ function CatalogGrid({
                 key={entry.connector_id}
                 type="button"
                 onClick={() => onPick(entry)}
-                className="text-left rounded-lg border border-gray-800/80 bg-gray-900/40 hover:bg-gray-900/80 hover:border-gray-700 transition-colors p-4 group"
+                className="text-left rounded-lg border border-[#374151]/80 bg-dark-70/80 hover:bg-dark-70/80 hover:border-[#333A47] transition-colors p-4 group"
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <span className="text-sm font-medium text-gray-100 group-hover:text-white">
@@ -509,7 +509,7 @@ function TroubleshootPanel({
               href={advice.doc_link}
               target="_blank"
               rel="noreferrer"
-              className="inline-block text-xs text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline"
+              className="inline-block text-xs text-brand-400 hover:text-brand-300 underline-offset-2 hover:underline"
             >
               Open setup guide →
             </a>
@@ -799,7 +799,7 @@ function OAuthAppRegistrationForm({
   };
 
   const fieldClass =
-    'w-full bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition-colors';
+    'w-full bg-dark-80/60 border border-[#374151] rounded-lg px-3 py-2 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition-colors';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 pt-1">
@@ -967,7 +967,7 @@ function ConfigStep({
           value={instanceName}
           onChange={(e) => setInstanceName(e.target.value)}
           placeholder={`${entry.connector_name} — production`}
-          className="w-full bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30"
+          className="w-full bg-dark-80/60 border border-[#374151] rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/30"
           required
         />
         <p className="mt-1 text-xs text-gray-500">
@@ -987,7 +987,7 @@ function ConfigStep({
           a disclosure since OAuth is the recommended path; for everyone
           else they're rendered inline as before. */}
       {supportsHostedOAuth ? (
-        <details className="group rounded-lg border border-gray-800/80 bg-gray-900/30">
+        <details className="group rounded-lg border border-[#374151]/80 bg-dark-70/50">
           <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold text-gray-400 hover:text-gray-200 transition-colors">
             Or use static credentials instead
           </summary>
@@ -1032,7 +1032,7 @@ function ConfigStep({
             href={entry.docs_url}
             target="_blank"
             rel="noreferrer"
-            className="text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline"
+            className="text-brand-400 hover:text-brand-300 underline-offset-2 hover:underline"
           >
             View setup guide
           </a>
@@ -1131,7 +1131,7 @@ function VerifyStep({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-gray-800/80 bg-gray-900/40 p-5">
+      <div className="rounded-lg border border-[#374151]/80 bg-dark-70/80 p-5">
         <div className="flex items-start gap-4">
           {arrived ? (
             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center">
@@ -1146,7 +1146,7 @@ function VerifyStep({
               </svg>
             </div>
           ) : (
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-brand-500/15 border border-brand-500/30 flex items-center justify-center">
               <span className="animate-spin w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full" />
             </div>
           )}
@@ -1220,8 +1220,8 @@ function VerifyStep({
           className={clsx(
             'text-sm px-4 py-2 rounded-lg transition-colors',
             arrived
-              ? 'bg-blue-600 hover:bg-blue-500 text-white'
-              : 'bg-gray-800 hover:bg-gray-700 text-gray-200',
+              ? 'bg-brand-600 hover:bg-brand-500 text-white'
+              : 'bg-dark-20 hover:bg-gray-700 text-gray-200',
           )}
         >
           {arrived ? 'Done' : 'Close — keep waiting in background'}
@@ -1461,10 +1461,10 @@ export function AddConnectorModal({
               role="dialog"
               aria-modal="true"
               aria-labelledby="add-connector-title"
-              className="pointer-events-auto w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-gray-800 bg-gray-950 shadow-2xl flex flex-col"
+              className="pointer-events-auto w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-[#374151] bg-dark-80 shadow-2xl flex flex-col"
             >
               {/* Header */}
-              <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-800">
+              <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-[#374151]">
                 <div className="min-w-0">
                   <h2
                     id="add-connector-title"
@@ -1523,7 +1523,7 @@ export function AddConnectorModal({
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search by name, vendor, or capability"
-                        className="w-full bg-gray-950/60 border border-gray-800 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30"
+                        className="w-full bg-dark-80/60 border border-[#374151] rounded-lg pl-9 pr-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/30"
                         autoFocus
                       />
                     </div>
@@ -1537,7 +1537,7 @@ export function AddConnectorModal({
                         <button
                           type="button"
                           onClick={() => setCategoryFilter(null)}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-200 px-2.5 py-0.5 hover:bg-blue-500/20 transition-colors"
+                          className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-200 px-2.5 py-0.5 hover:bg-brand-500/20 transition-colors"
                           title="Clear category filter"
                         >
                           <span className="font-medium">
@@ -1562,7 +1562,7 @@ export function AddConnectorModal({
 
                     {catalog === null && !catalogError ? (
                       <div className="flex items-center justify-center h-32 text-gray-600">
-                        <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                        <div className="animate-spin w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full" />
                       </div>
                     ) : catalogError ? (
                       <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
@@ -1596,7 +1596,7 @@ export function AddConnectorModal({
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-800 bg-gray-950/80">
+              <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-[#374151] bg-dark-80/80">
                 {step === 'pick' ? (
                   <>
                     <p className="text-xs text-gray-600">
@@ -1643,7 +1643,7 @@ export function AddConnectorModal({
                         type="button"
                         onClick={handleTest}
                         disabled={testing || saving}
-                        className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                        className="text-sm bg-dark-20 hover:bg-gray-700 text-gray-200 px-3 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                       >
                         {testing && (
                           <span className="animate-spin w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full" />
@@ -1654,7 +1654,7 @@ export function AddConnectorModal({
                         type="button"
                         onClick={handleSave}
                         disabled={saving || testing}
-                        className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                        className="text-sm bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                       >
                         {saving && (
                           <span className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" />

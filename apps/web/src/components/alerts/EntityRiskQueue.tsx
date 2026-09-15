@@ -31,7 +31,7 @@ const ENTITY_TYPE_CONFIG: Record<
 > = {
   user: { label: 'User', icon: '👤', tint: 'text-purple-300' },
   host: { label: 'Host', icon: '🖥️', tint: 'text-cyan-300' },
-  ip: { label: 'IP', icon: '🌐', tint: 'text-blue-300' },
+  ip: { label: 'IP', icon: '🌐', tint: 'text-brand-300' },
   domain: { label: 'Domain', icon: '🔗', tint: 'text-emerald-300' },
 };
 
@@ -39,7 +39,7 @@ const SEVERITY_DOT: Record<string, string> = {
   critical: 'bg-red-500',
   high: 'bg-orange-500',
   medium: 'bg-yellow-500',
-  low: 'bg-blue-500',
+  low: 'bg-brand-500',
   info: 'bg-gray-500',
 };
 
@@ -140,9 +140,9 @@ function bandFor(score: number, threshold: number): {
   }
   return {
     label: 'Low',
-    text: 'text-blue-300',
-    bg: 'bg-blue-500/10 border-blue-500/30',
-    bar: 'bg-blue-500',
+    text: 'text-brand-300',
+    bg: 'bg-brand-500/10 border-brand-500/30',
+    bar: 'bg-brand-500',
   };
 }
 
@@ -171,7 +171,7 @@ function RatioStat({
     ? '0:0'
     : `${ratio.toFixed(1)}:1`;
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl px-4 py-3">
       <p className="text-xs text-gray-500">Alert → Incident</p>
       <p
         className={clsx(
@@ -236,7 +236,7 @@ function ScoreBar({
   const pct = Math.min(100, (score / max) * 100);
   return (
     <div className="flex items-center gap-2 w-32 shrink-0">
-      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-dark-20 rounded-full overflow-hidden">
         <div
           className={clsx('h-full rounded-full', band.bar)}
           style={{ width: `${pct}%` }}
@@ -262,7 +262,7 @@ function EntityRow({
     <button
       type="button"
       onClick={onSelect}
-      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-800/20 transition-colors border-b border-gray-800/40 last:border-0 text-left"
+      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-dark-20/20 transition-colors border-b border-[#374151]/40 last:border-0 text-left"
     >
       <span className="text-base shrink-0" aria-hidden>
         {cfg.icon}
@@ -338,8 +338,8 @@ function EntityDetailDrawer({
         onClick={onClose}
         aria-hidden="true"
       />
-      <aside className="w-[480px] max-w-[90vw] bg-gray-950 border-l border-gray-800 overflow-y-auto">
-        <header className="px-5 py-4 border-b border-gray-800 flex items-start justify-between gap-3 sticky top-0 bg-gray-950 z-10">
+      <aside className="w-[480px] max-w-[90vw] bg-dark-80 border-l border-[#374151] overflow-y-auto">
+        <header className="px-5 py-4 border-b border-[#374151] flex items-start justify-between gap-3 sticky top-0 bg-dark-80 z-10">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-base" aria-hidden>
@@ -380,7 +380,7 @@ function EntityDetailDrawer({
                 threshold {Math.round(record.threshold)}
               </p>
             </div>
-            <div className="rounded-xl px-3 py-2.5 border border-gray-800/60 bg-gray-900/60">
+            <div className="rounded-xl px-3 py-2.5 border border-[#374151]/60 bg-dark-60">
               <p className="text-[10px] uppercase tracking-wider text-gray-500">
                 Alerts (window)
               </p>
@@ -420,7 +420,7 @@ function EntityDetailDrawer({
                 {record.contributions.map((c) => (
                   <li
                     key={c.alert_id}
-                    className="flex items-start gap-2 text-sm border border-gray-800/60 bg-gray-900/40 rounded-lg px-3 py-2"
+                    className="flex items-start gap-2 text-sm border border-[#374151]/60 bg-dark-70/80 rounded-lg px-3 py-2"
                   >
                     <span
                       className={clsx(
@@ -487,14 +487,14 @@ export function EntityRiskQueue() {
     <div className="space-y-4">
       {/* Stats strip — anchored on the 2026 KPI bar */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
+        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl px-4 py-3">
           <p className="text-xs text-gray-500">Active entities</p>
           <p className="text-2xl font-bold mt-1 text-gray-200">{total}</p>
           <p className="text-[10px] text-gray-600 mt-0.5">
             threshold {Math.round(threshold)} pts
           </p>
         </div>
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
+        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl px-4 py-3">
           <p className="text-xs text-gray-500">Promoted</p>
           <p className="text-2xl font-bold mt-1 text-red-400">
             {promotedCount}
@@ -503,7 +503,7 @@ export function EntityRiskQueue() {
             entity-incidents
           </p>
         </div>
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
+        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl px-4 py-3">
           <p className="text-xs text-gray-500">Contributing alerts</p>
           <p className="text-2xl font-bold mt-1 text-gray-200">{alertCount}</p>
           <p className="text-[10px] text-gray-600 mt-0.5">
@@ -514,15 +514,15 @@ export function EntityRiskQueue() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap py-3 px-4 bg-gray-900/40 border border-gray-800/60 rounded-xl">
+      <div className="flex items-center gap-3 flex-wrap py-3 px-4 bg-dark-70/80 border border-[#374151]/60 rounded-xl">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setPromotedOnly(false)}
             className={clsx(
               'text-xs px-2.5 py-1 rounded-lg transition-colors',
               !promotedOnly
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60',
+                ? 'bg-brand-600 text-white'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-dark-20/60',
             )}
           >
             All entities
@@ -533,7 +533,7 @@ export function EntityRiskQueue() {
               'text-xs px-2.5 py-1 rounded-lg transition-colors',
               promotedOnly
                 ? 'bg-red-600 text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60',
+                : 'text-gray-500 hover:text-gray-300 hover:bg-dark-20/60',
             )}
           >
             Promoted only
@@ -551,8 +551,8 @@ export function EntityRiskQueue() {
       )}
 
       {/* Queue */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
-        <div className="flex items-center px-4 py-2 border-b border-gray-800/60 bg-gray-900/80 gap-4">
+      <div className="bg-dark-60 border border-[#374151]/60 rounded-xl overflow-hidden">
+        <div className="flex items-center px-4 py-2 border-b border-[#374151]/60 bg-dark-70/80 gap-4">
           <span className="text-xs text-gray-500 flex-1">ENTITY</span>
           <span className="text-xs text-gray-500 w-32">RISK</span>
           <span className="text-xs text-gray-500 w-20 text-center">BAND</span>
@@ -560,7 +560,7 @@ export function EntityRiskQueue() {
 
         {queueLoading && entities.length === 0 ? (
           <div className="flex items-center justify-center h-32">
-            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : entities.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-500 gap-1">

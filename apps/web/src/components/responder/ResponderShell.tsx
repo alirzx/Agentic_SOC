@@ -10,6 +10,8 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
 } from '@/lib/pwa';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { BRAND } from '@/lib/brand';
 
 interface NavItem {
   label: string;
@@ -194,7 +196,7 @@ export function ResponderShell({ children }: { children: React.ReactNode }) {
   // Render login (and other public) routes without the chrome.
   if (isPublicRoute) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
+      <div className="min-h-screen bg-dark-80 text-white antialiased">
         {children}
       </div>
     );
@@ -203,37 +205,23 @@ export function ResponderShell({ children }: { children: React.ReactNode }) {
   // Avoid flashing protected content while we resolve auth state.
   if (!authReady || !authed) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <div className="text-sm text-zinc-500">Loading…</div>
+      <div className="min-h-screen bg-dark-80 text-white flex items-center justify-center">
+        <div className="text-sm text-amgray-50">Loading…</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 antialiased flex flex-col">
+    <div className="min-h-[100dvh] bg-dark-80 text-white antialiased flex flex-col">
       {/* Top bar: identity + sign out. Stays compact for portrait phones. */}
-      <header className="sticky top-0 z-30 bg-zinc-950/95 backdrop-blur border-b border-zinc-900 supports-[padding:max(0px)]:pt-[max(0px,env(safe-area-inset-top))]">
+      <header className="sticky top-0 z-30 bg-dark-80/95 backdrop-blur border-b border-[#1D232F] supports-[padding:max(0px)]:pt-[max(0px,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <svg
-                className="w-5 h-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.75}
-                  d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
-                />
-              </svg>
-            </div>
+            <BrandLogo variant="mark" size={32} />
             <div className="leading-tight">
-              <div className="text-sm font-semibold">AiSOC Responder</div>
+              <div className="text-sm font-semibold">{BRAND.shortName} Responder</div>
               {profileName ? (
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 truncate max-w-[140px]">
+                <div className="text-[10px] uppercase tracking-wider text-amgray-50 truncate max-w-[140px]">
                   {profileName}
                 </div>
               ) : null}
@@ -242,7 +230,7 @@ export function ResponderShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={handleSignOut}
-            className="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1.5 rounded-md border border-zinc-800 hover:border-zinc-700 transition"
+            className="text-xs text-amgray-40 hover:text-amgray-10 px-2 py-1.5 rounded-md border border-[#374151] hover:border-[#333A47] transition"
           >
             Sign out
           </button>
@@ -255,7 +243,7 @@ export function ResponderShell({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Bottom nav: thumb-reachable on portrait phones. */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-zinc-950/95 backdrop-blur border-t border-zinc-900 supports-[padding:max(0px)]:pb-[max(0px,env(safe-area-inset-bottom))]">
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-dark-80/95 backdrop-blur border-t border-[#1D232F] supports-[padding:max(0px)]:pb-[max(0px,env(safe-area-inset-bottom))]">
         <ul className="grid grid-cols-5 h-16">
           {NAV_ITEMS.map((item) => {
             const active = item.match(pathname);
@@ -266,8 +254,8 @@ export function ResponderShell({ children }: { children: React.ReactNode }) {
                   className={clsx(
                     'flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] uppercase tracking-wider transition',
                     active
-                      ? 'text-indigo-400'
-                      : 'text-zinc-500 hover:text-zinc-300',
+                      ? 'text-teal-20'
+                      : 'text-amgray-50 hover:text-amgray-20',
                   )}
                   aria-current={active ? 'page' : undefined}
                 >

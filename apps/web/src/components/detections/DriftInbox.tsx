@@ -151,7 +151,7 @@ export function DriftInbox() {
       </div>
 
       {/* Filter */}
-      <div className="inline-flex rounded-md border border-gray-800 bg-gray-950 p-0.5 text-xs">
+      <div className="inline-flex rounded-md border border-[#374151] bg-dark-80 p-0.5 text-xs">
         {ALL_ISSUES.map((opt) => (
           <button
             key={opt}
@@ -160,7 +160,7 @@ export function DriftInbox() {
             className={clsx(
               'rounded px-3 py-1.5 transition-colors',
               issueFilter === opt
-                ? 'bg-gray-800 text-gray-100'
+                ? 'bg-dark-20 text-gray-100'
                 : 'text-gray-400 hover:text-gray-200',
             )}
           >
@@ -206,7 +206,7 @@ function DriftRow({ entry }: DriftRowProps) {
   return (
     <Link
       href={`/detection/${entry.ruleId}`}
-      className="group block rounded-lg border border-gray-800 bg-gray-900/40 p-3 transition-colors hover:border-gray-700 hover:bg-gray-900/70"
+      className="group block rounded-lg border border-[#374151] bg-dark-70/80 p-3 transition-colors hover:border-[#333A47] hover:bg-dark-60"
     >
       <div className="flex items-center gap-3">
         {/* Status dot */}
@@ -221,7 +221,7 @@ function DriftRow({ entry }: DriftRowProps) {
         {/* Body */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-medium text-gray-100 group-hover:text-blue-300">
+            <h3 className="truncate text-sm font-medium text-gray-100 group-hover:text-brand-300">
               {entry.name}
             </h3>
             {entry.issues.map((issueId) => {
@@ -296,7 +296,7 @@ function SummaryCard({ label, value, tone }: SummaryCardProps) {
           ? 'text-sky-300'
           : 'text-gray-100';
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-2.5">
+    <div className="rounded-lg border border-[#374151] bg-dark-70/80 px-3 py-2.5">
       <div className="text-[11px] uppercase tracking-wide text-gray-500">
         {label}
       </div>

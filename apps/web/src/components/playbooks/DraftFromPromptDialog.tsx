@@ -148,7 +148,7 @@ export function DraftFromPromptDialog({ open, onClose }: DraftFromPromptDialogPr
         if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
-      <div className="w-full max-w-2xl rounded-xl border border-gray-800 bg-gray-950 p-6 shadow-2xl">
+      <div className="w-full max-w-2xl rounded-xl border border-[#374151] bg-dark-80 p-6 shadow-2xl">
         <div className="flex items-start justify-between">
           <div>
             <h2 id="nl-draft-title" className="text-base font-semibold text-white">
@@ -162,7 +162,7 @@ export function DraftFromPromptDialog({ open, onClose }: DraftFromPromptDialogPr
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-md p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300 disabled:opacity-40"
+            className="rounded-md p-1 text-gray-500 hover:bg-dark-20 hover:text-gray-300 disabled:opacity-40"
             aria-label="Close"
           >
             ✕
@@ -180,7 +180,7 @@ export function DraftFromPromptDialog({ open, onClose }: DraftFromPromptDialogPr
             'e.g. "When a high-severity exfil alert fires on a prod S3 bucket, ' +
             'isolate the IAM role, snapshot the bucket policy, and page on-call."'
           }
-          className="mt-4 w-full resize-y rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+          className="mt-4 w-full resize-y rounded-lg border border-[#374151] bg-dark-70 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
           disabled={busy}
         />
 
@@ -199,7 +199,7 @@ export function DraftFromPromptDialog({ open, onClose }: DraftFromPromptDialogPr
           </div>
         )}
 
-        <div className="mt-4 border-t border-gray-800 pt-3">
+        <div className="mt-4 border-t border-[#374151] pt-3">
           <p className="text-[11px] uppercase tracking-wide text-gray-500">Try one of:</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {SUGGESTIONS.map((s) => (
@@ -208,7 +208,7 @@ export function DraftFromPromptDialog({ open, onClose }: DraftFromPromptDialogPr
                 type="button"
                 disabled={busy}
                 onClick={() => setPrompt(s.prompt)}
-                className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-[11px] text-gray-400 hover:border-gray-700 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-50"
+                className="rounded-md border border-[#374151] bg-dark-70 px-2 py-1 text-[11px] text-gray-400 hover:border-[#333A47] hover:bg-dark-20 hover:text-gray-200 disabled:opacity-50"
               >
                 {s.label}
               </button>
@@ -221,7 +221,7 @@ export function DraftFromPromptDialog({ open, onClose }: DraftFromPromptDialogPr
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-gray-800 px-4 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-50"
+            className="rounded-lg border border-[#374151] px-4 py-2 text-sm text-gray-400 hover:bg-dark-20 hover:text-gray-200 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -229,7 +229,7 @@ export function DraftFromPromptDialog({ open, onClose }: DraftFromPromptDialogPr
             type="button"
             onClick={() => void handleSubmit()}
             disabled={busy || !prompt.trim()}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? 'Drafting…' : 'Draft playbook'}
           </button>

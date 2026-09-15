@@ -26,7 +26,7 @@ const STATUS_COPY: Record<
   { label: string; tone: string }
 > = {
   proposed: { label: 'Proposed', tone: 'bg-gray-700/40 text-gray-200' },
-  in_review: { label: 'In review', tone: 'bg-blue-500/20 text-blue-200' },
+  in_review: { label: 'In review', tone: 'bg-brand-500/20 text-brand-200' },
   eval_passed: {
     label: 'Eval passed',
     tone: 'bg-emerald-500/20 text-emerald-200',
@@ -108,7 +108,7 @@ export function DetectionProposalsView() {
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
             Detection-as-code lifecycle. Every proposal is graded by{' '}
-            <code className="rounded bg-gray-800 px-1 py-0.5 text-xs text-gray-300">
+            <code className="rounded bg-dark-20 px-1 py-0.5 text-xs text-gray-300">
               run_evals.py
             </code>{' '}
             and a ≥ 1pp MITRE accuracy regression vs. the active baseline
@@ -118,7 +118,7 @@ export function DetectionProposalsView() {
         <div className="flex items-center gap-2">
           <Link
             href="/detection"
-            className="rounded-md border border-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800"
+            className="rounded-md border border-[#374151] px-3 py-2 text-sm text-gray-300 hover:bg-dark-20"
           >
             ← Active rules
           </Link>
@@ -135,8 +135,8 @@ export function DetectionProposalsView() {
             className={clsx(
               'rounded-md border px-3 py-1.5 text-xs transition-colors',
               filter === opt
-                ? 'border-blue-500/40 bg-blue-500/10 text-blue-200'
-                : 'border-gray-800 text-gray-400 hover:bg-gray-800/50',
+                ? 'border-brand-500/40 bg-brand-500/10 text-brand-200'
+                : 'border-[#374151] text-gray-400 hover:bg-dark-20/50',
             )}
           >
             {opt === 'all' ? 'All' : STATUS_COPY[opt].label}
@@ -167,7 +167,7 @@ export function DetectionProposalsView() {
           {proposals.map((p) => (
             <li
               key={p.id}
-              className="rounded-lg border border-gray-800 bg-gray-900/40 p-4"
+              className="rounded-lg border border-[#374151] bg-dark-70/80 p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -204,7 +204,7 @@ export function DetectionProposalsView() {
                     )}
                   </div>
                   {p.eval_result && 'candidate' in p.eval_result && (
-                    <div className="mt-3 grid grid-cols-2 gap-3 rounded-md border border-gray-800 bg-gray-950/60 p-3 text-xs sm:grid-cols-4">
+                    <div className="mt-3 grid grid-cols-2 gap-3 rounded-md border border-[#374151] bg-dark-80/60 p-3 text-xs sm:grid-cols-4">
                       <div>
                         <div className="text-gray-500">Candidate MITRE</div>
                         <div className="font-mono text-gray-200">

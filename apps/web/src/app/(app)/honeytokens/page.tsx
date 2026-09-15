@@ -53,7 +53,7 @@ const TOKEN_TYPES = [
 const STATUS_COLORS: Record<TokenStatus, string> = {
   active: "bg-green-900/40 text-green-300",
   triggered: "bg-red-900/40 text-red-300",
-  expired: "bg-gray-800 text-gray-400",
+  expired: "bg-dark-20 text-gray-400",
   revoked: "bg-yellow-900/40 text-yellow-300",
 };
 
@@ -69,7 +69,7 @@ function TokenRow({
   onSelect: (id: string) => void;
 }) {
   return (
-    <tr className="hover:bg-gray-800/50 cursor-pointer" onClick={() => onSelect(token.id)}>
+    <tr className="hover:bg-dark-20/50 cursor-pointer" onClick={() => onSelect(token.id)}>
       <td className="px-4 py-3 text-sm font-medium text-gray-100 max-w-xs truncate">
         {token.name}
       </td>
@@ -150,13 +150,13 @@ function CreateTokenModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-md p-6">
+      <div className="bg-dark-70 rounded-lg shadow-xl border border-[#333A47] w-full max-w-md p-6">
         <h2 className="text-lg font-semibold text-gray-100 mb-4">Create Honeytoken</h2>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Name *</label>
             <input
-              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-dark-20 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. AWS Prod Key – Finance"
@@ -165,7 +165,7 @@ function CreateTokenModal({
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
             <textarea
-              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-dark-20 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -174,7 +174,7 @@ function CreateTokenModal({
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Token Type *</label>
             <select
-              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-dark-20 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
               value={tokenType}
               onChange={(e) => setTokenType(e.target.value)}
             >
@@ -191,7 +191,7 @@ function CreateTokenModal({
             </label>
             <input
               type="number"
-              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-dark-20 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
               value={ttlDays}
               onChange={(e) => setTtlDays(Number(e.target.value))}
               min={1}
@@ -206,7 +206,7 @@ function CreateTokenModal({
           <button
             onClick={submit}
             disabled={loading || !name}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-brand-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? "Creating…" : "Create"}
           </button>
@@ -225,7 +225,7 @@ function TriggersPanel({ tokenId, onClose }: { tokenId: string; onClose: () => v
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-2xl p-6 max-h-[80vh] flex flex-col">
+      <div className="bg-dark-70 rounded-lg shadow-xl border border-[#333A47] w-full max-w-2xl p-6 max-h-[80vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-gray-100">Trigger History</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-lg">
@@ -239,7 +239,7 @@ function TriggersPanel({ tokenId, onClose }: { tokenId: string; onClose: () => v
         ) : (
           <div className="overflow-y-auto flex-1">
             <table className="w-full text-sm">
-              <thead className="bg-gray-800 sticky top-0">
+              <thead className="bg-dark-20 sticky top-0">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium text-gray-400">Triggered</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-400">Source IP</th>
@@ -249,7 +249,7 @@ function TriggersPanel({ tokenId, onClose }: { tokenId: string; onClose: () => v
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {triggers.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-800/50">
+                  <tr key={t.id} className="hover:bg-dark-20/50">
                     <td className="px-3 py-2 text-gray-300" suppressHydrationWarning>
                       {new Date(t.triggered_at).toLocaleString()}
                     </td>
@@ -267,7 +267,7 @@ function TriggersPanel({ tokenId, onClose }: { tokenId: string; onClose: () => v
                     </td>
                     <td className="px-3 py-2">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${t.alert_sent ? "bg-green-900/40 text-green-300" : "bg-gray-800 text-gray-400"}`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${t.alert_sent ? "bg-green-900/40 text-green-300" : "bg-dark-20 text-gray-400"}`}
                       >
                         {t.alert_sent ? "Yes" : "No"}
                       </span>
@@ -328,7 +328,7 @@ export default function HoneytokensPage() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+          className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
         >
           + New Token
         </button>
@@ -342,7 +342,7 @@ export default function HoneytokensPage() {
           { label: "Triggered", value: counts.triggered, color: "text-red-400" },
           { label: "Revoked", value: counts.revoked, color: "text-yellow-400" },
         ].map((s) => (
-          <div key={s.label} className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
+          <div key={s.label} className="bg-dark-60 border border-[#333A47] rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">{s.label}</p>
             <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
           </div>
@@ -352,7 +352,7 @@ export default function HoneytokensPage() {
       {/* Filters */}
       <div className="flex gap-3 mb-4">
         <select
-          className="border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          className="border border-gray-600 bg-dark-20 text-gray-200 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
@@ -363,7 +363,7 @@ export default function HoneytokensPage() {
           <option value="revoked">Revoked</option>
         </select>
         <select
-          className="border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          className="border border-gray-600 bg-dark-20 text-gray-200 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
         >
@@ -377,7 +377,7 @@ export default function HoneytokensPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-gray-900/60 border border-gray-700 rounded-lg overflow-hidden">
+      <div className="bg-dark-60 border border-[#333A47] rounded-lg overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-sm text-gray-500">Loading tokens…</div>
         ) : !tokens?.length ? (
@@ -386,7 +386,7 @@ export default function HoneytokensPage() {
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-800 border-b border-gray-700">
+            <thead className="bg-dark-20 border-b border-[#333A47]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-gray-400">Name</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-400">Type</th>

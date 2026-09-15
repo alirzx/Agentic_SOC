@@ -61,7 +61,7 @@ const ENTITY_KIND_CONFIG: Record<
   RelatedEntity['kind'],
   { label: string; tone: string }
 > = {
-  principal: { label: 'Principals', tone: 'text-blue-300' },
+  principal: { label: 'Principals', tone: 'text-brand-300' },
   network: { label: 'Network', tone: 'text-cyan-300' },
   workflow: { label: 'Workflow', tone: 'text-purple-300' },
   tenant: { label: 'Tenant', tone: 'text-gray-300' },
@@ -72,7 +72,7 @@ const PRIORITY_TONE: Record<RecommendedAction['priority'], string> = {
   critical: 'border-red-500/40 bg-red-500/10 text-red-300',
   high: 'border-orange-500/40 bg-orange-500/10 text-orange-300',
   medium: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300',
-  low: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
+  low: 'border-brand-500/40 bg-brand-500/10 text-brand-300',
   info: 'border-gray-500/40 bg-gray-500/10 text-gray-300',
 };
 
@@ -165,10 +165,10 @@ function RailShell({
 }) {
   return (
     <aside
-      className="flex flex-col bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden h-full"
+      className="flex flex-col bg-dark-60 border border-[#374151]/60 rounded-xl overflow-hidden h-full"
       aria-label="Investigation rail"
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-gray-900/80">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#374151]/60 bg-dark-70/80">
         <h2 className="text-sm font-semibold text-gray-100 truncate" title={title}>
           {title}
         </h2>
@@ -176,7 +176,7 @@ function RailShell({
           type="button"
           onClick={onClose}
           aria-label="Close investigation rail"
-          className="text-xs text-gray-500 hover:text-gray-300 px-2 py-0.5 rounded hover:bg-gray-800/60 transition-colors"
+          className="text-xs text-gray-500 hover:text-gray-300 px-2 py-0.5 rounded hover:bg-dark-20/60 transition-colors"
         >
           Close
         </button>
@@ -189,7 +189,7 @@ function RailShell({
 function RailPlaceholder() {
   return (
     <aside
-      className="flex flex-col items-center justify-center bg-gray-900/30 border border-dashed border-gray-800/60 rounded-xl text-gray-500 text-sm h-full p-6 text-center"
+      className="flex flex-col items-center justify-center bg-dark-70/50 border border-dashed border-[#374151]/60 rounded-xl text-gray-500 text-sm h-full p-6 text-center"
       aria-label="Investigation rail (no alert selected)"
     >
       <p className="font-medium text-gray-400">Select an alert to investigate</p>
@@ -229,7 +229,7 @@ function RailHeader({
   onDeepExplain: () => void;
 }) {
   return (
-    <div className="px-4 py-3 border-b border-gray-800/60 bg-gray-900/40">
+    <div className="px-4 py-3 border-b border-[#374151]/60 bg-dark-70/80">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
         <span className="capitalize text-gray-300">{alert.severity}</span>
         <span>·</span>
@@ -261,7 +261,7 @@ function RailHeader({
         </button>
         <Link
           href={`/alerts/${alert.id}`}
-          className="text-xs text-blue-300 hover:text-blue-200 transition-colors"
+          className="text-xs text-brand-300 hover:text-brand-200 transition-colors"
         >
           Open full detail →
         </Link>
@@ -289,7 +289,7 @@ function NarrativeSection({ narrative }: { narrative: string | null }) {
   // paragraph + bullet structure produced by `narrative.build_narrative`
   // renders without us pulling in a full Markdown engine.
   return (
-    <section className="px-4 py-4 border-b border-gray-800/40">
+    <section className="px-4 py-4 border-b border-[#374151]/40">
       <SectionHeader title="Narrative" />
       <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
         {narrative}
@@ -311,7 +311,7 @@ function RelatedEntitiesSection({ entities }: { entities: RelatedEntity[] }) {
     { principal: [], network: [], workflow: [], tenant: [] },
   );
   return (
-    <section className="px-4 py-4 border-b border-gray-800/40">
+    <section className="px-4 py-4 border-b border-[#374151]/40">
       <SectionHeader title="Related entities" count={entities.length} />
       <div className="space-y-3">
         {(Object.keys(ENTITY_KIND_CONFIG) as Array<keyof typeof ENTITY_KIND_CONFIG>).map(
@@ -341,7 +341,7 @@ function EntityChip({ entity }: { entity: RelatedEntity }) {
   const inner = (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border border-gray-700/60 bg-gray-800/60 text-gray-200',
+        'inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border border-[#333A47]/60 bg-dark-20/60 text-gray-200',
         entity.pivotPath &&
           'hover:bg-gray-700/60 hover:border-gray-600/60 cursor-pointer transition-colors',
       )}
@@ -367,7 +367,7 @@ function EntityChip({ entity }: { entity: RelatedEntity }) {
 function MiniTimelineSection({ events }: { events: MiniTimelineEvent[] }) {
   if (events.length === 0) return null;
   return (
-    <section className="px-4 py-4 border-b border-gray-800/40">
+    <section className="px-4 py-4 border-b border-[#374151]/40">
       <SectionHeader title="Recent events" count={events.length} />
       <ol className="space-y-2.5">
         {events.map((e) => (
@@ -388,12 +388,12 @@ function TimelineRow({ event }: { event: MiniTimelineEvent }) {
     ts = event.timestamp;
   }
   return (
-    <li className="text-xs text-gray-300 border-l-2 border-gray-700/60 pl-3">
+    <li className="text-xs text-gray-300 border-l-2 border-[#333A47]/60 pl-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-gray-500 text-[10px]" suppressHydrationWarning>
           {ts}
         </span>
-        <span className="px-1.5 py-0 text-[10px] font-mono rounded border border-gray-700/60 bg-gray-800/40 text-gray-400 uppercase">
+        <span className="px-1.5 py-0 text-[10px] font-mono rounded border border-[#333A47]/60 bg-dark-20/40 text-gray-400 uppercase">
           {event.source === 'case_timeline' ? 'case' : 'audit'}
         </span>
         <span className="text-[10px] uppercase text-gray-500 tracking-wide">
@@ -420,7 +420,7 @@ function RecommendedActionsSection({ actions }: { actions: RecommendedAction[] }
         {actions.map((a, idx) => (
           <li
             key={`${a.action}-${idx}`}
-            className="border border-gray-800/60 bg-gray-900/40 rounded-lg p-2.5"
+            className="border border-[#374151]/60 bg-dark-70/80 rounded-lg p-2.5"
           >
             <div className="flex items-start gap-2">
               <span

@@ -151,7 +151,7 @@ export function SOC2View() {
           <button
             onClick={handleCollect}
             disabled={collecting}
-            className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium bg-teal-20 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
           >
             {collecting ? 'Collecting…' : '↻ Collect Evidence'}
           </button>
@@ -172,7 +172,7 @@ export function SOC2View() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-3">
               <span className="font-semibold text-gray-900">Overall Readiness</span>
-              <span className="text-2xl font-bold text-indigo-600">{data.summary.pct}%</span>
+              <span className="text-2xl font-bold text-teal-600">{data.summary.pct}%</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-3">
               <div
@@ -201,7 +201,7 @@ export function SOC2View() {
             onClick={() => setCategoryFilter('')}
             className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
               !categoryFilter
-                ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                ? 'bg-teal-50 border-teal-300 text-teal-700'
                 : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
             }`}
           >
@@ -213,7 +213,7 @@ export function SOC2View() {
               onClick={() => setCategoryFilter(cat === categoryFilter ? '' : cat)}
               className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
                 categoryFilter === cat
-                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  ? 'bg-teal-50 border-teal-300 text-teal-700'
                   : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
               }`}
             >
@@ -250,7 +250,7 @@ export function SOC2View() {
                 }
               >
                 <div className="flex-shrink-0 w-16 text-center">
-                  <span className="text-xs font-mono font-bold text-indigo-600">
+                  <span className="text-xs font-mono font-bold text-teal-600">
                     {item.control.control_id}
                   </span>
                 </div>
@@ -309,7 +309,7 @@ export function SOC2View() {
           <p className="text-gray-500 text-sm mb-4">No SOC 2 controls found in the database.</p>
           <button
             onClick={handleCollect}
-            className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="px-4 py-2 text-sm font-medium bg-teal-20 text-white rounded-lg hover:bg-teal-700"
           >
             Collect Evidence Now
           </button>

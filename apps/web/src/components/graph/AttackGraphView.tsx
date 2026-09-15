@@ -462,7 +462,7 @@ export function AttackGraphView() {
                   </div>
                 </div>
                 <button
-                  className="w-full text-xs px-3 py-2 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/30"
+                  className="w-full text-xs px-3 py-2 rounded bg-brand-500/20 text-brand-300 hover:bg-brand-500/30 border border-brand-500/30"
                   onClick={() => setSelected(null)}
                 >
                   Clear selection

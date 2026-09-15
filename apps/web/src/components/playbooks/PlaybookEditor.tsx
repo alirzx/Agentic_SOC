@@ -75,13 +75,13 @@ function TriggerBadge({
 }) {
   const colorMap: Record<string, string> = {
     alert: 'bg-red-900/50 text-red-300 border-red-800',
-    case: 'bg-blue-900/50 text-blue-300 border-blue-800',
-    manual: 'bg-gray-800 text-gray-300 border-gray-700',
+    case: 'bg-brand-900/50 text-brand-300 border-brand-800',
+    manual: 'bg-dark-20 text-gray-300 border-[#333A47]',
     schedule: 'bg-purple-900/50 text-purple-300 border-purple-800',
   };
   return (
     <div
-      className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border ${colorMap[on] ?? 'bg-gray-800 text-gray-400 border-gray-700'}`}
+      className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border ${colorMap[on] ?? 'bg-dark-20 text-gray-400 border-[#333A47]'}`}
     >
       <span className="font-medium">on:{on}</span>
       {severity && severity.length > 0 && (
@@ -305,9 +305,9 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-950 text-white">
+    <div className="flex flex-col h-full bg-dark-80 text-white">
       {/* ── Top bar ── */}
-      <div className="flex items-center gap-4 px-5 h-14 border-b border-gray-800/60 bg-gray-900/80 flex-shrink-0">
+      <div className="flex items-center gap-4 px-5 h-14 border-b border-[#374151]/60 bg-dark-70/80 flex-shrink-0">
         <button
           onClick={() => router.back()}
           className="text-gray-500 hover:text-gray-300 transition-colors"
@@ -324,12 +324,12 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
                 setPlaybook((p) => ({ ...p, name: e.target.value }))
               }
               onBlur={() => setEditMeta(false)}
-              className="bg-transparent border-b border-blue-500 text-white text-lg font-semibold focus:outline-none w-64"
+              className="bg-transparent border-b border-brand-500 text-white text-lg font-semibold focus:outline-none w-64"
             />
           ) : (
             <button
               onClick={() => setEditMeta(true)}
-              className="text-white text-lg font-semibold truncate hover:text-blue-300 transition-colors"
+              className="text-white text-lg font-semibold truncate hover:text-brand-300 transition-colors"
               title="Click to rename"
             >
               {playbook.name}
@@ -341,7 +341,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
           />
           <span className="text-xs text-gray-600">v{playbook.version}</span>
           <span
-            className={`text-xs px-2 py-0.5 rounded-full border ${playbook.enabled ? 'border-green-800 text-green-400 bg-green-950/50' : 'border-gray-700 text-gray-500'}`}
+            className={`text-xs px-2 py-0.5 rounded-full border ${playbook.enabled ? 'border-green-800 text-green-400 bg-green-950/50' : 'border-[#333A47] text-gray-500'}`}
           >
             {playbook.enabled ? 'enabled' : 'disabled'}
           </span>
@@ -354,7 +354,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
             disabled={!history.canUndo}
             title="Undo (⌘Z)"
             aria-label="Undo"
-            className="text-xs px-2.5 py-1.5 rounded border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="text-xs px-2.5 py-1.5 rounded border border-[#333A47] text-gray-400 hover:bg-dark-20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             ↶
           </button>
@@ -363,14 +363,14 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
             disabled={!history.canRedo}
             title="Redo (⌘⇧Z)"
             aria-label="Redo"
-            className="text-xs px-2.5 py-1.5 rounded border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="text-xs px-2.5 py-1.5 rounded border border-[#333A47] text-gray-400 hover:bg-dark-20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             ↷
           </button>
-          <div className="h-5 w-px bg-gray-800" />
+          <div className="h-5 w-px bg-dark-20" />
           <button
             onClick={() => setShowAddStep(true)}
-            className="text-xs px-3 py-1.5 rounded border border-blue-700 text-blue-400 hover:bg-blue-900/30 transition-colors"
+            className="text-xs px-3 py-1.5 rounded border border-brand-700 text-brand-400 hover:bg-brand-900/30 transition-colors"
           >
             + Add Step
           </button>
@@ -385,7 +385,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="text-xs px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-50"
+            className="text-xs px-4 py-1.5 rounded bg-brand-600 hover:bg-brand-500 text-white font-medium transition-colors disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -394,7 +394,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
 
       {/* ── Result banner ── */}
       {runResult && (
-        <div className="px-5 py-2 bg-gray-900/60 text-sm border-b border-gray-800/60 flex items-center justify-between">
+        <div className="px-5 py-2 bg-dark-60 text-sm border-b border-[#374151]/60 flex items-center justify-between">
           <span className="text-gray-300">{runResult}</span>
           <button
             onClick={() => setRunResult(null)}
@@ -414,7 +414,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
         `services/agents` `/api/v1/contextual` endpoints.
       */}
       {!isNew && playbook.id ? (
-        <div className="px-5 py-3 border-b border-gray-800/60 bg-gray-900/30">
+        <div className="px-5 py-3 border-b border-[#374151]/60 bg-dark-70/50">
           <ContextualActions
             page="playbooks"
             entityId={playbook.id}
@@ -441,7 +441,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
       {/* ── Body ── */}
       <div className="flex flex-1 min-h-0">
         {/* Left meta panel */}
-        <div className="w-56 flex-shrink-0 border-r border-gray-800/60 bg-gray-900/40 p-4 overflow-y-auto space-y-4 text-sm">
+        <div className="w-56 flex-shrink-0 border-r border-[#374151]/60 bg-dark-70/80 p-4 overflow-y-auto space-y-4 text-sm">
           <div>
             <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">
               Metadata
@@ -457,7 +457,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
                   onChange={(e) =>
                     setPlaybook((p) => ({ ...p, description: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500 resize-none"
+                  className="w-full bg-dark-20 border border-[#333A47] rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-brand-500 resize-none"
                 />
               </div>
               <div>
@@ -479,7 +479,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
                       },
                     }))
                   }
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-dark-20 border border-[#333A47] rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
                 >
                   <option value="manual">Manual</option>
                   <option value="alert">Alert</option>
@@ -502,7 +502,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
                         .filter(Boolean),
                     }))
                   }
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-dark-20 border border-[#333A47] rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -537,8 +537,8 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
                     }
                     className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center gap-2 transition-colors ${
                       step.id === selectedStepId
-                        ? 'bg-blue-900/40 text-blue-300'
-                        : 'text-gray-400 hover:bg-gray-800'
+                        ? 'bg-brand-900/40 text-brand-300'
+                        : 'text-gray-400 hover:bg-dark-20'
                     }`}
                   >
                     <span className="text-gray-600 w-4 text-right flex-shrink-0">
@@ -568,7 +568,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
               </div>
               <button
                 onClick={() => setShowAddStep(true)}
-                className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm transition-colors"
+                className="px-4 py-2 rounded bg-brand-600 hover:bg-brand-500 text-white text-sm transition-colors"
               >
                 + Add Step
               </button>
@@ -585,8 +585,8 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
 
         {/* Right: inspector */}
         {selectedStep && (
-          <div className="w-72 flex-shrink-0 border-l border-gray-800/60 bg-gray-900/40">
-            <div className="px-4 py-3 border-b border-gray-800/60 flex items-center justify-between">
+          <div className="w-72 flex-shrink-0 border-l border-[#374151]/60 bg-dark-70/80">
+            <div className="px-4 py-3 border-b border-[#374151]/60 flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Step Inspector
               </span>
@@ -613,7 +613,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
           onClick={() => setShowAddStep(false)}
         >
           <div
-            className="bg-gray-900 border border-gray-700 rounded-xl p-5 w-80 shadow-2xl"
+            className="bg-dark-70 border border-[#333A47] rounded-xl p-5 w-80 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-sm font-semibold text-white mb-4">
@@ -626,7 +626,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
                   <button
                     key={type}
                     onClick={() => addStep(type)}
-                    className="flex flex-col items-center gap-1 p-3 rounded-lg border border-gray-700 hover:border-gray-500 bg-gray-800 hover:bg-gray-750 transition-colors"
+                    className="flex flex-col items-center gap-1 p-3 rounded-lg border border-[#333A47] hover:border-gray-500 bg-dark-20 hover:bg-gray-750 transition-colors"
                   >
                     <span style={{ color: m.color, fontSize: 20 }}>
                       {m.icon}

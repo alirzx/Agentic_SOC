@@ -90,7 +90,7 @@ function Tile({ label, value, delta, lowerIsBetter = false, unit }: TileProps) {
         : 'text-red-400';
 
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
       <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider truncate">
         {label}
       </p>
@@ -109,12 +109,12 @@ function Tile({ label, value, delta, lowerIsBetter = false, unit }: TileProps) {
 
 function LoadingTile({ label }: { label: string }) {
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
       <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider truncate">
         {label}
       </p>
-      <div className="mt-2 h-7 w-20 rounded bg-gray-800/60 animate-pulse" />
-      <div className="mt-2 h-3 w-12 rounded bg-gray-800/40 animate-pulse" />
+      <div className="mt-2 h-7 w-20 rounded bg-dark-20/60 animate-pulse" />
+      <div className="mt-2 h-3 w-12 rounded bg-dark-20/40 animate-pulse" />
     </div>
   );
 }

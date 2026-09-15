@@ -1,14 +1,8 @@
 /**
- * T3.8 — AiSOC console Card primitive.
+ * Console Card primitive — AssetManagement section/card surfaces.
  *
- * Cards live everywhere on the console (KPI tiles, gallery items,
- * incident panes). Codifying the four-corner anatomy here makes it
- * trivial to keep padding, radius and border tokens consistent.
- *
- * Composition: ``<Card>`` is the outer surface; ``<CardHeader>``,
- * ``<CardBody>`` and ``<CardFooter>`` are optional thin wrappers
- * that add the canonical spacing. Each piece accepts a className so
- * callers can override locally without re-implementing the surface.
+ * Navy panels with `#374151` borders; optional teal accent bar via
+ * callers. Elevation maps to dark-70 / dark-60 / dark-80 shells.
  */
 import { clsx } from 'clsx';
 import type { HTMLAttributes, ReactNode } from 'react';
@@ -16,9 +10,9 @@ import type { HTMLAttributes, ReactNode } from 'react';
 export type CardElevation = 'flat' | 'raised' | 'inset';
 
 const ELEVATION_CLASSES: Record<CardElevation, string> = {
-  flat: 'bg-gray-900/40 border border-gray-800/60',
-  raised: 'bg-gray-900/70 border border-gray-800 shadow-md shadow-black/30',
-  inset: 'bg-gray-950/60 border border-gray-800/40 shadow-inner shadow-black/30',
+  flat: 'bg-dark-70/80 border border-[#374151]/80',
+  raised: 'bg-dark-60 border border-[#374151] shadow-none',
+  inset: 'bg-dark-80 border border-[#1D232F] shadow-inner shadow-black/20',
 };
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -37,7 +31,7 @@ export function Card({
   return (
     <div
       className={clsx(
-        'rounded-xl',
+        'rounded-[10px]',
         ELEVATION_CLASSES[elevation],
         !flush && 'p-5',
         className,
@@ -50,10 +44,6 @@ export function Card({
 }
 
 export interface CardHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
-  // We re-define ``title`` as ``ReactNode`` (instead of HTML's
-  // ``string | undefined`` tooltip attribute) because card headers
-  // routinely render an icon next to the title; HTML's ``title``
-  // attribute is unreachable here anyway as the wrapper is a <div>.
   title?: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
@@ -70,11 +60,21 @@ export function CardHeader({
   return (
     <div className={clsx('flex items-start justify-between gap-3 mb-3', className)} {...rest}>
       {children ?? (
-        <div className="min-w-0">
-          {title && <h3 className="text-sm font-semibold text-gray-100">{title}</h3>}
-          {description && (
-            <p className="mt-0.5 text-xs text-gray-500">{description}</p>
-          )}
+        <div className="min-w-0 flex items-start gap-3">
+          <span
+            aria-hidden
+            className="mt-0.5 w-[2px] h-8 shrink-0 rounded-sm bg-teal-10"
+          />
+          <div className="min-w-0">
+            {title && (
+              <h3 className="text-sm font-gilroy-semibold text-fg-primary">
+                {title}
+              </h3>
+            )}
+            {description && (
+              <p className="mt-0.5 text-xs text-amgray-40">{description}</p>
+            )}
+          </div>
         </div>
       )}
       {action && <div className="shrink-0">{action}</div>}
@@ -83,14 +83,14 @@ export function CardHeader({
 }
 
 export function CardBody({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={clsx('text-sm text-gray-300', className)} {...rest} />;
+  return <div className={clsx('text-sm text-amgray-20', className)} {...rest} />;
 }
 
 export function CardFooter({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={clsx(
-        'mt-4 flex items-center justify-end gap-2 border-t border-gray-800/60 pt-3',
+        'mt-4 flex items-center justify-end gap-2 border-t border-[#374151] pt-3',
         className,
       )}
       {...rest}

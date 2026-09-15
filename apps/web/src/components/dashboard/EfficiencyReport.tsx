@@ -69,7 +69,7 @@ function BarRow({
 }: BarRowProps) {
   const v = clamp01(value);
   // For "good-high" metrics, color by threshold; for others, neutral.
-  let barColor = 'bg-blue-500/70';
+  let barColor = 'bg-brand-500/70';
   if (goodHigh) {
     if (v < 0.2) barColor = 'bg-red-500/70';
     else if (v < 0.5) barColor = 'bg-amber-500/70';
@@ -87,7 +87,7 @@ function BarRow({
           {display}
         </p>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-gray-800/80 overflow-hidden">
+      <div className="h-1.5 w-full rounded-full bg-dark-20/80 overflow-hidden">
         <div
           className={clsx('h-full rounded-full transition-[width]', barColor)}
           style={{ width: `${(v * 100).toFixed(1)}%` }}
@@ -102,9 +102,9 @@ function LoadingBar({ label }: { label: string }) {
     <div>
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <p className="text-sm font-medium text-gray-200 truncate">{label}</p>
-        <div className="h-4 w-12 rounded bg-gray-800/60 animate-pulse" />
+        <div className="h-4 w-12 rounded bg-dark-20/60 animate-pulse" />
       </div>
-      <div className="h-1.5 w-full rounded-full bg-gray-800/40 animate-pulse" />
+      <div className="h-1.5 w-full rounded-full bg-dark-20/40 animate-pulse" />
     </div>
   );
 }
@@ -125,7 +125,7 @@ export function EfficiencyReport({
   );
 
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-semibold text-gray-100">

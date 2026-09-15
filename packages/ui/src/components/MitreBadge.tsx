@@ -20,7 +20,7 @@ const TACTIC_COLORS: Record<string, string> = {
   'credential-access': 'bg-green-600/20 text-green-300 border-green-600/30',
   discovery: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
   'lateral-movement': 'bg-cyan-600/20 text-cyan-300 border-cyan-600/30',
-  collection: 'bg-blue-600/20 text-blue-300 border-blue-600/30',
+  collection: 'bg-brand-600/20 text-brand-300 border-brand-600/30',
   'command-and-control': 'bg-indigo-600/20 text-indigo-300 border-indigo-600/30',
   exfiltration: 'bg-violet-600/20 text-violet-300 border-violet-600/30',
   impact: 'bg-purple-600/20 text-purple-300 border-purple-600/30',

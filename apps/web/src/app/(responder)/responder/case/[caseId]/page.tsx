@@ -150,7 +150,7 @@ export default function ResponderCaseDetailPage() {
       <button
         type="button"
         onClick={() => router.back()}
-        className="-ml-2 mb-2 inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-200"
+        className="-ml-2 mb-2 inline-flex items-center gap-1 text-sm text-amgray-40 hover:text-amgray-10"
       >
         <svg
           className="w-4 h-4"
@@ -180,16 +180,16 @@ export default function ResponderCaseDetailPage() {
         <>
           <div
             className={clsx(
-              'rounded-xl bg-zinc-900/70 border border-zinc-800/80 border-l-4 px-4 py-3',
+              'rounded-xl bg-dark-60 border border-[#374151]/80 border-l-4 px-4 py-3',
               tone.border,
             )}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="text-base font-semibold leading-snug text-zinc-100">
+                <h1 className="text-base font-semibold leading-snug text-white">
                   {caseRecord.title}
                 </h1>
-                <div className="mt-1 text-[11px] font-mono text-zinc-500">
+                <div className="mt-1 text-[11px] font-mono text-amgray-50">
                   {caseRecord.id}
                 </div>
               </div>
@@ -214,7 +214,7 @@ export default function ResponderCaseDetailPage() {
                 </span>
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-amgray-50">
               <span>opened {formatRelative(caseRecord.createdAt)}</span>
               {caseRecord.assignee ? (
                 <>
@@ -226,7 +226,7 @@ export default function ResponderCaseDetailPage() {
               ) : (
                 <>
                   <span aria-hidden>·</span>
-                  <span className="text-zinc-600">unassigned</span>
+                  <span className="text-amgray-50">unassigned</span>
                 </>
               )}
               {caseRecord.alertCount ? (
@@ -240,7 +240,7 @@ export default function ResponderCaseDetailPage() {
               ) : null}
             </div>
             {caseRecord.description ? (
-              <p className="mt-2 text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+              <p className="mt-2 text-sm text-amgray-20 leading-relaxed whitespace-pre-wrap">
                 {caseRecord.description}
               </p>
             ) : null}
@@ -324,7 +324,7 @@ export default function ResponderCaseDetailPage() {
                 {mitre.map((m) => (
                   <span
                     key={`mitre-${m}`}
-                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
+                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-teal-20/10 text-teal-10 border border-teal-20/20"
                   >
                     {m}
                   </span>
@@ -332,7 +332,7 @@ export default function ResponderCaseDetailPage() {
                 {tags.map((t) => (
                   <span
                     key={`tag-${t}`}
-                    className="text-[11px] px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300"
+                    className="text-[11px] px-2 py-0.5 rounded bg-dark-20/80 text-amgray-20"
                   >
                     {t}
                   </span>
@@ -348,7 +348,7 @@ export default function ResponderCaseDetailPage() {
             }`}
           >
             {linkedAlerts.length === 0 ? (
-              <p className="text-xs text-zinc-500 py-2">
+              <p className="text-xs text-amgray-50 py-2">
                 No alerts linked yet.
               </p>
             ) : (
@@ -357,14 +357,14 @@ export default function ResponderCaseDetailPage() {
                   <li key={a.id}>
                     <Link
                       href={`/responder/triage/${a.id}`}
-                      className="flex items-center gap-3 px-1 py-2.5 hover:bg-zinc-900/40 active:scale-[0.99] transition rounded"
+                      className="flex items-center gap-3 px-1 py-2.5 hover:bg-dark-70/40 active:scale-[0.99] transition rounded"
                     >
                       <AlertSeverityDot severity={a.severity} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-zinc-200 truncate">
+                        <div className="text-sm text-amgray-10 truncate">
                           {a.title}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500">
+                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-amgray-50">
                           <span>{a.source}</span>
                           <span aria-hidden>·</span>
                           <span>{formatRelative(a.createdAt)}</span>
@@ -372,7 +372,7 @@ export default function ResponderCaseDetailPage() {
                       </div>
                       <AlertStatusPill status={a.status} />
                       <svg
-                        className="w-3.5 h-3.5 text-zinc-600 shrink-0"
+                        className="w-3.5 h-3.5 text-amgray-50 shrink-0"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -388,7 +388,7 @@ export default function ResponderCaseDetailPage() {
                   </li>
                 ))}
                 {(caseRecord.alertCount ?? 0) > linkedAlerts.length ? (
-                  <li className="px-1 py-2 text-[11px] text-zinc-500">
+                  <li className="px-1 py-2 text-[11px] text-amgray-50">
                     {(caseRecord.alertCount ?? 0) - linkedAlerts.length} more on
                     desktop
                   </li>
@@ -399,7 +399,7 @@ export default function ResponderCaseDetailPage() {
 
           {caseRecord.resolution ? (
             <Section title="Resolution">
-              <p className="text-sm text-zinc-300 whitespace-pre-wrap">
+              <p className="text-sm text-amgray-20 whitespace-pre-wrap">
                 {caseRecord.resolution}
               </p>
             </Section>
@@ -428,7 +428,7 @@ function AlertSeverityDot({ severity }: { severity: Alert['severity'] }) {
         'bg-red-500': tone.glyph === 'C',
         'bg-orange-500': tone.glyph === 'H',
         'bg-yellow-500': tone.glyph === 'M',
-        'bg-blue-500': tone.glyph === 'L',
+        'bg-brand-500': tone.glyph === 'L',
         'bg-slate-500': tone.glyph === 'I',
       })}
     />
@@ -477,8 +477,8 @@ function ActionButton({
       className={clsx(
         'h-16 rounded-xl border text-xs font-medium flex flex-col items-center justify-center gap-1 transition active:scale-[0.97]',
         tone === 'primary'
-          ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-200'
-          : 'bg-zinc-900/60 hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-200',
+          ? 'bg-teal-20/15 hover:bg-teal-10/25 border-teal-20/30 text-teal-20'
+          : 'bg-dark-70/60 hover:bg-dark-70 border-[#374151] hover:border-[#333A47] text-amgray-10',
         (disabled || busy) && 'opacity-50 active:scale-100',
       )}
     >
@@ -496,8 +496,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 px-4 py-3">
-      <h2 className="text-xs uppercase tracking-wider text-zinc-500 mb-2">
+    <section className="mt-3 rounded-xl border border-[#374151]/80 bg-dark-70/40 px-4 py-3">
+      <h2 className="text-xs uppercase tracking-wider text-amgray-50 mb-2">
         {title}
       </h2>
       {children}
@@ -508,16 +508,16 @@ function Section({
 function DetailSkeleton() {
   return (
     <div aria-hidden>
-      <div className="rounded-xl bg-zinc-900/40 border border-zinc-800/60 border-l-4 border-l-zinc-800 px-4 py-3">
-        <div className="h-4 w-3/4 bg-zinc-800/80 rounded animate-pulse" />
-        <div className="h-3 w-1/3 bg-zinc-800/60 rounded mt-3 animate-pulse" />
-        <div className="h-12 bg-zinc-800/40 rounded mt-3 animate-pulse" />
+      <div className="rounded-xl bg-dark-70/40 border border-[#374151]/60 border-l-4 border-l-zinc-800 px-4 py-3">
+        <div className="h-4 w-3/4 bg-dark-20/80 rounded animate-pulse" />
+        <div className="h-3 w-1/3 bg-dark-20/60 rounded mt-3 animate-pulse" />
+        <div className="h-12 bg-dark-20/40 rounded mt-3 animate-pulse" />
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="h-16 rounded-xl bg-zinc-900/40 border border-zinc-800/60 animate-pulse"
+            className="h-16 rounded-xl bg-dark-70/40 border border-[#374151]/60 animate-pulse"
           />
         ))}
       </div>

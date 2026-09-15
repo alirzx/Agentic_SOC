@@ -378,7 +378,7 @@ export function SettingsView() {
           aria-label="Settings sections"
           className="lg:sticky lg:top-4 lg:w-64 lg:shrink-0"
         >
-          <ul className="space-y-1 rounded-xl border border-gray-800 bg-gray-900/40 p-2">
+          <ul className="space-y-1 rounded-xl border border-[#374151] bg-dark-70/80 p-2">
             {TABS.map((t) => {
               const active = tab === t.id;
               return (
@@ -389,8 +389,8 @@ export function SettingsView() {
                     className={clsx(
                       'flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
                       active
-                        ? 'bg-gray-800/80 text-gray-50 ring-1 ring-blue-500/40'
-                        : 'text-gray-300 hover:bg-gray-800/50 hover:text-gray-100',
+                        ? 'bg-dark-20/80 text-gray-50 ring-1 ring-brand-500/40'
+                        : 'text-gray-300 hover:bg-dark-20/50 hover:text-gray-100',
                     )}
                   >
                     <span className="font-medium">{t.label}</span>
@@ -413,7 +413,7 @@ export function SettingsView() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18 }}
-              className="rounded-xl border border-gray-800 bg-gray-900/40"
+              className="rounded-xl border border-[#374151] bg-dark-70/80"
             >
               {tab === 'profile' && <ProfilePanel />}
               {tab === 'workspace' && <WorkspacePanel />}
@@ -445,7 +445,7 @@ function PanelHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-gray-800 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 border-b border-[#374151] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h2 className="text-lg font-semibold text-gray-100">{title}</h2>
         <p className="mt-1 max-w-xl text-sm text-gray-500">{description}</p>
@@ -475,8 +475,8 @@ function Field({
 
 function inputClass() {
   return clsx(
-    'w-full rounded-lg border border-gray-700 bg-gray-950/60 px-3 py-2 text-sm text-gray-100',
-    'placeholder:text-gray-600 focus:border-blue-500/60 focus:outline-none focus:ring-1 focus:ring-blue-500/40',
+    'w-full rounded-lg border border-[#333A47] bg-dark-80/60 px-3 py-2 text-sm text-gray-100',
+    'placeholder:text-gray-600 focus:border-brand-500/60 focus:outline-none focus:ring-1 focus:ring-brand-500/40',
   );
 }
 
@@ -492,7 +492,7 @@ function Toggle({
   description?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+    <div className="flex items-start justify-between gap-4 rounded-lg border border-[#374151] bg-dark-80/40 p-4">
       <div className="min-w-0">
         <p className="text-sm font-medium text-gray-200">{label}</p>
         {description ? (
@@ -506,8 +506,8 @@ function Toggle({
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={clsx(
-          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50',
-          checked ? 'bg-blue-500/80' : 'bg-gray-700',
+          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/50',
+          checked ? 'bg-brand-500/80' : 'bg-gray-700',
         )}
       >
         <span
@@ -562,8 +562,8 @@ function ProfilePanel() {
             className={clsx(
               'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
               dirty
-                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                : 'cursor-not-allowed bg-gray-800 text-gray-500',
+                ? 'bg-brand-600 text-white hover:bg-brand-500'
+                : 'cursor-not-allowed bg-dark-20 text-gray-500',
             )}
           >
             Save changes
@@ -574,7 +574,7 @@ function ProfilePanel() {
         <div className="flex items-center gap-4">
           <div
             aria-hidden
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white ring-2 ring-gray-800"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-600 text-xl font-semibold text-white ring-2 ring-gray-800"
           >
             {initials || '?'}
           </div>
@@ -631,7 +631,7 @@ function ProfilePanel() {
           </Field>
         </div>
 
-        <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4 text-xs text-gray-500">
+        <div className="rounded-lg border border-[#374151] bg-dark-80/40 p-4 text-xs text-gray-500">
           Profile preferences are persisted to your user account and sync
           across devices when you sign in.
         </div>
@@ -660,12 +660,12 @@ function WorkspacePanel() {
           value={`${Intl.DateTimeFormat().resolvedOptions().locale} • 24h`}
         />
       </div>
-      <div className="border-t border-gray-800 px-6 py-5">
+      <div className="border-t border-[#374151] px-6 py-5">
         <h3 className="text-sm font-semibold text-gray-200">Members</h3>
         <p className="mt-1 text-xs text-gray-500">
           5 active operators in this workspace (demo data).
         </p>
-        <ul className="mt-3 divide-y divide-gray-800 rounded-lg border border-gray-800 bg-gray-950/40">
+        <ul className="mt-3 divide-y divide-gray-800 rounded-lg border border-[#374151] bg-dark-80/40">
           {[
             { name: 'Sasha Lin', email: 'sasha.lin@example.com', role: 'Admin' },
             { name: 'Avi Sharma', email: 'avi.sharma@example.com', role: 'Analyst' },
@@ -681,7 +681,7 @@ function WorkspacePanel() {
                 <p className="truncate text-gray-100">{m.name}</p>
                 <p className="truncate text-xs text-gray-500">{m.email}</p>
               </div>
-              <span className="rounded-full bg-gray-800 px-2.5 py-1 text-xs text-gray-300 ring-1 ring-gray-700">
+              <span className="rounded-full bg-dark-20 px-2.5 py-1 text-xs text-gray-300 ring-1 ring-gray-700">
                 {m.role}
               </span>
             </li>
@@ -694,7 +694,7 @@ function WorkspacePanel() {
 
 function InfoTile({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+    <div className="rounded-lg border border-[#374151] bg-dark-80/40 p-4">
       <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
       <p
         className={clsx(
@@ -777,7 +777,7 @@ function IntegrationsPanel() {
         action={
           <Link
             href="/connectors/new"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500"
           >
             + Add connector
           </Link>
@@ -812,7 +812,7 @@ function IntegrationsPanel() {
             action={
               <Link
                 href="/connectors/new"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500"
               >
                 Add connector
               </Link>
@@ -823,7 +823,7 @@ function IntegrationsPanel() {
             {connectors.map((c) => (
               <li
                 key={c.id}
-                className="rounded-lg border border-gray-800 bg-gray-950/40 p-4 transition-colors hover:border-gray-700"
+                className="rounded-lg border border-[#374151] bg-dark-80/40 p-4 transition-colors hover:border-[#333A47]"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
@@ -874,7 +874,7 @@ function IntegrationsPanel() {
                     <button
                       type="button"
                       onClick={() => onTest(c)}
-                      className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
+                      className="rounded-lg border border-[#333A47] bg-dark-70 px-3 py-1.5 text-xs text-gray-200 hover:bg-dark-20"
                     >
                       Test
                     </button>
@@ -917,7 +917,7 @@ function StatTile({
     gray: 'text-gray-300',
   };
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+    <div className="rounded-lg border border-[#374151] bg-dark-80/40 p-4">
       <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
       <p className={clsx('mt-1 text-2xl font-semibold tabular-nums', tones[tone])}>
         {value}
@@ -976,7 +976,7 @@ function ApiKeysPanel() {
       />
       <div className="space-y-5 px-6 py-5">
         {/* Create */}
-        <div className="flex flex-col gap-3 rounded-lg border border-gray-800 bg-gray-950/40 p-4 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-3 rounded-lg border border-[#374151] bg-dark-80/40 p-4 sm:flex-row sm:items-end">
           <Field label="Name">
             <input
               className={inputClass()}
@@ -988,7 +988,7 @@ function ApiKeysPanel() {
           <button
             type="button"
             onClick={create}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500"
           >
             Generate key
           </button>
@@ -1007,20 +1007,20 @@ function ApiKeysPanel() {
                 Save this key now — it will not be shown again.
               </p>
               <div className="mt-3 flex items-center gap-2">
-                <code className="block flex-1 truncate rounded bg-gray-950 px-3 py-2 font-mono text-sm text-amber-100 ring-1 ring-amber-500/30">
+                <code className="block flex-1 truncate rounded bg-dark-80 px-3 py-2 font-mono text-sm text-amber-100 ring-1 ring-amber-500/30">
                   {createdSecret}
                 </code>
                 <button
                   type="button"
                   onClick={() => copy(createdSecret)}
-                  className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800"
+                  className="rounded-lg border border-[#333A47] bg-dark-70 px-3 py-2 text-sm text-gray-200 hover:bg-dark-20"
                 >
                   Copy
                 </button>
                 <button
                   type="button"
                   onClick={() => setCreatedSecret(null)}
-                  className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800"
+                  className="rounded-lg border border-[#333A47] bg-dark-70 px-3 py-2 text-sm text-gray-200 hover:bg-dark-20"
                 >
                   Dismiss
                 </button>
@@ -1036,9 +1036,9 @@ function ApiKeysPanel() {
             description="Create your first key above to authenticate pipelines."
           />
         ) : (
-          <div className="overflow-hidden rounded-lg border border-gray-800">
+          <div className="overflow-hidden rounded-lg border border-[#374151]">
             <table className="w-full text-sm">
-              <thead className="bg-gray-900/60 text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-dark-60 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="px-4 py-2 text-left">Name</th>
                   <th className="px-4 py-2 text-left">Prefix</th>
@@ -1048,7 +1048,7 @@ function ApiKeysPanel() {
                   <th className="px-4 py-2 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800 bg-gray-950/40">
+              <tbody className="divide-y divide-gray-800 bg-dark-80/40">
                 {keys.map((k) => (
                   <tr key={k.id}>
                     <td className="px-4 py-3 font-medium text-gray-100">{k.name}</td>
@@ -1060,7 +1060,7 @@ function ApiKeysPanel() {
                         {k.scopes.map((s) => (
                           <span
                             key={s}
-                            className="rounded bg-gray-800 px-1.5 py-0.5 font-mono text-[11px] text-gray-300 ring-1 ring-gray-700"
+                            className="rounded bg-dark-20 px-1.5 py-0.5 font-mono text-[11px] text-gray-300 ring-1 ring-gray-700"
                           >
                             {s}
                           </span>
@@ -1141,7 +1141,7 @@ function NotificationsPanel() {
           onChange={(v) => update('copilotAutoOpen', v)}
         />
 
-        <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+        <div className="rounded-lg border border-[#374151] bg-dark-80/40 p-4">
           <Field
             label="Email digest frequency"
             hint="Roll-up email summarizing alerts and case activity."
@@ -1164,7 +1164,7 @@ function NotificationsPanel() {
           </Field>
         </div>
 
-        <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+        <div className="rounded-lg border border-[#374151] bg-dark-80/40 p-4">
           <Field
             label="Default time range"
             hint="Used by Hunt, Dashboard, and Cases when you first arrive."
@@ -1245,8 +1245,8 @@ function AppearancePanel() {
                   className={clsx(
                     'rounded-xl border p-3 text-left transition-colors',
                     active
-                      ? 'border-blue-500/60 bg-blue-500/10'
-                      : 'border-gray-800 bg-gray-950/40 hover:border-gray-700',
+                      ? 'border-brand-500/60 bg-brand-500/10'
+                      : 'border-[#374151] bg-dark-80/40 hover:border-[#333A47]',
                   )}
                 >
                   <span className="block text-sm font-medium capitalize text-gray-100">
@@ -1279,8 +1279,8 @@ function AppearancePanel() {
                   className={clsx(
                     'rounded-xl border p-3 text-left transition-colors',
                     active
-                      ? 'border-blue-500/60 bg-blue-500/10'
-                      : 'border-gray-800 bg-gray-950/40 hover:border-gray-700',
+                      ? 'border-brand-500/60 bg-brand-500/10'
+                      : 'border-[#374151] bg-dark-80/40 hover:border-[#333A47]',
                   )}
                 >
                   <span className="block text-sm font-medium capitalize text-gray-100">
@@ -1409,7 +1409,7 @@ function DeploymentAIPanel() {
                 href="https://github.com/SoorinSecurity/Agentic_SOC/docs/operations/airgap/"
                 target="_blank"
                 rel="noreferrer"
-                className="text-blue-400 hover:text-blue-300 hover:underline"
+                className="text-brand-400 hover:text-brand-300 hover:underline"
               >
                 Air-gapped deployments
               </a>
@@ -1425,7 +1425,7 @@ function DeploymentAIPanel() {
 function AirgapCard({ status }: { status: AirgapStatus }) {
   return (
     <section
-      className="rounded-xl border border-gray-800 bg-gray-950/40 p-5"
+      className="rounded-xl border border-[#374151] bg-dark-80/40 p-5"
       aria-label="Air-gap policy"
     >
       <header className="flex items-start justify-between gap-3">
@@ -1449,7 +1449,7 @@ function AirgapCard({ status }: { status: AirgapStatus }) {
               {status.allowlist.map((host) => (
                 <code
                   key={host}
-                  className="rounded bg-gray-900 px-1.5 py-0.5 font-mono text-[11px] text-gray-200"
+                  className="rounded bg-dark-70 px-1.5 py-0.5 font-mono text-[11px] text-gray-200"
                 >
                   {host}
                 </code>
@@ -1464,7 +1464,7 @@ function AirgapCard({ status }: { status: AirgapStatus }) {
             {status.implicit_private_suffixes.map((suffix) => (
               <code
                 key={suffix}
-                className="rounded bg-gray-900 px-1.5 py-0.5 font-mono text-[11px] text-gray-400"
+                className="rounded bg-dark-70 px-1.5 py-0.5 font-mono text-[11px] text-gray-400"
               >
                 {suffix}
               </code>
@@ -1489,7 +1489,7 @@ function LlmCard({
 
   return (
     <section
-      className="rounded-xl border border-gray-800 bg-gray-950/40 p-5"
+      className="rounded-xl border border-[#374151] bg-dark-80/40 p-5"
       aria-label="LLM provider"
     >
       <header className="flex items-start justify-between gap-3">
@@ -1836,7 +1836,7 @@ function BYOKCard({
   // ── VIEW: have credential, not editing ──────────────────────────────────
   if (credential && !editing) {
     return (
-      <section className="rounded-lg border border-gray-800 bg-gray-950/40 p-5">
+      <section className="rounded-lg border border-[#374151] bg-dark-80/40 p-5">
         <header className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -1858,7 +1858,7 @@ function BYOKCard({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800"
+              className="rounded-md border border-[#333A47] bg-dark-70 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-dark-20"
             >
               Edit
             </button>
@@ -1870,7 +1870,7 @@ function BYOKCard({
                 'rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50',
                 confirmingDelete
                   ? 'border border-red-500/50 bg-red-500/15 text-red-200 hover:bg-red-500/25'
-                  : 'border border-gray-700 bg-gray-900 text-gray-200 hover:bg-gray-800',
+                  : 'border border-[#333A47] bg-dark-70 text-gray-200 hover:bg-dark-20',
               )}
             >
               {confirmingDelete ? 'Confirm remove' : 'Remove'}
@@ -1964,7 +1964,7 @@ function BYOKCard({
   // ── EMPTY: no credential, not editing ────────────────────────────────────
   if (!credential && !editing) {
     return (
-      <section className="rounded-lg border border-gray-800 bg-gray-950/40 p-5">
+      <section className="rounded-lg border border-[#374151] bg-dark-80/40 p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-200">
@@ -1979,7 +1979,7 @@ function BYOKCard({
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="shrink-0 rounded-md border border-blue-500/50 bg-blue-500/15 px-3 py-1.5 text-xs font-medium text-blue-200 hover:bg-blue-500/25"
+            className="shrink-0 rounded-md border border-brand-500/50 bg-brand-500/15 px-3 py-1.5 text-xs font-medium text-brand-200 hover:bg-brand-500/25"
           >
             Configure BYOK
           </button>
@@ -1990,7 +1990,7 @@ function BYOKCard({
 
   // ── EDIT: form (creating or editing) ─────────────────────────────────────
   return (
-    <section className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-5">
+    <section className="rounded-lg border border-brand-500/30 bg-brand-500/5 p-5">
       <header className="mb-4">
         <h3 className="text-sm font-semibold text-gray-200">
           {credential ? 'Edit BYOK credential' : 'Configure BYOK credential'}
@@ -2088,7 +2088,7 @@ function BYOKCard({
           type="button"
           onClick={onCancel}
           disabled={submitting}
-          className="rounded-md border border-gray-700 bg-gray-900 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-800 disabled:opacity-50"
+          className="rounded-md border border-[#333A47] bg-dark-70 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-dark-20 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -2096,7 +2096,7 @@ function BYOKCard({
           type="button"
           onClick={onSave}
           disabled={submitting}
-          className="rounded-md bg-blue-500/80 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          className="rounded-md bg-brand-500/80 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-50"
         >
           {submitting
             ? 'Saving…'
@@ -2138,7 +2138,7 @@ function StatusPill({
     tone === 'emerald' && 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
     tone === 'amber' && 'border-amber-500/40 bg-amber-500/10 text-amber-200',
     tone === 'red' && 'border-red-500/40 bg-red-500/10 text-red-200',
-    tone === 'gray' && 'border-gray-700 bg-gray-900 text-gray-300',
+    tone === 'gray' && 'border-[#333A47] bg-dark-70 text-gray-300',
   );
   const dotCls = clsx(
     'inline-block h-1.5 w-1.5 rounded-full',
@@ -2210,12 +2210,12 @@ function AboutPanel() {
         <InfoTile label="License" value="MIT" />
         <InfoTile label="Source" value="github.com/SoorinSecurity/Agentic_SOC" mono />
       </div>
-      <div className="border-t border-gray-800 px-6 py-5 text-sm text-gray-400">
+      <div className="border-t border-[#374151] px-6 py-5 text-sm text-gray-400">
         <p>
           Soorin Agentic SOC is maintained by Soorin Security. Issues and PRs welcome on GitHub.
           See the{' '}
           <a
-            className="text-blue-400 hover:text-blue-300"
+            className="text-brand-400 hover:text-brand-300"
             href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CONTRIBUTING.md"
             target="_blank"
             rel="noreferrer"
@@ -2226,7 +2226,7 @@ function AboutPanel() {
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <a
-            className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
+            className="rounded-lg border border-[#333A47] bg-dark-70 px-3 py-1.5 text-xs text-gray-200 hover:bg-dark-20"
             href="https://github.com/SoorinSecurity/Agentic_SOC"
             target="_blank"
             rel="noreferrer"
@@ -2234,7 +2234,7 @@ function AboutPanel() {
             GitHub →
           </a>
           <a
-            className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
+            className="rounded-lg border border-[#333A47] bg-dark-70 px-3 py-1.5 text-xs text-gray-200 hover:bg-dark-20"
             href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CHANGELOG.md"
             target="_blank"
             rel="noreferrer"
@@ -2242,7 +2242,7 @@ function AboutPanel() {
             Changelog →
           </a>
           <a
-            className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
+            className="rounded-lg border border-[#333A47] bg-dark-70 px-3 py-1.5 text-xs text-gray-200 hover:bg-dark-20"
             href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/SECURITY.md"
             target="_blank"
             rel="noreferrer"

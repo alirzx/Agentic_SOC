@@ -428,7 +428,7 @@ export function EffectivePermissionsView() {
         },
         {
           selector: 'node[column = "role"]',
-          style: { 'background-color': '#1d4ed8' },
+          style: { 'background-color': '#2a9e91' },
         },
         {
           selector: 'node[column = "policy"]',
@@ -479,8 +479,8 @@ export function EffectivePermissionsView() {
   }, [elements, showGraph]);
 
   return (
-    <div className="flex h-screen flex-col bg-gray-950 text-gray-200">
-      <header className="flex flex-wrap items-center gap-4 border-b border-gray-800 px-6 py-3">
+    <div className="flex h-screen flex-col bg-dark-80 text-gray-200">
+      <header className="flex flex-wrap items-center gap-4 border-b border-[#374151] px-6 py-3">
         <h1 className="text-lg font-semibold">Effective Permissions</h1>
         <div className="flex items-center gap-2">
           <label htmlFor="provider" className="text-sm text-gray-400">
@@ -490,7 +490,7 @@ export function EffectivePermissionsView() {
             id="provider"
             value={provider}
             onChange={(e) => setProvider(e.target.value as SupportedProvider)}
-            className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm"
+            className="rounded border border-[#333A47] bg-dark-70 px-2 py-1 text-sm"
           >
             {providers.map((p) => (
               <option key={p.name} value={p.name}>
@@ -508,7 +508,7 @@ export function EffectivePermissionsView() {
             id="principal"
             value={principalId}
             onChange={(e) => setPrincipalId(e.target.value)}
-            className="w-96 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm"
+            className="w-96 rounded border border-[#333A47] bg-dark-70 px-2 py-1 text-sm"
             placeholder="arn:aws:iam::…"
           />
         </div>
@@ -544,7 +544,7 @@ export function EffectivePermissionsView() {
 
       <div className="grid flex-1 grid-cols-[1fr_320px]">
         {/* Graph pane: Cytoscape canvas, empty state, or scaffold placeholder. */}
-        <div className="relative h-full w-full bg-gray-950">
+        <div className="relative h-full w-full bg-dark-80">
           {isScaffoldProvider ? (
             <div className="flex h-full flex-col items-center justify-center px-8 text-center text-gray-400">
               <p className="text-base font-semibold text-gray-200">
@@ -574,7 +574,7 @@ export function EffectivePermissionsView() {
           )}
         </div>
 
-        <aside className="border-l border-gray-800 bg-gray-900 p-4 text-sm">
+        <aside className="border-l border-[#374151] bg-dark-70 p-4 text-sm">
           <h2 className="mb-2 font-semibold">Resolver envelope</h2>
           {isLoading ? (
             <p className="text-gray-500">Resolving…</p>

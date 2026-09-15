@@ -185,10 +185,10 @@ function ConnectorCard({
     : '';
 
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5 hover:border-gray-700/60 transition-colors flex flex-col">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 hover:border-[#333A47]/60 transition-colors flex flex-col">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 flex-shrink-0">
+          <div className="w-10 h-10 bg-dark-20 rounded-xl flex items-center justify-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 flex-shrink-0">
             {abbreviateType(connector.type)}
           </div>
           <div className="min-w-0">
@@ -249,7 +249,7 @@ function ConnectorCard({
                 'text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1',
                 driftRecent
                   ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
-                  : 'text-gray-400 bg-gray-800/60 border-gray-700/50',
+                  : 'text-gray-400 bg-dark-20/60 border-[#333A47]/50',
               )}
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -273,7 +273,7 @@ function ConnectorCard({
           {eventsDropped > 0 && (
             <span
               title={`${eventsDropped.toLocaleString()} event${eventsDropped === 1 ? '' : 's'} dropped by pre-ingest filter rules`}
-              className="text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 text-blue-300 bg-blue-500/10 border-blue-500/30"
+              className="text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 text-brand-300 bg-brand-500/10 border-brand-500/30"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -290,13 +290,13 @@ function ConnectorCard({
       )}
 
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <div className="bg-gray-800/60 rounded-lg p-2">
+        <div className="bg-dark-20/60 rounded-lg p-2">
           <p className="text-xs text-gray-500">Events ingested</p>
           <p className="text-sm font-medium text-gray-300">
             {alertCount.toLocaleString()}
           </p>
         </div>
-        <div className="bg-gray-800/60 rounded-lg p-2">
+        <div className="bg-dark-20/60 rounded-lg p-2">
           <p className="text-xs text-gray-500">Last sync</p>
           <p className="text-sm font-medium text-gray-300">
             {formatLastSync(connector.lastSync)}
@@ -309,7 +309,7 @@ function ConnectorCard({
           type="button"
           onClick={() => onTest(connector.id)}
           disabled={testing}
-          className="flex-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+          className="flex-1 text-xs bg-dark-20 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
         >
           {testing && (
             <span className="animate-spin w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full" />
@@ -320,7 +320,7 @@ function ConnectorCard({
           type="button"
           disabled
           title="Connector editing UI is planned for v1.1"
-          className="flex-1 text-xs bg-gray-800/40 text-gray-500 px-3 py-2 rounded-lg border border-gray-700/40 cursor-not-allowed select-none"
+          className="flex-1 text-xs bg-dark-20/40 text-gray-500 px-3 py-2 rounded-lg border border-[#333A47]/40 cursor-not-allowed select-none"
         >
           Configure
           <span className="ml-1.5 text-[10px] font-medium text-amber-400">v1.1</span>
@@ -410,7 +410,7 @@ export function ConnectorInstanceList({
           <button
             type="button"
             onClick={onAdd}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+            className="bg-brand-600 hover:bg-brand-500 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -441,9 +441,9 @@ export function ConnectorInstanceList({
       <button
         type="button"
         onClick={onAdd}
-        className="bg-gray-900/30 border border-dashed border-gray-700/60 rounded-xl p-5 flex flex-col items-center justify-center gap-3 hover:border-gray-600/60 hover:bg-gray-900/50 transition-colors text-left"
+        className="bg-dark-70/50 border border-dashed border-[#333A47]/60 rounded-xl p-5 flex flex-col items-center justify-center gap-3 hover:border-gray-600/60 hover:bg-dark-70/50 transition-colors text-left"
       >
-        <div className="w-10 h-10 bg-gray-800/60 rounded-xl flex items-center justify-center text-gray-500">
+        <div className="w-10 h-10 bg-dark-20/60 rounded-xl flex items-center justify-center text-gray-500">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>

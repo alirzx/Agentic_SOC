@@ -53,7 +53,7 @@ export function AlertCard({
       className={[
         'rounded-lg border p-4 cursor-pointer transition-all',
         selected
-          ? 'border-blue-500/60 bg-blue-500/10'
+          ? 'border-brand-500/60 bg-brand-500/10'
           : 'border-gray-700/50 bg-gray-800/50 hover:border-gray-600/60 hover:bg-gray-800/80',
         className,
       ].join(' ')}

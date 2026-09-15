@@ -36,22 +36,22 @@ const RechartsArea = dynamic(
           <AreaChart data={props.data}>
             <defs>
               <linearGradient id="alertGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                <stop offset="5%" stopColor="#4FD2C2" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#4FD2C2" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} interval={3} />
             <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} />
             <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey="count" stroke="#3b82f6" fill="url(#alertGrad)" strokeWidth={2} name="Alerts" />
+            <Area type="monotone" dataKey="count" stroke="#4FD2C2" fill="url(#alertGrad)" strokeWidth={2} name="Alerts" />
           </AreaChart>
         </ResponsiveContainer>
       );
     }
     return RechartsAreaInner;
   }),
-  { ssr: false, loading: () => <div className="h-[180px] bg-gray-800/30 animate-pulse rounded" /> },
+  { ssr: false, loading: () => <div className="h-[180px] bg-dark-20/30 animate-pulse rounded" /> },
 );
 
 const RechartsPie = dynamic(
@@ -73,7 +73,7 @@ const RechartsPie = dynamic(
     }
     return RechartsPieInner;
   }),
-  { ssr: false, loading: () => <div className="h-[140px] bg-gray-800/30 animate-pulse rounded" /> },
+  { ssr: false, loading: () => <div className="h-[140px] bg-dark-20/30 animate-pulse rounded" /> },
 );
 
 const RechartsBar = dynamic(
@@ -94,7 +94,7 @@ const RechartsBar = dynamic(
     }
     return RechartsBarInner;
   }),
-  { ssr: false, loading: () => <div className="h-[180px] bg-gray-800/30 animate-pulse rounded" /> },
+  { ssr: false, loading: () => <div className="h-[180px] bg-dark-20/30 animate-pulse rounded" /> },
 );
 
 class DashboardErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -106,7 +106,7 @@ class DashboardErrorBoundary extends Component<{ children: ReactNode }, { hasErr
       return (
         <div className="p-6 text-center text-gray-400">
           <p className="text-sm">Dashboard encountered an error. Please refresh.</p>
-          <button onClick={() => this.setState({ hasError: false })} className="mt-2 text-xs text-blue-400 underline">Retry</button>
+          <button onClick={() => this.setState({ hasError: false })} className="mt-2 text-xs text-brand-400 underline">Retry</button>
         </div>
       );
     }
@@ -179,14 +179,14 @@ const COLOR_MAP = {
   orange: 'text-orange-400',
   yellow: 'text-yellow-400',
   green: 'text-green-400',
-  blue: 'text-blue-400',
+  blue: 'text-brand-400',
   purple: 'text-purple-400',
   gray: 'text-gray-400',
 };
 
 function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProps) {
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
       <div>
         <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">{label}</p>
         <p className={clsx('text-3xl font-bold', COLOR_MAP[color])}>{value}</p>
@@ -210,7 +210,7 @@ function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProp
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs">
+    <div className="bg-dark-70 border border-[#333A47] rounded-lg px-3 py-2 text-xs">
       <p className="text-gray-400 mb-1">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }} className="font-medium">
@@ -296,7 +296,7 @@ function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, child
       className={clsx(
         'relative group transition-opacity',
         isDragging && 'opacity-40',
-        isOver && 'ring-2 ring-blue-500/60 ring-offset-2 ring-offset-gray-950 rounded-xl',
+        isOver && 'ring-2 ring-brand-500/60 ring-offset-2 ring-offset-gray-950 rounded-xl',
       )}
       aria-label={`Dashboard widget: ${id}`}
     >
@@ -431,7 +431,7 @@ export function DashboardView() {
     { name: 'Critical', value: metrics.alerts.critical, color: '#ef4444' },
     { name: 'High', value: metrics.alerts.high, color: '#f97316' },
     { name: 'Medium', value: metrics.alerts.medium, color: '#eab308' },
-    { name: 'Low', value: metrics.alerts.low, color: '#3b82f6' },
+    { name: 'Low', value: metrics.alerts.low, color: '#4FD2C2' },
     { name: 'Info', value: metrics.alerts.info ?? 0, color: '#64748b' },
   ];
 
@@ -507,14 +507,14 @@ export function DashboardView() {
 
     'charts-row': (
       <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+        <div className="col-span-2 bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
             <span className="text-xs text-gray-500">Last 24 hours</span>
           </div>
           <RechartsArea data={trendData} />
         </div>
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Severity Breakdown</h3>
           <RechartsPie data={SEVERITY_CHART_DATA} />
           <div className="space-y-1.5 mt-2">
@@ -534,11 +534,11 @@ export function DashboardView() {
 
     'bottom-row': (
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Top MITRE ATT&CK Tactics</h3>
           <RechartsBar data={metrics.topMitre} />
         </div>
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
           <div className="space-y-3">
             {metrics.sources.map((src) => {
@@ -556,8 +556,8 @@ export function DashboardView() {
                     </div>
                     <span className="text-xs text-gray-500">{src.count}</span>
                   </div>
-                  <div className="h-1 bg-gray-800 rounded-full">
-                    <div className="h-1 bg-blue-500/60 rounded-full" style={{ width: `${pct}%` }} />
+                  <div className="h-1 bg-dark-20 rounded-full">
+                    <div className="h-1 bg-brand-500/60 rounded-full" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );

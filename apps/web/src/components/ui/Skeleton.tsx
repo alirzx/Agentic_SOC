@@ -51,7 +51,7 @@ export function SkeletonList({ count = 5, className, rowClassName }: SkeletonLis
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-5 space-y-4">
+    <div className="rounded-xl border border-[#374151]/60 bg-dark-70/80 p-5 space-y-4">
       <Skeleton className="h-4 w-1/3" />
       <Skeleton className="h-8 w-2/3" />
       <Skeleton className="h-3 w-full" />

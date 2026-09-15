@@ -107,7 +107,7 @@ function formatErrorRate(ratio: number): string {
 function StageCard({ stage }: { stage: PipelineStage }) {
   const styles = statusStyles(stage.status);
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
       <div className="flex items-center justify-between mb-1">
         <p className="text-sm font-semibold text-gray-100 truncate">
           {STAGE_LABELS[stage.stage]}
@@ -147,7 +147,7 @@ function StageCard({ stage }: { stage: PipelineStage }) {
 
 function LoadingStage({ stage }: { stage: PipelineStage['stage'] }) {
   return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
       <div className="flex items-center justify-between mb-1">
         <p className="text-sm font-semibold text-gray-100 truncate">
           {STAGE_LABELS[stage]}
@@ -158,9 +158,9 @@ function LoadingStage({ stage }: { stage: PipelineStage['stage'] }) {
         {STAGE_DESCRIPTIONS[stage]}
       </p>
       <div className="mt-3 space-y-2">
-        <div className="h-3 w-full rounded bg-gray-800/60 animate-pulse" />
-        <div className="h-3 w-full rounded bg-gray-800/60 animate-pulse" />
-        <div className="h-3 w-2/3 rounded bg-gray-800/60 animate-pulse" />
+        <div className="h-3 w-full rounded bg-dark-20/60 animate-pulse" />
+        <div className="h-3 w-full rounded bg-dark-20/60 animate-pulse" />
+        <div className="h-3 w-2/3 rounded bg-dark-20/60 animate-pulse" />
       </div>
     </div>
   );

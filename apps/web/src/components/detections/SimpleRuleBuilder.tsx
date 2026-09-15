@@ -80,7 +80,7 @@ export function SimpleRuleBuilder({
     );
 
   return (
-    <div className="space-y-3 rounded-lg border border-gray-800 bg-gray-900/40 p-4">
+    <div className="space-y-3 rounded-lg border border-[#374151] bg-dark-70/80 p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-gray-200">No-code builder</h3>
         <button
@@ -90,7 +90,7 @@ export function SimpleRuleBuilder({
               buildSigma({ title, product, category, level, conditions }),
             )
           }
-          className="rounded-md bg-blue-600/80 px-3 py-1.5 text-xs font-medium text-white"
+          className="rounded-md bg-brand-600/80 px-3 py-1.5 text-xs font-medium text-white"
         >
           Generate Sigma
         </button>
@@ -101,19 +101,19 @@ export function SimpleRuleBuilder({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Rule title"
-          className="col-span-2 rounded-md border border-gray-800 bg-gray-950 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+          className="col-span-2 rounded-md border border-[#374151] bg-dark-80 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-brand-500/60"
         />
         <input
           value={product}
           onChange={(e) => setProduct(e.target.value)}
           placeholder="log source product (e.g. windows)"
-          className="rounded-md border border-gray-800 bg-gray-950 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+          className="rounded-md border border-[#374151] bg-dark-80 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-brand-500/60"
         />
         <input
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           placeholder="category (e.g. process_creation)"
-          className="rounded-md border border-gray-800 bg-gray-950 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+          className="rounded-md border border-[#374151] bg-dark-80 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-brand-500/60"
         />
       </div>
 
@@ -124,14 +124,14 @@ export function SimpleRuleBuilder({
               value={c.field}
               onChange={(e) => update(i, { field: e.target.value })}
               placeholder="field"
-              className="w-1/3 rounded-md border border-gray-800 bg-gray-950 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+              className="w-1/3 rounded-md border border-[#374151] bg-dark-80 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-brand-500/60"
             />
             <select
               value={c.operator}
               onChange={(e) =>
                 update(i, { operator: e.target.value as Operator })
               }
-              className="rounded-md border border-gray-800 bg-gray-950 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+              className="rounded-md border border-[#374151] bg-dark-80 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-brand-500/60"
             >
               {OPERATORS.map((op) => (
                 <option key={op.id} value={op.id}>
@@ -143,7 +143,7 @@ export function SimpleRuleBuilder({
               value={c.value}
               onChange={(e) => update(i, { value: e.target.value })}
               placeholder="value"
-              className="flex-1 rounded-md border border-gray-800 bg-gray-950 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+              className="flex-1 rounded-md border border-[#374151] bg-dark-80 px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-brand-500/60"
             />
             {conditions.length > 1 && (
               <button
@@ -151,7 +151,7 @@ export function SimpleRuleBuilder({
                 onClick={() =>
                   setConditions((prev) => prev.filter((_, idx) => idx !== i))
                 }
-                className="rounded-md border border-gray-800 px-2 py-1.5 text-xs text-gray-400 hover:text-red-400"
+                className="rounded-md border border-[#374151] px-2 py-1.5 text-xs text-gray-400 hover:text-red-400"
                 aria-label="Remove condition"
               >
                 ×
@@ -168,14 +168,14 @@ export function SimpleRuleBuilder({
                 { field: '', operator: 'contains', value: '' },
               ])
             }
-            className="rounded-md border border-gray-800 px-2 py-1 text-xs text-gray-300 hover:border-blue-500/60"
+            className="rounded-md border border-[#374151] px-2 py-1 text-xs text-gray-300 hover:border-brand-500/60"
           >
             + Add condition
           </button>
           <select
             value={level}
             onChange={(e) => setLevel(e.target.value)}
-            className="ml-auto rounded-md border border-gray-800 bg-gray-950 px-2 py-1 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+            className="ml-auto rounded-md border border-[#374151] bg-dark-80 px-2 py-1 text-xs text-gray-200 outline-none focus:border-brand-500/60"
           >
             {['info', 'low', 'medium', 'high', 'critical'].map((l) => (
               <option key={l} value={l}>

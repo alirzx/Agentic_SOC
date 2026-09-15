@@ -78,7 +78,7 @@ function Row({ row }: { row: PreviewRow }) {
               {row.matched_rule_ids.map((id) => (
                 <span
                   key={id}
-                  className="rounded bg-indigo-900/40 px-1.5 py-0.5 font-mono text-[11px] text-indigo-200"
+                  className="rounded bg-teal-900/40 px-1.5 py-0.5 font-mono text-[11px] text-teal-20"
                 >
                   {id}
                 </span>
@@ -107,7 +107,7 @@ function Row({ row }: { row: PreviewRow }) {
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-xs text-indigo-300 hover:text-indigo-200"
+            className="text-xs text-teal-10 hover:text-teal-20"
           >
             {open ? "Hide diff" : "Show diff"}
           </button>

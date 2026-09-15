@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import packageJson from '../../../package.json';
 import { LiveQueueBadge } from './LiveQueueBadge';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { BRAND } from '@/lib/brand';
 
 const APP_VERSION = packageJson.version;
 
@@ -381,26 +383,18 @@ export function Sidebar() {
     <aside
       aria-label="Application sidebar"
       className={clsx(
-        'fixed inset-y-0 left-0 w-60 flex flex-col bg-surface-raised/95 border-r border-surface-border z-40 transition-transform duration-200',
+        'fixed inset-y-0 left-0 w-60 flex flex-col bg-dark-70 border-r border-[#374151] z-40 transition-transform duration-200',
         mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 h-16 border-b border-surface-border">
-        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-600/20 border border-brand-600/30 flex items-center justify-center">
-          <span className="text-brand-400">
-            <ShieldIcon />
-          </span>
-        </div>
-        <div>
-          <span className="text-fg-primary font-bold text-base tracking-tight">Soorin</span>
-          <span className="text-brand-400 font-bold text-base tracking-tight"> SOC</span>
-          <p className="text-xs text-fg-subtle -mt-0.5">Agentic</p>
-        </div>
-        {/* Live indicator — decorative, status conveyed by the green dot label */}
+      <div className="flex items-center gap-3 px-5 h-16 border-b border-[#374151]">
+        <Link href="/dashboard" className="min-w-0 flex-1" aria-label={BRAND.product}>
+          <BrandLogo variant="nav" size={32} />
+        </Link>
           <div className="ml-auto flex items-center gap-1" aria-hidden="true">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot" />
-            <span className="text-xs text-fg-subtle">Live</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-teal-30 pulse-dot shadow-[0_0_10px_0_#3AC7B6]" />
+            <span className="text-xs text-amgray-50">Live</span>
           </div>
       </div>
 
@@ -409,7 +403,7 @@ export function Sidebar() {
         {navSections.map((section, si) => (
           <div key={si}>
             {section.title && (
-              <p className="px-3 mb-1.5 text-xs font-semibold text-fg-subtle uppercase tracking-wider">
+              <p className="px-3 mb-1.5 text-xs font-gilroy-semibold text-amgray-50 uppercase tracking-wider">
                 {section.title}
               </p>
             )}
@@ -422,13 +416,13 @@ export function Sidebar() {
                       href={item.href}
                       onClick={() => setMobileOpen(false)}
                       className={clsx(
-                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+                        'flex items-center gap-3 px-3 py-2 rounded-[6px] text-sm font-gilroy-medium transition-all duration-150 border-l-2',
                         active
-                          ? 'bg-brand-600/15 text-brand-300 border border-brand-600/20'
-                          : 'text-fg-muted hover:text-fg-secondary hover:bg-surface-hover'
+                          ? 'border-l-teal-10 bg-teal-20/10 text-teal-10'
+                          : 'border-l-transparent text-amgray-30 hover:text-teal-10 hover:bg-dark-20'
                       )}
                     >
-                      <span className={active ? 'text-brand-400' : 'text-fg-subtle'}>{item.icon}</span>
+                      <span className={active ? 'text-teal-10' : 'text-amgray-50'}>{item.icon}</span>
                       <span>{item.label}</span>
                       {item.liveBadge
                         ? item.liveBadge
@@ -449,15 +443,15 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-surface-border">
-        <div className="flex items-center gap-2 text-xs text-fg-subtle">
+      <div className="p-4 border-t border-[#374151]">
+        <div className="flex items-center gap-2 rounded-[10px] bg-teal-20 px-3 py-2 text-xs text-dark-80 font-gilroy-semibold">
           <span className="font-mono">v{APP_VERSION}</span>
           <span>·</span>
           <a
             href="https://github.com/SoorinSecurity/Agentic_SOC"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-fg-muted transition-colors"
+            className="hover:opacity-80 transition-opacity"
           >
             MIT License
           </a>

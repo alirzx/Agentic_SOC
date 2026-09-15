@@ -56,7 +56,7 @@ const MOCK_AUDIT: AuditListResponse = {
 
 const ACTION_COLORS: Record<string, string> = {
   create: 'bg-green-500/20 text-green-300',
-  update: 'bg-blue-500/20 text-blue-300',
+  update: 'bg-brand-500/20 text-brand-300',
   delete: 'bg-red-500/20 text-red-300',
   execute: 'bg-yellow-500/20 text-yellow-300',
 };
@@ -207,7 +207,7 @@ export function AuditLogView() {
                   ? 'Nothing to export with the current filters'
                   : 'Download the filtered audit trail as RFC 4180 CSV'
               }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-600 bg-dark-20 text-gray-200 hover:bg-gray-700 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-teal-20"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -233,7 +233,7 @@ export function AuditLogView() {
                   ? 'Nothing to export with the current filters'
                   : 'Open a print-ready HTML bundle (use browser to Save as PDF)'
               }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-teal-20/40 bg-teal-20/10 text-teal-20 hover:bg-teal-20/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-teal-20"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -258,19 +258,19 @@ export function AuditLogView() {
       {/* Filters */}
       <form
         onSubmit={handleSearch}
-        className="flex flex-wrap gap-3 bg-gray-800/50 p-4 rounded-lg border border-gray-700 shadow-sm"
+        className="flex flex-wrap gap-3 bg-dark-20/50 p-4 rounded-lg border border-[#333A47] shadow-sm"
       >
         <input
           type="text"
           placeholder="Search email or action…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-48 rounded-md border border-gray-600 bg-gray-900 text-gray-200 px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="flex-1 min-w-48 rounded-md border border-gray-600 bg-dark-70 text-gray-200 px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-20"
         />
         <select
           value={actionFilter}
           onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-600 bg-gray-900 text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="rounded-md border border-gray-600 bg-dark-70 text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-20"
         >
           <option value="">All actions</option>
           <option value="cases:">Cases</option>
@@ -284,7 +284,7 @@ export function AuditLogView() {
         <select
           value={resourceFilter}
           onChange={(e) => { setResourceFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-600 bg-gray-900 text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="rounded-md border border-gray-600 bg-dark-70 text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-20"
         >
           <option value="">All resources</option>
           <option value="case">case</option>
@@ -297,14 +297,14 @@ export function AuditLogView() {
         </select>
         <button
           type="submit"
-          className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="px-4 py-2 text-sm font-medium bg-teal-20 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-20"
         >
           Search
         </button>
       </form>
 
       {/* Table */}
-      <div className="bg-gray-800/50 rounded-lg border border-gray-700 shadow-sm overflow-hidden">
+      <div className="bg-dark-20/50 rounded-lg border border-[#333A47] shadow-sm overflow-hidden">
         {error && !data && (
           <div className="p-4">
             <ErrorState
@@ -332,7 +332,7 @@ export function AuditLogView() {
                       setResourceFilter('');
                       setPage(1);
                     }}
-                    className="text-xs px-3 py-1.5 rounded-md border border-indigo-500/40 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                    className="text-xs px-3 py-1.5 rounded-md border border-teal-20/40 bg-teal-20/10 text-teal-10 hover:bg-teal-20/20 transition-colors"
                   >
                     Clear filters
                   </button>
@@ -351,7 +351,7 @@ export function AuditLogView() {
         )}
         {data && data.items.length > 0 && (
           <table className="min-w-full divide-y divide-gray-700 text-sm">
-            <thead className="bg-gray-900/60">
+            <thead className="bg-dark-60">
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-gray-400">
                   Timestamp
@@ -411,12 +411,12 @@ export function AuditLogView() {
                     <td className="px-4 py-3 text-gray-400">
                       {event.actor_ip ?? '—'}
                     </td>
-                    <td className="px-4 py-3 text-indigo-500 text-xs">
+                    <td className="px-4 py-3 text-teal-500 text-xs">
                       {expandedId === event.id ? '▲ hide' : '▼ show'}
                     </td>
                   </tr>
                   {expandedId === event.id && (
-                    <tr key={`${event.id}-expanded`} className="bg-gray-900/40">
+                    <tr key={`${event.id}-expanded`} className="bg-dark-70/80">
                       <td colSpan={6} className="px-4 py-3">
                         <pre className="text-xs text-gray-300 whitespace-pre-wrap">
                           {JSON.stringify(

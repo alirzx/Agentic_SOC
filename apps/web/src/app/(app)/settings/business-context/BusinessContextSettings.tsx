@@ -180,7 +180,7 @@ export function BusinessContextSettings() {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md bg-teal-20 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? "Saving..." : dirty ? "Save changes" : "Save"}
           </button>

@@ -65,9 +65,9 @@ export function DAGPreviewDrawer({ playbook, onClose, onFork, forking }: DAGPrev
       />
 
       {/* Drawer panel */}
-      <aside className="w-full max-w-3xl bg-gray-950 border-l border-gray-800 shadow-2xl flex flex-col">
+      <aside className="w-full max-w-3xl bg-dark-80 border-l border-[#374151] shadow-2xl flex flex-col">
         {/* Header */}
-        <header className="flex items-start justify-between gap-3 border-b border-gray-800 px-6 py-4">
+        <header className="flex items-start justify-between gap-3 border-b border-[#374151] px-6 py-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               {isPack && (
@@ -111,7 +111,7 @@ export function DAGPreviewDrawer({ playbook, onClose, onFork, forking }: DAGPrev
         </header>
 
         {/* DAG canvas — read-only */}
-        <div className="flex-1 min-h-0 bg-gray-950">
+        <div className="flex-1 min-h-0 bg-dark-80">
           {playbook.steps.length === 0 ? (
             <div className="h-full flex items-center justify-center text-sm text-gray-600">
               This playbook has no steps yet.
@@ -135,7 +135,7 @@ export function DAGPreviewDrawer({ playbook, onClose, onFork, forking }: DAGPrev
         </div>
 
         {/* Action bar */}
-        <footer className="border-t border-gray-800 px-6 py-3 flex items-center justify-between">
+        <footer className="border-t border-[#374151] px-6 py-3 flex items-center justify-between">
           <p className="text-xs text-gray-500">
             {isPack
               ? 'Fork to make a local copy you can edit and enable.'
@@ -153,7 +153,7 @@ export function DAGPreviewDrawer({ playbook, onClose, onFork, forking }: DAGPrev
             )}
             <Link
               href={`/playbooks/${playbook.id}`}
-              className="px-3 py-1.5 rounded-md border border-gray-700 text-gray-200 hover:bg-gray-800 text-sm font-medium transition-colors"
+              className="px-3 py-1.5 rounded-md border border-[#333A47] text-gray-200 hover:bg-dark-20 text-sm font-medium transition-colors"
             >
               {isPack ? 'View source' : 'Open editor'}
             </Link>

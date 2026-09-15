@@ -104,7 +104,7 @@ export default function ResponderCasesPage() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Cases</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="text-xs text-amgray-50 mt-0.5">
             {counts.open} open
             {myEmail ? ` · ${counts.mine} mine` : ''}
           </p>
@@ -114,7 +114,7 @@ export default function ResponderCasesPage() {
           onClick={() => void load('refresh')}
           disabled={refreshing}
           aria-label="Refresh cases"
-          className="w-9 h-9 rounded-full border border-zinc-800 hover:border-zinc-700 disabled:opacity-60 flex items-center justify-center text-zinc-300"
+          className="w-9 h-9 rounded-full border border-[#374151] hover:border-[#333A47] disabled:opacity-60 flex items-center justify-center text-amgray-20"
         >
           <svg
             className={clsx('w-4 h-4', refreshing && 'animate-spin')}
@@ -150,8 +150,8 @@ export default function ResponderCasesPage() {
                   active
                     ? tone
                       ? `${tone.bg} ${tone.fg} border-transparent`
-                      : 'bg-indigo-500/15 text-indigo-300 border-transparent'
-                    : 'bg-transparent text-zinc-400 border-zinc-800 hover:border-zinc-700',
+                      : 'bg-teal-20/15 text-teal-10 border-transparent'
+                    : 'bg-transparent text-amgray-40 border-[#374151] hover:border-[#333A47]',
                 )}
               >
                 {filter.label}
@@ -165,8 +165,8 @@ export default function ResponderCasesPage() {
               className={clsx(
                 'shrink-0 text-xs px-3 py-1.5 rounded-full border transition ml-1',
                 mineOnly
-                  ? 'bg-indigo-500/15 text-indigo-300 border-transparent'
-                  : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-700',
+                  ? 'bg-teal-20/15 text-teal-10 border-transparent'
+                  : 'bg-transparent text-amgray-50 border-[#374151] hover:border-[#333A47]',
               )}
             >
               {mineOnly ? 'Mine (on)' : 'Mine'}
@@ -178,8 +178,8 @@ export default function ResponderCasesPage() {
             className={clsx(
               'shrink-0 text-xs px-3 py-1.5 rounded-full border transition',
               showClosed
-                ? 'bg-zinc-800 text-zinc-200 border-transparent'
-                : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-700',
+                ? 'bg-dark-20 text-amgray-10 border-transparent'
+                : 'bg-transparent text-amgray-50 border-[#374151] hover:border-[#333A47]',
             )}
           >
             {showClosed ? 'Closed (on)' : 'Closed'}
@@ -217,17 +217,17 @@ function CaseCard({ caseRecord }: { caseRecord: Case }) {
     <Link
       href={`/responder/case/${caseRecord.id}`}
       className={clsx(
-        'block rounded-xl bg-zinc-900/70 hover:bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 transition active:scale-[0.99] border-l-4',
+        'block rounded-xl bg-dark-60 hover:bg-dark-70 border border-[#374151]/80 hover:border-[#333A47] transition active:scale-[0.99] border-l-4',
         tone.border,
       )}
     >
       <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-medium text-zinc-100 leading-snug line-clamp-2">
+            <h2 className="text-sm font-medium text-white leading-snug line-clamp-2">
               {caseRecord.title}
             </h2>
-            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-500">
+            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-amgray-50">
               <span className="font-mono">{caseRecord.id}</span>
               {caseRecord.alertCount ? (
                 <>
@@ -261,12 +261,12 @@ function CaseCard({ caseRecord }: { caseRecord: Case }) {
             </span>
           </div>
         </div>
-        <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-500">
+        <div className="mt-2 flex items-center justify-between text-[11px] text-amgray-50">
           <span>updated {formatRelative(caseRecord.updatedAt)}</span>
           {caseRecord.assignee ? (
             <span className="truncate max-w-[120px]">@{caseRecord.assignee}</span>
           ) : (
-            <span className="text-zinc-600">unassigned</span>
+            <span className="text-amgray-50">unassigned</span>
           )}
         </div>
       </div>
@@ -280,11 +280,11 @@ function SkeletonList() {
       {Array.from({ length: 4 }).map((_, i) => (
         <li
           key={i}
-          className="rounded-xl bg-zinc-900/40 border border-zinc-800/60 border-l-4 border-l-zinc-800 px-4 py-3"
+          className="rounded-xl bg-dark-70/40 border border-[#374151]/60 border-l-4 border-l-zinc-800 px-4 py-3"
         >
-          <div className="h-3.5 w-2/3 bg-zinc-800/80 rounded animate-pulse" />
-          <div className="h-3 w-1/3 bg-zinc-800/60 rounded mt-2.5 animate-pulse" />
-          <div className="h-2.5 w-1/4 bg-zinc-800/60 rounded mt-3 animate-pulse" />
+          <div className="h-3.5 w-2/3 bg-dark-20/80 rounded animate-pulse" />
+          <div className="h-3 w-1/3 bg-dark-20/60 rounded mt-2.5 animate-pulse" />
+          <div className="h-2.5 w-1/4 bg-dark-20/60 rounded mt-3 animate-pulse" />
         </li>
       ))}
     </ul>
@@ -293,10 +293,10 @@ function SkeletonList() {
 
 function EmptyState({ mineOnly }: { mineOnly: boolean }) {
   return (
-    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 px-6 py-12 text-center">
-      <div className="w-10 h-10 mx-auto rounded-full bg-zinc-800/60 flex items-center justify-center mb-3">
+    <div className="rounded-xl border border-[#374151]/80 bg-dark-70/30 px-6 py-12 text-center">
+      <div className="w-10 h-10 mx-auto rounded-full bg-dark-20/60 flex items-center justify-center mb-3">
         <svg
-          className="w-5 h-5 text-zinc-500"
+          className="w-5 h-5 text-amgray-50"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -309,7 +309,7 @@ function EmptyState({ mineOnly }: { mineOnly: boolean }) {
           />
         </svg>
       </div>
-      <p className="text-sm text-zinc-300">
+      <p className="text-sm text-amgray-20">
         {mineOnly ? 'No cases assigned to you.' : 'No cases match this filter.'}
       </p>
     </div>

@@ -59,10 +59,10 @@ export default function CompliancePage() {
           <Link
             key={fw.id}
             href={`/compliance/${fw.id}`}
-            className="block bg-gray-800 border border-gray-700 rounded-lg p-5 hover:border-blue-500 hover:bg-gray-750 transition-all group"
+            className="block bg-dark-20 border border-[#333A47] rounded-lg p-5 hover:border-brand-500 hover:bg-gray-750 transition-all group"
           >
             <div className="flex items-start justify-between mb-3">
-              <h2 className="text-white font-semibold text-base group-hover:text-blue-400 transition-colors">
+              <h2 className="text-white font-semibold text-base group-hover:text-brand-400 transition-colors">
                 {fw.name}
               </h2>
               <span className="ml-2 flex-shrink-0 text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">
@@ -70,7 +70,7 @@ export default function CompliancePage() {
               </span>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">{fw.description}</p>
-            <div className="mt-4 text-blue-400 text-xs font-medium group-hover:text-blue-300">
+            <div className="mt-4 text-brand-400 text-xs font-medium group-hover:text-brand-300">
               View Dashboard →
             </div>
           </Link>

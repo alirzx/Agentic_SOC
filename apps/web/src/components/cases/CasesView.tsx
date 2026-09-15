@@ -53,7 +53,7 @@ const SEVERITY_CONFIG = {
   critical: { label: 'Critical', className: 'text-red-400 bg-red-500/10 border-red-500/20' },
   high: { label: 'High', className: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   medium: { label: 'Medium', className: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
-  low: { label: 'Low', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  low: { label: 'Low', className: 'text-brand-400 bg-brand-500/10 border-brand-500/20' },
 };
 
 const STATUS_CONFIG: Record<
@@ -61,10 +61,10 @@ const STATUS_CONFIG: Record<
   { label: string; className: string; dot: string }
 > = {
   open: { label: 'Open', className: 'text-gray-300 bg-gray-700/50 border-gray-600/50', dot: 'bg-gray-400' },
-  in_progress: { label: 'In Progress', className: 'text-blue-300 bg-blue-500/10 border-blue-500/20', dot: 'bg-blue-400 animate-pulse' },
+  in_progress: { label: 'In Progress', className: 'text-brand-300 bg-brand-500/10 border-brand-500/20', dot: 'bg-brand-400 animate-pulse' },
   pending: { label: 'Pending', className: 'text-amber-300 bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-400' },
   resolved: { label: 'Resolved', className: 'text-green-300 bg-green-500/10 border-green-500/20', dot: 'bg-green-400' },
-  closed: { label: 'Closed', className: 'text-gray-500 bg-gray-800/50 border-gray-700/50', dot: 'bg-gray-600' },
+  closed: { label: 'Closed', className: 'text-gray-500 bg-dark-20/50 border-[#333A47]/50', dot: 'bg-gray-600' },
 };
 
 // ─── Case Card ────────────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ function CaseCard({ c }: { c: Case }) {
 
   return (
     <Link href={detailHref} className="block">
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5 hover:border-gray-700 hover:bg-gray-900/80 transition-all group">
+      <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 hover:border-[#333A47] hover:bg-dark-70/80 transition-all group">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
@@ -109,7 +109,7 @@ function CaseCard({ c }: { c: Case }) {
             {c.tags && c.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 justify-end">
                 {c.tags.slice(0, 2).map((tag) => (
-                  <span key={tag} className="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">
+                  <span key={tag} className="text-xs text-gray-500 bg-dark-20 px-1.5 py-0.5 rounded">
                     {tag}
                   </span>
                 ))}
@@ -120,7 +120,7 @@ function CaseCard({ c }: { c: Case }) {
                 e.preventDefault();
                 toast.success('Incident report generated — downloading PDF');
               }}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-400 transition-colors opacity-0 group-hover:opacity-100"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -216,8 +216,8 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
               key={s}
               onClick={() => setStatusFilter(s)}
               className={clsx(
-                'bg-gray-900/60 border rounded-xl p-4 text-left transition-all',
-                statusFilter === s ? 'border-blue-500/50 bg-blue-500/5' : 'border-gray-800/60 hover:border-gray-700'
+                'bg-dark-60 border rounded-xl p-4 text-left transition-all',
+                statusFilter === s ? 'border-brand-500/50 bg-brand-500/5' : 'border-[#374151]/60 hover:border-[#333A47]'
               )}
             >
               <p className="text-2xl font-bold text-gray-100">{statCounts[s]}</p>
@@ -260,14 +260,14 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search cases…"
-            className="w-full pl-9 pr-4 py-2 bg-gray-900/60 border border-gray-800 rounded-lg text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500/50"
+            className="w-full pl-9 pr-4 py-2 bg-dark-60 border border-[#374151] rounded-lg text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-brand-500/50"
           />
         </div>
 
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value as Case['severity'] | 'all')}
-          className="bg-gray-900/60 border border-gray-800 rounded-lg text-sm text-gray-400 px-3 py-2 focus:outline-none focus:border-blue-500/50"
+          className="bg-dark-60 border border-[#374151] rounded-lg text-sm text-gray-400 px-3 py-2 focus:outline-none focus:border-brand-500/50"
         >
           <option value="all">All Severities</option>
           <option value="critical">Critical</option>
@@ -282,7 +282,7 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
       {/* Cases List */}
       {isLoading ? (
         <div className="flex items-center justify-center h-48">
-          <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-brand-500/30 border-t-blue-500 rounded-full animate-spin" />
         </div>
       ) : cases.length === 0 ? (
         // WS-F5 — distinguish "filter miss" from "no cases ever". The former
@@ -300,7 +300,7 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
                   setSeverityFilter('all');
                   setSearch('');
                 }}
-                className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+                className="text-xs px-3 py-1.5 rounded-md border border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 transition-colors"
               >
                 Clear filters
               </button>

@@ -33,7 +33,7 @@ function renderControl(
   readOnly: boolean,
 ): React.ReactNode {
   const baseClass =
-    'w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60';
+    'w-full bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60';
 
   switch (field.kind) {
     case 'textarea':
@@ -217,7 +217,7 @@ export function SchemaForm({
       )}
 
       {/* Raw JSON escape hatch */}
-      <div className="border-t border-gray-800 pt-3">
+      <div className="border-t border-[#374151] pt-3">
         <button
           type="button"
           onClick={() => {
@@ -255,7 +255,7 @@ export function SchemaForm({
                 }
               }}
               disabled={readOnly}
-              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-green-400 font-mono text-xs focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              className="w-full bg-dark-70 border border-[#333A47] rounded px-3 py-2 text-green-400 font-mono text-xs focus:outline-none focus:border-brand-500 disabled:opacity-60"
             />
             {rawError && (
               <div className="text-xs text-red-400 mt-1">{rawError}</div>

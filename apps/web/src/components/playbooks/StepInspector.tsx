@@ -120,7 +120,7 @@ export function StepInspector({
           value={local.name}
           onChange={(e) => update({ name: e.target.value })}
           disabled={readOnly}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+          className="w-full bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
         />
       </div>
 
@@ -131,7 +131,7 @@ export function StepInspector({
           value={local.type}
           onChange={(e) => changeType(e.target.value as StepType)}
           disabled={readOnly}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+          className="w-full bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
         >
           {ALL_TYPES.map((t) => (
             <option key={t} value={t}>
@@ -148,7 +148,7 @@ export function StepInspector({
           value={local.on_failure}
           onChange={(e) => update({ on_failure: e.target.value as OnFailure })}
           disabled={readOnly}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+          className="w-full bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
         >
           <option value="abort">Abort playbook</option>
           <option value="continue">Continue</option>
@@ -167,7 +167,7 @@ export function StepInspector({
             value={local.retry_max}
             onChange={(e) => update({ retry_max: Number(e.target.value) })}
             disabled={readOnly}
-            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+            className="w-full bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
           />
         </div>
         <div>
@@ -181,7 +181,7 @@ export function StepInspector({
               update({ timeout_seconds: Number(e.target.value) })
             }
             disabled={readOnly}
-            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+            className="w-full bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
           />
         </div>
       </div>
@@ -191,7 +191,7 @@ export function StepInspector({
         <label className="block text-gray-400 text-xs mb-1">
           Condition (optional)
         </label>
-        <div className="space-y-2 border border-gray-700 rounded p-3">
+        <div className="space-y-2 border border-[#333A47] rounded p-3">
           <div>
             <input
               placeholder="field e.g. verdict"
@@ -206,7 +206,7 @@ export function StepInspector({
                 })
               }
               disabled={readOnly}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              className="w-full bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -228,7 +228,7 @@ export function StepInspector({
                 })
               }
               disabled={readOnly}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              className="bg-dark-20 border border-[#333A47] rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
             >
               <option value="eq">eq</option>
               <option value="ne">ne</option>
@@ -250,7 +250,7 @@ export function StepInspector({
                 })
               }
               disabled={readOnly}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              className="bg-dark-20 border border-[#333A47] rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
             />
           </div>
           {local.condition?.field && (

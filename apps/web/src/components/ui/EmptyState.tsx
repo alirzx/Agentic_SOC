@@ -32,9 +32,9 @@ const VARIANT_STYLES: Record<EmptyStateVariant, {
 }> = {
   default: {
     container:
-      'border-gray-800 bg-gray-900/30',
+      'border-[#374151] bg-dark-70/50',
     iconWrap:
-      'bg-gray-800/60 text-blue-400',
+      'bg-dark-20/60 text-teal-20',
     badge: '',
     badgeLabel: '',
   },

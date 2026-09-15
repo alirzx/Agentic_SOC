@@ -16,6 +16,8 @@ import type { ReactElement, SVGProps } from 'react';
 import Link from 'next/link';
 import { GithubMark } from './icons';
 import { docs } from '@/lib/docs';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { BRAND } from '@/lib/brand';
 
 interface LinkSpec {
   label: string;
@@ -160,9 +162,13 @@ export function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-velvet-border pt-8 sm:flex-row sm:items-center">
-          <p className="text-xs text-velvet-content-tertiary">
-            © {new Date().getFullYear()} Soorin Security · Agentic SOC · MIT-licensed · v{VERSION}
-          </p>
+          <div className="flex items-center gap-3">
+            <BrandLogo variant="mark" size={28} />
+            <p className="text-xs text-velvet-content-tertiary">
+              © {new Date().getFullYear()} {BRAND.company} · {BRAND.product} · MIT-licensed · v
+              {VERSION}
+            </p>
+          </div>
           <ul className="flex items-center gap-3">
             {SOCIAL_LINKS.map(({ label, href, Icon }) => (
               <li key={label}>
@@ -170,7 +176,7 @@ export function Footer() {
                   href={href}
                   rel="noreferrer"
                   target="_blank"
-                  aria-label={`Soorin on ${label}`}
+                  aria-label={`${BRAND.shortName} on ${label}`}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-velvet-border text-velvet-content-tertiary transition-colors duration-200 hover:border-velvet-emerald/40 hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
                 >
                   <Icon className="h-4 w-4" />

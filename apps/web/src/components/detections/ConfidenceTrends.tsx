@@ -77,7 +77,7 @@ const SEVERITY_BADGE: Record<string, string> = {
   critical: 'bg-red-500/10 text-red-300 ring-red-500/40',
   high: 'bg-orange-500/10 text-orange-300 ring-orange-500/40',
   medium: 'bg-yellow-500/10 text-yellow-300 ring-yellow-500/40',
-  low: 'bg-blue-500/10 text-blue-300 ring-blue-500/40',
+  low: 'bg-brand-500/10 text-brand-300 ring-brand-500/40',
   info: 'bg-slate-500/10 text-slate-300 ring-slate-500/40',
 };
 
@@ -165,7 +165,7 @@ export function ConfidenceTrends() {
       {/* Histogram */}
       <section
         aria-label="Confidence distribution"
-        className="rounded-lg border border-gray-800 bg-gray-900/40 p-4"
+        className="rounded-lg border border-[#374151] bg-dark-70/80 p-4"
       >
         <header className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold text-gray-100">
@@ -194,7 +194,7 @@ export function ConfidenceTrends() {
       {/* Per-tactic averages */}
       <section
         aria-label="Average confidence by MITRE tactic"
-        className="rounded-lg border border-gray-800 bg-gray-900/40 p-4"
+        className="rounded-lg border border-[#374151] bg-dark-70/80 p-4"
       >
         <header className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold text-gray-100">
@@ -262,7 +262,7 @@ function HistogramBar({ bucket, maxCount }: HistogramBarProps) {
     <div className="flex flex-col items-center gap-1.5">
       <div className="flex h-32 w-full items-end justify-center">
         <div
-          className="relative w-full max-w-[3.5rem] overflow-hidden rounded-t-md bg-gray-800/60"
+          className="relative w-full max-w-[3.5rem] overflow-hidden rounded-t-md bg-dark-20/60"
           style={{ height: `${Math.max(totalPct, bucket.count > 0 ? 4 : 0)}%` }}
           aria-label={`${bucket.count} rules between ${bucket.label} confidence, ${bucket.activeCount} active`}
         >
@@ -302,7 +302,7 @@ function TacticBar({ tactic }: TacticBarProps) {
       <div className="truncate text-xs font-medium text-gray-300">
         {humanizeTactic(tactic.tactic)}
       </div>
-      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-gray-800/70">
+      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-dark-20/70">
         <div
           className={clsx('absolute inset-y-0 left-0 opacity-40', tone.bar)}
           style={{ width: `${total}%` }}
@@ -340,7 +340,7 @@ function RuleList({ title, subtitle, tone, entries }: RuleListProps) {
   return (
     <section
       aria-label={title}
-      className="rounded-lg border border-gray-800 bg-gray-900/40 p-4"
+      className="rounded-lg border border-[#374151] bg-dark-70/80 p-4"
     >
       <header>
         <h2 className={clsx('text-sm font-semibold', headerTone)}>{title}</h2>
@@ -370,7 +370,7 @@ function RuleListRow({ entry }: RuleListRowProps) {
   return (
     <Link
       href={`/detection/${entry.ruleId}`}
-      className="group flex items-center gap-3 py-2.5 transition-colors hover:bg-gray-900/60"
+      className="group flex items-center gap-3 py-2.5 transition-colors hover:bg-dark-60"
     >
       <span
         className={clsx(
@@ -381,7 +381,7 @@ function RuleListRow({ entry }: RuleListRowProps) {
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h3 className="truncate text-sm text-gray-100 group-hover:text-blue-300">
+          <h3 className="truncate text-sm text-gray-100 group-hover:text-brand-300">
             {entry.name}
           </h3>
           {entry.severity && (
@@ -389,7 +389,7 @@ function RuleListRow({ entry }: RuleListRowProps) {
               className={clsx(
                 'rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1',
                 SEVERITY_BADGE[entry.severity] ??
-                  'bg-gray-800 text-gray-300 ring-gray-700',
+                  'bg-dark-20 text-gray-300 ring-gray-700',
               )}
             >
               {entry.severity}
@@ -429,7 +429,7 @@ interface SummaryCardProps {
 
 function SummaryCard({ label, value, hint, tone }: SummaryCardProps) {
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-2.5">
+    <div className="rounded-lg border border-[#374151] bg-dark-70/80 px-3 py-2.5">
       <div className="text-[11px] uppercase tracking-wide text-gray-500">
         {label}
       </div>

@@ -63,11 +63,11 @@ const KIND_ICON: Record<string, string> = {
 
 /** Map ledger `kind` enum → tailwind colour family for chip styling. */
 const KIND_TONE: Record<string, string> = {
-  recon: 'bg-blue-500/10 text-blue-300 ring-blue-500/30',
+  recon: 'bg-brand-500/10 text-brand-300 ring-brand-500/30',
   forensic: 'bg-purple-500/10 text-purple-300 ring-purple-500/30',
   responder: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
-  reporter: 'bg-indigo-500/10 text-indigo-300 ring-indigo-500/30',
-  report: 'bg-indigo-500/10 text-indigo-300 ring-indigo-500/30',
+  reporter: 'bg-teal-20/10 text-teal-10 ring-teal-20/30',
+  report: 'bg-teal-20/10 text-teal-10 ring-teal-20/30',
   llm_prompt: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
   llm_response: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
   tool_call: 'bg-cyan-500/10 text-cyan-300 ring-cyan-500/30',
@@ -486,7 +486,7 @@ function RunStatusBadge({ run }: { run: LedgerRunSummary }) {
       ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30'
       : run.status === 'failed'
         ? 'bg-red-500/10 text-red-300 ring-red-500/30'
-        : 'bg-blue-500/10 text-blue-300 ring-blue-500/30';
+        : 'bg-brand-500/10 text-brand-300 ring-brand-500/30';
   return (
     <span
       className={clsx(
@@ -495,7 +495,7 @@ function RunStatusBadge({ run }: { run: LedgerRunSummary }) {
       )}
     >
       {run.status === 'running' && (
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
       )}
       {run.status}
     </span>

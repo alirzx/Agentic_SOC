@@ -251,7 +251,7 @@ export default function InvestigationChat({ runId }: Props) {
                 </span>
                 <button
                   onClick={() => setShowSummary((s) => !s)}
-                  className="rounded-lg border border-slate-700/70 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-300 hover:border-blue-500/40 hover:text-white"
+                  className="rounded-lg border border-slate-700/70 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-300 hover:border-brand-500/40 hover:text-white"
                 >
                   {showSummary ? 'Hide Summary' : 'View Summary'}
                 </button>
@@ -259,7 +259,7 @@ export default function InvestigationChat({ runId }: Props) {
                   <button
                     onClick={handleDownloadPdf}
                     disabled={pdfLoading}
-                    className="rounded-lg bg-blue-700/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
+                    className="rounded-lg bg-blue-700/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
                   >
                     {pdfLoading ? 'Exporting…' : '↓ PDF'}
                   </button>
@@ -274,7 +274,7 @@ export default function InvestigationChat({ runId }: Props) {
                       value={analystNote}
                       onChange={(e) => setAnalystNote(e.target.value)}
                       placeholder="Optional analyst note…"
-                      className="rounded-lg border border-slate-700/70 bg-slate-950/50 px-2 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-blue-500/50"
+                      className="rounded-lg border border-slate-700/70 bg-slate-950/50 px-2 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-brand-500/50"
                     />
                     <button
                       onClick={handleCloseInvestigation}
@@ -341,7 +341,7 @@ export default function InvestigationChat({ runId }: Props) {
                   <div
                     className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${
                       isUser
-                        ? 'bg-blue-600/20 text-white ring-1 ring-blue-500/30'
+                        ? 'bg-brand-600/20 text-white ring-1 ring-brand-500/30'
                         : 'bg-slate-800/70 text-slate-100 ring-1 ring-slate-700/60'
                     }`}
                   >
@@ -373,7 +373,7 @@ export default function InvestigationChat({ runId }: Props) {
                   key={action}
                   onClick={() => sendMessage(action)}
                   disabled={isTyping}
-                  className="rounded-full border border-slate-700/70 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-blue-500/40 hover:bg-slate-700/60 hover:text-white disabled:opacity-50"
+                  className="rounded-full border border-slate-700/70 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-brand-500/40 hover:bg-slate-700/60 hover:text-white disabled:opacity-50"
                 >
                   {action}
                 </button>
@@ -386,7 +386,7 @@ export default function InvestigationChat({ runId }: Props) {
               This investigation is closed. Open a new session to continue.
             </p>
           ) : (
-            <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-xl border border-slate-700/70 bg-slate-950/40 p-2 focus-within:border-blue-500/50">
+            <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-xl border border-slate-700/70 bg-slate-950/40 p-2 focus-within:border-brand-500/50">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -400,7 +400,7 @@ export default function InvestigationChat({ runId }: Props) {
                 disabled={!input.trim() || isTyping}
                 className={`flex-none rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
                   input.trim() && !isTyping
-                    ? 'bg-blue-600 text-white hover:bg-blue-500'
+                    ? 'bg-brand-600 text-white hover:bg-brand-500'
                     : 'bg-slate-800 text-slate-500'
                 }`}
               >

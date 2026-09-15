@@ -114,7 +114,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   critical: 'bg-red-900/40 text-red-300 border-red-700/60',
   high:     'bg-orange-900/40 text-orange-300 border-orange-700/60',
   medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-700/60',
-  low:      'bg-blue-900/40 text-blue-300 border-blue-700/60',
+  low:      'bg-brand-900/40 text-brand-300 border-brand-700/60',
   info:     'bg-slate-900/40 text-slate-300 border-slate-700/60',
 };
 
@@ -143,7 +143,7 @@ function SeverityBadge({ severity }: { severity?: string }) {
     <span
       className={clsx(
         'inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
-        SEVERITY_COLORS[severity] ?? 'bg-zinc-700 text-zinc-300 border-zinc-600'
+        SEVERITY_COLORS[severity] ?? 'bg-zinc-700 text-amgray-20 border-zinc-600'
       )}
     >
       {severity}
@@ -156,7 +156,7 @@ function TypeBadge({ type }: { type: string }) {
     <span
       className={clsx(
         'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium',
-        TYPE_COLORS[type] ?? 'bg-zinc-700 text-zinc-300 border-zinc-600'
+        TYPE_COLORS[type] ?? 'bg-zinc-700 text-amgray-20 border-zinc-600'
       )}
     >
       {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -179,7 +179,7 @@ function CommunityBadge() {
   return (
     <span
       title="Community contribution"
-      className="inline-flex items-center gap-0.5 rounded border border-blue-700/60 bg-blue-900/30 px-1.5 py-0.5 text-xs font-medium text-blue-300"
+      className="inline-flex items-center gap-0.5 rounded border border-brand-700/60 bg-brand-900/30 px-1.5 py-0.5 text-xs font-medium text-brand-300"
     >
       Community
     </span>
@@ -191,13 +191,13 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
   const half = rating - full >= 0.5;
 
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+    <span className="inline-flex items-center gap-1 text-xs text-amgray-40">
       <span className="text-yellow-400">
         {'★'.repeat(full)}
         {half ? '½' : ''}
         {'☆'.repeat(5 - full - (half ? 1 : 0))}
       </span>
-      <span className="text-zinc-500">
+      <span className="text-amgray-50">
         {rating.toFixed(1)} ({count})
       </span>
     </span>
@@ -213,7 +213,7 @@ function MitreTechniquesRow({ ids }: { ids: string[] }) {
       className="flex flex-wrap items-center gap-1"
       title={`Maps to MITRE ATT&CK techniques: ${ids.join(', ')}`}
     >
-      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+      <span className="text-[10px] uppercase tracking-wide text-amgray-50">
         ATT&amp;CK
       </span>
       {head.map((tid) => (
@@ -228,7 +228,7 @@ function MitreTechniquesRow({ ids }: { ids: string[] }) {
         </a>
       ))}
       {rest > 0 && (
-        <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[11px] text-zinc-400">
+        <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[11px] text-amgray-40">
           +{rest}
         </span>
       )}
@@ -260,7 +260,7 @@ function InstallButton({ item, installed, busy, onInstall, onUninstall }: Instal
           onClick={() => onUninstall(item)}
           disabled={busy}
           title="Remove from this tenant"
-          className="rounded px-1.5 py-1 text-xs text-zinc-400 hover:text-rose-300 disabled:opacity-50"
+          className="rounded px-1.5 py-1 text-xs text-amgray-40 hover:text-rose-300 disabled:opacity-50"
         >
           {busy ? '…' : '×'}
         </button>
@@ -272,7 +272,7 @@ function InstallButton({ item, installed, busy, onInstall, onUninstall }: Instal
     <button
       onClick={() => onInstall(item)}
       disabled={busy}
-      className="rounded bg-zinc-700 px-2 py-1 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:opacity-60"
+      className="rounded bg-zinc-700 px-2 py-1 text-xs font-medium text-amgray-10 transition-colors hover:bg-zinc-600 disabled:opacity-60"
     >
       {busy ? '…' : 'Install'}
     </button>
@@ -310,10 +310,10 @@ interface ItemCardProps {
 
 function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-4 hover:border-zinc-600 transition-colors">
+    <div className="flex flex-col gap-3 rounded-xl border border-[#333A47]/60 bg-dark-20/60 p-4 hover:border-zinc-600 transition-colors">
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-zinc-100 leading-snug line-clamp-2">
+        <h3 className="text-sm font-semibold text-white leading-snug line-clamp-2">
           {item.name}
         </h3>
         <div className="flex shrink-0 flex-wrap gap-1 justify-end">
@@ -323,7 +323,7 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
       </div>
 
       {/* Description */}
-      <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
+      <p className="text-xs text-amgray-40 leading-relaxed line-clamp-3">
         {item.description}
       </p>
 
@@ -338,10 +338,10 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
           {item.rating !== undefined && item.rating > 0 ? (
             <StarRating rating={item.rating} count={item.rating_count ?? 0} />
           ) : (
-            <span className="text-xs text-zinc-600">No ratings yet</span>
+            <span className="text-xs text-amgray-50">No ratings yet</span>
           )}
           {item.install_count !== undefined && (
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-amgray-50">
               {item.install_count.toLocaleString()} installs
             </span>
           )}
@@ -349,29 +349,29 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
       )}
 
       {/* Metadata row */}
-      <div className="flex flex-wrap items-center gap-2 mt-auto pt-2 border-t border-zinc-700/40">
+      <div className="flex flex-wrap items-center gap-2 mt-auto pt-2 border-t border-[#333A47]/40">
         {item.severity && <SeverityBadge severity={item.severity} />}
 
         {item.type === 'playbook' && item.trigger && (
-          <span className="text-xs text-zinc-500">
-            trigger: <span className="text-zinc-300">{item.trigger}</span>
+          <span className="text-xs text-amgray-50">
+            trigger: <span className="text-amgray-20">{item.trigger}</span>
           </span>
         )}
         {item.type === 'playbook' && item.steps !== undefined && (
-          <span className="text-xs text-zinc-500">{item.steps} steps</span>
+          <span className="text-xs text-amgray-50">{item.steps} steps</span>
         )}
         {item.type === 'detection' && item.category && (
-          <span className="text-xs text-zinc-500">{item.category}</span>
+          <span className="text-xs text-amgray-50">{item.category}</span>
         )}
         {item.type === 'detection' && item.log_source && (
-          <span className="text-xs text-zinc-500">via {item.log_source}</span>
+          <span className="text-xs text-amgray-50">via {item.log_source}</span>
         )}
         {item.type === 'plugin' && item.plugin_type && (
-          <span className="text-xs text-zinc-500">{item.plugin_type}</span>
+          <span className="text-xs text-amgray-50">{item.plugin_type}</span>
         )}
         {item.type === 'plugin' && <SdkChips sdks={item.sdks} />}
 
-        <span className="text-xs text-zinc-600">v{item.version}</span>
+        <span className="text-xs text-amgray-50">v{item.version}</span>
         <div className="ml-auto">
           <InstallButton
             item={item}
@@ -389,13 +389,13 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
           {item.tags.slice(0, 4).map((tag) => (
             <span
               key={tag}
-              className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-zinc-400"
+              className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-amgray-40"
             >
               {tag}
             </span>
           ))}
           {item.tags.length > 4 && (
-            <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-zinc-500">
+            <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-amgray-50">
               +{item.tags.length - 4}
             </span>
           )}
@@ -726,12 +726,12 @@ export function MarketplaceView() {
       {/* Page Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-[280px] flex-1">
-          <h1 className="text-2xl font-bold text-zinc-100">Marketplace</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <h1 className="text-2xl font-bold text-white">Marketplace</h1>
+          <p className="mt-1 text-sm text-amgray-40">
             Browse and install detection rules, response playbooks, and plugins shipped with AiSOC. Every entry is generated directly from the
-            repo&rsquo;s <code className="text-zinc-300">detections/</code>,{' '}
-            <code className="text-zinc-300">playbooks/</code> and{' '}
-            <code className="text-zinc-300">plugins/</code> trees, so what you see here is what your AiSOC instance has on disk.
+            repo&rsquo;s <code className="text-amgray-20">detections/</code>,{' '}
+            <code className="text-amgray-20">playbooks/</code> and{' '}
+            <code className="text-amgray-20">plugins/</code> trees, so what you see here is what your AiSOC instance has on disk.
           </p>
         </div>
         {installedSet.size > 0 && (
@@ -764,19 +764,19 @@ export function MarketplaceView() {
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
           {[
-            { label: 'Total',       value: stats.total,      color: 'text-zinc-100' },
+            { label: 'Total',       value: stats.total,      color: 'text-white' },
             { label: 'Playbooks',   value: stats.playbooks,  color: 'text-purple-300' },
             { label: 'Detections',  value: stats.detections, color: 'text-cyan-300' },
             { label: 'Plugins',     value: stats.plugins,    color: 'text-emerald-300' },
             { label: 'Verified',    value: stats.verified,   color: 'text-emerald-400' },
-            { label: 'Community',   value: stats.community,  color: 'text-blue-300' },
+            { label: 'Community',   value: stats.community,  color: 'text-brand-300' },
           ].map(({ label, value, color }) => (
             <div
               key={label}
-              className="rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-4 text-center"
+              className="rounded-xl border border-[#333A47]/60 bg-dark-20/60 p-4 text-center"
             >
               <p className={clsx('text-3xl font-bold tabular-nums', color)}>{value}</p>
-              <p className="mt-1 text-xs text-zinc-500">{label}</p>
+              <p className="mt-1 text-xs text-amgray-50">{label}</p>
             </div>
           ))}
         </div>
@@ -789,18 +789,18 @@ export function MarketplaceView() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name, description, tag, MITRE ID, or item ID…"
-          className="flex-1 min-w-[240px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
+          className="flex-1 min-w-[240px] rounded-lg border border-[#333A47] bg-dark-20 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
         />
 
         {/* Type filter */}
-        <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1">
+        <div className="flex gap-1 rounded-lg border border-[#333A47] bg-dark-20 p-1">
           {(['all', 'playbook', 'detection', 'plugin'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
               className={clsx(
                 'rounded px-2.5 py-1.5 text-xs font-medium transition-colors capitalize',
-                typeFilter === t ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                typeFilter === t ? 'bg-zinc-600 text-white' : 'text-amgray-40 hover:text-amgray-10'
               )}
             >
               {t === 'all' ? 'All' : `${t.charAt(0).toUpperCase() + t.slice(1)}s`}
@@ -809,14 +809,14 @@ export function MarketplaceView() {
         </div>
 
         {/* Source filter (core vs community) */}
-        <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1">
+        <div className="flex gap-1 rounded-lg border border-[#333A47] bg-dark-20 p-1">
           {(['all', 'core', 'community'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setSourceFilter(s)}
               className={clsx(
                 'rounded px-2.5 py-1.5 text-xs font-medium transition-colors capitalize',
-                sourceFilter === s ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                sourceFilter === s ? 'bg-zinc-600 text-white' : 'text-amgray-40 hover:text-amgray-10'
               )}
             >
               {s === 'all' ? 'All sources' : s}
@@ -828,7 +828,7 @@ export function MarketplaceView() {
             hand-authored detections don't get drowned in imported Sigma
             content. Users opt into imported/beta/community explicitly. */}
         <div
-          className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1"
+          className="flex gap-1 rounded-lg border border-[#333A47] bg-dark-20 p-1"
           title="Stable = native AiSOC content. Imported = upstream rules (SigmaHQ, Splunk, Chronicle, CAR), parseable but not fixture-tested. Beta = working but partial. Community = third-party."
         >
           {(['all', 'stable', 'beta', 'imported', 'community'] as const).map((t) => {
@@ -840,11 +840,11 @@ export function MarketplaceView() {
                 onClick={() => setTierFilter(t)}
                 className={clsx(
                   'rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
-                  tierFilter === t ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                  tierFilter === t ? 'bg-zinc-600 text-white' : 'text-amgray-40 hover:text-amgray-10'
                 )}
               >
                 {label}
-                {count > 0 && <span className="ml-1 text-zinc-500">({count})</span>}
+                {count > 0 && <span className="ml-1 text-amgray-50">({count})</span>}
               </button>
             );
           })}
@@ -856,7 +856,7 @@ export function MarketplaceView() {
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
-          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
+          className="rounded-lg border border-[#333A47] bg-dark-20 px-3 py-2 text-sm text-amgray-20 focus:border-zinc-500 focus:outline-none"
         >
           <option value="all">All severities</option>
           <option value="critical">Critical</option>
@@ -869,7 +869,7 @@ export function MarketplaceView() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
+            className="rounded-lg border border-[#333A47] bg-dark-20 px-3 py-2 text-sm text-amgray-20 focus:border-zinc-500 focus:outline-none"
           >
             <option value="all">All categories</option>
             {categoryOptions.map((c) => (
@@ -901,7 +901,7 @@ export function MarketplaceView() {
         <select
           value={sdkFilter}
           onChange={(e) => setSdkFilter(e.target.value as SdkFilter)}
-          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
+          className="rounded-lg border border-[#333A47] bg-dark-20 px-3 py-2 text-sm text-amgray-20 focus:border-zinc-500 focus:outline-none"
           title="Filter plugins by SDK availability"
         >
           <option value="all">Any SDK</option>
@@ -914,7 +914,7 @@ export function MarketplaceView() {
           href="https://github.com/SoorinSecurity/Agentic_SOC/blob/main/CONTRIBUTING.md#community-marketplace"
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto rounded-lg border border-blue-700/60 bg-blue-900/20 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-900/40"
+          className="ml-auto rounded-lg border border-brand-700/60 bg-blue-900/20 px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-900/40"
         >
           + Contribute to the marketplace
         </a>
@@ -922,28 +922,28 @@ export function MarketplaceView() {
 
       {/* Sort bar */}
       <div className="flex items-center gap-2 -mt-3">
-        <span className="text-xs text-zinc-500">Sort by:</span>
+        <span className="text-xs text-amgray-50">Sort by:</span>
         {(['name', 'install_count', 'rating'] as SortOption[]).map((field) => (
           <button
             key={field}
             onClick={() => toggleSort(field)}
             className={clsx(
               'text-xs px-2 py-1 rounded transition-colors',
-              sortBy === field ? 'text-zinc-100 bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200'
+              sortBy === field ? 'text-white bg-zinc-700' : 'text-amgray-40 hover:text-amgray-10'
             )}
           >
             {field === 'install_count' ? 'Installs' : field === 'rating' ? 'Rating' : 'Name'}
             {sortBy === field && (sortOrder === 'desc' ? ' ↓' : ' ↑')}
           </button>
         ))}
-        <span className="ml-auto text-xs text-zinc-500">
+        <span className="ml-auto text-xs text-amgray-50">
           Showing {items.length} of {data?.items.length ?? 0}
         </span>
       </div>
 
       {/* Grid */}
       {isLoading && (
-        <div className="flex items-center justify-center py-20 text-zinc-500">
+        <div className="flex items-center justify-center py-20 text-amgray-50">
           Loading marketplace…
         </div>
       )}
@@ -966,7 +966,7 @@ export function MarketplaceView() {
           action={
             <button
               onClick={clearFilters}
-              className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+              className="text-xs px-3 py-1.5 rounded-md border border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 transition-colors"
             >
               Clear filters
             </button>

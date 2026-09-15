@@ -205,7 +205,7 @@ const SEVERITY_BADGE: Record<AlertSeverity, string> = {
   critical: 'bg-red-500/15 text-red-300 ring-red-500/30',
   high: 'bg-orange-500/15 text-orange-300 ring-orange-500/30',
   medium: 'bg-yellow-500/15 text-yellow-300 ring-yellow-500/30',
-  low: 'bg-blue-500/15 text-blue-300 ring-blue-500/30',
+  low: 'bg-brand-500/15 text-brand-300 ring-brand-500/30',
   info: 'bg-slate-500/15 text-slate-300 ring-slate-500/30',
 };
 

@@ -11,7 +11,7 @@ function getColor(score: number) {
   if (score >= 90) return { ring: 'text-red-500', bg: 'bg-red-500', label: 'Critical' };
   if (score >= 70) return { ring: 'text-orange-500', bg: 'bg-orange-500', label: 'High' };
   if (score >= 45) return { ring: 'text-yellow-500', bg: 'bg-yellow-500', label: 'Medium' };
-  if (score >= 20) return { ring: 'text-blue-500', bg: 'bg-blue-500', label: 'Low' };
+  if (score >= 20) return { ring: 'text-brand-500', bg: 'bg-brand-500', label: 'Low' };
   return { ring: 'text-gray-500', bg: 'bg-gray-500', label: 'Minimal' };
 }
 

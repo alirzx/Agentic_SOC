@@ -80,7 +80,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   critical: 'text-red-400',
   high:     'text-orange-400',
   medium:   'text-yellow-400',
-  low:      'text-blue-400',
+  low:      'text-brand-400',
   info:     'text-slate-400',
 };
 
@@ -88,7 +88,7 @@ const SEVERITY_BG: Record<string, string> = {
   critical: 'bg-red-900/30 border-red-700',
   high:     'bg-orange-900/30 border-orange-700',
   medium:   'bg-yellow-900/30 border-yellow-700',
-  low:      'bg-blue-900/30 border-blue-700',
+  low:      'bg-brand-900/30 border-brand-700',
   info:     'bg-slate-900/30 border-slate-700',
 };
 
@@ -141,7 +141,7 @@ function EditConfigModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm space-y-4">
+      <div className="bg-dark-70 border border-[#333A47] rounded-xl p-6 w-full max-w-sm space-y-4">
         <h3 className="text-white font-semibold text-lg capitalize">{config.severity} SLA Targets</h3>
         {[
           { label: 'MTTD (min)', val: mttd, set: setMttd },
@@ -155,7 +155,7 @@ function EditConfigModal({
               min={1}
               value={val}
               onChange={(e) => set(Number(e.target.value))}
-              className="w-full bg-gray-800 border border-gray-600 text-white rounded px-3 py-1.5 text-sm"
+              className="w-full bg-dark-20 border border-gray-600 text-white rounded px-3 py-1.5 text-sm"
             />
           </div>
         ))}
@@ -163,7 +163,7 @@ function EditConfigModal({
           <button
             onClick={save}
             disabled={saving}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
+            className="flex-1 bg-brand-600 hover:bg-brand-500 text-white rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -226,7 +226,7 @@ function EditKpiBarModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-md space-y-4 rounded-xl border border-gray-700 bg-gray-900 p-6">
+      <div className="w-full max-w-md space-y-4 rounded-xl border border-[#333A47] bg-dark-70 p-6">
         <h3 className="text-lg font-semibold text-white">2026 KPI bar targets</h3>
         <p className="text-xs text-gray-500">
           Published defaults apply until you override. Metrics use the same look-back as SLA metrics.
@@ -274,7 +274,7 @@ function EditKpiBarModal({
               step={step}
               value={val}
               onChange={(e) => set(Number(e.target.value))}
-              className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white"
+              className="w-full rounded border border-gray-600 bg-dark-20 px-3 py-1.5 text-sm text-white"
             />
           </div>
         ))}
@@ -284,7 +284,7 @@ function EditKpiBarModal({
             type="button"
             onClick={save}
             disabled={saving}
-            className="flex-1 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="flex-1 rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -383,7 +383,7 @@ function KpiBarSection({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-left text-sm">
           <thead>
-            <tr className="border-b border-gray-700 text-gray-500">
+            <tr className="border-b border-[#333A47] text-gray-500">
               <th className="py-2 pr-4 font-medium">Metric</th>
               <th className="py-2 pr-4 font-medium">Observed</th>
               <th className="py-2 pr-4 font-medium">Target</th>
@@ -392,7 +392,7 @@ function KpiBarSection({
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.key} className="border-b border-gray-800/80">
+              <tr key={r.key} className="border-b border-[#374151]/80">
                 <td className="py-2.5 pr-4 text-gray-200">{r.label}</td>
                 <td className="py-2.5 pr-4 text-white">{r.observed}</td>
                 <td className="py-2.5 pr-4 text-gray-400">{r.target}</td>
@@ -480,7 +480,7 @@ export function SLADashboard() {
         <select
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="bg-gray-800 border border-gray-600 text-white text-sm rounded px-3 py-1.5"
+          className="bg-dark-20 border border-gray-600 text-white text-sm rounded px-3 py-1.5"
         >
           {[7, 14, 30, 60, 90].map((d) => (
             <option key={d} value={d}>
@@ -510,7 +510,7 @@ export function SLADashboard() {
           ].map(({ label, value }) => (
             <div
               key={label}
-              className="bg-gray-800 border border-gray-700 rounded-lg p-4"
+              className="bg-dark-20 border border-[#333A47] rounded-lg p-4"
             >
               <p className="text-gray-400 text-xs">{label}</p>
               <p className="text-white text-2xl font-semibold mt-1">{value}</p>
@@ -552,7 +552,7 @@ export function SLADashboard() {
                     {cfg && (
                       <button
                         onClick={() => setEditConfig(cfg)}
-                        className="text-xs text-blue-400 hover:text-blue-300"
+                        className="text-xs text-brand-400 hover:text-brand-300"
                       >
                         Edit targets
                       </button>

@@ -78,8 +78,8 @@ const SEVERITY_TONES: Record<AlertSeverity | CaseSeverity | 'info', SeverityTone
     rank: 2,
   },
   low: {
-    bg: 'bg-blue-500/15',
-    fg: 'text-blue-300',
+    bg: 'bg-brand-500/15',
+    fg: 'text-brand-300',
     border: 'border-l-blue-500',
     glyph: 'L',
     rank: 1,
@@ -107,7 +107,7 @@ interface StatusTone {
 }
 
 const ALERT_STATUS: Record<string, StatusTone> = {
-  new: { bg: 'bg-blue-500/20', fg: 'text-blue-300', label: 'New' },
+  new: { bg: 'bg-brand-500/20', fg: 'text-brand-300', label: 'New' },
   triaged: { bg: 'bg-yellow-500/20', fg: 'text-yellow-300', label: 'Triaged' },
   investigating: { bg: 'bg-purple-500/20', fg: 'text-purple-300', label: 'Investigating' },
   in_progress: { bg: 'bg-purple-500/20', fg: 'text-purple-300', label: 'Active' },
@@ -118,7 +118,7 @@ const ALERT_STATUS: Record<string, StatusTone> = {
 };
 
 const CASE_STATUS: Record<string, StatusTone> = {
-  open: { bg: 'bg-blue-500/20', fg: 'text-blue-300', label: 'Open' },
+  open: { bg: 'bg-brand-500/20', fg: 'text-brand-300', label: 'Open' },
   in_progress: { bg: 'bg-purple-500/20', fg: 'text-purple-300', label: 'Active' },
   pending: { bg: 'bg-yellow-500/20', fg: 'text-yellow-300', label: 'Pending' },
   resolved: { bg: 'bg-green-500/20', fg: 'text-green-300', label: 'Resolved' },

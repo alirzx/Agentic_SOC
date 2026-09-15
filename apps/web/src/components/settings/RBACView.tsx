@@ -27,7 +27,7 @@ const fetcher = (url: string) =>
   });
 
 const CATEGORY_COLORS: Record<string, string> = {
-  cases: 'bg-blue-500/20 text-blue-300',
+  cases: 'bg-brand-500/20 text-brand-300',
   alerts: 'bg-red-500/20 text-red-300',
   playbooks: 'bg-purple-500/20 text-purple-300',
   detections: 'bg-orange-500/20 text-orange-300',
@@ -49,13 +49,13 @@ function PermissionBadge({ perm }: { perm: Permission }) {
 
 function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: (r: Role) => void; onDelete: (r: Role) => void }) {
   return (
-    <div className="rounded-xl border border-gray-800/60 bg-gray-900/60 p-5">
+    <div className="rounded-xl border border-[#374151]/60 bg-dark-60 p-5">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-base font-semibold text-gray-100">{role.name}</span>
             {role.is_system && (
-              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+              <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-700">
                 system
               </span>
             )}
@@ -66,7 +66,7 @@ function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: (r: Role) =>
           <div className="flex shrink-0 gap-2">
             <button
               onClick={() => onEdit(role)}
-              className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800"
+              className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-dark-20"
             >
               Edit
             </button>
@@ -155,7 +155,7 @@ function RoleForm({ allPermissions, initial, onClose }: RoleFormProps) {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-20"
               placeholder="e.g. threat-hunter"
             />
           </div>
@@ -164,7 +164,7 @@ function RoleForm({ allPermissions, initial, onClose }: RoleFormProps) {
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-20"
               placeholder="Optional description"
             />
           </div>
@@ -185,7 +185,7 @@ function RoleForm({ allPermissions, initial, onClose }: RoleFormProps) {
                             type="checkbox"
                             checked={selectedIds.has(perm.id)}
                             onChange={() => toggle(perm.id)}
-                            className="rounded border-gray-300 text-indigo-600"
+                            className="rounded border-gray-300 text-teal-600"
                           />
                           <span className="text-xs text-gray-700">{perm.name}</span>
                         </label>
@@ -203,7 +203,7 @@ function RoleForm({ allPermissions, initial, onClose }: RoleFormProps) {
           <button
             onClick={save}
             disabled={saving}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="rounded-lg bg-teal-20 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
           >
             {saving ? 'Saving…' : initial ? 'Update' : 'Create'}
           </button>
@@ -277,7 +277,7 @@ export function RBACView() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          className="rounded-lg bg-teal-20 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
         >
           + New Role
         </button>
@@ -292,7 +292,7 @@ export function RBACView() {
       {!roles && !rolesError && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-800/60" />
+            <div key={i} className="h-32 animate-pulse rounded-xl bg-dark-20/60" />
           ))}
         </div>
       )}
@@ -306,7 +306,7 @@ export function RBACView() {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+              className="rounded-lg bg-teal-20 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
             >
               + New Role
             </button>

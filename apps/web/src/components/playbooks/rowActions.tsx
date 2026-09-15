@@ -35,7 +35,7 @@ export function EnabledToggle({ playbook }: { playbook: Playbook }) {
       title={playbook.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
       aria-label={`${playbook.enabled ? 'Disable' : 'Enable'} ${playbook.name}`}
       aria-pressed={playbook.enabled}
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 disabled:opacity-50 ${
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-gray-900 disabled:opacity-50 ${
         playbook.enabled ? 'bg-green-600' : 'bg-gray-700'
       }`}
     >
@@ -79,7 +79,7 @@ export function RunButton({ playbook }: { playbook: Playbook }) {
       disabled={status === 'running'}
       title="Dry run"
       aria-label={`Dry-run ${playbook.name}`}
-      className={`text-xs px-2.5 py-1 rounded border border-gray-700 transition-colors ${color}`}
+      className={`text-xs px-2.5 py-1 rounded border border-[#333A47] transition-colors ${color}`}
     >
       {label}
     </button>

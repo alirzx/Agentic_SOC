@@ -49,10 +49,10 @@ interface FrameworkData {
 
 const STATUS_BADGE: Record<string, string> = {
   approved: 'bg-green-900 text-green-300',
-  collected: 'bg-blue-900 text-blue-300',
+  collected: 'bg-blue-900 text-brand-300',
   review: 'bg-yellow-900 text-yellow-300',
   rejected: 'bg-red-900 text-red-300',
-  missing: 'bg-gray-800 text-gray-400',
+  missing: 'bg-dark-20 text-gray-400',
 };
 
 const fetcher = (url: string) =>
@@ -150,7 +150,7 @@ export function FrameworkView({ framework }: Props) {
           <button
             onClick={handleCollect}
             disabled={collecting}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-md font-medium transition-colors"
+            className="px-4 py-2 bg-brand-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-md font-medium transition-colors"
           >
             {collecting ? 'Collecting…' : 'Auto-collect Evidence'}
           </button>
@@ -169,14 +169,14 @@ export function FrameworkView({ framework }: Props) {
         {[
           { label: 'Total Controls', value: summary.total, color: 'text-white' },
           { label: 'Approved', value: summary.approved, color: 'text-green-400' },
-          { label: 'Collected', value: summary.collected, color: 'text-blue-400' },
+          { label: 'Collected', value: summary.collected, color: 'text-brand-400' },
           { label: 'In Review', value: summary.review, color: 'text-yellow-400' },
           { label: 'Rejected', value: summary.rejected, color: 'text-red-400' },
           { label: 'Missing', value: summary.missing, color: 'text-gray-400' },
         ].map(({ label, value, color }) => (
           <div
             key={label}
-            className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-center"
+            className="bg-dark-20 border border-[#333A47] rounded-lg p-3 text-center"
           >
             <div className={`text-2xl font-bold ${color}`}>{value}</div>
             <div className="text-gray-400 text-xs mt-1">{label}</div>
@@ -185,7 +185,7 @@ export function FrameworkView({ framework }: Props) {
       </div>
 
       {/* Progress bar */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <div className="bg-dark-20 border border-[#333A47] rounded-lg p-4">
         <div className="flex justify-between text-sm mb-2">
           <span className="text-gray-300">Evidence collected</span>
           <span className="text-white font-semibold">{summary.pct}%</span>
@@ -199,14 +199,14 @@ export function FrameworkView({ framework }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-700">
+      <div className="flex gap-1 border-b border-[#333A47]">
         {(['controls', 'heatmap'] as Tab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
               activeTab === tab
-                ? 'border-b-2 border-blue-500 text-blue-400'
+                ? 'border-b-2 border-brand-500 text-brand-400'
                 : 'text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -229,8 +229,8 @@ export function FrameworkView({ framework }: Props) {
                   onClick={() => setFilterStatus(s)}
                   className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
                     filterStatus === s
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-dark-20 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
                   {s}
@@ -253,7 +253,7 @@ export function FrameworkView({ framework }: Props) {
                   filterStatus !== 'all' ? (
                     <button
                       onClick={() => setFilterStatus('all')}
-                      className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+                      className="text-xs px-3 py-1.5 rounded-md border border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 transition-colors"
                     >
                       Show all controls
                     </button>
@@ -267,7 +267,7 @@ export function FrameworkView({ framework }: Props) {
               return (
                 <div
                   key={cwev.control.id}
-                  className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden"
+                  className="bg-dark-20 border border-[#333A47] rounded-lg overflow-hidden"
                 >
                   <button
                     onClick={() =>
@@ -308,7 +308,7 @@ export function FrameworkView({ framework }: Props) {
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-gray-700 p-4 space-y-3">
+                    <div className="border-t border-[#333A47] p-4 space-y-3">
                       {cwev.control.description && (
                         <p className="text-gray-300 text-sm">
                           {cwev.control.description}
@@ -323,7 +323,7 @@ export function FrameworkView({ framework }: Props) {
                           {cwev.evidence.map((ev) => (
                             <div
                               key={ev.id}
-                              className="bg-gray-900 rounded-md p-3 border border-gray-700"
+                              className="bg-dark-70 rounded-md p-3 border border-[#333A47]"
                             >
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-white text-xs font-medium">

@@ -24,9 +24,9 @@ interface Achievement {
 
 const BADGE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   'MITRE Master':     { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/30' },
-  'Speed Demon':      { bg: 'bg-blue-500/15',   text: 'text-blue-300',   border: 'border-blue-500/30' },
+  'Speed Demon':      { bg: 'bg-brand-500/15',   text: 'text-brand-300',   border: 'border-brand-500/30' },
   'Zero FP':          { bg: 'bg-green-500/15',  text: 'text-green-300',  border: 'border-green-500/30' },
-  'Night Owl':        { bg: 'bg-indigo-500/15', text: 'text-indigo-300', border: 'border-indigo-500/30' },
+  'Night Owl':        { bg: 'bg-teal-20/15', text: 'text-teal-10', border: 'border-teal-20/30' },
   'Precision Strike': { bg: 'bg-amber-500/15',  text: 'text-amber-300',  border: 'border-amber-500/30' },
   'Mentor':           { bg: 'bg-teal-500/15',   text: 'text-teal-300',   border: 'border-teal-500/30' },
   'Newcomer Rising':  { bg: 'bg-rose-500/15',   text: 'text-rose-300',   border: 'border-rose-500/30' },
@@ -79,7 +79,7 @@ function achievementIcon(icon: Achievement['icon']) {
       );
     case 'rank':
       return (
-        <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <svg className="h-4 w-4 text-brand-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
         </svg>
       );
@@ -128,7 +128,7 @@ export function TeamAnalyticsView() {
           { label: 'Team Accuracy Rate',       value: `${teamAccuracy}%`,         accent: 'text-violet-400' },
           { label: 'Total Badges Earned',      value: totalBadges.toString(),      accent: 'text-amber-400' },
         ].map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-5 space-y-4">
+          <div key={stat.label} className="rounded-xl border border-[#374151]/60 bg-dark-70/80 p-5 space-y-4">
             <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{stat.label}</p>
             <p className={clsx('text-3xl font-bold', stat.accent)}>{stat.value}</p>
           </div>
@@ -136,7 +136,7 @@ export function TeamAnalyticsView() {
       </div>
 
       {/* Leaderboard */}
-      <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-5 space-y-4">
+      <div className="rounded-xl border border-[#374151]/60 bg-dark-70/80 p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Analyst Leaderboard</h2>
           <div className="flex items-center gap-3">
@@ -145,7 +145,7 @@ export function TeamAnalyticsView() {
               placeholder="Search analyst…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="rounded-lg border border-gray-700/60 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 w-44"
+              className="rounded-lg border border-[#333A47]/60 bg-dark-70 px-3 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-20/60 w-44"
             />
             <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Sort</span>
             {SORT_OPTIONS.map((opt) => (
@@ -174,7 +174,7 @@ export function TeamAnalyticsView() {
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                className="rounded-lg bg-dark-20 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
               >
                 Clear search
               </button>
@@ -184,7 +184,7 @@ export function TeamAnalyticsView() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-800/60 text-xs uppercase tracking-wider text-gray-500">
+              <tr className="border-b border-[#374151]/60 text-xs uppercase tracking-wider text-gray-500">
                 <th className="pb-3 pr-3 font-medium w-12">Rank</th>
                 <th className="pb-3 pr-3 font-medium">Analyst</th>
                 <th className="pb-3 pr-3 font-medium text-right">Cases</th>
@@ -261,13 +261,13 @@ export function TeamAnalyticsView() {
       </div>
 
       {/* Team Highlights */}
-      <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-5 space-y-4">
+      <div className="rounded-xl border border-[#374151]/60 bg-dark-70/80 p-5 space-y-4">
         <h2 className="text-lg font-semibold text-white">Team Highlights</h2>
         <div className="space-y-3">
           {ACHIEVEMENTS.map((ach, i) => (
             <div
               key={i}
-              className="flex items-start gap-3 rounded-lg border border-gray-800/40 bg-black/20 p-3.5"
+              className="flex items-start gap-3 rounded-lg border border-[#374151]/40 bg-black/20 p-3.5"
             >
               <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/5">
                 {achievementIcon(ach.icon)}

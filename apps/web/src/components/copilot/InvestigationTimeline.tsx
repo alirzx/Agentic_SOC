@@ -79,8 +79,8 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 const KIND_COLORS: Record<string, string> = {
-  run_start: "bg-blue-500",
-  agent_start: "bg-indigo-500",
+  run_start: "bg-brand-500",
+  agent_start: "bg-teal-20",
   step: "bg-slate-400",
   decision: "bg-yellow-500",
   tool_call: "bg-teal-500",
@@ -229,7 +229,7 @@ function TimelineNodeCard({
           <span className="text-[10px] text-slate-600">
             +{formatDuration(node.duration_ms)}
           </span>
-          <span className="text-[10px] font-mono text-indigo-400">{node.agent}</span>
+          <span className="text-[10px] font-mono text-teal-20">{node.agent}</span>
 
           {node.diff_vs_prev_attempt && (
             <span
@@ -612,7 +612,7 @@ export default function InvestigationTimeline({
             <span
               className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase
                 ${data.status === "completed" ? "bg-emerald-900/70 text-emerald-300" :
-                  data.status === "running" ? "bg-blue-900/70 text-blue-300 animate-pulse" :
+                  data.status === "running" ? "bg-blue-900/70 text-brand-300 animate-pulse" :
                   data.status === "failed" ? "bg-red-900/70 text-red-300" :
                   "bg-slate-700 text-slate-300"}`}
             >

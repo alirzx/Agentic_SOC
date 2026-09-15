@@ -84,7 +84,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0a0d14',
+  themeColor: '#121724',
   width: 'device-width',
   initialScale: 1,
 };
@@ -96,7 +96,7 @@ const jsonLd = {
       '@type': 'Organization',
       name: BRAND.company,
       url: siteUrl,
-      logo: `${siteUrl}/favicon.svg`,
+      logo: `${siteUrl}/logo/logo-mark.svg`,
       description:
         `${BRAND.product} — self-hostable AI security operations platform from ${BRAND.company}.`,
       sameAs: [
@@ -180,7 +180,7 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="bg-surface-base text-fg-primary antialiased">
+      <body className="bg-surface-base text-fg-primary font-sans antialiased">
         <script
           // eslint-disable-next-line react/no-danger -- pre-hydration theme bootstrap
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
@@ -197,20 +197,18 @@ export default function RootLayout({
             position="bottom-right"
             toastOptions={{
               duration: 4000,
-              // Toast styles read CSS variables so the toaster flips with
-              // the rest of the chrome. `iconTheme` only takes hex values,
-              // so we pin the brand semantic colors there.
               style: {
                 background: 'var(--surface-raised)',
                 color: 'var(--fg-primary)',
                 border: '1px solid var(--surface-border)',
                 fontSize: '0.875rem',
+                fontFamily: 'Gilory-Medium, Gilroy, system-ui, sans-serif',
               },
               success: {
-                iconTheme: { primary: '#22c55e', secondary: '#0a0d14' },
+                iconTheme: { primary: '#64FF99', secondary: '#121724' },
               },
               error: {
-                iconTheme: { primary: '#ef4444', secondary: '#0a0d14' },
+                iconTheme: { primary: '#ef4444', secondary: '#121724' },
               },
             }}
           />

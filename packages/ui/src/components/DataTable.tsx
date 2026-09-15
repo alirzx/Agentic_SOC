@@ -64,7 +64,7 @@ export function DataTable<T>({
                 <span className="flex items-center gap-1">
                   {col.header}
                   {col.sortable && sortKey === col.key && (
-                    <span className="text-blue-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                    <span className="text-brand-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
                   )}
                 </span>
               </th>
@@ -76,7 +76,7 @@ export function DataTable<T>({
             <tr>
               <td colSpan={columns.length} className="px-4 py-8 text-center text-gray-500">
                 <div className="flex justify-center">
-                  <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                  <div className="animate-spin h-6 w-6 border-2 border-brand-500 border-t-transparent rounded-full" />
                 </div>
               </td>
             </tr>
@@ -100,7 +100,7 @@ export function DataTable<T>({
                     'border-b border-gray-700/30 transition-colors',
                     onRowClick ? 'cursor-pointer' : '',
                     isSelected
-                      ? 'bg-blue-500/10'
+                      ? 'bg-brand-500/10'
                       : 'hover:bg-gray-800/60',
                   ].join(' ')}
                 >

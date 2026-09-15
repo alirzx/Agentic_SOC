@@ -35,7 +35,7 @@ const HEAT_BUCKETS: { min: number; class: string; label: string }[] = [
   { min: 1, class: 'bg-emerald-500/15 text-emerald-200', label: '1' },
 ];
 
-const EMPTY_CELL_CLASS = 'bg-gray-800/40 text-gray-600';
+const EMPTY_CELL_CLASS = 'bg-dark-20/40 text-gray-600';
 
 function bucketClassFor(active: number, total: number): string {
   if (active === 0 && total > 0) {
@@ -140,7 +140,7 @@ export function MitreRuleHeatmap() {
       </div>
 
       {/* Heatmap */}
-      <div className="overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+      <div className="overflow-x-auto rounded-lg border border-[#374151] bg-dark-70/80 p-3">
         <div className="flex gap-3 min-w-max">
           {tactics.map((tactic) => {
             const cells = grouped?.get(tactic) ?? [];
@@ -150,7 +150,7 @@ export function MitreRuleHeatmap() {
                 className="flex w-32 flex-col gap-1.5"
                 data-testid={`tactic-column-${tactic}`}
               >
-                <header className="border-b border-gray-800 pb-1.5">
+                <header className="border-b border-[#374151] pb-1.5">
                   <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-gray-300">
                     {humanizeTactic(tactic)}
                   </div>
@@ -233,7 +233,7 @@ function SummaryCard({ label, value, suffix, tone }: SummaryCardProps) {
         ? 'text-amber-300'
         : 'text-gray-100';
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-2.5">
+    <div className="rounded-lg border border-[#374151] bg-dark-70/80 px-3 py-2.5">
       <div className="text-[11px] uppercase tracking-wide text-gray-500">
         {label}
       </div>
