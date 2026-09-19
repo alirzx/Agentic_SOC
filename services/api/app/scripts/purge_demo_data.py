@@ -4,12 +4,13 @@ Keeps the demo tenant + login user so operators can still sign in. Deletes
 alerts, cases, investigation runs/artifacts/events, case tasks/timelines, and
 seeded placeholder connectors (CrowdStrike Falcon, Microsoft Defender, etc.).
 
+``investigation_events`` and ``published_replays`` are append-only via DB
+triggers; this script briefly disables those triggers (superuser / table owner
+in the demo compose) so a clean wipe is possible.
+
 Usage (from the API container)::
 
     python -m app.scripts.purge_demo_data
-    # or from the host:
-    docker compose --project-directory . -f infra/compose/docker-compose.demo.yml \\
-      exec -T api python -m app.scripts.purge_demo_data
 """
 
 from __future__ import annotations
@@ -46,50 +47,72 @@ _SEEDED_CONNECTOR_NAMES = frozenset(
     }
 )
 
+# Append-only tables that block DELETE via BEFORE triggers.
+_IMMUTABLE_TABLES = (
+    "investigation_events",
+    "published_replays",
+)
+
+
+async def _set_immutable_triggers(session, *, enabled: bool) -> None:
+    action = "ENABLE" if enabled else "DISABLE"
+    for table in _IMMUTABLE_TABLES:
+        await session.execute(text(f"ALTER TABLE {table} {action} TRIGGER USER"))
+
 
 async def _purge(session) -> dict[str, int]:
     tenant_id = DEMO_TENANT_ID
     counts: dict[str, int] = {}
 
-    run_ids = (
-        await session.execute(select(InvestigationRun.id).where(InvestigationRun.tenant_id == tenant_id))
-    ).scalars().all()
-    if run_ids:
-        r1 = await session.execute(delete(InvestigationArtifact).where(InvestigationArtifact.run_id.in_(run_ids)))
-        r2 = await session.execute(delete(InvestigationEvent).where(InvestigationEvent.run_id.in_(run_ids)))
-        counts["investigation_artifacts"] = r1.rowcount or 0
-        counts["investigation_events"] = r2.rowcount or 0
-    r3 = await session.execute(delete(InvestigationRun).where(InvestigationRun.tenant_id == tenant_id))
-    counts["investigation_runs"] = r3.rowcount or 0
-
-    case_ids = (await session.execute(select(Case.id).where(Case.tenant_id == tenant_id))).scalars().all()
-    if case_ids:
-        r4 = await session.execute(delete(CaseTask).where(CaseTask.case_id.in_(case_ids)))
-        r5 = await session.execute(delete(CaseTimeline).where(CaseTimeline.case_id.in_(case_ids)))
-        counts["case_tasks"] = r4.rowcount or 0
-        counts["case_timelines"] = r5.rowcount or 0
-    r6 = await session.execute(delete(Case).where(Case.tenant_id == tenant_id))
-    counts["cases"] = r6.rowcount or 0
-
-    r7 = await session.execute(delete(Alert).where(Alert.tenant_id == tenant_id))
-    counts["alerts"] = r7.rowcount or 0
-
-    r8 = await session.execute(delete(PublishedReplay).where(PublishedReplay.tenant_id == tenant_id))
-    counts["published_replays"] = r8.rowcount or 0
-
-    r9 = await session.execute(
-        delete(Connector).where(
-            Connector.tenant_id == tenant_id,
-            Connector.name.in_(_SEEDED_CONNECTOR_NAMES),
-        )
-    )
-    counts["seeded_connectors"] = r9.rowcount or 0
-
-    # Mirror table used by some list endpoints (best-effort; may not exist).
+    await _set_immutable_triggers(session, enabled=False)
     try:
-        await session.execute(text("DELETE FROM aisoc_cases WHERE tenant_id = :tid"), {"tid": str(tenant_id)})
-    except Exception:
-        pass
+        run_ids = (
+            await session.execute(select(InvestigationRun.id).where(InvestigationRun.tenant_id == tenant_id))
+        ).scalars().all()
+        if run_ids:
+            r1 = await session.execute(
+                delete(InvestigationArtifact).where(InvestigationArtifact.run_id.in_(run_ids))
+            )
+            r2 = await session.execute(
+                delete(InvestigationEvent).where(InvestigationEvent.run_id.in_(run_ids))
+            )
+            counts["investigation_artifacts"] = r1.rowcount or 0
+            counts["investigation_events"] = r2.rowcount or 0
+        r3 = await session.execute(delete(InvestigationRun).where(InvestigationRun.tenant_id == tenant_id))
+        counts["investigation_runs"] = r3.rowcount or 0
+
+        case_ids = (await session.execute(select(Case.id).where(Case.tenant_id == tenant_id))).scalars().all()
+        if case_ids:
+            r4 = await session.execute(delete(CaseTask).where(CaseTask.case_id.in_(case_ids)))
+            r5 = await session.execute(delete(CaseTimeline).where(CaseTimeline.case_id.in_(case_ids)))
+            counts["case_tasks"] = r4.rowcount or 0
+            counts["case_timelines"] = r5.rowcount or 0
+        r6 = await session.execute(delete(Case).where(Case.tenant_id == tenant_id))
+        counts["cases"] = r6.rowcount or 0
+
+        r7 = await session.execute(delete(Alert).where(Alert.tenant_id == tenant_id))
+        counts["alerts"] = r7.rowcount or 0
+
+        r8 = await session.execute(delete(PublishedReplay).where(PublishedReplay.tenant_id == tenant_id))
+        counts["published_replays"] = r8.rowcount or 0
+
+        r9 = await session.execute(
+            delete(Connector).where(
+                Connector.tenant_id == tenant_id,
+                Connector.name.in_(_SEEDED_CONNECTOR_NAMES),
+            )
+        )
+        counts["seeded_connectors"] = r9.rowcount or 0
+
+        try:
+            await session.execute(
+                text("DELETE FROM aisoc_cases WHERE tenant_id = :tid"),
+                {"tid": str(tenant_id)},
+            )
+        except Exception:
+            pass
+    finally:
+        await _set_immutable_triggers(session, enabled=True)
 
     return counts
 
