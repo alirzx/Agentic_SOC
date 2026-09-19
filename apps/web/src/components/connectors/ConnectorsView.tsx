@@ -7,18 +7,15 @@
  * depending on state:
  *
  *   - loading  → skeleton tiles
- *   - error    → `ErrorState` with retry
+ *   - error    → error banner + empty list (no fabricated demo connectors)
  *   - data     → header stats + `ConnectorInstanceList` + add-connector modal
- *
- * Mock data is intentionally gone — the modal can spin up real instances
- * against the backend, so dogfooding the empty state is now both more
- * informative and one click from being populated.
  */
 
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
+import Link from 'next/link';
 
 import {
   connectorsApi,
@@ -29,42 +26,8 @@ import { AddConnectorModal } from './AddConnectorModal';
 import { ConnectorInstanceList } from './ConnectorInstanceList';
 import { InboxTokensPanel } from './InboxTokensPanel';
 
-const DEMO_CONNECTORS: Connector[] = [
-  {
-    id: 'conn-001', name: 'CrowdStrike Falcon', type: 'crowdstrike',
-    status: 'active', enabled: true,
-    config: {}, alertCount: 4231, alertsIngested: 4231,
-    lastSync: '2026-05-06T12:30:00Z',
-    createdAt: '2026-03-15T10:00:00Z', updatedAt: '2026-05-06T12:30:00Z',
-  },
-  {
-    id: 'conn-002', name: 'Microsoft Sentinel', type: 'microsoft_sentinel',
-    status: 'active', enabled: true,
-    config: {}, alertCount: 2847, alertsIngested: 2847,
-    lastSync: '2026-05-06T12:28:00Z',
-    createdAt: '2026-03-20T14:00:00Z', updatedAt: '2026-05-06T12:28:00Z',
-  },
-  {
-    id: 'conn-003', name: 'Splunk Enterprise', type: 'splunk',
-    status: 'active', enabled: true,
-    config: {}, alertCount: 1893, alertsIngested: 1893,
-    lastSync: '2026-05-06T12:25:00Z',
-    createdAt: '2026-04-01T09:00:00Z', updatedAt: '2026-05-06T12:25:00Z',
-  },
-  {
-    id: 'conn-004', name: 'AWS Security Hub', type: 'aws_security_hub',
-    status: 'error', enabled: true,
-    config: {}, alertCount: 567, alertsIngested: 567,
-    lastSync: '2026-05-06T08:15:00Z',
-    createdAt: '2026-04-10T11:00:00Z', updatedAt: '2026-05-06T08:15:00Z',
-  },
-  {
-    id: 'conn-005', name: 'Okta SSO', type: 'okta',
-    status: 'active', enabled: false,
-    config: {}, alertCount: 0, alertsIngested: 0,
-    createdAt: '2026-04-20T16:00:00Z', updatedAt: '2026-04-20T16:00:00Z',
-  },
-];
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function ConnectorsView() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -74,12 +37,9 @@ export function ConnectorsView() {
   const { data, error, isLoading, mutate } = useSWR(
     'connectors',
     () => connectorsApi.list(),
-    { revalidateOnFocus: false, fallbackData: { connectors: DEMO_CONNECTORS, total: DEMO_CONNECTORS.length } },
+    { revalidateOnFocus: false },
   );
 
-  // Health summary is a separate endpoint so the empty/error case is silent —
-  // we just fall back to the locally-derived stats. SWR keys are namespaced so
-  // the two queries don't fight over the cache.
   const { data: healthSummary } = useSWR<ConnectorHealthSummary | null>(
     'connectors:health',
     async () => {
@@ -112,8 +72,6 @@ export function ConnectorsView() {
     return { active, errored, totalEvents, driftedRecently, totalDropped };
   }, [connectors]);
 
-  // Prefer backend-aggregated stats when the API is reachable so the tile
-  // matches the source of truth (the schema-drift sentinel runs server-side).
   const stats = useMemo(() => {
     if (healthSummary) {
       return {
@@ -127,9 +85,13 @@ export function ConnectorsView() {
     return localStats;
   }, [healthSummary, localStats]);
 
-  // ─── Actions ──────────────────────────────────────────────────────────────
-
   const handleTest = async (id: string) => {
+    if (!UUID_RE.test(id)) {
+      toast.error(
+        'This is not a saved connector. Click Add Connector to create a real Splunk instance.',
+      );
+      return;
+    }
     setTestingId(id);
     setTestResults((prev) => ({ ...prev, [id]: undefined }));
     try {
@@ -150,9 +112,6 @@ export function ConnectorsView() {
   };
 
   const handleDelete = async (connector: Connector) => {
-    // Browser confirm is intentional — destructive, infrequent, and we don't
-    // yet have a shared confirmation dialog component. Worth revisiting once
-    // we add one to `components/ui/`.
     const ok = window.confirm(
       `Delete connector "${connector.name}"? This stops polling and removes its credentials. Already-ingested alerts are preserved.`,
     );
@@ -169,9 +128,6 @@ export function ConnectorsView() {
   };
 
   const handleConfigure = (_connector: Connector) => {
-    // Inline edit dialog ships in a follow-up. For now, surface a hint so
-    // operators don't think the button is broken — the modal already covers
-    // create + test, which is the high-value path for v1.
     toast('Connector editing UI is coming soon. Delete + re-add for now.', {
       icon: '🔧',
     });
@@ -181,11 +137,10 @@ export function ConnectorsView() {
     mutate();
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  const authError = error instanceof Error && /401|Unauthorized/i.test(error.message);
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-100">Connectors</h1>
@@ -205,10 +160,6 @@ export function ConnectorsView() {
         </button>
       </div>
 
-      {/* Stats — render even with zero connectors so the layout is stable
-          between empty/populated states. The drift/dropped tiles only render
-          when the schema-drift sentinel has actually fired so a clean tenant
-          keeps a calm 4-tile layout. */}
       <div
         className={clsx(
           'grid grid-cols-2 gap-3',
@@ -237,10 +188,9 @@ export function ConnectorsView() {
             value: stats.driftedRecently,
             color: 'text-amber-400',
             show: stats.driftedRecently > 0,
-            tooltip:
-              healthSummary?.lastDriftAt
-                ? `Most recent drift: ${new Date(healthSummary.lastDriftAt).toLocaleString()}`
-                : undefined,
+            tooltip: healthSummary?.lastDriftAt
+              ? `Most recent drift: ${new Date(healthSummary.lastDriftAt).toLocaleString()}`
+              : undefined,
           },
           {
             label: 'Events Dropped',
@@ -263,31 +213,36 @@ export function ConnectorsView() {
           ))}
       </div>
 
-      {/* Body */}
-      {error && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-          Connectors API unreachable — showing demo instances so you can explore the interface.
+      {authError && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
+          Not authenticated.{' '}
+          <Link href="/login" className="underline hover:text-white">
+            Sign in
+          </Link>{' '}
+          with <code className="text-xs">demo@tryaisoc.com</code> /{' '}
+          <code className="text-xs">aisoc-demo</code>, then use <strong>Add Connector</strong> to
+          create a real Splunk instance.
         </div>
       )}
-      {(
-        <ConnectorInstanceList
-          connectors={connectors}
-          isLoading={isLoading && !data}
-          testingId={testingId}
-          testResults={testResults}
-          onTest={handleTest}
-          onAdd={() => setModalOpen(true)}
-          onConfigure={handleConfigure}
-          onDelete={handleDelete}
-        />
+      {error && !authError && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-4 py-2 text-xs text-red-200">
+          Connectors API error: {error instanceof Error ? error.message : String(error)}
+        </div>
       )}
 
-      {/* Universal capture (push) — collapsed by default. Sits below the
-          poll-based connector list so the catalog stays the primary path
-          and "push for everything else" is one click away. */}
+      <ConnectorInstanceList
+        connectors={connectors}
+        isLoading={isLoading && !data}
+        testingId={testingId}
+        testResults={testResults}
+        onTest={handleTest}
+        onAdd={() => setModalOpen(true)}
+        onConfigure={handleConfigure}
+        onDelete={handleDelete}
+      />
+
       <InboxTokensPanel />
 
-      {/* Add modal */}
       <AddConnectorModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
