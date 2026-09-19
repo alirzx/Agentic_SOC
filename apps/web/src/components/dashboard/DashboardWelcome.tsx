@@ -67,15 +67,15 @@ export function DashboardWelcome() {
       <ul className="mt-4 grid gap-3 sm:grid-cols-3">
         <Tip
           step="1"
-          title="Connect a source"
-          body="Pick from 26 vendors. EDR + cloud + IAM gives the agent enough signal to start triaging."
-          cta={{ label: 'Open the connector gallery →', href: '/onboarding' }}
+          title="Connect Splunk"
+          body="Add the Splunk SIEM connector with your management URL and API token. Polling starts automatically."
+          cta={{ label: 'Open connectors →', href: '/connectors' }}
         />
         <Tip
           step="2"
-          title="Or load the demo seed"
-          body="Run pnpm seed:demo and refresh. You'll get an in-flight LockBit case to investigate."
-          cta={{ label: 'Open a sample case →', href: '/cases/INC-RT-001?tab=ledger' }}
+          title="Watch live ingest"
+          body="Once notables flow through ingest → fusion, the dashboard tiles and live feed fill from real alerts."
+          cta={{ label: 'Open alerts →', href: '/alerts' }}
         />
         <Tip
           step="3"

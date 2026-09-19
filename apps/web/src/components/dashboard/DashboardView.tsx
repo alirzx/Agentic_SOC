@@ -114,54 +114,29 @@ class DashboardErrorBoundary extends Component<{ children: ReactNode }, { hasErr
   }
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const MOCK_METRICS: DashboardMetrics = {
+// Empty baseline — dashboard never invents mock SOC numbers. Charts stay
+// zeroed until `/metrics/dashboard` returns live connector-ingested data.
+const EMPTY_METRICS: DashboardMetrics = {
   alerts: {
-    total: 1247,
-    new: 89,
-    critical: 12,
-    high: 43,
-    medium: 156,
-    low: 289,
-    resolvedToday: 67,
-    mttr: 42,
+    total: 0,
+    new: 0,
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    info: 0,
+    resolvedToday: 0,
+    mttr: 0,
   },
   cases: {
-    open: 23,
-    inProgress: 15,
-    resolvedThisWeek: 34,
+    open: 0,
+    inProgress: 0,
+    resolvedThisWeek: 0,
   },
-  sources: [
-    { name: 'CrowdStrike EDR', count: 412, status: 'active' },
-    { name: 'Microsoft Sentinel', count: 287, status: 'active' },
-    { name: 'AWS CloudTrail', count: 198, status: 'active' },
-    { name: 'Okta Identity', count: 163, status: 'active' },
-    { name: 'Google Workspace', count: 107, status: 'active' },
-    { name: 'GitHub Audit', count: 84, status: 'active' },
-  ],
-  topMitre: [
-    { tactic: 'Execution', count: 89 },
-    { tactic: 'Defense Evasion', count: 67 },
-    { tactic: 'Command & Control', count: 54 },
-    { tactic: 'Credential Access', count: 43 },
-    { tactic: 'Lateral Movement', count: 38 },
-    { tactic: 'Exfiltration', count: 21 },
-  ],
-  // Deterministic timestamps — no Date.now()/Math.random() to avoid SSR hydration mismatches.
-  alertsTrend: Array.from({ length: 24 }, (_, i) => ({
-    timestamp: new Date(new Date('2026-05-06T12:00:00Z').getTime() - (23 - i) * 3600000).toISOString(),
-    count: ((i * 37 + 13) % 80) + 20,
-    severity: 'all',
-  })),
-  threatsBySource: [
-    { source: 'CrowdStrike EDR', count: 412 },
-    { source: 'Microsoft Sentinel', count: 287 },
-    { source: 'AWS CloudTrail', count: 198 },
-    { source: 'Okta Identity', count: 163 },
-    { source: 'Google Workspace', count: 107 },
-    { source: 'GitHub Audit', count: 84 },
-  ],
+  sources: [],
+  topMitre: [],
+  alertsTrend: [],
+  threatsBySource: [],
 };
 
 // ─── Metric Card ──────────────────────────────────────────────────────────────
@@ -377,7 +352,7 @@ export function DashboardView() {
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
     {
-      fallbackData: MOCK_METRICS,
+      fallbackData: EMPTY_METRICS,
       refreshInterval: 60000,
       revalidateOnMount: true,
       revalidateOnFocus: false,
@@ -394,33 +369,21 @@ export function DashboardView() {
         ? String(metricsError)
         : null;
 
-  // Hybrid: prefer real API fields when present, fall back to mock for missing
-  // sections (e.g. /metrics/dashboard currently returns alertsTrend: [] and no
-  // threatsBySource yet, so the charts would render empty without this merge).
+  // Live API only — never pad empty series with fabricated demo numbers.
   const apiData = rawMetrics as Partial<DashboardMetrics> | undefined;
   const hasRealAlerts = !!apiData && typeof apiData.alerts?.total === 'number';
   const metrics: DashboardMetrics = hasRealAlerts
     ? {
         alerts: apiData!.alerts as DashboardMetrics['alerts'],
-        cases: apiData!.cases ?? MOCK_METRICS.cases,
-        sources:
-          Array.isArray(apiData!.sources) && apiData!.sources!.length
-            ? apiData!.sources!
-            : MOCK_METRICS.sources,
-        topMitre:
-          Array.isArray(apiData!.topMitre) && apiData!.topMitre!.length
-            ? apiData!.topMitre!
-            : MOCK_METRICS.topMitre,
-        alertsTrend:
-          Array.isArray(apiData!.alertsTrend) && apiData!.alertsTrend!.length
-            ? apiData!.alertsTrend!
-            : MOCK_METRICS.alertsTrend,
-        threatsBySource:
-          Array.isArray(apiData!.threatsBySource) && apiData!.threatsBySource!.length
-            ? apiData!.threatsBySource!
-            : MOCK_METRICS.threatsBySource,
+        cases: apiData!.cases ?? EMPTY_METRICS.cases,
+        sources: Array.isArray(apiData!.sources) ? apiData!.sources! : [],
+        topMitre: Array.isArray(apiData!.topMitre) ? apiData!.topMitre! : [],
+        alertsTrend: Array.isArray(apiData!.alertsTrend) ? apiData!.alertsTrend! : [],
+        threatsBySource: Array.isArray(apiData!.threatsBySource)
+          ? apiData!.threatsBySource!
+          : [],
       }
-    : MOCK_METRICS;
+    : EMPTY_METRICS;
 
   const trendData = metrics.alertsTrend.map((d) => ({
     time: format(new Date(d.timestamp), 'HH:mm'),

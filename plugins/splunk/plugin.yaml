@@ -1,0 +1,39 @@
+id: splunk
+name: Splunk SIEM Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull notable events from Splunk Enterprise / Splunk Cloud via the REST API
+  (saved search or index=notable). Urgency maps onto the five-tier severity
+  ladder (info|low|medium|high|critical). Auth is a Splunk bearer / HEC token;
+  TLS verification defaults on but can be relaxed for consoles using an
+  internal CA. Events flow: connector → ingest → Kafka → fusion → dashboard.
+author: AiSOC Core Team
+tags: [siem, splunk, connector, notables]
+homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/splunk.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [base_url, token]
+  properties:
+    base_url:
+      type: string
+      description: Splunk management URL (port 8089), e.g. https://splunk.example.com:8089
+    token:
+      type: string
+      secret: true
+      description: Splunk REST API / bearer token
+    saved_search:
+      type: string
+      default: AiSOC_Alerts
+      description: Saved search name; leave blank to search index=notable
+    page_size:
+      type: number
+      default: 500
+      description: Results page size (poller pages through all results)
+    ssl_verify:
+      type: boolean
+      default: true
+      description: Verify TLS; disable only for internal/self-signed CAs

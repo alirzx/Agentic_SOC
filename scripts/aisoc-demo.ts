@@ -96,12 +96,9 @@ interface Flags {
   // consumes for nightly regression tracking.
   budgetMs: number | null;
   resultsFile: string | null;
-  // T6.4 quick-seed path. `demoQuick` swaps the seeder to its 4-case
-  // deterministic mode (DEMO-001..DEMO-004) and re-points the browser
-  // deeplink at DEMO-004 (the ransomware case) so the screencast lands
-  // on the most visually-impactful incident. `clock` lets a power user
-  // override the canonical T6.4 timestamp anchor; in practice nobody
-  // touches it — it exists so byte-stable reseeds are reproducible.
+  // Opt-in demo seed. Default is live mode (empty dashboards until a real
+  // connector like Splunk ingests). Pass `--seed` to load INC-RT-* cases.
+  seed: boolean;
   demoQuick: boolean;
   clock: string | null;
   // Phase 2 quick-win on-ramp: capture the visual assets the slim
@@ -147,7 +144,8 @@ ${c.bold("Demo content:")}
                        browser opens on DEMO-004 (LockBit ransomware)
 
 ${c.bold("Flags:")}
-  --demo-quick, --quick    seed only the 4 canonical DEMO-* cases (T6.4 screencast path)
+  --seed                   opt-in: load full INC-RT-* demo dataset (profile demo-seed)
+  --demo-quick, --quick    seed only the 4 canonical DEMO-* cases (implies --seed)
   --clock <iso>            override the --demo-quick clock anchor (ISO-8601)
   --record                 after boot, record the 90s screencast + hero.gif into
                            apps/web/public/demo/ (implies --no-open; needs ffmpeg)
@@ -160,6 +158,9 @@ ${c.bold("Flags:")}
   --budget-ms <number>     exit 3 if total elapsed exceeds this many ms
   --results-file <path>    write per-phase timing JSON for the acceptance harness
   --help, -h               print this and exit
+
+Default is live mode: no seeded incidents. Prefer \`pnpm aisoc:splunk\` for
+real Splunk → dashboard ingest.
 
 ${c.bold("Exit codes:")}
   0  success, browser opened
@@ -177,6 +178,7 @@ function parseFlags(argv: string[]): Flags {
     tag: "latest",
     budgetMs: null,
     resultsFile: null,
+    seed: false,
     demoQuick: false,
     clock: null,
     record: false,
@@ -187,6 +189,7 @@ function parseFlags(argv: string[]): Flags {
     if (a === "--no-pull") flags.noPull = true;
     else if (a === "--no-open") flags.noOpen = true;
     else if (a === "--rebuild") flags.rebuild = true;
+    else if (a === "--seed") flags.seed = true;
     else if (a === "--tag") flags.tag = argv[++i] ?? "latest";
     else if (a === "--budget-ms") {
       const raw = argv[++i];
@@ -196,6 +199,7 @@ function parseFlags(argv: string[]): Flags {
       flags.resultsFile = argv[++i] ?? null;
     } else if (a === "--demo-quick" || a === "--quick") {
       flags.demoQuick = true;
+      flags.seed = true;
     } else if (a === "--clock") {
       flags.clock = argv[++i] ?? null;
     } else if (a === "--record") {
@@ -542,7 +546,7 @@ function pullImages(flags: Flags): boolean {
     return true;
   }
   step(2, 7, `Pulling prebuilt images from ghcr.io (tag: ${flags.tag})`);
-  const code = runStream("docker", ["compose", "-f", COMPOSE_FILE, "pull"], {
+  const code = runStream("docker", ["compose", "--project-directory", ROOT, "-f", COMPOSE_FILE, "pull"], {
     AISOC_TAG: flags.tag,
   });
   if (code !== 0) {
@@ -600,7 +604,12 @@ async function startStack(flags: Flags): Promise<boolean> {
   // surfaced in the script's own output instead of buried in a docker
   // compose error wall. Module-level so the rest of the script can read
   // the resolved values without threading them through every signature.
-  const args = ["compose", "-f", COMPOSE_FILE, "up", "-d", "--remove-orphans"];
+  const args = ["compose", "--project-directory", ROOT, "-f", COMPOSE_FILE, "up", "-d", "--remove-orphans"];
+  if (flags.seed) {
+    args.splice(1, 0, "--profile", "demo-seed");
+  } else {
+    args.splice(1, 0, "--profile", "bootstrap");
+  }
   if (flags.rebuild) args.push("--build");
 
   const maxAttempts = 3;
@@ -699,26 +708,24 @@ async function waitForHealth(): Promise<boolean> {
 }
 
 function seedData(flags: Flags): boolean {
+  if (!flags.seed) {
+    step(5, 7, "Skipping demo seed (live mode — connect Splunk for real data)");
+    return true;
+  }
   const label = flags.demoQuick
     ? "Seeding 4 deterministic DEMO-* cases (--demo-quick)"
     : "Ensuring canonical demo data is seeded";
   step(5, 7, label);
-  // The `seed` service in infra/compose/docker-compose.demo.yml runs `python -m
-  // app.scripts.seed_demo` automatically once the api healthcheck passes
-  // and then exits. We re-run it here as a safety net for two cases:
-  //   - the seed container failed silently (network blip pulling the
-  //     image, postgres took longer than the seed's healthcheck-wait, …)
-  //   - the user previously ran `docker compose down` without `-v`, so the
-  //     postgres volume survived but the seeder isn't going to fire again
-  //     because the api is already considered healthy on the next `up`.
-  // Idempotency is enforced inside seed_demo.py — repeated runs are a
-  // no-op as long as INC-RT-001 etc. already exist; in --demo-quick mode
-  // _purge_demo_quick wipes the four DEMO-* cases before reseeding so
-  // re-running this command is a clean reset rather than a duplicate.
+  // The `seed` service is profile-gated (`demo-seed`). We re-run it here as a
+  // safety net when `--seed` / `--demo-quick` is requested.
   const seedArgs = [
     "compose",
+    "--project-directory",
+    ROOT,
     "-f",
     COMPOSE_FILE,
+    "--profile",
+    "demo-seed",
     "exec",
     "-T",
     "api",
@@ -878,8 +885,9 @@ ${c.bold(c.green("AiSOC demo is up."))}
 
 ${c.dim("Useful commands:")}
   pnpm aisoc:doctor                           ${c.dim("# health check")}
-  docker compose -f infra/compose/docker-compose.demo.yml logs -f api
-  docker compose -f infra/compose/docker-compose.demo.yml down -v   ${c.dim("# stop & wipe demo data")}
+  docker compose --project-directory . -f infra/compose/docker-compose.demo.yml logs -f api
+  docker compose --project-directory . -f infra/compose/docker-compose.demo.yml down -v   ${c.dim("# stop & wipe demo data")}
+  pnpm aisoc:demo:reset                       ${c.dim("# force-clear ports + up")}
 
 ${c.bold("Total elapsed:")} ${c.green(elapsed())}
 `);

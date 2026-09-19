@@ -4,18 +4,16 @@
  * LiveFeedPanel
  *
  * Subscribes to the realtime `alerts` channel and renders the most recent
- * fused alerts as a live-streaming list. If the realtime service is not
- * reachable (common in dev when only the web app is running), the panel
- * gracefully falls back to a small set of demo events so the UI never
- * appears broken.
+ * fused alerts as a live-streaming list. When no events have arrived yet,
+ * the panel shows an honest empty state — never fabricated demo events.
  *
  * The status pill reflects the actual WebSocket state:
  *   - "Live"          → connected and receiving
  *   - "Reconnecting"  → connecting / closing / closed (auto-retry)
- *   - "Demo"          → no real events received yet, showing seeded data
+ *   - "Waiting"       → connected (or idle) with no events yet
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useRealtimeChannel, type RealtimeStatus } from '@/lib/realtime';
 
@@ -66,68 +64,6 @@ const SEVERITY_COLORS: Record<Severity, string> = {
   info: 'bg-gray-500/20 text-gray-300 border border-gray-500/30',
 };
 
-// Deterministic base — no Date.now() to avoid SSR hydration mismatches.
-// The live-updating clock inside the component handles "X seconds ago" rendering.
-const DEMO_BASE = new Date('2026-05-06T12:00:00Z').getTime();
-const DEMO_EVENTS: LiveEvent[] = [
-  {
-    id: 'demo-1',
-    severity: 'critical',
-    text: 'Ransomware indicators detected on DESKTOP-7892',
-    source: 'CrowdStrike',
-    receivedAt: DEMO_BASE - 2_000,
-    isDemo: true,
-  },
-  {
-    id: 'demo-2',
-    severity: 'high',
-    text: 'Impossible travel: admin login from US then RU within 4 min',
-    source: 'Okta',
-    receivedAt: DEMO_BASE - 14_000,
-    isDemo: true,
-  },
-  {
-    id: 'demo-3',
-    severity: 'high',
-    text: 'IAM role assumed from untrusted account 319…847',
-    source: 'AWS CloudTrail',
-    receivedAt: DEMO_BASE - 28_000,
-    isDemo: true,
-  },
-  {
-    id: 'demo-4',
-    severity: 'medium',
-    text: 'OAuth app granted Mail.ReadWrite across 37 mailboxes',
-    source: 'Microsoft 365',
-    receivedAt: DEMO_BASE - 42_000,
-    isDemo: true,
-  },
-  {
-    id: 'demo-5',
-    severity: 'medium',
-    text: 'Anomalous GCS bucket policy change in prod project',
-    source: 'GCP SCC',
-    receivedAt: DEMO_BASE - 58_000,
-    isDemo: true,
-  },
-  {
-    id: 'demo-6',
-    severity: 'low',
-    text: 'New deploy key added to private repo infra-terraform',
-    source: 'GitHub Audit',
-    receivedAt: DEMO_BASE - 76_000,
-    isDemo: true,
-  },
-  {
-    id: 'demo-7',
-    severity: 'low',
-    text: 'SPL federated search matched 12 indicators across Splunk',
-    source: 'Sentinel',
-    receivedAt: DEMO_BASE - 95_000,
-    isDemo: true,
-  },
-];
-
 const MAX_VISIBLE = 12;
 
 function normalizeSeverity(value: unknown): Severity {
@@ -152,15 +88,15 @@ function relativeTime(receivedAt: number, now: number): string {
 
 function statusToLabel(status: RealtimeStatus, hasReal: boolean): {
   label: string;
-  tone: 'live' | 'reconnect' | 'demo';
+  tone: 'live' | 'reconnect' | 'waiting';
 } {
   if (status === 'open' && hasReal) return { label: 'Live', tone: 'live' };
-  if (status === 'open') return { label: 'Demo', tone: 'demo' };
+  if (status === 'open') return { label: 'Waiting', tone: 'waiting' };
   if (status === 'connecting') return { label: 'Connecting…', tone: 'reconnect' };
   if (status === 'closing' || status === 'closed' || status === 'error') {
-    return { label: hasReal ? 'Reconnecting…' : 'Demo', tone: hasReal ? 'reconnect' : 'demo' };
+    return { label: hasReal ? 'Reconnecting…' : 'Offline', tone: hasReal ? 'reconnect' : 'waiting' };
   }
-  return { label: 'Demo', tone: 'demo' };
+  return { label: 'Waiting', tone: 'waiting' };
 }
 
 function eventFromMessage(msg: RealtimeAlertMessage, fallbackId: number): LiveEvent | null {
@@ -222,16 +158,7 @@ export function LiveFeedPanel() {
   }, []);
 
   const hasReal = events.length > 0;
-  const visible = useMemo<LiveEvent[]>(() => {
-    if (hasReal) return events;
-    // Refresh demo timestamps so they don't drift to "5h ago" while the dev
-    // sits on the page with no realtime backend running.
-    return DEMO_EVENTS.map((e, i) => ({
-      ...e,
-      receivedAt: now - (i + 1) * 8_000,
-    }));
-  }, [events, hasReal, now]);
-
+  const visible = events;
   const pill = statusToLabel(status, hasReal);
 
   return (
@@ -243,7 +170,7 @@ export function LiveFeedPanel() {
               'w-2 h-2 rounded-full',
               pill.tone === 'live' && 'bg-emerald-400 animate-pulse',
               pill.tone === 'reconnect' && 'bg-amber-400 animate-pulse',
-              pill.tone === 'demo' && 'bg-gray-500',
+              pill.tone === 'waiting' && 'bg-gray-500',
             )}
           />
           Live Feed
@@ -253,11 +180,11 @@ export function LiveFeedPanel() {
             'text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border',
             pill.tone === 'live' && 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
             pill.tone === 'reconnect' && 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-            pill.tone === 'demo' && 'bg-gray-500/10 text-gray-400 border-[#333A47]',
+            pill.tone === 'waiting' && 'bg-gray-500/10 text-gray-400 border-[#333A47]',
           )}
           title={
-            pill.tone === 'demo'
-              ? 'Realtime service unreachable or no events received yet — showing demo data'
+            pill.tone === 'waiting'
+              ? 'No fused alerts yet — connect Splunk (or another source) to start the feed'
               : `WebSocket: ${status}`
           }
         >
@@ -266,7 +193,12 @@ export function LiveFeedPanel() {
       </div>
 
       <div className="space-y-2.5 overflow-y-auto max-h-52 pr-1">
-        {visible.map((event) => (
+        {visible.length === 0 ? (
+          <p className="text-xs text-gray-500 py-6 text-center">
+            Waiting for live alerts from connected sources…
+          </p>
+        ) : (
+          visible.map((event) => (
           <div key={event.id} className="flex items-start gap-2">
             <span
               className={clsx(
@@ -283,7 +215,8 @@ export function LiveFeedPanel() {
               </p>
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

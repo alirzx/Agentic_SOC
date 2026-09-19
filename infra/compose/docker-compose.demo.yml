@@ -13,16 +13,18 @@
 # Usage:
 #   pnpm aisoc:demo
 #
-# Manual usage:
-#   docker compose -f infra/compose/docker-compose.demo.yml pull
-#   docker compose -f infra/compose/docker-compose.demo.yml up -d
+# Manual usage (always pin project-directory so repo-root `.env` is loaded):
+#   docker compose --project-directory . -f infra/compose/docker-compose.demo.yml pull
+#   docker compose --project-directory . -f infra/compose/docker-compose.demo.yml up -d
 #
 # SECURITY NOTE
 # -------------
 # Application ports (web / api / agents / realtime) bind to
 # ${AISOC_BIND_ADDR:-0.0.0.0} so the console is reachable on the LAN
 # (e.g. http://192.168.0.55:5000). Postgres / Redis / Kafka stay on
-# 127.0.0.1. To lock the UI back to localhost only:
+# 127.0.0.1 with non-default host ports (15432 / 16379 / 19092) so they
+# do not collide with system Postgres/Redis. To lock the UI back to
+# localhost only:
 #   AISOC_BIND_ADDR=127.0.0.1 docker compose ... up -d
 # If you expose this beyond a trusted network, change the demo passwords.
 ###############################################################################
@@ -48,11 +50,10 @@ services:
       POSTGRES_DB: aisoc
       POSTGRES_USER: aisoc
       POSTGRES_PASSWORD: aisoc_dev_secret
-    # Host port is overridable so `pnpm aisoc:demo` can fall forward to the
-    # next free port when a local Postgres is already bound to 5432. The
-    # container port stays at 5432; only the publish side changes.
+    # Host port defaults away from 5432 so system Postgres does not block
+    # the demo. Override with AISOC_POSTGRES_PORT. Container stays on 5432.
     ports:
-      - "127.0.0.1:${AISOC_POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${AISOC_POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres_demo_data:/var/lib/postgresql/data
     networks:
@@ -68,7 +69,7 @@ services:
     container_name: aisoc-demo-redis
     command: redis-server --appendonly yes --requirepass redis_dev_secret
     ports:
-      - "127.0.0.1:${AISOC_REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${AISOC_REDIS_PORT:-16379}:6379"
     volumes:
       - redis_demo_data:/data
     networks:
@@ -100,16 +101,21 @@ services:
       zookeeper:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${AISOC_KAFKA_PORT:-9092}:9092"
+      - "127.0.0.1:${AISOC_KAFKA_PORT:-19092}:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      # Listeners MUST be explicit: internal 29092 (docker DNS) + host 9092
+      # (published as AISOC_KAFKA_PORT). Without KAFKA_LISTENERS the broker
+      # exits on startup when ADVERTISED points at 29092.
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${AISOC_KAFKA_PORT:-19092}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_HEAP_OPTS: -Xmx512M -Xms256M
     networks:
       - aisoc-demo
     volumes:
@@ -118,7 +124,8 @@ services:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 20s
 
   # ─── Application Services (prebuilt from GHCR) ──────────────────────────────
 
@@ -162,6 +169,9 @@ services:
       # the api defaults to `http://agents:8000` and every playbook / case
       # investigation request 503s with "All connection attempts failed".
       AGENTS_SERVICE_URL: http://agents:8084
+      # Shared Fernet key with the connectors service (vault encrypt/decrypt).
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}
+      AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}
     networks:
       - aisoc-demo
     restart: unless-stopped
@@ -234,16 +244,13 @@ services:
       - aisoc-demo
     restart: unless-stopped
 
-  # ─── One-shot demo seeder ───────────────────────────────────────────────────
-  # Runs `python -m app.scripts.seed_demo` once when the api is healthy, then
-  # exits cleanly. The seeder is idempotent (it checks for existing INC-RT-*
-  # case_numbers before inserting), so repeated `docker compose up -d` runs
-  # don't double-seed. `restart: "no"` makes compose treat the clean exit as
-  # success and stop trying to bring it back. The orchestrator script
-  # (scripts/aisoc-demo.ts) waits for this container to terminate before
-  # reading /v1/cases — that's how we get a deterministic INC-RT-001 in the
-  # API on first browser load.
+  # ─── One-shot demo seeder (opt-in) ──────────────────────────────────────────
+  # Disabled by default so dashboards stay empty until a real connector
+  # (e.g. Splunk) ingests live data. Enable with:
+  #   docker compose ... --profile demo-seed up -d
+  # or `pnpm aisoc:demo --seed`.
   seed:
+    profiles: ["demo-seed"]
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
     build:
       context: ../../services/api
@@ -264,6 +271,31 @@ services:
       - aisoc-demo
     restart: "no"
     command: ["python", "-m", "app.scripts.seed_demo"]
+
+  # Bootstrap tenant + login user only (no fake alerts/cases). Used by live
+  # Splunk bring-up so operators can sign in without seeding demo incidents.
+  bootstrap:
+    profiles: ["bootstrap"]
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
+    build:
+      context: ../../services/api
+    container_name: aisoc-demo-bootstrap
+    pull_policy: missing
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/0
+      SECRET_KEY: dev_secret_key_change_in_production
+      ENV: development
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      AISOC_DISABLE_KAFKA: "true"
+    networks:
+      - aisoc-demo
+    restart: "no"
+    command: ["python", "-m", "app.scripts.seed_demo", "--bootstrap-only"]
 
   web:
     image: ghcr.io/beenuar/aisoc-web:${AISOC_TAG:-latest}
@@ -292,11 +324,11 @@ services:
         # apps/web/Dockerfile so `pnpm aisoc:demo --rebuild` produces an image
         # behaviourally identical to the published ghcr.io/beenuar/aisoc-web
         # image used by the no-flag default flow.
-        NEXT_PUBLIC_DEMO_MODE: "true"
-        NEXT_PUBLIC_DEMO_DEEPLINK: "/cases/INC-RT-001?tab=ledger"
-        NEXT_PUBLIC_DEMO_BANNER: "Demo data resets daily at 00:00 UTC. All write actions are disabled."
-        NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL: "demo@tryaisoc.com"
-        NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD: "aisoc-demo"
+        NEXT_PUBLIC_DEMO_MODE: ""
+        NEXT_PUBLIC_DEMO_DEEPLINK: ""
+        NEXT_PUBLIC_DEMO_BANNER: ""
+        NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL: ""
+        NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD: ""
     container_name: aisoc-demo-web
     pull_policy: missing
     depends_on:

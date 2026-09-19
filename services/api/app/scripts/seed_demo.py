@@ -3189,7 +3189,30 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "byte-stable. Ignored without --demo-quick."
         ),
     )
+    p.add_argument(
+        "--bootstrap-only",
+        action="store_true",
+        help=(
+            "Create only the demo tenant + login user (no alerts, cases, or "
+            "placeholder connectors). Use for live Splunk / connector bring-up."
+        ),
+    )
     return p
+
+
+async def _run_bootstrap_only() -> None:
+    print("[seed] --bootstrap-only (tenant + user, no demo incidents)", flush=True)
+    async with AsyncSessionLocal() as session:
+        try:
+            tenant = await _ensure_tenant(session)
+            user = await _ensure_user(session, tenant)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+    print(f"[seed] tenant: {tenant.id} ({tenant.slug})")
+    print(f"[seed] user: {user.email} (role={user.role})")
+    print("[seed] done — connect Splunk (or another source) to populate the dashboard")
 
 
 # Tenant-scoped tables whose timestamp columns drive the rolling-window
@@ -3316,7 +3339,9 @@ async def _run_quick_seed(clock: datetime) -> None:
 
 
 async def _main_async(args: argparse.Namespace) -> None:
-    if args.demo_quick:
+    if args.bootstrap_only:
+        await _run_bootstrap_only()
+    elif args.demo_quick:
         await _run_quick_seed(clock=_parse_clock(args.clock))
     else:
         await _run_full_seed()

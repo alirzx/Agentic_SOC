@@ -96,6 +96,7 @@ const sidebars: SidebarsConfig = {
         "connectors/aws-vpc-flow",
         "connectors/kubernetes-audit",
         "connectors/qradar",
+        "connectors/splunk",
         "connectors/exabeam",
         "connectors/securonix",
         "connectors/devo",

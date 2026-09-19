@@ -12,49 +12,26 @@ import {
   type CostAggregate,
 } from "@/lib/api";
 
-const MOCK_SOC_METRICS: SOCMetrics = {
+const EMPTY_SOC_METRICS: SOCMetrics = {
   kpis: {
-    mttd_hours: 1.4,
-    mttr_hours: 6.2,
-    mttc_hours: 14.8,
-    false_positive_rate: 0.12,
-    escalation_rate: 0.18,
-    alert_volume_7d: 1247,
-    cases_opened_7d: 23,
-    cases_closed_7d: 34,
-    analyst_overrides_7d: 8,
+    mttd_hours: 0,
+    mttr_hours: 0,
+    mttc_hours: 0,
+    false_positive_rate: 0,
+    escalation_rate: 0,
+    alert_volume_7d: 0,
+    cases_opened_7d: 0,
+    cases_closed_7d: 0,
+    analyst_overrides_7d: 0,
   },
-  attack_heatmap: [
-    { tactic: "Execution", technique: "T1059 Command & Scripting", count: 42 },
-    { tactic: "Execution", technique: "T1204 User Execution", count: 18 },
-    { tactic: "Defense Evasion", technique: "T1027 Obfuscated Files", count: 31 },
-    { tactic: "Defense Evasion", technique: "T1070 Indicator Removal", count: 14 },
-    { tactic: "Credential Access", technique: "T1003 OS Credential Dumping", count: 22 },
-    { tactic: "Credential Access", technique: "T1110 Brute Force", count: 9 },
-    { tactic: "Lateral Movement", technique: "T1021 Remote Services", count: 17 },
-    { tactic: "Command and Control", technique: "T1071 Application Layer", count: 26 },
-    { tactic: "Command and Control", technique: "T1105 Ingress Tool Transfer", count: 11 },
-    { tactic: "Exfiltration", technique: "T1048 Exfiltration Over Alt Protocol", count: 7 },
-    { tactic: "Initial Access", technique: "T1566 Phishing", count: 35 },
-    { tactic: "Persistence", technique: "T1053 Scheduled Task/Job", count: 19 },
-  ],
-  calibration_curve: [
-    { predicted_lower: 0.0, predicted_upper: 0.2, sample_count: 48, actual_tp_rate: 0.08 },
-    { predicted_lower: 0.2, predicted_upper: 0.4, sample_count: 62, actual_tp_rate: 0.31 },
-    { predicted_lower: 0.4, predicted_upper: 0.6, sample_count: 85, actual_tp_rate: 0.52 },
-    { predicted_lower: 0.6, predicted_upper: 0.8, sample_count: 73, actual_tp_rate: 0.71 },
-    { predicted_lower: 0.8, predicted_upper: 1.0, sample_count: 41, actual_tp_rate: 0.88 },
-  ],
+  attack_heatmap: [],
+  calibration_curve: [],
 };
 
-const MOCK_COST_AGGREGATE: CostAggregate = {
+const EMPTY_COST_AGGREGATE: CostAggregate = {
   window_days: 30,
-  by_model: [
-    { model: "gpt-4o", runs: 312, calls: 1840, total_prompt_tokens: 4_620_000, total_completion_tokens: 890_000, total_cost_usd: 42.18, total_latency_ms: 7_360_000, avg_cost_per_run: 0.1352, avg_latency_per_call_ms: 4000 },
-    { model: "gpt-4o-mini", runs: 580, calls: 3200, total_prompt_tokens: 2_100_000, total_completion_tokens: 620_000, total_cost_usd: 4.86, total_latency_ms: 3_200_000, avg_cost_per_run: 0.0084, avg_latency_per_call_ms: 1000 },
-    { model: "claude-3.5-sonnet", runs: 145, calls: 870, total_prompt_tokens: 3_480_000, total_completion_tokens: 710_000, total_cost_usd: 29.61, total_latency_ms: 4_350_000, avg_cost_per_run: 0.2042, avg_latency_per_call_ms: 5000 },
-  ],
-  totals: { model: "all", runs: 1037, calls: 5910, total_prompt_tokens: 10_200_000, total_completion_tokens: 2_220_000, total_cost_usd: 76.65, total_latency_ms: 14_910_000, avg_cost_per_run: 0.0739, avg_latency_per_call_ms: 2523 },
+  by_model: [],
+  totals: null,
 };
 
 function formatUsd(n: number): string {
@@ -163,7 +140,7 @@ export function SOCMetricsDashboard() {
     () => metricsApi.getSOC(),
     {
       refreshInterval: 60_000,
-      fallbackData: MOCK_SOC_METRICS,
+      fallbackData: EMPTY_SOC_METRICS,
       shouldRetryOnError: true,
       errorRetryCount: 3,
       errorRetryInterval: 4000,
@@ -178,13 +155,10 @@ export function SOCMetricsDashboard() {
     !!data &&
     typeof data.kpis?.mttd_hours === "number" &&
     Array.isArray(data.attack_heatmap);
-  const resolved = isValidSOC ? data : MOCK_SOC_METRICS;
+  const resolved = isValidSOC ? data : EMPTY_SOC_METRICS;
   const kpis = resolved.kpis;
   const heatmap = resolved.attack_heatmap ?? [];
   const calibration = resolved.calibration_curve ?? [];
-  // We surface the error inline rather than swapping the whole panel out for
-  // a blocking error state — the mock fallback keeps the page legible while
-  // the user retries.
   const errorMessage =
     error instanceof Error
       ? error.message
@@ -208,8 +182,7 @@ export function SOCMetricsDashboard() {
       {errorMessage && (
         <div className="rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="font-semibold">SOC metrics unavailable:</span>{" "}
-          {errorMessage}. Showing last known mock baseline; the live numbers
-          will refresh automatically once the API recovers.
+          {errorMessage}. Panels stay empty until the live API recovers.
         </div>
       )}
 
@@ -331,7 +304,7 @@ function CostTelemetryPanel() {
     () => investigationsApi.getCostAggregate(30),
     {
       refreshInterval: 60_000,
-      fallbackData: MOCK_COST_AGGREGATE,
+      fallbackData: EMPTY_COST_AGGREGATE,
       shouldRetryOnError: true,
       errorRetryCount: 3,
       errorRetryInterval: 4000,
@@ -344,7 +317,7 @@ function CostTelemetryPanel() {
     !!data &&
     Array.isArray(data.by_model) &&
     typeof data.window_days === "number";
-  const resolved = isValidCost ? data : MOCK_COST_AGGREGATE;
+  const resolved = isValidCost ? data : EMPTY_COST_AGGREGATE;
   const totals = resolved.totals;
   const byModel = resolved.by_model ?? [];
   const maxModelCost = Math.max(...byModel.map((m) => m.total_cost_usd), 0.0001);
@@ -373,7 +346,7 @@ function CostTelemetryPanel() {
       {errorMessage && (
         <div className="mb-3 rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="font-semibold">Cost telemetry unavailable:</span>{" "}
-          {errorMessage}. Showing baseline projections until the API recovers.
+          {errorMessage}. Showing empty totals until the API recovers.
         </div>
       )}
 

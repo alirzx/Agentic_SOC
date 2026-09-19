@@ -1,0 +1,120 @@
+###############################################################################
+# AiSOC — Splunk live-ingest overlay (pairs with docker-compose.demo.yml)
+#
+# Brings the production spine online so Splunk notables become dashboard data:
+#   connectors → ingest-worker → Kafka → fusion → Postgres / realtime
+#
+# Usage (always pin project-directory so repo-root `.env` is loaded):
+#   pnpm aisoc:splunk
+#   # or:
+#   docker compose --project-directory . \
+#     -f infra/compose/docker-compose.demo.yml \
+#     -f infra/compose/docker-compose.splunk.yml \
+#     up -d --remove-orphans
+#
+# Then purge any leftover seed data and connect Splunk in the UI:
+#   pnpm aisoc:purge-demo
+#   Open Connectors → Add → Splunk SIEM
+###############################################################################
+
+services:
+  # ─── Ingest (HTTP batch endpoint used by connectors) ────────────────────────
+  ingest-worker:
+    image: ghcr.io/beenuar/aisoc-ingest:${AISOC_TAG:-latest}
+    build:
+      context: ../../services/ingest
+    container_name: aisoc-demo-ingest
+    pull_policy: missing
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AISOC_INGEST_PORT:-18081}:8080"
+    environment:
+      ENV: development
+      HTTP_PORT: 8080
+      METRICS_PORT: 9090
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/1
+      LOG_LEVEL: info
+      JWT_SECRET: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      # Neo4j is not in the slim demo stack — disable graph-at-ingest.
+      AISOC_GRAPH_ENABLED: "false"
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  # ─── Fusion (promotes raw events → fused alerts in Postgres) ────────────────
+  fusion:
+    image: ghcr.io/beenuar/aisoc-fusion:${AISOC_TAG:-latest}
+    build:
+      context: ../../services/fusion
+    container_name: aisoc-demo-fusion
+    pull_policy: missing
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AISOC_FUSION_PORT:-18003}:8003"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/3
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      # ClickHouse is not in the slim stack — lake writer fails soft.
+      CLICKHOUSE_HOST: ""
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  # ─── Connectors (Splunk poller + credential vault decrypt) ──────────────────
+  connectors:
+    image: ghcr.io/beenuar/aisoc-connectors:${AISOC_TAG:-latest}
+    build:
+      context: ../../services/connectors
+    container_name: aisoc-demo-connectors
+    pull_policy: missing
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      ingest-worker:
+        condition: service_started
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AISOC_CONNECTORS_PORT:-18088}:8003"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/6
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      CORE_API_URL: http://api:8000
+      INGEST_SERVICE_URL: http://ingest-worker:8080
+      # Must match the API vault key so encrypted connector secrets decrypt.
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}
+      AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  # Ensure the API can encrypt connector secrets with the same vault key.
+  api:
+    environment:
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}
+      AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}
+
+  # Live mode: no demo banner / auto-login / fake deeplink.
+  web:
+    build:
+      args:
+        NEXT_PUBLIC_DEMO_MODE: ""
+        NEXT_PUBLIC_DEMO_DEEPLINK: ""
+        NEXT_PUBLIC_DEMO_BANNER: ""
+        NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL: ""
+        NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD: ""
