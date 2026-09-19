@@ -20,9 +20,9 @@ echo "==> Starting AiSOC + Splunk ingest spine (api + connectors + ingest + fusi
 echo "==> Waiting for connectors health"
 for i in $(seq 1 30); do
   if docker exec aisoc-demo-connectors python -c \
-    'import urllib.request; urllib.request.urlopen("http://localhost:8003/health")' \
+    'import urllib.request; urllib.request.urlopen("http://localhost:8003/livez")' \
     2>/dev/null; then
-    echo "    connectors healthy"
+    echo "    connectors healthy (/livez)"
     break
   fi
   sleep 2
@@ -34,7 +34,7 @@ echo "==> Bootstrapping tenant/user only (no demo incidents)"
 
 echo "==> Sanity: API → connectors DNS"
 docker exec aisoc-demo-api python -c \
-  'import urllib.request; print(urllib.request.urlopen("http://connectors:8003/health").status)'
+  'import urllib.request; print(urllib.request.urlopen("http://connectors:8003/livez").status)'
 
 echo "==> Done. Open http://localhost:${AISOC_WEB_PORT:-5000}"
 echo "    Connect Splunk: Connectors → Add → Splunk SIEM"
