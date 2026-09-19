@@ -169,6 +169,36 @@ async def test_fetch_alerts_custom_search_uses_basic_auth_and_earliest():
     assert out[0]["external_id"]
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_alerts_pipe_rest_is_not_prefixed_with_search():
+    c = SplunkConnector(
+        base_url=BASE,
+        username="admin",
+        password="secret",
+        custom_search="| rest splunk_server=local count=0 /services/saved/searches | head 1",
+        ssl_verify=False,
+    )
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "SID4"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID4/results").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID4(\?.*)?$").mock(return_value=_done_status())
+
+    await c.fetch_alerts()
+    body = jobs.calls[0].request.content.decode()
+    assert "search=%7C+rest" in body or "search=| rest" in body or "%7C%20rest" in body
+    assert "search+search" not in body
+    assert "search%20search" not in body
+
+
+def test_ssl_verify_string_false_is_disabled():
+    c = SplunkConnector(base_url=BASE, username="a", password="b", ssl_verify="false")
+    assert c._ssl_verify is False
+
+
 def test_timeless_catalog_skips_checkpoint_filter():
     c = _conn()
     c.set_checkpoint({"time": "", "id": "Zzz"})

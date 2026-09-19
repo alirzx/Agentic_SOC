@@ -103,9 +103,11 @@ services:
       - aisoc-demo
     restart: unless-stopped
 
-  # Ensure the API can encrypt connector secrets with the same vault key.
+  # Ensure the API can encrypt connector secrets with the same vault key
+  # and reach the connectors microservice for Test / catalog.
   api:
     environment:
+      CONNECTORS_SERVICE_URL: http://connectors:8003
       AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}
       AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}
 

@@ -66,6 +66,38 @@ def _map_severity(raw: Any) -> str:
     return _SEVERITY_BY_URGENCY.get(key, "medium")
 
 
+def _coerce_bool(value: Any, default: bool = False) -> bool:
+    """Accept real bools and common form/JSON string encodings."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off", ""}:
+        return False
+    return default
+
+
+def _normalize_custom_spl(custom: str) -> str:
+    """Prepare SPL for ``/services/search/jobs``.
+
+    Generating commands (``| rest``, ``| inputlookup``, …) must not be
+    prefixed with ``search``. Ad-hoc event searches without a leading
+    ``search`` keyword still need it.
+    """
+    stripped = custom.strip()
+    if not stripped:
+        return stripped
+    lower = stripped.lower()
+    if lower.startswith("search ") or lower.startswith("|"):
+        return stripped
+    return f"search {stripped}"
+
+
 class SplunkConnector(BaseConnector):
     connector_id = "splunk"
     connector_name = "Splunk SIEM"
@@ -174,7 +206,7 @@ class SplunkConnector(BaseConnector):
         saved_search: str = "",
         custom_search: str = "",
         earliest_time: str = "-90d@d",
-        ssl_verify: bool = True,
+        ssl_verify: bool = False,
         page_size: int = _DEFAULT_PAGE_SIZE,
         **_ignored: Any,
     ):
@@ -185,7 +217,7 @@ class SplunkConnector(BaseConnector):
         self._saved_search = (saved_search or "").strip()
         self._custom_search = (custom_search or "").strip()
         self._earliest_time = (earliest_time or "").strip() or "-90d@d"
-        self._ssl_verify = ssl_verify
+        self._ssl_verify = _coerce_bool(ssl_verify, default=False)
         try:
             self._page_size = max(1, int(page_size))
         except (TypeError, ValueError):
@@ -240,8 +272,17 @@ class SplunkConnector(BaseConnector):
                 version = resp.json().get("entry", [{}])[0].get("content", {}).get("version")
                 return {"success": True, "connector": self.connector_id, "version": version}
             except Exception as exc:
-                logger.warning("splunk.test_connection.failed", error_type=type(exc).__name__)
-                return {"success": False, "connector": self.connector_id, "error": "Connection failed"}
+                detail = str(exc).replace("\r", " ").replace("\n", " ")[:240]
+                logger.warning(
+                    "splunk.test_connection.failed",
+                    error_type=type(exc).__name__,
+                    error=detail,
+                )
+                return {
+                    "success": False,
+                    "connector": self.connector_id,
+                    "error": f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__,
+                }
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         earliest = self._earliest_time if self._custom_search else f"-{max(1, int(since_seconds))}s"
@@ -259,7 +300,7 @@ class SplunkConnector(BaseConnector):
         """Kick off the search job and return its SID."""
         custom = self._custom_search
         if custom:
-            search = custom if custom.lstrip().lower().startswith("search") else f"search {custom}"
+            search = _normalize_custom_spl(custom)
             resp = await client.post(
                 f"{self._base_url}/services/search/jobs",
                 headers=self._headers(),
