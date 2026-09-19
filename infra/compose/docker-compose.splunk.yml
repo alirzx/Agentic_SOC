@@ -22,7 +22,7 @@ services:
   ingest-worker:
     image: ghcr.io/beenuar/aisoc-ingest:${AISOC_TAG:-latest}
     build:
-      context: ../../services/ingest
+      context: services/ingest
     container_name: aisoc-demo-ingest
     pull_policy: missing
     depends_on:
@@ -48,7 +48,7 @@ services:
   fusion:
     image: ghcr.io/beenuar/aisoc-fusion:${AISOC_TAG:-latest}
     build:
-      context: ../../services/fusion
+      context: services/fusion
     container_name: aisoc-demo-fusion
     pull_policy: missing
     depends_on:
@@ -74,7 +74,7 @@ services:
   connectors:
     image: ghcr.io/beenuar/aisoc-connectors:${AISOC_TAG:-latest}
     build:
-      context: ../../services/connectors
+      context: services/connectors
     container_name: aisoc-demo-connectors
     pull_policy: missing
     depends_on:

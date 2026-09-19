@@ -136,12 +136,10 @@ services:
 
   api:
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
-    # Local build context for `pnpm aisoc:demo --rebuild`. Without this the
-    # `--build` flag is a no-op because compose has nothing to build from.
-    # When pulling prebuilt images this block is ignored. Paths are relative
-    # to this file (infra/compose/), hence `../../services/...`.
+    # Local build context for `pnpm aisoc:demo --rebuild` / `pnpm aisoc:splunk`.
+    # Paths are relative to `--project-directory` (repo root), not this file.
     build:
-      context: ../../services/api
+      context: services/api
     container_name: aisoc-demo-api
     # `missing` lets `pnpm aisoc:demo --rebuild` use locally built images
     # without being clobbered by a registry pull. Compose still pulls when
@@ -194,7 +192,7 @@ services:
   agents:
     image: ghcr.io/beenuar/aisoc-agents:${AISOC_TAG:-latest}
     build:
-      context: ../../services/agents
+      context: services/agents
     container_name: aisoc-demo-agents
     pull_policy: missing
     depends_on:
@@ -230,7 +228,7 @@ services:
   realtime:
     image: ghcr.io/beenuar/aisoc-realtime:${AISOC_TAG:-latest}
     build:
-      context: ../../services/realtime
+      context: services/realtime
     container_name: aisoc-demo-realtime
     pull_policy: missing
     depends_on:
@@ -258,7 +256,7 @@ services:
     profiles: ["demo-seed"]
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
     build:
-      context: ../../services/api
+      context: services/api
     container_name: aisoc-demo-seed
     pull_policy: missing
     depends_on:
@@ -283,7 +281,7 @@ services:
     profiles: ["bootstrap"]
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
     build:
-      context: ../../services/api
+      context: services/api
     container_name: aisoc-demo-bootstrap
     pull_policy: missing
     depends_on:
@@ -310,7 +308,7 @@ services:
     # proxies those to the services below using the Docker DNS targets in
     # `environment:`.
     build:
-      context: ../..
+      context: .
       dockerfile: apps/web/Dockerfile
       # Next.js bakes rewrite destinations into routes-manifest.json at
       # `next build` time, not at `next start`. These args MUST match the
@@ -320,15 +318,7 @@ services:
         API_URL: http://api:8000
         AGENTS_URL: http://agents:8084
         REALTIME_URL: http://realtime:4000
-        # NEXT_PUBLIC_* values are inlined as string literals into the client
-        # bundle at `next build` time, so the local demo experience (banner,
-        # auto-login, deeplink routing) requires baking them in here. Without
-        # these the bundle ships with empty strings and `isDemoMode()` returns
-        # false → no banner, no auto-login, visitor gets bounced to /login on
-        # first navigation. Mirrors the prod hosted defaults in
-        # apps/web/Dockerfile so `pnpm aisoc:demo --rebuild` produces an image
-        # behaviourally identical to the published ghcr.io/beenuar/aisoc-web
-        # image used by the no-flag default flow.
+        # NEXT_PUBLIC_* left empty for live Splunk mode (no demo banner/auto-login).
         NEXT_PUBLIC_DEMO_MODE: ""
         NEXT_PUBLIC_DEMO_DEEPLINK: ""
         NEXT_PUBLIC_DEMO_BANNER: ""
