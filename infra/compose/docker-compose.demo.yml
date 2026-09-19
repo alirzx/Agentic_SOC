@@ -334,7 +334,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'python -c ''import urllib.request; urllib.request.urlopen("http://localhost:8003/health")'' || exit 1',
+          'python -c ''import urllib.request; urllib.request.urlopen("http://localhost:8003/livez")'' || exit 1',
         ]
       interval: 10s
       timeout: 5s
