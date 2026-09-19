@@ -39,7 +39,8 @@ config_schema:
       description: Named saved search to dispatch; ignored when custom_search is set
     custom_search:
       type: string
-      description: Ad-hoc SPL for /services/search/jobs (ES catalog or index=notable)
+      default: "search index=notable | table _time source search_name severity urgency host dvc dest dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
+      description: Fired notables from index=notable (prefer over ES catalog |rest)
     earliest_time:
       type: string
       default: "-90d@d"
@@ -50,5 +51,5 @@ config_schema:
       description: Results page size
     ssl_verify:
       type: boolean
-      default: true
-      description: Verify TLS; disable only for internal/self-signed CAs
+      default: false
+      description: Verify TLS; leave false for lab self-signed certs
