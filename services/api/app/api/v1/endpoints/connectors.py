@@ -161,8 +161,25 @@ class ConnectorResponse(BaseModel):
 
 
 def _as_config_dict(value: Any) -> dict[str, Any]:
-    """Coerce a JSONB column to a dict (NULL / scalar / list → {})."""
-    return value if isinstance(value, dict) else {}
+    """Coerce a JSONB column to a dict (NULL / scalar / corrupt array → {}).
+
+    Recovers the array form produced by a historical checkpoint write bug:
+    ``[{...config...}, "{\\"checkpoint\\": {...}}"]``.
+    """
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return _as_config_dict(parsed)
+    if isinstance(value, list):
+        merged: dict[str, Any] = {}
+        for item in value:
+            merged.update(_as_config_dict(item))
+        return merged
+    return {}
 
 
 def _as_str_list(value: Any) -> list[str]:

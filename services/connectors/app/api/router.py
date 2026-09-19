@@ -493,10 +493,31 @@ async def scheduler_poll_now(connector_id: uuid.UUID, request: Request) -> dict[
     """Force one poll cycle for a saved connector instance (UUID from Postgres)."""
     scheduler = getattr(request.app.state, "scheduler", None)
     if scheduler is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="connector scheduler is not running",
-        )
+        # Scheduler failed to start (e.g. transient DB / vault). Still allow a
+        # one-shot Sync from the UI so operators aren't blocked.
+        from app.scheduler import ConnectorScheduler
+
+        try:
+            oneshot = ConnectorScheduler()
+            if oneshot._engine is None:
+                from app.db.engine import get_engine
+
+                oneshot._engine = get_engine()
+            if oneshot._ingest_client is None:
+                from app.ingest_client import IngestClient
+
+                oneshot._ingest_client = IngestClient.from_env()
+            if oneshot._vault is None:
+                from app.security.credential_vault import get_vault
+
+                oneshot._vault = get_vault()
+            await oneshot._poll_one(connector_id=connector_id)
+            return {"ok": True, "connector_id": str(connector_id), "mode": "oneshot"}
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"connector scheduler is not running: {exc}",
+            ) from exc
     await scheduler._poll_one(connector_id=connector_id)
     return {"ok": True, "connector_id": str(connector_id)}
 

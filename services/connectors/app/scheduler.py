@@ -120,8 +120,10 @@ _MAX_BACKFILL_LOOKBACK_S = 24 * 60 * 60  # 24 hours
 _BACKFILL_LOOKBACK_BUFFER_S = 5 * 60
 
 
-def _coerce_poll_interval(connector_config: dict[str, Any]) -> int:
+def _coerce_poll_interval(connector_config: Any) -> int:
     """Pull ``poll_interval_seconds`` out of the config blob, with bounds."""
+    if not isinstance(connector_config, dict):
+        return _DEFAULT_POLL_INTERVAL_S
     raw = connector_config.get("poll_interval_seconds", _DEFAULT_POLL_INTERVAL_S)
     try:
         seconds = int(raw)
@@ -254,45 +256,53 @@ class ConnectorScheduler:
 
         seen: set[str] = set()
         for inst in instances:
-            cid = str(inst.id)
-            seen.add(cid)
-            sig = self._signature(inst)
-            existing = self._known_signatures.get(cid)
-            if existing == sig:
-                # Unchanged — leave the existing job alone.
-                continue
+            try:
+                cid = str(inst.id)
+                seen.add(cid)
+                sig = self._signature(inst)
+                existing = self._known_signatures.get(cid)
+                if existing == sig:
+                    # Unchanged — leave the existing job alone.
+                    continue
 
-            interval = _coerce_poll_interval(inst.connector_config)
-            # APScheduler 3.x treats ``next_run_time=None`` as "add the job
-            # PAUSED": it registers but never fires and nothing resumes it, so
-            # enabled connectors silently never auto-poll (#527). Compute an
-            # explicit, timezone-aware first-run time instead. The offset is a
-            # STABLE per-connector jitter derived from the UUID (deterministic
-            # across reloads so a config change doesn't randomly re-phase the
-            # job) that spreads first-fire to avoid a stampede when many
-            # connectors load at once. It's bounded by the poll interval, and
-            # capped at 60s so long-interval connectors still start promptly.
-            jitter_window = max(1, min(interval, 60))
-            first_run = datetime.now(UTC) + timedelta(seconds=inst.id.int % jitter_window)
-            self._scheduler.add_job(
-                self._poll_one,
-                "interval",
-                seconds=interval,
-                id=_job_id(inst.id),
-                replace_existing=True,
-                max_instances=1,
-                # Don't pile up missed polls if the source was slow/dead.
-                coalesce=True,
-                next_run_time=first_run,
-                kwargs={"connector_id": inst.id},
-            )
-            self._known_signatures[cid] = sig
-            logger.info(
-                "connector.scheduler.scheduled id=%s type=%s interval=%ss",
-                cid,
-                inst.connector_type,
-                interval,
-            )
+                interval = _coerce_poll_interval(inst.connector_config)
+                # APScheduler 3.x treats ``next_run_time=None`` as "add the job
+                # PAUSED": it registers but never fires and nothing resumes it, so
+                # enabled connectors silently never auto-poll (#527). Compute an
+                # explicit, timezone-aware first-run time instead. The offset is a
+                # STABLE per-connector jitter derived from the UUID (deterministic
+                # across reloads so a config change doesn't randomly re-phase the
+                # job) that spreads first-fire to avoid a stampede when many
+                # connectors load at once. It's bounded by the poll interval, and
+                # capped at 60s so long-interval connectors still start promptly.
+                jitter_window = max(1, min(interval, 60))
+                first_run = datetime.now(UTC) + timedelta(seconds=inst.id.int % jitter_window)
+                self._scheduler.add_job(
+                    self._poll_one,
+                    "interval",
+                    seconds=interval,
+                    id=_job_id(inst.id),
+                    replace_existing=True,
+                    max_instances=1,
+                    # Don't pile up missed polls if the source was slow/dead.
+                    coalesce=True,
+                    next_run_time=first_run,
+                    kwargs={"connector_id": inst.id},
+                )
+                self._known_signatures[cid] = sig
+                logger.info(
+                    "connector.scheduler.scheduled id=%s type=%s interval=%ss",
+                    cid,
+                    inst.connector_type,
+                    interval,
+                )
+            except Exception:
+                logger.exception(
+                    "connector.scheduler.schedule_instance_failed id=%s type=%s",
+                    str(getattr(inst, "id", "")),
+                    str(getattr(inst, "connector_type", "")),
+                )
+                continue
 
         # Remove jobs for instances that disappeared from the enabled set
         # (deleted, disabled, or moved to another tenant we don't poll).

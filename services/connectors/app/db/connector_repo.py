@@ -31,9 +31,9 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    cast,
     func,
     select,
+    type_coerce,
     update,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -119,6 +119,37 @@ class ConnectorInstance:
     last_backfill_at: datetime | None = None
 
 
+def normalize_connector_config(value: Any) -> dict[str, Any]:
+    """Coerce a JSONB ``connector_config`` value into a plain dict.
+
+    ``record_checkpoint`` historically used ``cast(json.dumps(...), JSONB)``,
+    which some drivers bind as a JSON *string*. Postgres then coerces
+    ``object || string`` into a two-element array::
+
+        [{...real config...}, "{\\"checkpoint\\": {...}}"]
+
+    That array breaks every caller that does ``config.get(...)`` and is the
+    root cause of ``GET /connectors`` 500s + ``scheduler is not running``.
+    This helper recovers the dict (and nested checkpoint) so the scheduler
+    and API can keep serving while the row is repaired.
+    """
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return normalize_connector_config(parsed)
+    if isinstance(value, list):
+        merged: dict[str, Any] = {}
+        for item in value:
+            part = normalize_connector_config(item)
+            merged.update(part)
+        return merged
+    return {}
+
+
 async def fetch_enabled_connectors(connection: Any) -> list[ConnectorInstance]:
     """Return every connector instance with ``is_enabled = True``.
 
@@ -155,8 +186,8 @@ async def fetch_enabled_connectors(connection: Any) -> list[ConnectorInstance]:
             name=row.name,
             connector_type=row.connector_type,
             is_enabled=row.is_enabled,
-            auth_config=row.auth_config or {},
-            connector_config=row.connector_config or {},
+            auth_config=row.auth_config if isinstance(row.auth_config, dict) else {},
+            connector_config=normalize_connector_config(row.connector_config),
             health_status=row.health_status,
             last_sync=row.last_sync,
             events_ingested=row.events_ingested,
@@ -258,11 +289,27 @@ async def record_checkpoint(
     config is preserved. Written only after ingest accepts the batch, so a
     crash mid-poll leaves the previous checkpoint intact and the next poll
     re-scans a bounded overlap rather than skipping events.
+
+    Important: patch must be bound as a native JSONB **object** via
+    ``type_coerce(dict, JSONB)``. ``cast(json.dumps(...), JSONB)`` double-
+    encodes under asyncpg and turns ``object || string`` into a corrupt
+    JSON array (see ``normalize_connector_config``).
     """
     now = datetime.now(UTC)
-    patch = cast(json.dumps({"checkpoint": checkpoint}), JSONB)
-    merged = func.coalesce(connectors_table.c.connector_config, cast("{}", JSONB)).op("||")(patch)
-    stmt = update(connectors_table).where(connectors_table.c.id == connector_id).values(connector_config=merged, updated_at=now)
+    # Read-repair: if a prior write left connector_config as an array,
+    # normalize it before merging so || stays in object||object mode.
+    row = (
+        await connection.execute(
+            select(connectors_table.c.connector_config).where(connectors_table.c.id == connector_id)
+        )
+    ).first()
+    current = normalize_connector_config(row.connector_config if row else None)
+    current["checkpoint"] = checkpoint
+    stmt = (
+        update(connectors_table)
+        .where(connectors_table.c.id == connector_id)
+        .values(connector_config=type_coerce(current, JSONB), updated_at=now)
+    )
     await connection.execute(stmt)
 
 
