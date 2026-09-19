@@ -46,11 +46,16 @@ _SEVERITY_BY_URGENCY = {
 
 # Default SPL used when the operator wants fired ES notables (incidents).
 # Prefer this over the ``| rest`` correlation-search *catalog* (rule definitions).
+# Time window is applied via ``earliest_time`` / poll cadence — do not embed
+# ``earliest=`` in the SPL (it fights the connector's lookback).
 _DEFAULT_NOTABLE_SPL = (
     "search index=notable "
     "| table _time source search_name severity urgency host dvc dest "
     "dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
 )
+
+# Default scheduler cadence for Splunk (30 minutes).
+_DEFAULT_POLL_INTERVAL_SECONDS = 1800
 
 
 def _map_severity(raw: Any) -> str:
@@ -179,7 +184,15 @@ class SplunkConnector(BaseConnector):
                     "Earliest time",
                     required=False,
                     default="-90d@d",
-                    help_text="Splunk earliest_time for custom/saved dispatch (e.g. -90d@d, -24h).",
+                    help_text="First-poll / backfill window (e.g. -90d@d). Later polls use the 30m cadence.",
+                ),
+                Field(
+                    "poll_interval_seconds",
+                    "number",
+                    "Poll interval (seconds)",
+                    required=False,
+                    default=_DEFAULT_POLL_INTERVAL_SECONDS,
+                    help_text="How often to pull new notables (default 1800 = 30 minutes). Duplicates are skipped.",
                 ),
                 Field(
                     "page_size",
@@ -297,7 +310,16 @@ class SplunkConnector(BaseConnector):
                 }
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        earliest = self._earliest_time if self._custom_search else f"-{max(1, int(since_seconds))}s"
+        # First poll / no checkpoint → backfill window (``earliest_time``).
+        # Later polls → cadence window with a small overlap so we don't miss
+        # edge events; connector + fusion dedupe by source_guid / fingerprint.
+        if self._checkpoint:
+            lookback = max(int(since_seconds), 60) + 120
+            earliest = f"-{lookback}s"
+        elif self._custom_search:
+            earliest = self._earliest_time
+        else:
+            earliest = f"-{max(1, int(since_seconds))}s"
         async with httpx.AsyncClient(**self._client_kwargs()) as client:
             sid = await self._dispatch(client, earliest)
             if not sid:

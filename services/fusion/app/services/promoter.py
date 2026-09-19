@@ -164,6 +164,11 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
     tactics, techniques = _mitre(ocsf)
     connector_id, connector_type, class_uid = extract_provenance(message, ocsf)
 
+    finding_uid = _get_nested(ocsf, "finding", "uid")
+    source_event_ids: list[str] = []
+    if isinstance(finding_uid, str) and finding_uid.strip():
+        source_event_ids.append(finding_uid.strip())
+
     return RawAlert(
         tenant_id=tenant_id,
         source=_source(ocsf),
@@ -182,4 +187,7 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         connector_id=connector_id,
         connector_type=connector_type,
         ocsf_class_uid=class_uid,
+        source_event_ids=source_event_ids,
+        rule_id=finding_uid if isinstance(finding_uid, str) else None,
+        rule_name=_title(ocsf),
     )

@@ -101,7 +101,12 @@ class RawAlert(BaseModel):
         return uuid5(ALERT_ID_NAMESPACE, f"{self.tenant_id}:{self.fingerprint()}")
 
     def fingerprint(self) -> str:
-        """Generate a stable deduplication fingerprint."""
+        """Generate a stable deduplication fingerprint.
+
+        Includes ``source_event_ids`` / ``rule_id`` so two Splunk notables that
+        share the same title and host (common for ES stash) still stay distinct,
+        while an identical replay of the same notable collapses to one alert.
+        """
         fields = {
             "tenant_id": str(self.tenant_id),
             "source": self.source,
@@ -112,6 +117,8 @@ class RawAlert(BaseModel):
             "username": self.username,
             "file_hash": self.file_hash,
             "mitre_techniques": sorted(self.mitre_techniques),
+            "source_event_ids": sorted(self.source_event_ids),
+            "rule_id": self.rule_id,
         }
         canonical = json.dumps(fields, sort_keys=True)
         return hashlib.sha256(canonical.encode()).hexdigest()

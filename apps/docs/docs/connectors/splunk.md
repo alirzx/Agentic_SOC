@@ -1,77 +1,45 @@
 ---
 title: Splunk SIEM
-description: Ingest fired notable events (index=notable) into AiSOC.
+description: Ingest fired notable events (index=notable) into AiSOC every 30 minutes.
 ---
 
 # Splunk SIEM
 
-The **Splunk** connector (`splunk`, category `siem`) pulls data via the Splunk REST API on the **management port (8089)** — not the web UI port (8000).
+Pulls **fired** notables from Splunk ES `index=notable` via REST (:8089), every **30 minutes** by default. Duplicates are skipped (connector checkpoint + fusion fingerprint on `source_guid`).
 
-Auth: **Bearer token** *or* **Basic username/password**. Severity maps onto `info | low | medium | high | critical`.
-
-## Architecture
-
-```
-Splunk (:8089) → connectors (SplunkConnector) → ingest-worker
-  → Kafka raw_events → fusion → Postgres alerts → dashboard / realtime
-```
-
-## Setup (live stack)
+## Setup
 
 ```bash
 pnpm aisoc:splunk
 pnpm aisoc:purge-demo
 ```
 
-In **Connectors → Add → Splunk SIEM** (or Edit existing):
+**Connectors → Add → Splunk SIEM** (or edit existing):
 
 | Field | Value |
 |-------|--------|
 | Splunk URL | `https://192.168.0.10:8089` |
-| Username / Password | Splunk admin (leave Token empty) |
-| Custom SPL | fired notables (below) |
-| Earliest time | `-90d@d` |
-| Verify SSL | **off** for lab self-signed certs |
-
-### Fired notables (use this for the dashboard)
-
-Verified against live ES stash events (`search_name`, `severity`, `dvc`, `source_guid` live inside `_raw`):
+| Username / Password | admin (Token empty) |
+| Custom SPL | see below |
+| Earliest time | `-90d@d` (first backfill) |
+| Poll interval | `1800` (30 minutes) |
+| Verify SSL | **off** |
 
 ```spl
 search index=notable
 | table _time source search_name severity urgency host dvc dest dest_port transport src src_ip source_guid source_event_id event_id _cd _raw
 ```
 
-Even a bare `search index=notable` works — the connector parses KV pairs from `_raw`.
+Then click **Sync** once (forces an immediate poll). Within seconds you should see:
 
-Click **Test**, then **Save**. Scheduler polls on the configured cadence.
+- Connector card: `Events ingested` ≥ 3 (your lab has 3 notables in 90d)
+- **`/alerts` → Alerts tab**: one row per notable (not the Entities demo queue)
 
-### ES correlation-search catalog (optional)
+Ongoing: scheduler re-polls every 30 minutes; only *new* notables become new alerts.
 
-Lists rule *definitions*, not fired incidents. Use `| rest` (not `search rest`):
+## Architecture
 
-```spl
-| rest splunk_server=local count=0 /services/saved/searches
-| search action.correlationsearch.enabled=1
-| eval notable_name=title
-| eval severity=action.notable.param.severity
-| table notable_name description search severity
-| rename notable_name as "Notable Name", description as "Description", search as "Notable SPL", severity as "Severity"
-| sort "Notable Name"
 ```
-
-## Env bootstrap
-
-Repo-root `.env` (never commit secrets):
-
-```bash
-SPLUNK_ENABLED=true
-SPLUNK_BASE_URL=https://192.168.0.10:8089
-SPLUNK_USERNAME=admin
-SPLUNK_PASSWORD=  # set locally
-SPLUNK_VERIFY_SSL=false
-SPLUNK_EARLIEST_TIME=-90d@d
-SPLUNK_CUSTOM_SEARCH=search index=notable | table _time source search_name severity host dvc dest_port source_guid _cd _raw
+Splunk (:8089) → connectors poll (30m) → ingest-worker
+  → Kafka raw_events → fusion (promote + dedupe) → Postgres → /alerts
 ```
-
-Then `python scripts/splunk_bootstrap.py` (needs `AISOC_API_TOKEN` + running API).

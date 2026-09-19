@@ -750,7 +750,15 @@
         "label": "Earliest time",
         "required": false,
         "default": "-90d@d",
-        "help_text": "Splunk earliest_time (e.g. -90d@d, -24h)."
+        "help_text": "First-poll / backfill window (e.g. -90d@d)."
+      },
+      {
+        "name": "poll_interval_seconds",
+        "type": "number",
+        "label": "Poll interval (seconds)",
+        "required": false,
+        "default": 1800,
+        "help_text": "How often to pull new notables (default 1800 = 30 minutes)."
       },
       {
         "name": "page_size",
