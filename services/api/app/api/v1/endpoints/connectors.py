@@ -443,7 +443,13 @@ async def _proxy_test_connection(
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="connectors service is unavailable; cannot test connection",
+            detail=(
+                "connectors service is unavailable at CONNECTORS_SERVICE_URL; "
+                "cannot test connection. Bring it up with: "
+                "pnpm aisoc:splunk   "
+                "(or: docker compose --project-directory . "
+                "-f infra/compose/docker-compose.demo.yml up -d connectors ingest-worker fusion)"
+            ),
         ) from exc
 
     # 404 from the microservice = unknown connector_type. We've already

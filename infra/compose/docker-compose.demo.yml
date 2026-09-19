@@ -2,16 +2,14 @@
 # AiSOC - AI Security Operations Center
 # Docker Compose - Slim Demo Profile (time-to-wow under 5 minutes)
 #
-# This profile pulls prebuilt images from GHCR instead of building locally,
-# and only includes the 6 services required to demo a triaging investigation:
-#   postgres, redis, zookeeper, kafka, api, agents, realtime, web
+# This profile pulls prebuilt images from GHCR instead of building locally.
+# Core UI stack: postgres, redis, zookeeper, kafka, api, agents, realtime, web
+# Live ingest spine (required for Connectors → Test / Splunk): ingest-worker,
+# fusion, connectors. Without connectors, POST .../connectors/{id}/test → 503.
 #
-# Optional heavyweights (clickhouse, opensearch, qdrant, neo4j, kafka-ui,
-# enrichment, fusion, ingest, threatintel, ueba, honeytokens, purple-team,
-# actions, connectors, monitoring) are intentionally excluded from the base
-# file. For live Splunk → dashboard, also load:
-#   -f infra/compose/docker-compose.splunk.yml
-# (or `pnpm aisoc:splunk`). Demo seed is opt-in via `--profile demo-seed`.
+# Optional heavyweights (clickhouse, opensearch, qdrant, neo4j, …) stay out.
+# `pnpm aisoc:splunk` also loads docker-compose.splunk.yml (live-mode web).
+# Demo seed is opt-in via `--profile demo-seed`.
 #
 # Usage:
 #   pnpm aisoc:splunk          # live ingest spine, no seed
@@ -248,6 +246,99 @@ services:
     networks:
       - aisoc-demo
     restart: unless-stopped
+
+  # ─── Live ingest spine (Connectors → Test / Splunk poll → alerts) ───────────
+  # Without these, POST /api/v1/connectors/{id}/test returns 503 because the
+  # API proxies to http://connectors:8003.
+
+  ingest-worker:
+    image: ghcr.io/beenuar/aisoc-ingest:${AISOC_TAG:-latest}
+    build:
+      context: services/ingest
+    container_name: aisoc-demo-ingest
+    pull_policy: missing
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AISOC_INGEST_PORT:-18081}:8080"
+    environment:
+      ENV: development
+      HTTP_PORT: 8080
+      METRICS_PORT: 9090
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/1
+      LOG_LEVEL: info
+      JWT_SECRET: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      AISOC_GRAPH_ENABLED: "false"
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  fusion:
+    image: ghcr.io/beenuar/aisoc-fusion:${AISOC_TAG:-latest}
+    build:
+      context: services/fusion
+    container_name: aisoc-demo-fusion
+    pull_policy: missing
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AISOC_FUSION_PORT:-18003}:8003"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/3
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      CLICKHOUSE_HOST: ""
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  connectors:
+    image: ghcr.io/beenuar/aisoc-connectors:${AISOC_TAG:-latest}
+    build:
+      context: services/connectors
+    container_name: aisoc-demo-connectors
+    pull_policy: missing
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      ingest-worker:
+        condition: service_started
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AISOC_CONNECTORS_PORT:-18088}:8003"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/6
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      CORE_API_URL: http://api:8000
+      INGEST_SERVICE_URL: http://ingest-worker:8080
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}
+      AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c ''import urllib.request; urllib.request.urlopen("http://localhost:8003/health")'' || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   # ─── One-shot demo seeder (opt-in) ──────────────────────────────────────────
   # Disabled by default so dashboards stay empty until a real connector
