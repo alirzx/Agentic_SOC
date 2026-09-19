@@ -8,10 +8,15 @@
 #
 # Optional heavyweights (clickhouse, opensearch, qdrant, neo4j, kafka-ui,
 # enrichment, fusion, ingest, threatintel, ueba, honeytokens, purple-team,
-# actions, connectors, monitoring) are intentionally excluded.
+# actions, connectors, monitoring) are intentionally excluded from the base
+# file. For live Splunk → dashboard, also load:
+#   -f infra/compose/docker-compose.splunk.yml
+# (or `pnpm aisoc:splunk`). Demo seed is opt-in via `--profile demo-seed`.
 #
 # Usage:
-#   pnpm aisoc:demo
+#   pnpm aisoc:splunk          # live ingest spine, no seed
+#   pnpm aisoc:demo --seed     # classic seeded demo
+#   pnpm aisoc:purge-demo      # wipe leftover INC-RT-* / DEMO-* rows
 #
 # Manual usage (always pin project-directory so repo-root `.env` is loaded):
 #   docker compose --project-directory . -f infra/compose/docker-compose.demo.yml pull
