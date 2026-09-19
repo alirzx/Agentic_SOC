@@ -697,7 +697,7 @@
     "connector_id": "splunk",
     "connector_name": "Splunk SIEM",
     "category": "siem",
-    "description": "Splunk Enterprise / Cloud notable events via the REST API.",
+    "description": "Splunk Enterprise / Cloud notables via REST (token or basic auth).",
     "fields": [
       {
         "name": "base_url",
@@ -705,28 +705,67 @@
         "label": "Splunk URL",
         "required": true,
         "placeholder": "https://splunk.example.com:8089",
-        "help_text": "Management port (default 8089), not the web UI port."
+        "help_text": "Management port (default 8089), not the web UI port (8000)."
       },
       {
         "name": "token",
         "type": "secret",
-        "label": "HEC / API Token",
-        "required": true
+        "label": "HEC / API Token (optional)",
+        "required": false,
+        "help_text": "Bearer token. Leave blank when using username/password."
+      },
+      {
+        "name": "username",
+        "type": "string",
+        "label": "Username",
+        "required": false,
+        "help_text": "Basic auth username (e.g. admin). Used when token is empty."
+      },
+      {
+        "name": "password",
+        "type": "secret",
+        "label": "Password",
+        "required": false,
+        "help_text": "Basic auth password. Used when token is empty."
       },
       {
         "name": "saved_search",
         "type": "string",
         "label": "Saved Search Name",
         "required": false,
-        "default": "AiSOC_Alerts"
+        "default": "",
+        "help_text": "Dispatch a named saved search. Ignored when custom_search is set."
+      },
+      {
+        "name": "custom_search",
+        "type": "textarea",
+        "label": "Custom SPL",
+        "required": false,
+        "default": "",
+        "help_text": "Ad-hoc SPL for /services/search/jobs. Use | rest … catalog or search index=notable."
+      },
+      {
+        "name": "earliest_time",
+        "type": "string",
+        "label": "Earliest time",
+        "required": false,
+        "default": "-90d@d",
+        "help_text": "Splunk earliest_time (e.g. -90d@d, -24h)."
+      },
+      {
+        "name": "page_size",
+        "type": "number",
+        "label": "Results page size",
+        "required": false,
+        "default": 500
       },
       {
         "name": "ssl_verify",
         "type": "boolean",
         "label": "Verify SSL certificate",
         "required": false,
-        "default": true,
-        "help_text": "Disable only for self-signed certificates in private deployments."
+        "default": false,
+        "help_text": "Disable for self-signed certificates in private deployments."
       }
     ],
     "docs_url": "/docs/connectors/splunk"

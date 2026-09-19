@@ -91,7 +91,7 @@ class SplunkConnector(BaseConnector):
                 Field(
                     "token",
                     "secret",
-                    "HEC / API Token",
+                    "HEC / API Token (optional)",
                     required=False,
                     help_text="Bearer token. Leave blank when using username/password.",
                 ),
