@@ -889,6 +889,64 @@ async def test_existing_connector(
     return verdict
 
 
+@router.post("/{connector_id}/poll", status_code=status.HTTP_200_OK)
+async def poll_connector_now(
+    connector_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("connectors:write"))],
+    db: DBSession,
+) -> dict[str, Any]:
+    """Force one scheduler poll for this connector instance (does not wait for cadence)."""
+    result = await db.execute(
+        select(Connector).where(
+            Connector.id == connector_id,
+            Connector.tenant_id == current_user.tenant_id,
+        )
+    )
+    connector = result.scalar_one_or_none()
+    if connector is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
+    if not connector.is_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="connector is disabled; enable it before polling",
+        )
+
+    url = _connectors_service_url(f"/scheduler/poll/{connector_id}")
+    # Splunk jobs can take well over the catalog timeout (15s); give the
+    # forced poll a full search budget.
+    poll_timeout = httpx.Timeout(180.0, connect=10.0)
+    try:
+        async with httpx.AsyncClient(timeout=poll_timeout) as client:
+            resp = await client.post(url)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="connectors service is unavailable; cannot poll",
+        ) from exc
+    if resp.status_code >= 400:
+        detail: Any
+        try:
+            detail = resp.json().get("detail", resp.text)
+        except ValueError:
+            detail = resp.text
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    body = resp.json() if resp.content else {"ok": True}
+    refreshed = await db.execute(
+        select(Connector).where(
+            Connector.id == connector_id,
+            Connector.tenant_id == current_user.tenant_id,
+        )
+    )
+    row = refreshed.scalar_one()
+    return {
+        "ok": True,
+        "connector_id": str(connector_id),
+        "scheduler": body,
+        "events_ingested": row.events_ingested,
+        "last_sync": row.last_sync.isoformat() if row.last_sync else None,
+    }
+
+
 # ----------------------------------------------------------- verify-data-flowing
 
 

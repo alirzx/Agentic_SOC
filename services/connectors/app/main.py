@@ -18,6 +18,7 @@ running this app without spinning up a polling loop.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -30,6 +31,11 @@ from app.db.engine import dispose_engine
 from app.scheduler import ConnectorScheduler, scheduler_disabled
 from app.security.cors import build_cors_kwargs
 
+# Ensure scheduler / vault logs reach `docker logs` (uvicorn alone is not enough).
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 logger = logging.getLogger("aisoc.connectors.main")
 
 

@@ -2402,6 +2402,17 @@ export const connectorsApi = {
       method: 'POST',
     }),
 
+  /** Force one scheduler poll now (Splunk → ingest → fusion). */
+  pollNow: (id: string) =>
+    request<{
+      ok: boolean;
+      connector_id: string;
+      events_ingested: number;
+      last_sync: string | null;
+    }>(`/api/v1/connectors/${id}/poll`, {
+      method: 'POST',
+    }),
+
   /** Run "Test connection" with un-saved credentials from the wizard. */
   testInline: (payload: TestConnectorPayload) =>
     request<ConnectorTestResult>('/api/v1/connectors/test', {

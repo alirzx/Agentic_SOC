@@ -32,6 +32,7 @@ const UUID_RE =
 export function ConnectorsView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [pollingId, setPollingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, boolean | undefined>>({});
 
   const { data, error, isLoading, mutate } = useSWR(
@@ -108,6 +109,26 @@ export function ConnectorsView() {
       toast.error(msg);
     } finally {
       setTestingId(null);
+    }
+  };
+
+  const handlePoll = async (id: string) => {
+    if (!UUID_RE.test(id)) {
+      toast.error('This is not a saved connector.');
+      return;
+    }
+    setPollingId(id);
+    try {
+      const result = await connectorsApi.pollNow(id);
+      toast.success(
+        `Poll done — ${result.events_ingested} events ingested total`,
+      );
+      mutate();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Poll failed';
+      toast.error(msg);
+    } finally {
+      setPollingId(null);
     }
   };
 
@@ -234,8 +255,10 @@ export function ConnectorsView() {
         connectors={connectors}
         isLoading={isLoading && !data}
         testingId={testingId}
+        pollingId={pollingId}
         testResults={testResults}
         onTest={handleTest}
+        onPoll={handlePoll}
         onAdd={() => setModalOpen(true)}
         onConfigure={handleConfigure}
         onDelete={handleDelete}

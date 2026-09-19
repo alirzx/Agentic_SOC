@@ -126,9 +126,11 @@ function abbreviateType(type: string | undefined): string {
 interface ConnectorCardProps {
   connector: Connector;
   testing: boolean;
+  polling?: boolean;
   /** `true` = last test passed, `false` = failed, `undefined` = idle. */
   testResult: boolean | undefined;
   onTest: (id: string) => void;
+  onPoll?: (id: string) => void;
   onConfigure?: (connector: Connector) => void;
   onDelete?: (connector: Connector) => void;
 }
@@ -136,8 +138,10 @@ interface ConnectorCardProps {
 function ConnectorCard({
   connector,
   testing,
+  polling = false,
   testResult,
   onTest,
+  onPoll,
   onConfigure,
   onDelete,
 }: ConnectorCardProps) {
@@ -308,7 +312,7 @@ function ConnectorCard({
         <button
           type="button"
           onClick={() => onTest(connector.id)}
-          disabled={testing}
+          disabled={testing || polling}
           className="flex-1 text-xs bg-dark-20 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
         >
           {testing && (
@@ -316,6 +320,20 @@ function ConnectorCard({
           )}
           Test
         </button>
+        {onPoll && (
+          <button
+            type="button"
+            onClick={() => onPoll(connector.id)}
+            disabled={testing || polling}
+            className="flex-1 text-xs bg-brand-600/80 hover:bg-brand-500 text-white px-3 py-2 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            title="Force one poll now (Splunk → ingest → alerts)"
+          >
+            {polling && (
+              <span className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+            )}
+            Sync
+          </button>
+        )}
         <button
           type="button"
           disabled
@@ -364,8 +382,10 @@ export interface ConnectorInstanceListProps {
   connectors: Connector[];
   isLoading?: boolean;
   testingId?: string | null;
+  pollingId?: string | null;
   testResults?: Record<string, boolean | undefined>;
   onTest: (id: string) => void;
+  onPoll?: (id: string) => void;
   onAdd: () => void;
   onConfigure?: (connector: Connector) => void;
   onDelete?: (connector: Connector) => void;
@@ -375,8 +395,10 @@ export function ConnectorInstanceList({
   connectors,
   isLoading,
   testingId,
+  pollingId,
   testResults,
   onTest,
+  onPoll,
   onAdd,
   onConfigure,
   onDelete,
@@ -429,8 +451,10 @@ export function ConnectorInstanceList({
           key={connector.id}
           connector={connector}
           testing={testingId === connector.id}
+          polling={pollingId === connector.id}
           testResult={testResults?.[connector.id]}
           onTest={onTest}
+          onPoll={onPoll}
           onConfigure={onConfigure}
           onDelete={onDelete}
         />

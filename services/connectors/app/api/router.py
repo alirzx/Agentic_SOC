@@ -26,10 +26,11 @@ service's lifespan), not in this router.
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from pydantic import Field as PydField
 
@@ -476,6 +477,28 @@ async def push_status_change(connector_id: str, payload: PushStatusChangeRequest
             detail=f"connector '{connector_id}' returned unexpected push_status_change payload",
         )
     return result
+
+
+@router.get("/scheduler/status")
+async def scheduler_status(request: Request) -> dict[str, Any]:
+    """Diagnostics for the in-process poller (jobs + next_run_time)."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        return {"running": False, "jobs": [], "detail": "scheduler not started"}
+    return {"running": True, "jobs": scheduler.job_diagnostics()}
+
+
+@router.post("/scheduler/poll/{connector_id}")
+async def scheduler_poll_now(connector_id: uuid.UUID, request: Request) -> dict[str, Any]:
+    """Force one poll cycle for a saved connector instance (UUID from Postgres)."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="connector scheduler is not running",
+        )
+    await scheduler._poll_one(connector_id=connector_id)
+    return {"ok": True, "connector_id": str(connector_id)}
 
 
 @router.get("/health")
