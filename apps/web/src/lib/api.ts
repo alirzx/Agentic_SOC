@@ -211,6 +211,39 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
     );
   }
 
+  // Stale / invalid JWTs force 401 even in ENV=development (the API only
+  // falls back to the demo user when *no* Authorization header is sent).
+  // Drop the bad token once and retry without it so the local stack stays usable.
+  if (
+    response.status === 401 &&
+    typeof window !== 'undefined' &&
+    (headers as Record<string, string>).Authorization
+  ) {
+    try {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+      window.localStorage.removeItem(AUTH_REFRESH_KEY);
+      window.localStorage.removeItem(AUTH_USER_KEY);
+    } catch {
+      /* ignore */
+    }
+    const retryHeaders = { ...(headers as Record<string, string>) };
+    delete retryHeaders.Authorization;
+    delete retryHeaders.authorization;
+    try {
+      response = await fetch(url, {
+        ...fetchOptions,
+        headers: retryHeaders,
+        cache: 'no-store',
+      });
+    } catch (err) {
+      throw new ApiError(
+        `Network error talking to ${url}: ${(err as Error).message}`,
+        0,
+        '',
+      );
+    }
+  }
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new ApiError(
