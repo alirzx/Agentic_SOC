@@ -120,13 +120,13 @@ class ConnectorResponse(BaseModel):
     connector_type: str
     category: str
     is_enabled: bool
-    connector_config: dict[str, Any]
+    connector_config: dict[str, Any] = Field(default_factory=dict)
     health_status: str
-    last_health_check: datetime | None
-    last_sync: datetime | None
-    events_ingested: int
+    last_health_check: datetime | None = None
+    last_sync: datetime | None = None
+    events_ingested: int = 0
     events_dropped: int = 0
-    error_count: int
+    error_count: int = 0
     # Schema-drift sentinel state surfaced to the wizard so the
     # connector card can show "schema changed at <ts>" without a
     # second round-trip. Both fields are nullable for connectors
@@ -153,7 +153,7 @@ class ConnectorResponse(BaseModel):
     # ``last_event_at``; never persisted, so the verdict is always
     # current as of the request.
     freshness: FreshnessSLOResponse | None = None
-    tags: list
+    tags: list = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -167,16 +167,34 @@ def _build_connector_response(connector: Connector) -> ConnectorResponse:
     same shape. Pure projection — no DB round-trips, ``compute_freshness``
     runs against the row's own ``last_event_at`` and ``category`` columns.
     Honors a per-instance cadence override at
-    ``connector_config.expected_cadence_seconds`` so an operator can
-    declare "this Splunk instance polls hourly, don't paint yellow"
-    without changing the global table.
+    ``connector_config.poll_interval_seconds`` (or legacy
+    ``expected_cadence_seconds``) so Splunk's 30-minute poll doesn't paint
+    the freshness badge red between ticks.
     """
+    # Coerce NULL JSONB columns so a partially-migrated / hand-updated row
+    # never 500s the whole connectors list.
+    if connector.tags is None:
+        object.__setattr__(connector, "tags", [])
+    if connector.connector_config is None:
+        object.__setattr__(connector, "connector_config", {})
+    elif not isinstance(connector.connector_config, dict):
+        object.__setattr__(connector, "connector_config", {})
+    if connector.auth_config is None:
+        object.__setattr__(connector, "auth_config", {})
+
     response = ConnectorResponse.model_validate(connector)
     override = None
-    cfg = connector.connector_config or {}
-    raw_override = cfg.get("expected_cadence_seconds") if isinstance(cfg, dict) else None
-    if isinstance(raw_override, int | float):
-        override = int(raw_override)
+    cfg = connector.connector_config if isinstance(connector.connector_config, dict) else {}
+    for key in ("poll_interval_seconds", "expected_cadence_seconds"):
+        raw_override = cfg.get(key)
+        if isinstance(raw_override, bool):
+            continue
+        if isinstance(raw_override, (int, float)):
+            override = int(raw_override)
+            break
+        if isinstance(raw_override, str) and raw_override.strip().isdigit():
+            override = int(raw_override.strip())
+            break
     verdict = compute_freshness(
         category=connector.category,
         last_event_at=connector.last_event_at,
@@ -604,7 +622,18 @@ async def list_connectors(
     """List all connector instances for the caller's tenant."""
     result = await db.execute(select(Connector).where(Connector.tenant_id == current_user.tenant_id).order_by(Connector.created_at))
     connectors = result.scalars().all()
-    return [_build_connector_response(c) for c in connectors]
+    out: list[ConnectorResponse] = []
+    for c in connectors:
+        try:
+            out.append(_build_connector_response(c))
+        except Exception:
+            logger.exception(
+                "connectors.list.build_failed id=%s type=%s",
+                str(getattr(c, "id", "")).replace("\r", "").replace("\n", " ")[:64],
+                str(getattr(c, "connector_type", "")).replace("\r", "").replace("\n", " ")[:64],
+            )
+            raise
+    return out
 
 
 @router.post("", response_model=ConnectorResponse, status_code=status.HTTP_201_CREATED)
