@@ -79,7 +79,7 @@ class SplunkConnector(BaseConnector):
             connector_name=cls.connector_name,
             category=cls.connector_category,
             description="Splunk Enterprise / Cloud notables via REST (token or basic auth).",
-            docs_url="/docs/connectors/splunk",
+            docs_url="/docs/connectors/splunk"),
             fields=[
                 Field(
                     "base_url",
