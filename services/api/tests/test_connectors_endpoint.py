@@ -245,3 +245,83 @@ async def test_proxy_test_connection_non_dict_body_normalised() -> None:
         result = await _proxy_test_connection("splunk", {}, {})
     assert isinstance(result, dict)
     assert result["success"] is False
+
+
+def test_build_connector_response_tolerates_null_jsonb() -> None:
+    """Hand-updated / partially-migrated rows must not 500 GET /connectors."""
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from app.api.v1.endpoints.connectors import _build_connector_response
+
+    row = MagicMock()
+    row.id = uuid4()
+    row.tenant_id = uuid4()
+    row.name = "Splunk"
+    row.connector_type = "splunk"
+    row.category = "siem"
+    row.is_enabled = True
+    row.connector_config = None
+    row.auth_config = None
+    row.health_status = "healthy"
+    row.last_health_check = None
+    row.last_sync = None
+    row.events_ingested = 3
+    row.events_dropped = None
+    row.error_count = None
+    row.schema_fingerprint = None
+    row.last_schema_drift_at = None
+    row.last_drift_details = "not-a-dict"
+    row.last_event_at = None
+    row.last_event_kind = None
+    row.oauth_provisioned = None
+    row.allowed_capabilities = {"pull": True}
+    row.tags = None
+    row.created_at = datetime.now(UTC)
+    row.updated_at = None
+
+    actual = _build_connector_response(row)
+    assert actual.connector_config == {}
+    assert actual.tags == []
+    assert actual.events_dropped == 0
+    assert actual.last_drift_details is None
+    assert actual.allowed_capabilities == []
+    assert actual.freshness is not None
+    assert actual.freshness.status == "unknown"
+
+
+def test_build_connector_response_honors_poll_interval_override() -> None:
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from app.api.v1.endpoints.connectors import _build_connector_response
+
+    row = MagicMock()
+    row.id = uuid4()
+    row.tenant_id = uuid4()
+    row.name = "Splunk"
+    row.connector_type = "splunk"
+    row.category = "siem"
+    row.is_enabled = True
+    row.connector_config = {"poll_interval_seconds": 1800}
+    row.health_status = "healthy"
+    row.last_health_check = None
+    row.last_sync = None
+    row.events_ingested = 3
+    row.events_dropped = 0
+    row.error_count = 0
+    row.schema_fingerprint = None
+    row.last_schema_drift_at = None
+    row.last_drift_details = None
+    row.last_event_at = datetime.now(UTC) - timedelta(minutes=20)
+    row.last_event_kind = "alert"
+    row.oauth_provisioned = False
+    row.allowed_capabilities = None
+    row.tags = ["prod"]
+    row.created_at = datetime.now(UTC)
+    row.updated_at = datetime.now(UTC)
+
+    actual = _build_connector_response(row)
+    assert actual.freshness is not None
+    assert actual.freshness.expected_cadence_seconds == 1800
+    assert actual.freshness.status == "green"

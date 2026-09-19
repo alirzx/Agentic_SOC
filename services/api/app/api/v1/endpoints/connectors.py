@@ -160,6 +160,18 @@ class ConnectorResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _as_config_dict(value: Any) -> dict[str, Any]:
+    """Coerce a JSONB column to a dict (NULL / scalar / list → {})."""
+    return value if isinstance(value, dict) else {}
+
+
+def _as_str_list(value: Any) -> list[str]:
+    """Coerce a JSONB column to a list of strings."""
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item is not None]
+
+
 def _build_connector_response(connector: Connector) -> ConnectorResponse:
     """Hydrate a ``ConnectorResponse`` and attach the live freshness SLO.
 
@@ -170,21 +182,44 @@ def _build_connector_response(connector: Connector) -> ConnectorResponse:
     ``connector_config.poll_interval_seconds`` (or legacy
     ``expected_cadence_seconds``) so Splunk's 30-minute poll doesn't paint
     the freshness badge red between ticks.
-    """
-    # Coerce NULL JSONB columns so a partially-migrated / hand-updated row
-    # never 500s the whole connectors list.
-    if connector.tags is None:
-        object.__setattr__(connector, "tags", [])
-    if connector.connector_config is None:
-        object.__setattr__(connector, "connector_config", {})
-    elif not isinstance(connector.connector_config, dict):
-        object.__setattr__(connector, "connector_config", {})
-    if connector.auth_config is None:
-        object.__setattr__(connector, "auth_config", {})
 
-    response = ConnectorResponse.model_validate(connector)
+    Builds from an explicit safe payload (not ``model_validate(orm)``) so a
+    hand-updated / partially-migrated row with NULL JSONB or bad types
+    never 500s ``GET /connectors``.
+    """
+    cfg = _as_config_dict(getattr(connector, "connector_config", None))
+    drift = getattr(connector, "last_drift_details", None)
+    caps = getattr(connector, "allowed_capabilities", None)
+    now = datetime.now(UTC)
+    created = getattr(connector, "created_at", None) or now
+    updated = getattr(connector, "updated_at", None) or created
+    payload: dict[str, Any] = {
+        "id": connector.id,
+        "tenant_id": connector.tenant_id,
+        "name": connector.name or "",
+        "connector_type": connector.connector_type or "",
+        "category": connector.category or "uncategorized",
+        "is_enabled": True if connector.is_enabled is None else bool(connector.is_enabled),
+        "connector_config": cfg,
+        "health_status": connector.health_status or "unknown",
+        "last_health_check": connector.last_health_check,
+        "last_sync": connector.last_sync,
+        "events_ingested": int(connector.events_ingested or 0),
+        "events_dropped": int(connector.events_dropped or 0),
+        "error_count": int(connector.error_count or 0),
+        "schema_fingerprint": connector.schema_fingerprint,
+        "last_schema_drift_at": connector.last_schema_drift_at,
+        "last_drift_details": drift if isinstance(drift, dict) else None,
+        "last_event_at": connector.last_event_at,
+        "last_event_kind": connector.last_event_kind,
+        "oauth_provisioned": bool(getattr(connector, "oauth_provisioned", False) or False),
+        "allowed_capabilities": _as_str_list(caps) if caps is not None else None,
+        "tags": _as_str_list(getattr(connector, "tags", None)),
+        "created_at": created,
+        "updated_at": updated,
+    }
+    response = ConnectorResponse.model_validate(payload)
     override = None
-    cfg = connector.connector_config if isinstance(connector.connector_config, dict) else {}
     for key in ("poll_interval_seconds", "expected_cadence_seconds"):
         raw_override = cfg.get(key)
         if isinstance(raw_override, bool):
@@ -196,8 +231,8 @@ def _build_connector_response(connector: Connector) -> ConnectorResponse:
             override = int(raw_override.strip())
             break
     verdict = compute_freshness(
-        category=connector.category,
-        last_event_at=connector.last_event_at,
+        category=payload["category"],
+        last_event_at=payload["last_event_at"],
         override_seconds=override,
     )
     response.freshness = FreshnessSLOResponse(**verdict.to_dict())
@@ -627,12 +662,14 @@ async def list_connectors(
         try:
             out.append(_build_connector_response(c))
         except Exception:
+            # Never 500 the whole page for one bad row — health summary
+            # already proves the row exists; skip + log so the UI can load.
             logger.exception(
                 "connectors.list.build_failed id=%s type=%s",
                 str(getattr(c, "id", "")).replace("\r", "").replace("\n", " ")[:64],
                 str(getattr(c, "connector_type", "")).replace("\r", "").replace("\n", " ")[:64],
             )
-            raise
+            continue
     return out
 
 
