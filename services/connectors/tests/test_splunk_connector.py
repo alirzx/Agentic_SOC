@@ -199,6 +199,28 @@ def test_ssl_verify_string_false_is_disabled():
     assert c._ssl_verify is False
 
 
+def test_normalize_parses_notable_stash_raw():
+    c = _conn()
+    raw = {
+        "_time": "2026-07-01T12:48:35.000+03:30",
+        "host": "SH",
+        "index": "notable",
+        "source": "Network - Unapproved Port Activity Detected - Rule",
+        "_cd": "37:42",
+        "_raw": (
+            '1782897512, search_name="Network - Unapproved Port Activity Detected - Rule", '
+            'dest_port="3389", dvc="WIN-017UMT7DCGT.soorinsec.local", severity="low", '
+            'source_guid="af145ac9-6b34-49b9-af4a-afe5e342e47c", transport="tcp"'
+        ),
+    }
+    out = c.normalize(raw)
+    assert out["title"] == "Network - Unapproved Port Activity Detected - Rule"
+    assert out["severity"] == "low"
+    assert out["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
+    assert out["external_id"] == "af145ac9-6b34-49b9-af4a-afe5e342e47c"
+    assert out["raw_event"]["dest_port"] == "3389"
+
+
 def test_timeless_catalog_skips_checkpoint_filter():
     c = _conn()
     c.set_checkpoint({"time": "", "id": "Zzz"})

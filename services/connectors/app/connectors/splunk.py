@@ -44,20 +44,12 @@ _SEVERITY_BY_URGENCY = {
     "5": "critical",
 }
 
-# Default SPL used when the operator pastes the ES correlation-search catalog
-# query (lists notable *definitions*). Prefer ``| rest`` (not ``search rest``).
-_DEFAULT_ES_CATALOG_SPL = (
-    "| rest splunk_server=local count=0 /services/saved/searches "
-    "| search action.correlationsearch.enabled=1 "
-    "| eval notable_name=title "
-    "| eval severity=action.notable.param.severity "
-    "| eval annotations=action.correlationsearch.annotations "
-    '| table notable_name description search annotations severity '
-    '| rename notable_name as "Notable Name", '
-    'description as "Description", '
-    'search as "Notable SPL", '
-    'severity as "Severity" '
-    '| sort "Notable Name"'
+# Default SPL used when the operator wants fired ES notables (incidents).
+# Prefer this over the ``| rest`` correlation-search *catalog* (rule definitions).
+_DEFAULT_NOTABLE_SPL = (
+    "search index=notable "
+    "| table _time source search_name severity urgency host dvc dest "
+    "dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
 )
 
 
@@ -96,6 +88,26 @@ def _normalize_custom_spl(custom: str) -> str:
     if lower.startswith("search ") or lower.startswith("|"):
         return stripped
     return f"search {stripped}"
+
+
+_RAW_KV_RE = re.compile(r'([A-Za-z_][\w.]*)="([^"]*)"')
+
+
+def _parse_stash_raw(raw_text: str) -> dict[str, str]:
+    """Extract ``key=\"value\"`` pairs from an ES notable stash ``_raw`` line."""
+    if not raw_text:
+        return {}
+    return {key: value for key, value in _RAW_KV_RE.findall(raw_text)}
+
+
+def _enrich_notable_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Merge top-level Splunk fields with KV pairs parsed from ``_raw``."""
+    merged: dict[str, Any] = dict(row)
+    parsed = _parse_stash_raw(str(row.get("_raw") or ""))
+    for key, value in parsed.items():
+        if merged.get(key) in (None, ""):
+            merged[key] = value
+    return merged
 
 
 class SplunkConnector(BaseConnector):
@@ -154,11 +166,11 @@ class SplunkConnector(BaseConnector):
                     "textarea",
                     "Custom SPL",
                     required=False,
-                    default="",
+                    default=_DEFAULT_NOTABLE_SPL,
                     help_text=(
                         "Ad-hoc SPL posted to /services/search/jobs. "
-                        "When set, overrides saved_search / index=notable. "
-                        "Use for ES correlation-search catalog or index=notable."
+                        "Default pulls fired notables from index=notable. "
+                        "Use | rest … only for the ES rule catalog (definitions, not incidents)."
                     ),
                 ),
                 Field(
@@ -389,7 +401,9 @@ class SplunkConnector(BaseConnector):
     @staticmethod
     def _event_tiebreak(row: dict[str, Any]) -> str:
         name = (
-            row.get("event_id")
+            row.get("source_guid")
+            or row.get("source_event_id")
+            or row.get("event_id")
             or row.get("_cd")
             or row.get("Notable Name")
             or row.get("notable_name")
@@ -398,7 +412,8 @@ class SplunkConnector(BaseConnector):
         return str(name)
 
     def _order_and_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        ordered = sorted(rows, key=lambda r: (self._event_time(r), self._event_tiebreak(r)))
+        enriched = [_enrich_notable_row(r) if isinstance(r, dict) else r for r in rows]
+        ordered = sorted(enriched, key=lambda r: (self._event_time(r), self._event_tiebreak(r)))
         # ES correlation catalog rows have no _time — emit the full snapshot every
         # poll and skip checkpoint filtering (otherwise only names after the last
         # alphabetically-sorted title would survive subsequent polls).
@@ -454,16 +469,36 @@ class SplunkConnector(BaseConnector):
                 "created_at": raw.get("_time"),
             }
 
-        external_id = str(raw.get("event_id") or raw.get("_cd") or "")
+        row = _enrich_notable_row(raw)
+        external_id = str(
+            row.get("source_guid")
+            or row.get("source_event_id")
+            or row.get("event_id")
+            or row.get("_cd")
+            or ""
+        )
+        title = (
+            row.get("search_name")
+            or row.get("orig_rule_title")
+            or row.get("source")
+            or "Splunk Notable Event"
+        )
+        description = str(
+            row.get("orig_rule_description")
+            or row.get("description")
+            or row.get("_raw")
+            or ""
+        )
+        hostname = row.get("dvc") or row.get("dest") or row.get("host")
         return {
             "source": self.connector_id,
             "external_id": external_id,
             "event_id": external_id,
-            "title": raw.get("search_name") or raw.get("source") or "Splunk Notable Event",
-            "description": raw.get("description", ""),
-            "severity": _map_severity(raw.get("urgency") or raw.get("severity")),
-            "src_ip": raw.get("src", raw.get("src_ip")),
-            "hostname": raw.get("host"),
-            "raw_event": raw,
-            "created_at": raw.get("_time"),
+            "title": str(title),
+            "description": description[:2000],
+            "severity": _map_severity(row.get("urgency") or row.get("severity")),
+            "src_ip": row.get("src") or row.get("src_ip"),
+            "hostname": hostname,
+            "raw_event": row,
+            "created_at": row.get("_time"),
         }

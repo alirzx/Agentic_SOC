@@ -741,8 +741,8 @@
         "type": "textarea",
         "label": "Custom SPL",
         "required": false,
-        "default": "",
-        "help_text": "Ad-hoc SPL for /services/search/jobs. Use | rest … catalog or search index=notable."
+        "default": "search index=notable | table _time source search_name severity urgency host dvc dest dest_port transport src src_ip source_guid source_event_id event_id _cd _raw",
+        "help_text": "Fired notables from index=notable. Use | rest … only for the ES rule catalog."
       },
       {
         "name": "earliest_time",
