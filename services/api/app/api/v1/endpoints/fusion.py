@@ -179,6 +179,7 @@ async def entity_risk_stats(tenant_id: UUID) -> dict[str, Any]:
         "total": 0,
         "promoted": 0,
         "bands": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "alert_count": 0,
         "alerts_total": 0,
     }
 

@@ -10,12 +10,12 @@ COMPOSE=(docker compose --project-directory "$ROOT"
   -f infra/compose/docker-compose.demo.yml
   -f infra/compose/docker-compose.splunk.yml)
 
-echo "==> Building api + connectors from local source"
-"${COMPOSE[@]}" build api connectors
+echo "==> Building api + connectors + web from local source"
+"${COMPOSE[@]}" build api connectors web
 
-echo "==> Starting AiSOC + Splunk ingest spine (api + connectors + ingest + fusion)"
+echo "==> Starting AiSOC + Splunk ingest spine (api + connectors + ingest + fusion + web)"
 "${COMPOSE[@]}" up -d --remove-orphans --force-recreate \
-  api connectors ingest-worker fusion "$@"
+  api connectors ingest-worker fusion web "$@"
 
 echo "==> Waiting for connectors health"
 for i in $(seq 1 30); do

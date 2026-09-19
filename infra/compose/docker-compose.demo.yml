@@ -172,6 +172,8 @@ services:
       AGENTS_SERVICE_URL: http://agents:8084
       # Click-and-connect Test / catalog proxy (splunk overlay brings this up).
       CONNECTORS_SERVICE_URL: http://connectors:8003
+      # Proxy /api/v1/fusion/* entity-risk to the live fusion service.
+      FUSION_SERVICE_URL: http://fusion:8003
       # Shared Fernet key with the connectors service (vault encrypt/decrypt).
       AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}
       AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}

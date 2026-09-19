@@ -1072,7 +1072,7 @@ export const entityRiskApi = {
   } = {}) =>
     request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
       params: {
-        tenant_id: params.tenantId ?? TENANT_ID,
+        tenant_id: params.tenantId ?? getActiveTenantId(),
         limit: params.limit ?? 25,
         promoted_only: params.promotedOnly ? 'true' : undefined,
       },
@@ -1081,7 +1081,7 @@ export const entityRiskApi = {
   /** Tenant-scoped queue stats for dashboards (banding, totals, threshold). */
   stats: (tenantId?: string) =>
     request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
-      params: { tenant_id: tenantId ?? TENANT_ID },
+      params: { tenant_id: tenantId ?? getActiveTenantId() },
     }),
 
   /** Full risk record for a single entity (drawer detail). */
@@ -1089,7 +1089,7 @@ export const entityRiskApi = {
     const pathType = entityType === 'ip' ? 'src_ip' : entityType;
     return request<EntityRiskRecord>(
       `${FUSION_PATH}/entity-risk/${pathType}/${encodeURIComponent(entityValue)}`,
-      { params: { tenant_id: tenantId ?? TENANT_ID } },
+      { params: { tenant_id: tenantId ?? getActiveTenantId() } },
     );
   },
 };

@@ -45,51 +45,10 @@ const STATUS_CONFIG = {
   false_positive: { label: 'False Positive', color: 'text-gray-400 bg-gray-500/10 border-gray-500/20' },
 };
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-// Deterministic mock data — no Date.now() or Math.random() to avoid SSR hydration mismatches.
-const MOCK_BASE_TS = '2026-05-06T12:00:00Z';
-const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
-  const sev = (['critical', 'high', 'high', 'medium', 'medium', 'medium', 'low', 'info'] as const)[i % 8];
-  const src = ['CrowdStrike', 'Splunk', 'AWS Security Hub', 'Okta', 'Microsoft Sentinel'][i % 5];
-  const status = (['new', 'investigating', 'new', 'resolved', 'false_positive'] as const)[i % 5];
-  const conf = (['high', 'high', 'medium', 'medium', 'medium', 'low'] as const)[i % 6];
-  const confScore = conf === 'high' ? 0.78 + (i % 5) * 0.03 : conf === 'medium' ? 0.45 + (i % 5) * 0.03 : 0.18 + (i % 5) * 0.03;
-  const base = new Date(MOCK_BASE_TS).getTime();
-  return {
-    id: `ALT-${String(1000 + i).padStart(4, '0')}`,
-    title: [
-      'Suspicious PowerShell Execution via Encoded Command',
-      'Lateral Movement via WMI Remote Execution',
-      'Credential Dumping Detected: LSASS Access',
-      'New Admin Account Created Outside Business Hours',
-      'DNS Tunneling Activity Detected',
-      'Brute Force Attack: 50+ Failed Logins in 5 Minutes',
-      'Malicious File Download: Known Malware Signature',
-      'Privilege Escalation: Sudo Command Without Password',
-      'Ransomware Behavior: Mass File Encryption Attempt',
-      'Command and Control Beacon Traffic Detected',
-    ][i % 10],
-    description: 'Automated detection based on behavioral analytics and threat intelligence correlation.',
-    severity: sev,
-    status,
-    source: src,
-    createdAt: new Date(base - i * 1800000).toISOString(),
-    updatedAt: new Date(base - i * 900000).toISOString(),
-    tenantId: 'default',
-    assignee: i % 3 === 0 ? 'analyst@example.com' : undefined,
-    tags: i % 2 === 0 ? ['mitre:T1059', 'endpoint'] : ['network'],
-    iocs: [],
-    mitreAttack: i % 3 === 0 ? [{ tactic: 'Execution', technique: 'PowerShell', techniqueId: 'T1059.001' }] : [],
-    riskScore: ((i * 37 + 13) % 100),
-    confidenceLabel: conf,
-    confidenceScore: Number(confScore.toFixed(2)),
-  };
-});
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 // Wave 1 — Detection confidence chip rendered inline in the alert grid so an
 // analyst can spot low-confidence alerts at a glance without clicking through.
-// Click-through still goes to AlertDetailView for the full evidence chain.
 const CONFIDENCE_ROW_CONFIG: Record<ConfidenceLabel, { label: string; cls: string }> = {
   high: { label: 'HIGH', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
   medium: { label: 'MED', cls: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
@@ -107,8 +66,6 @@ function ConfidencePill({ label }: { label: ConfidenceLabel }) {
     </span>
   );
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SeverityDot({ severity }: { severity: string }) {
   const cfg = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG.info;
@@ -266,13 +223,8 @@ export function AlertsView() {
     ['alerts', filters],
     () => alertsApi.list(filters),
     {
-      fallbackData: {
-        alerts: MOCK_ALERTS,
-        total: MOCK_ALERTS.length,
-        page: 1,
-        pageSize: 25,
-      },
       refreshInterval: 30000,
+      shouldRetryOnError: true,
     }
   );
 
