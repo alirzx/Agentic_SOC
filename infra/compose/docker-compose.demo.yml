@@ -319,6 +319,7 @@ services:
     ports:
       - "127.0.0.1:${AISOC_CONNECTORS_PORT:-18088}:8003"
     environment:
+      PORT: "8003"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/6
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
