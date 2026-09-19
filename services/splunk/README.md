@@ -1,47 +1,45 @@
 # Splunk live-ingest module
 
-Dedicated operator surface for wiring **real Splunk notables** into AiSOC so the
-dashboard, alerts queue, and live feed are populated only from live data — never
-from `seed_demo` or UI mock fallbacks.
+Dedicated operator surface for wiring **real Splunk** into AiSOC so the
+dashboard fills from live data only.
 
-## What this module is
+## Your lab host
 
-| Piece | Role |
-|-------|------|
-| `services/connectors/.../splunk.py` | `SplunkConnector` — poll saved search / `index=notable`, normalize, checkpoint |
-| `plugins/splunk/plugin.yaml` | Marketplace manifest |
-| `infra/compose/docker-compose.splunk.yml` | Overlay: connectors + ingest + fusion on the slim demo stack |
-| `app/bootstrap.py` | Optional CLI to register a Splunk connector instance via the Core API |
-| `apps/docs/docs/connectors/splunk.md` | Operator walkthrough |
+| Item | Value |
+|------|--------|
+| Web UI | `https://192.168.0.10:8000/` |
+| REST API (connector) | `https://192.168.0.10:8089` |
+| Auth | Basic `admin` / password in local `.env` only |
 
-Investigation-time SPL (TriageAgent tools) lives separately under
-`services/agents/app/integrations/splunk/` and is **not** used for dashboard KPIs.
+Credentials live in repo-root `.env` (`SPLUNK_*`) — **never commit them**.
 
 ## Quick start
 
 ```bash
-# 1. Stack with live ingest spine
 pnpm aisoc:splunk
-
-# 2. Wipe any leftover seeded demo rows (keeps login tenant/user)
 pnpm aisoc:purge-demo
-
-# 3. Connect in the UI: Connectors → Add → Splunk SIEM
-#    or bootstrap from env (SPLUNK_BASE_URL + SPLUNK_TOKEN + API auth):
-python scripts/splunk_bootstrap.py
+# UI → Connectors → Add → Splunk SIEM
+#   base_url: https://192.168.0.10:8089
+#   username / password
+#   custom_search: ES catalog SPL (see docs)
+#   earliest_time: -90d@d
+#   ssl_verify: false
 ```
 
-Required env (repo-root `.env`):
+Or register from env:
 
-- `AISOC_CREDENTIAL_KEY` — Fernet key shared by API + connectors (vault)
-- Splunk credentials entered in the UI (preferred) **or** `SPLUNK_BASE_URL` + `SPLUNK_TOKEN` for bootstrap
+```bash
+python scripts/splunk_bootstrap.py   # needs AISOC_API_TOKEN
+```
 
 ## Data path
 
 ```
-Splunk REST → SplunkConnector.fetch_alerts → IngestClient /v1/ingest/batch
-  → Kafka raw_events → fusion → Postgres alerts → /api/v1/metrics/dashboard
+Splunk REST → SplunkConnector.fetch_alerts → IngestClient
+  → Kafka → fusion → Postgres → /api/v1/metrics/dashboard
 ```
 
-After a successful poll you should see non-zero tiles on `/dashboard` and
-events on the Live Feed panel (WebSocket `alerts` channel).
+### Catalog vs fired notables
+
+The ES `action.correlationsearch.enabled=1` query returns the **rule catalog**.
+For live incident stream use `search index=notable` (or an ES notable saved search).

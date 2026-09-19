@@ -1,11 +1,13 @@
 """
 Splunk connector.
-Runs saved searches and fetches notable events from Splunk SIEM.
+Runs saved searches, custom SPL, or fetches notable events from Splunk SIEM.
+Supports Bearer token or Basic (username/password) auth.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 from typing import Any
 from urllib.parse import quote
@@ -34,7 +36,34 @@ _SEVERITY_BY_URGENCY = {
     "low": "low",
     "informational": "info",
     "info": "info",
+    # Enterprise Security notable param.severity is often 1–5.
+    "1": "info",
+    "2": "low",
+    "3": "medium",
+    "4": "high",
+    "5": "critical",
 }
+
+# Default SPL used when the operator pastes the ES correlation-search catalog
+# query (lists notable *definitions*). Prefer ``| rest`` (not ``search rest``).
+_DEFAULT_ES_CATALOG_SPL = (
+    "| rest splunk_server=local count=0 /services/saved/searches "
+    "| search action.correlationsearch.enabled=1 "
+    "| eval notable_name=title "
+    "| eval severity=action.notable.param.severity "
+    "| eval annotations=action.correlationsearch.annotations "
+    '| table notable_name description search annotations severity '
+    '| rename notable_name as "Notable Name", '
+    'description as "Description", '
+    'search as "Notable SPL", '
+    'severity as "Severity" '
+    '| sort "Notable Name"'
+)
+
+
+def _map_severity(raw: Any) -> str:
+    key = str(raw if raw is not None else "medium").strip().lower()
+    return _SEVERITY_BY_URGENCY.get(key, "medium")
 
 
 class SplunkConnector(BaseConnector):
@@ -49,7 +78,7 @@ class SplunkConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description="Splunk Enterprise / Cloud notable events via the REST API.",
+            description="Splunk Enterprise / Cloud notables via REST (token or basic auth).",
             docs_url="/docs/connectors/splunk",
             fields=[
                 Field(
@@ -57,16 +86,56 @@ class SplunkConnector(BaseConnector):
                     "string",
                     "Splunk URL",
                     placeholder="https://splunk.example.com:8089",
-                    help_text="Management port (default 8089), not the web UI port.",
+                    help_text="Management port (default 8089), not the web UI port (8000).",
                 ),
-                Field("token", "secret", "HEC / API Token"),
+                Field(
+                    "token",
+                    "secret",
+                    "HEC / API Token",
+                    required=False,
+                    help_text="Bearer token. Leave blank when using username/password.",
+                ),
+                Field(
+                    "username",
+                    "string",
+                    "Username",
+                    required=False,
+                    help_text="Basic auth username (e.g. admin). Used when token is empty.",
+                ),
+                Field(
+                    "password",
+                    "secret",
+                    "Password",
+                    required=False,
+                    help_text="Basic auth password. Used when token is empty.",
+                ),
                 Field(
                     "saved_search",
                     "string",
                     "Saved Search Name",
                     required=False,
-                    default="AiSOC_Alerts",
-                    help_text="Dispatched via the saved-search endpoint. Leave blank to search index=notable.",
+                    default="",
+                    help_text="Dispatch a named saved search. Ignored when custom_search is set.",
+                ),
+                Field(
+                    "custom_search",
+                    "textarea",
+                    "Custom SPL",
+                    required=False,
+                    default="",
+                    help_text=(
+                        "Ad-hoc SPL posted to /services/search/jobs. "
+                        "When set, overrides saved_search / index=notable. "
+                        "Use for ES correlation-search catalog or index=notable."
+                    ),
+                ),
+                Field(
+                    "earliest_time",
+                    "string",
+                    "Earliest time",
+                    required=False,
+                    default="-90d@d",
+                    help_text="Splunk earliest_time for custom/saved dispatch (e.g. -90d@d, -24h).",
                 ),
                 Field(
                     "page_size",
@@ -74,7 +143,7 @@ class SplunkConnector(BaseConnector):
                     "Results page size",
                     required=False,
                     default=_DEFAULT_PAGE_SIZE,
-                    help_text="Number of results fetched per page. Polling pages through all results — there is no 100-event cap.",
+                    help_text="Number of results fetched per page. Polling pages through all results.",
                 ),
                 Field(
                     "ssl_verify",
@@ -89,10 +158,6 @@ class SplunkConnector(BaseConnector):
 
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
-        # Splunk surfaces notable events (alerts) and supports federated SPL
-        # search over indexes — the latter maps to QUERY_LOGS.
-        # WS-E5: Live Splunk REST API response actions now wired
-        # via services/actions/app/clients/splunk_client.py
         return (
             Capability.PULL_ALERTS,
             Capability.QUERY_LOGS,
@@ -103,23 +168,28 @@ class SplunkConnector(BaseConnector):
     def __init__(
         self,
         base_url: str,
-        token: str,
-        saved_search: str = "AiSOC_Alerts",
+        token: str = "",
+        username: str = "",
+        password: str = "",
+        saved_search: str = "",
+        custom_search: str = "",
+        earliest_time: str = "-90d@d",
         ssl_verify: bool = True,
         page_size: int = _DEFAULT_PAGE_SIZE,
+        **_ignored: Any,
     ):
         self._base_url = base_url.rstrip("/")
-        self._token = token
-        self._saved_search = saved_search
+        self._token = (token or "").strip()
+        self._username = (username or "").strip()
+        self._password = password or ""
+        self._saved_search = (saved_search or "").strip()
+        self._custom_search = (custom_search or "").strip()
+        self._earliest_time = (earliest_time or "").strip() or "-90d@d"
         self._ssl_verify = ssl_verify
         try:
             self._page_size = max(1, int(page_size))
         except (TypeError, ValueError):
             self._page_size = _DEFAULT_PAGE_SIZE
-        # Checkpoint plumbing (#529). ``_checkpoint`` is the last-accepted
-        # (event_time, tie-breaker id) fed in by the scheduler before a poll;
-        # ``_next_checkpoint`` is the advanced value the scheduler persists
-        # *after* ingest accepts the batch. Both are ``{"time","id"}`` dicts.
         self._checkpoint: dict[str, str] | None = None
         self._next_checkpoint: dict[str, str] | None = None
 
@@ -131,21 +201,35 @@ class SplunkConnector(BaseConnector):
             self._checkpoint = None
 
     def get_checkpoint(self) -> dict[str, str] | None:
-        """Return the advanced checkpoint after a fetch, or None if unchanged.
-
-        The scheduler persists this only once ingest has accepted the batch, so
-        a failed ingest never advances the checkpoint (#529).
-        """
+        """Return the advanced checkpoint after a fetch, or None if unchanged."""
         return self._next_checkpoint
 
+    def _auth(self) -> tuple[str, str] | None:
+        if self._username and self._password:
+            return (self._username, self._password)
+        return None
+
     def _headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self._token}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        if self._token and not self._auth():
+            headers["Authorization"] = f"Bearer {self._token}"
+        return headers
+
+    def _client_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {"timeout": 60.0, "verify": self._ssl_verify}
+        auth = self._auth()
+        if auth:
+            kwargs["auth"] = auth
+        return kwargs
 
     async def test_connection(self) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=15.0, verify=self._ssl_verify) as client:
+        if not self._token and not self._auth():
+            return {
+                "success": False,
+                "connector": self.connector_id,
+                "error": "Provide a token or username/password",
+            }
+        async with httpx.AsyncClient(**self._client_kwargs()) as client:
             try:
                 resp = await client.get(
                     f"{self._base_url}/services/server/info",
@@ -160,8 +244,8 @@ class SplunkConnector(BaseConnector):
                 return {"success": False, "connector": self.connector_id, "error": "Connection failed"}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        earliest = f"-{max(1, int(since_seconds))}s"
-        async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_verify) as client:
+        earliest = self._earliest_time if self._custom_search else f"-{max(1, int(since_seconds))}s"
+        async with httpx.AsyncClient(**self._client_kwargs()) as client:
             sid = await self._dispatch(client, earliest)
             if not sid:
                 return []
@@ -172,15 +256,24 @@ class SplunkConnector(BaseConnector):
         return [self.normalize(r) for r in ordered]
 
     async def _dispatch(self, client: httpx.AsyncClient, earliest: str) -> str | None:
-        """Kick off the search job and return its SID.
+        """Kick off the search job and return its SID."""
+        custom = self._custom_search
+        if custom:
+            search = custom if custom.lstrip().lower().startswith("search") else f"search {custom}"
+            resp = await client.post(
+                f"{self._base_url}/services/search/jobs",
+                headers=self._headers(),
+                data={
+                    "search": search,
+                    "earliest_time": earliest,
+                    "latest_time": "now",
+                    "output_mode": "json",
+                },
+            )
+            resp.raise_for_status()
+            return self._extract_sid(resp)
 
-        Honors the configured saved search (#525): when ``saved_search`` names
-        a real saved search we dispatch it via the dedicated endpoint with a
-        URL-encoded name (never injecting the untrusted name into SPL) and
-        override its time window. When it is empty or an ``index=`` expression
-        we fall back to the original ad-hoc notable-index search.
-        """
-        ss = (self._saved_search or "").strip()
+        ss = self._saved_search
         if ss and not ss.startswith("index="):
             resp = await client.post(
                 f"{self._base_url}/services/saved/searches/{quote(ss, safe='')}/dispatch",
@@ -211,10 +304,7 @@ class SplunkConnector(BaseConnector):
             if isinstance(data, dict) and data.get("sid"):
                 return str(data["sid"])
         except (ValueError, KeyError):
-            # Response wasn't JSON with a sid — fall through to the XML path below.
             pass
-        # The dispatch endpoint may answer with XML (<sid>…</sid>) despite
-        # output_mode=json depending on Splunk version.
         match = re.search(r"<sid>([^<]+)</sid>", resp.text)
         return match.group(1) if match else None
 
@@ -257,13 +347,23 @@ class SplunkConnector(BaseConnector):
 
     @staticmethod
     def _event_tiebreak(row: dict[str, Any]) -> str:
-        return str(row.get("event_id") or row.get("_cd") or "")
+        name = (
+            row.get("event_id")
+            or row.get("_cd")
+            or row.get("Notable Name")
+            or row.get("notable_name")
+            or ""
+        )
+        return str(name)
 
     def _order_and_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Sort by a stable (event_time, tie-breaker) tuple, drop anything at or
-        before the incoming checkpoint (suppresses overlapping-window
-        duplicates), and stage the advanced checkpoint for the scheduler."""
         ordered = sorted(rows, key=lambda r: (self._event_time(r), self._event_tiebreak(r)))
+        # ES correlation catalog rows have no _time — emit the full snapshot every
+        # poll and skip checkpoint filtering (otherwise only names after the last
+        # alphabetically-sorted title would survive subsequent polls).
+        if not any(self._event_time(r) for r in ordered):
+            self._next_checkpoint = None
+            return ordered
         cp = self._checkpoint or {}
         cp_key = (str(cp.get("time") or ""), str(cp.get("id") or ""))
         fresh: list[dict[str, Any]] = []
@@ -279,16 +379,10 @@ class SplunkConnector(BaseConnector):
         return fresh
 
     async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
-        """Run a translated SPL search and return raw rows.
-
-        We deliberately do *not* call ``normalize`` here because federated
-        search returns rows for analyst pivoting, not alerts that should
-        flow into the fusion engine. The API layer wraps each row with
-        connector identity so downstream consumers can tell sources apart.
-        """
+        """Run a translated SPL search and return raw rows."""
         index = self._saved_search if self._saved_search.startswith("index=") else "notable"
         spl = to_spl(unified, index=index)
-        async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_verify) as client:
+        async with httpx.AsyncClient(**self._client_kwargs()) as client:
             resp = await client.post(
                 f"{self._base_url}/services/search/jobs",
                 headers=self._headers(),
@@ -298,27 +392,35 @@ class SplunkConnector(BaseConnector):
             return list(resp.json().get("results", []))
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
-        # Idempotency guard (#528): ``fetch_alerts`` already returns canonical
-        # events, and the scheduler historically re-ran ``normalize`` on every
-        # event. Re-normalizing a canonical envelope treated it as a raw Splunk
-        # row (external_id -> "", title -> "splunk", severity -> medium,
-        # nested raw_event). Detect the envelope and pass it straight through.
         if isinstance(raw, dict) and "raw_event" in raw and raw.get("source") == self.connector_id:
             return raw
 
-        # Prefer a stable vendor identifier so replays map to the same canonical
-        # event ID downstream (#529). Emit it under both keys the ingest
-        # normalizer understands.
+        # ES correlation-search catalog rows (operator custom SPL).
+        notable_name = raw.get("Notable Name") or raw.get("notable_name")
+        if notable_name:
+            title = str(notable_name)
+            external_id = hashlib.sha256(title.encode("utf-8")).hexdigest()[:24]
+            return {
+                "source": self.connector_id,
+                "external_id": external_id,
+                "event_id": external_id,
+                "title": title,
+                "description": str(raw.get("Description") or raw.get("description") or ""),
+                "severity": _map_severity(raw.get("Severity") or raw.get("severity")),
+                "src_ip": None,
+                "hostname": None,
+                "raw_event": raw,
+                "created_at": raw.get("_time"),
+            }
+
         external_id = str(raw.get("event_id") or raw.get("_cd") or "")
         return {
             "source": self.connector_id,
             "external_id": external_id,
             "event_id": external_id,
-            # The correlation-search name is the notable's rule title; fall back
-            # to source, then a generic label.
             "title": raw.get("search_name") or raw.get("source") or "Splunk Notable Event",
             "description": raw.get("description", ""),
-            "severity": _SEVERITY_BY_URGENCY.get(str(raw.get("urgency", "medium")).lower(), "medium"),
+            "severity": _map_severity(raw.get("urgency") or raw.get("severity")),
             "src_ip": raw.get("src", raw.get("src_ip")),
             "hostname": raw.get("host"),
             "raw_event": raw,

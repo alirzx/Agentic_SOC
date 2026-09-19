@@ -1,20 +1,13 @@
 """Register a Splunk connector instance against a running AiSOC Core API.
 
-Reads ``SPLUNK_BASE_URL`` / ``SPLUNK_TOKEN`` (and optional auth headers) from
-the environment, then POSTs ``/api/v1/connectors`` so the connectors scheduler
-picks up the instance on the next reload (~30s).
+Reads Splunk credentials from the environment (``.env``), then POSTs
+``/api/v1/connectors`` so the connectors scheduler picks up the instance.
 
-# Prefer the Connectors UI for day-to-day setup; this CLI is for automation and
-# air-gapped bring-up.
-#
-# Usage::
-#
-#     set CORE_API_URL=http://127.0.0.1:8888
-#     set AISOC_API_TOKEN=<jwt>
-#     set AISOC_TENANT_ID=<uuid>
-#     set SPLUNK_BASE_URL=https://splunk.example.com:8089
-#     set SPLUNK_TOKEN=<token>
-#     python scripts/splunk_bootstrap.py
+Prefer the Connectors UI for day-to-day setup; this CLI is for automation.
+
+Usage::
+
+    python scripts/splunk_bootstrap.py
 """
 
 from __future__ import annotations
@@ -42,11 +35,11 @@ def _post_json(url: str, body: dict, headers: dict[str, str]) -> dict:
 
 def main() -> int:
     cfg = load_bootstrap_config()
-    if not cfg.base_url or not cfg.token:
-        print(
-            "[splunk] set SPLUNK_BASE_URL and SPLUNK_TOKEN (or SPLUNK_HOST + SPLUNK_TOKEN)",
-            file=sys.stderr,
-        )
+    if not cfg.base_url:
+        print("[splunk] set SPLUNK_BASE_URL (or SPLUNK_HOST)", file=sys.stderr)
+        return 2
+    if not cfg.token and not (cfg.username and cfg.password):
+        print("[splunk] set SPLUNK_TOKEN or SPLUNK_USERNAME + SPLUNK_PASSWORD", file=sys.stderr)
         return 2
     if not cfg.api_token:
         print("[splunk] set AISOC_API_TOKEN (JWT) to create the connector", file=sys.stderr)
@@ -56,16 +49,26 @@ def main() -> int:
     if cfg.tenant_id:
         headers["X-Tenant-ID"] = cfg.tenant_id
 
+    auth_config: dict = {
+        "base_url": cfg.base_url,
+        "ssl_verify": cfg.ssl_verify,
+        "earliest_time": cfg.earliest_time,
+    }
+    if cfg.token:
+        auth_config["token"] = cfg.token
+    else:
+        auth_config["username"] = cfg.username
+        auth_config["password"] = cfg.password
+    if cfg.custom_search:
+        auth_config["custom_search"] = cfg.custom_search
+    if cfg.saved_search:
+        auth_config["saved_search"] = cfg.saved_search
+
     payload = {
         "name": cfg.connector_name,
         "connector_type": "splunk",
         "category": "siem",
-        "auth_config": {
-            "base_url": cfg.base_url,
-            "token": cfg.token,
-            "saved_search": cfg.saved_search,
-            "ssl_verify": cfg.ssl_verify,
-        },
+        "auth_config": auth_config,
         "connector_config": {
             "poll_interval_seconds": cfg.poll_interval_seconds,
         },

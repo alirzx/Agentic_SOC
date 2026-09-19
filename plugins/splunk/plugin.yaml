@@ -1,22 +1,23 @@
 id: splunk
 name: Splunk SIEM Connector
-version: "1.0.0"
+version: "1.1.0"
 plugin_type: connector
 tier: stable
 description: >
-  Pull notable events from Splunk Enterprise / Splunk Cloud via the REST API
-  (saved search or index=notable). Urgency maps onto the five-tier severity
-  ladder (info|low|medium|high|critical). Auth is a Splunk bearer / HEC token;
-  TLS verification defaults on but can be relaxed for consoles using an
-  internal CA. Events flow: connector → ingest → Kafka → fusion → dashboard.
+  Pull notable events or ES correlation-search catalog from Splunk Enterprise /
+  Splunk Cloud via the REST API (management port 8089). Auth supports Bearer
+  token or Basic username/password. Urgency / ES severity (1-5) maps onto the
+  five-tier ladder (info|low|medium|high|critical). Optional custom_search runs
+  ad-hoc SPL (e.g. ES correlationsearch.enabled=1 catalog). Events flow:
+  connector → ingest → Kafka → fusion → dashboard.
 author: AiSOC Core Team
-tags: [siem, splunk, connector, notables]
+tags: [siem, splunk, connector, notables, enterprise-security]
 homepage: https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/connectors/app/connectors/splunk.py
 license: MIT
 min_aisoc_version: "7.0.0"
 config_schema:
   type: object
-  required: [base_url, token]
+  required: [base_url]
   properties:
     base_url:
       type: string
@@ -24,15 +25,29 @@ config_schema:
     token:
       type: string
       secret: true
-      description: Splunk REST API / bearer token
+      description: Optional Bearer token; leave blank when using username/password
+    username:
+      type: string
+      description: Basic auth username (used when token is empty)
+    password:
+      type: string
+      secret: true
+      description: Basic auth password (used when token is empty)
     saved_search:
       type: string
-      default: AiSOC_Alerts
-      description: Saved search name; leave blank to search index=notable
+      default: ""
+      description: Named saved search to dispatch; ignored when custom_search is set
+    custom_search:
+      type: string
+      description: Ad-hoc SPL for /services/search/jobs (ES catalog or index=notable)
+    earliest_time:
+      type: string
+      default: "-90d@d"
+      description: Splunk earliest_time window
     page_size:
       type: number
       default: 500
-      description: Results page size (poller pages through all results)
+      description: Results page size
     ssl_verify:
       type: boolean
       default: true

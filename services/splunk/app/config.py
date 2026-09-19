@@ -17,7 +17,11 @@ class SplunkBootstrapConfig:
 
     base_url: str
     token: str
+    username: str
+    password: str
     saved_search: str
+    custom_search: str
+    earliest_time: str
     ssl_verify: bool
     poll_interval_seconds: int
     api_base_url: str
@@ -33,11 +37,15 @@ def load_bootstrap_config() -> SplunkBootstrapConfig:
     base_url = os.getenv("SPLUNK_BASE_URL", "").strip()
     if not base_url and host:
         base_url = f"{scheme}://{host}:{port}"
-    token = (os.getenv("SPLUNK_TOKEN") or os.getenv("SPLUNK_PASSWORD") or "").strip()
+    token = (os.getenv("SPLUNK_TOKEN") or "").strip()
     return SplunkBootstrapConfig(
         base_url=base_url.rstrip("/"),
         token=token,
-        saved_search=os.getenv("SPLUNK_SAVED_SEARCH", "AiSOC_Alerts").strip() or "AiSOC_Alerts",
+        username=os.getenv("SPLUNK_USERNAME", "").strip(),
+        password=os.getenv("SPLUNK_PASSWORD", ""),
+        saved_search=os.getenv("SPLUNK_SAVED_SEARCH", "").strip(),
+        custom_search=os.getenv("SPLUNK_CUSTOM_SEARCH", "").strip(),
+        earliest_time=os.getenv("SPLUNK_EARLIEST_TIME", "-90d@d").strip() or "-90d@d",
         ssl_verify=_bool_env("SPLUNK_VERIFY_SSL", True),
         poll_interval_seconds=int(os.getenv("SPLUNK_CONNECTOR_POLL_SECONDS", "300") or "300"),
         api_base_url=os.getenv("CORE_API_URL", "http://127.0.0.1:8888").rstrip("/"),

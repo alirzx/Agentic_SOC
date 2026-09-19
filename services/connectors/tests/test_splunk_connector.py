@@ -129,6 +129,74 @@ async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_fetch_alerts_custom_search_uses_basic_auth_and_earliest():
+    c = SplunkConnector(
+        base_url=BASE,
+        username="admin",
+        password="secret",
+        custom_search='search rest splunk_server=local count=0 /services/saved/searches | table title',
+        earliest_time="-90d@d",
+        ssl_verify=False,
+    )
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "SID3"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID3/results").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "Notable Name": "Brute Force Detected",
+                        "Description": "Too many failures",
+                        "Severity": "4",
+                    }
+                ]
+            },
+        )
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID3(\?.*)?$").mock(return_value=_done_status())
+
+    out = await c.fetch_alerts()
+    assert jobs.called
+    body = jobs.calls[0].request.content.decode()
+    assert "earliest_time" in body and "-90d" in body
+    auth_header = jobs.calls[0].request.headers.get("authorization", "")
+    assert auth_header.lower().startswith("basic ")
+    assert len(out) == 1
+    assert out[0]["title"] == "Brute Force Detected"
+    assert out[0]["severity"] == "high"
+    assert out[0]["external_id"]
+
+
+def test_timeless_catalog_skips_checkpoint_filter():
+    c = _conn()
+    c.set_checkpoint({"time": "", "id": "Zzz"})
+    rows = [
+        {"Notable Name": "AAA Rule", "Severity": "3"},
+        {"Notable Name": "MMM Rule", "Severity": "4"},
+    ]
+    fresh = c._order_and_checkpoint(rows)
+    assert len(fresh) == 2
+    assert c.get_checkpoint() is None
+
+
+def test_normalize_es_catalog_row():
+    c = _conn()
+    row = {
+        "Notable Name": "Access - Excessive Failed Logins",
+        "Description": "ES correlation",
+        "Severity": "5",
+        "Notable SPL": "| tstats ...",
+    }
+    out = c.normalize(row)
+    assert out["title"] == "Access - Excessive Failed Logins"
+    assert out["severity"] == "critical"
+    assert out["description"] == "ES correlation"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_pagination_collects_all_results_no_head_cap():
     c = _conn(saved_search="", page_size=100)
     total = 250

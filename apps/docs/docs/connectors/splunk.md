@@ -1,40 +1,84 @@
 ---
 title: Splunk SIEM
-description: Ingest notable events (urgency→severity) into AiSOC (splunk connector).
+description: Ingest notable events / ES correlation catalog into AiSOC (splunk connector).
 ---
 
 # Splunk SIEM
 
-The **Splunk** connector (`splunk`, category `siem`) pulls notable events via the Splunk REST API and normalizes each into the AiSOC alert shape, mapping urgency onto the five-tier ladder (`info | low | medium | high | critical`).
+The **Splunk** connector (`splunk`, category `siem`) pulls data via the Splunk REST API on the **management port (8089)** — not the web UI port (8000).
+
+Auth: **Bearer token** *or* **Basic username/password**. Severity maps onto `info | low | medium | high | critical` (including ES numeric 1–5).
 
 ## Architecture
 
 ```
-Splunk (8089) → connectors (SplunkConnector) → ingest-worker
+Splunk (:8089) → connectors (SplunkConnector) → ingest-worker
   → Kafka raw_events → fusion → Postgres alerts → dashboard / realtime
 ```
 
-Operator docs for the dedicated live-ingest module live at `services/splunk/README.md`.
+## Setup (live stack)
 
-## Setup
+```bash
+pnpm aisoc:splunk
+pnpm aisoc:purge-demo
+```
 
-1. Bring up the live spine (demo stack + Splunk overlay):
+In **Connectors → Add → Splunk SIEM**:
 
-   ```bash
-   pnpm aisoc:splunk
-   pnpm aisoc:purge-demo   # wipe any leftover seeded INC-RT-* / DEMO-* rows
-   ```
+| Field | Example |
+|-------|---------|
+| Splunk URL | `https://192.168.0.10:8089` |
+| Username / Password | Splunk admin (or leave blank and use Token) |
+| Custom SPL | ES correlation-search catalog (below) or `search index=notable` |
+| Earliest time | `-90d@d` |
+| Verify SSL | off for lab self-signed certs |
 
-2. In **Connectors → Add connector**, choose **Splunk SIEM**.
-3. Fill in:
-   - **Splunk URL** — management port (`https://host:8089`), not the web UI.
-   - **HEC / API Token** — vault-encrypted at rest.
-   - **Saved Search Name** — default `AiSOC_Alerts`; leave blank to search `index=notable`.
-   - **Verify SSL** — disable only for self-signed / private CA labs.
-4. Click **Test connection**, then **Save**. The in-process scheduler polls on the default cadence (override per-instance via `poll_interval_seconds`).
+### ES correlation-search catalog (operator query)
 
-Events flow through ingest (OCSF normalize) → Kafka → fusion, where alerts are written to Postgres and broadcast on the realtime channel. The dashboard `/metrics/dashboard` endpoint aggregates those live rows — there is no mock fallback.
+Use **`| rest`** (not `search rest`) — verified against Splunk 9.3:
 
-## Agent-side SPL queries
+```spl
+| rest splunk_server=local count=0 /services/saved/searches
+| search action.correlationsearch.enabled=1
+| eval notable_name=title
+| eval severity=action.notable.param.severity
+| eval annotations=action.correlationsearch.annotations
+| table notable_name description search annotations severity
+| rename notable_name as "Notable Name",
+         description as "Description",
+         search as "Notable SPL",
+         severity as "Severity"
+| sort "Notable Name"
+```
 
-Separate from ingest, TriageAgent can run constrained SPL against the same Splunk instance when `SPLUNK_ENABLED=true` (see `.env.example` and `services/agents/app/integrations/splunk/`). That path is for investigation enrichment, not dashboard population.
+Paste into **Custom SPL**. This returns the ES *rule catalog* (~thousands of definitions).
+
+For **fired** notables (live incidents in the dashboard feed), use instead:
+
+```spl
+search index=notable
+```
+
+with earliest `-90d@d` (or longer).
+
+Click **Test connection**, then **Save**. The scheduler polls on the configured cadence.
+
+## Env bootstrap
+
+Repo-root `.env` (never commit secrets):
+
+```bash
+SPLUNK_ENABLED=true
+SPLUNK_BASE_URL=https://192.168.0.10:8089
+SPLUNK_USERNAME=admin
+SPLUNK_PASSWORD=  # set locally
+SPLUNK_VERIFY_SSL=false
+SPLUNK_EARLIEST_TIME=-90d@d
+SPLUNK_CUSTOM_SEARCH=...   # optional; same SPL as above
+```
+
+Then `python scripts/splunk_bootstrap.py` (needs `AISOC_API_TOKEN` + running API).
+
+## Agent-side SPL
+
+TriageAgent can run constrained SPL when `SPLUNK_ENABLED=true` (`services/agents/app/integrations/splunk/`). That path enriches investigations; dashboard KPIs come from the connector ingest spine above.
