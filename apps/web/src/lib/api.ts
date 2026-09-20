@@ -735,6 +735,7 @@ function normalizeAlert(raw: unknown): Alert {
     tags,
     createdAt:
       pickStr('created_at', 'createdAt') ??
+      pickStr('event_time', 'eventTime') ??
       pickStr('first_seen', 'firstSeen') ??
       new Date().toISOString(),
     updatedAt:

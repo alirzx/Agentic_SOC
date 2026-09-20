@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Alert detail no longer paints a CrowdStrike demo incident.**
+  `GET /alerts/{id}` used SWR `fallbackData` of a canned PowerShell/C2
+  alert (`CS-2024-789012`). A 404 from a live Splunk notable ID showed that
+  mock with the real UUID in the breadcrumb. The page now loads, errors, or
+  404s honestly; failed AI investigations no longer inject a fake report.
+
 - **Entity-risk drawer no longer crashes with `RangeError: Invalid time value`.**
   Fusion appended `Z` to timezone-aware Splunk `event_time` values, producing
   `+00:00Z` on contributing alerts. The drawer now sanitizes those timestamps,

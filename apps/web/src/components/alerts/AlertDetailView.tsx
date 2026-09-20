@@ -16,11 +16,12 @@ import {
   type AnalystVerdict,
   type RedispositionCandidate,
 } from '@/lib/api';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { clsx } from 'clsx';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { ExplainDrawer } from '@/components/alerts/ExplainDrawer';
 import { CreateCaseModal } from '@/components/alerts/CreateCaseModal';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,79 +62,17 @@ const CONFIDENCE_CONFIG: Record<ConfidenceLabel, { label: string; badge: string;
   },
 };
 
-// Mock alert for development
-const MOCK_ALERT: Alert = {
-  id: 'alert-1',
-  title: 'Suspicious PowerShell execution detected',
-  description: 'A PowerShell script was executed with obfuscated content and attempted to download a payload from an external domain. The process was spawned by a user with administrative privileges outside of business hours.',
-  severity: 'critical',
-  status: 'new',
-  source: 'CrowdStrike',
-  sourceRef: 'CS-2024-789012',
-  tenantId: 'tenant-1',
-  riskScore: 95,
-  mitreAttack: [
-    { tactic: 'Execution', technique: 'PowerShell', techniqueId: 'T1059.001' },
-    { tactic: 'Defense Evasion', technique: 'Obfuscated Files or Information', techniqueId: 'T1027' },
-    { tactic: 'Command and Control', technique: 'Application Layer Protocol', techniqueId: 'T1071' },
-  ],
-  iocs: [
-    { type: 'ip', value: '185.220.101.45', malicious: true },
-    { type: 'domain', value: 'payload-c2.xyz', malicious: true },
-    { type: 'hash', value: 'a1b2c3d4e5f6789012345678901234567890abcd', malicious: true },
-  ],
-  tags: ['powershell', 'c2-beacon', 'high-priority'],
-  assignee: 'analyst@example.com',
-  createdAt: '2026-05-06T11:00:00Z',
-  updatedAt: '2026-05-06T11:30:00Z',
-  confidenceLabel: 'high',
-  confidenceScore: 0.86,
-  confidenceRationale: [
-    {
-      factor: 'severity',
-      label: 'Critical severity from source',
-      value: 1.0,
-      contribution: 0.20,
-      weight: 0.20,
-    },
-    {
-      factor: 'mitre_coverage',
-      label: '3 MITRE techniques mapped (T1059.001, T1027, T1071)',
-      value: 1.0,
-      contribution: 0.18,
-      weight: 0.18,
-    },
-    {
-      factor: 'threat_intel',
-      label: 'IOC matched against known C2 infrastructure',
-      value: 1.0,
-      contribution: 0.20,
-      weight: 0.20,
-    },
-    {
-      factor: 'ml_score',
-      label: 'Anomaly score 0.94 (UEBA baseline deviation)',
-      value: 0.94,
-      contribution: 0.14,
-      weight: 0.15,
-    },
-    {
-      factor: 'upstream_risk',
-      label: 'Affected user is in elevated-risk cohort',
-      value: 0.78,
-      contribution: 0.08,
-      weight: 0.10,
-    },
-    {
-      factor: 'ioc_density',
-      label: '3 distinct malicious IOCs in single event',
-      value: 0.85,
-      contribution: 0.06,
-      weight: 0.07,
-    },
-  ],
-  ledgerRunId: 'run-mock-c2-beacon-investigation',
-};
+function formatAlertTime(raw: string | undefined, pattern: string): string {
+  if (!raw) return '—';
+  const cleaned = raw.replace(/([+-]\d{2}:\d{2})Z$/, '$1');
+  const date = new Date(cleaned);
+  if (!isValid(date)) return '—';
+  try {
+    return format(date, pattern);
+  } catch {
+    return '—';
+  }
+}
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
@@ -329,7 +268,7 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
                   </span>
                 </div>
                 <div className="text-[10px] text-gray-600 mt-0.5" suppressHydrationWarning>
-                  {event.agent} · {format(new Date(event.ts), 'HH:mm:ss')}
+                  {event.agent} · {formatAlertTime(event.ts, 'HH:mm:ss')}
                 </div>
               </div>
             </li>
@@ -351,52 +290,14 @@ function AIInvestigation({ alertId }: { alertId: string }) {
       const result = await agentsApi.investigate(alertId);
       setInvestigation(result);
     } catch (err) {
-      // Show mock investigation for demo
-      setInvestigation({
-        id: 'inv-1',
-        alertId,
-        status: 'completed',
-        findings: `## AI Investigation Summary
-
-**Threat Classification:** Advanced Persistent Threat (APT) - High Confidence
-
-### Executive Summary
-The PowerShell execution event represents a multi-stage attack with C2 communication. The attacker leveraged legitimate administrative credentials obtained via credential stuffing to execute an obfuscated downloader script.
-
-### Key Findings
-1. **Initial Access**: Credential abuse from IP 185.220.101.45 (known Tor exit node)
-2. **Execution**: Obfuscated PowerShell base64 encoded payload downloading secondary stage
-3. **C2 Communication**: Established encrypted channel to payload-c2.xyz (newly registered domain, 3 days old)
-4. **Lateral Movement Risk**: Current user has admin rights on 12 additional systems
-
-### MITRE ATT&CK Coverage
-- T1059.001 (PowerShell) → Active
-- T1027 (Obfuscation) → Active  
-- T1071 (Application Layer Protocol) → Active
-
-### Recommended Actions
-1. Isolate affected endpoint immediately
-2. Block IP 185.220.101.45 at perimeter firewall
-3. Block domain payload-c2.xyz at DNS level
-4. Reset credentials for affected user account
-5. Hunt for similar PowerShell patterns across fleet`,
-        recommendations: [
-          'Isolate endpoint DESKTOP-ABC123 from network immediately',
-          'Block IP 185.220.101.45 at firewall',
-          'Block domain payload-c2.xyz at DNS',
-          'Reset password for user john.doe@company.com',
-          'Review admin rights across all systems',
-        ],
-        actions: [
-          { type: 'isolate_endpoint', target: 'DESKTOP-ABC123', status: 'pending' },
-          { type: 'block_ip', target: '185.220.101.45', status: 'pending' },
-          { type: 'block_domain', target: 'payload-c2.xyz', status: 'pending' },
-        ],
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-      });
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Investigation failed — no demo report is shown.',
+      );
+    } finally {
+      setIsRunning(false);
     }
-    setIsRunning(false);
   };
 
   if (!investigation) {
@@ -824,7 +725,6 @@ function AnalystOverridePanel({
 
 export function AlertDetailView({ alertId }: { alertId: string }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'raw'>('overview');
-  const [status, setStatus] = useState<Alert['status']>('new');
   // Side drawer for the "Explain this alert" structured walkthrough
   // (`POST /api/v1/explain`). Kept local to the detail view because it
   // only makes sense while a single alert is on screen.
@@ -834,23 +734,21 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
   // the alert to an existing one before running a playbook.
   const [createCaseOpen, setCreateCaseOpen] = useState(false);
 
-  const { data: alert, isLoading, mutate } = useSWR(
+  const { data: alert, error, isLoading, mutate } = useSWR(
     ['alert', alertId],
     () => alertsApi.get(alertId),
-    { fallbackData: { ...MOCK_ALERT, id: alertId, status } }
   );
 
   const handleStatusChange = async (newStatus: Alert['status']) => {
-    setStatus(newStatus);
     try {
       await alertsApi.update(alertId, { status: newStatus });
       mutate();
     } catch {
-      // handled gracefully
+      toast.error('Could not update alert status');
     }
   };
 
-  if (isLoading || !alert) {
+  if (isLoading && !alert) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500 animate-pulse">
         Loading alert...
@@ -858,7 +756,28 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
     );
   }
 
-  const sevCfg = SEVERITY_CONFIG[alert.severity];
+  if (error || !alert) {
+    return (
+      <ErrorState
+        title="Alert not found"
+        description="This ID is not in the live alert store for the current tenant. No demo alert is shown — open the Alerts list for Splunk notables."
+        error={error}
+        onRetry={() => mutate()}
+        action={
+          <Link
+            href="/alerts"
+            className="rounded-md border border-[#374151] bg-dark-60 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-dark-20"
+          >
+            Back to alerts
+          </Link>
+        }
+      />
+    );
+  }
+
+  const sevCfg =
+    SEVERITY_CONFIG[alert.severity as keyof typeof SEVERITY_CONFIG] ??
+    SEVERITY_CONFIG.info;
   const stsCfg = STATUS_CONFIG[alert.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.new;
 
   return (
@@ -890,7 +809,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
             <span className="text-xs text-gray-500">Risk Score: <span className="text-white font-bold">{alert.riskScore}</span></span>
           </div>
           <h1 className="text-lg font-semibold text-gray-100">{alert.title}</h1>
-          <p className="text-sm text-gray-500 mt-1" suppressHydrationWarning>{alert.source} · {format(new Date(alert.createdAt), 'MMM d, yyyy HH:mm:ss')}</p>
+          <p className="text-sm text-gray-500 mt-1" suppressHydrationWarning>{alert.source} · {formatAlertTime(alert.createdAt, 'MMM d, yyyy HH:mm:ss')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <select
@@ -1007,9 +926,9 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
                 <Field label="Source Ref" value={alert.sourceRef || '—'} />
                 <Field label="Tenant" value={alert.tenantId} />
                 <Field label="Assignee" value={alert.assignee || <span className="text-gray-500">Unassigned</span>} />
-                <Field label="Created" value={<span suppressHydrationWarning>{format(new Date(alert.createdAt), 'MMM d, yyyy HH:mm:ss')}</span>} />
+                <Field label="Created" value={<span suppressHydrationWarning>{formatAlertTime(alert.createdAt, 'MMM d, yyyy HH:mm:ss')}</span>} />
                 {alert.resolvedAt && (
-                  <Field label="Resolved" value={<span suppressHydrationWarning>{format(new Date(alert.resolvedAt), 'MMM d, yyyy HH:mm:ss')}</span>} />
+                  <Field label="Resolved" value={<span suppressHydrationWarning>{formatAlertTime(alert.resolvedAt, 'MMM d, yyyy HH:mm:ss')}</span>} />
                 )}
                 {alert.tags && alert.tags.length > 0 && (
                   <Field label="Tags" value={
@@ -1080,7 +999,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
                 <div className="pb-4">
                   <div className="text-sm font-medium text-gray-200">{event.title}</div>
                   <div className="text-xs text-gray-500 mt-0.5">{event.desc}</div>
-                  <div className="text-xs text-gray-600 mt-1" suppressHydrationWarning>{format(new Date(event.time), 'MMM d, yyyy HH:mm:ss')}</div>
+                  <div className="text-xs text-gray-600 mt-1" suppressHydrationWarning>{formatAlertTime(event.time, 'MMM d, yyyy HH:mm:ss')}</div>
                 </div>
               </div>
             ))}
