@@ -1127,6 +1127,30 @@ function mapEntityType(raw: string | undefined): EntityType {
   return 'host';
 }
 
+/**
+ * Parse fusion timestamps that may be naive ISO, UTC `Z`, or the invalid
+ * `+00:00Z` form produced by appending Z to an aware datetime.
+ */
+function parseFlexibleDate(raw: unknown): Date | null {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const date = new Date(raw < 1e12 ? raw * 1000 : raw);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof raw !== 'string') return null;
+  const text = raw.trim();
+  if (!text) return null;
+  const cleaned = text.replace(/([+-]\d{2}:\d{2})Z$/, '$1');
+  const date = new Date(cleaned);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeIsoTimestamp(raw: unknown, fallback: string): string {
+  const parsed = parseFlexibleDate(raw);
+  if (parsed) return parsed.toISOString();
+  const fallbackDate = parseFlexibleDate(fallback);
+  return (fallbackDate ?? new Date()).toISOString();
+}
+
 function mapEntityRiskRecord(
   raw: EntityRiskWire,
   queueThreshold: number = 80,
@@ -1136,7 +1160,7 @@ function mapEntityRiskRecord(
     typeof raw.threshold === 'number' && raw.threshold > 0
       ? raw.threshold
       : queueThreshold;
-  const lastSeen = raw.last_seen || new Date().toISOString();
+  const lastSeen = normalizeIsoTimestamp(raw.last_seen, new Date().toISOString());
   const histogram = {
     ...(raw.severity_histogram ?? {}),
     ...(raw.severities ?? {}),
@@ -1151,7 +1175,12 @@ function mapEntityRiskRecord(
       title: c.title ?? c.detection ?? null,
       source: c.source ?? null,
     }))
-  ).filter((c) => c.alert_id);
+  )
+    .filter((c) => c.alert_id)
+    .map((c) => ({
+      ...c,
+      observed_at: normalizeIsoTimestamp(c.observed_at, lastSeen),
+    }));
 
   return {
     tenant_id: String(raw.tenant_id ?? ''),
@@ -1164,7 +1193,7 @@ function mapEntityRiskRecord(
     promoted: Boolean(raw.promoted ?? raw.promoted_at),
     promoted_incident_id: raw.promoted_incident_id ?? null,
     last_seen: lastSeen,
-    first_seen: raw.first_seen || lastSeen,
+    first_seen: normalizeIsoTimestamp(raw.first_seen, lastSeen),
     contributions,
     severity_histogram: histogram,
     alert_count:

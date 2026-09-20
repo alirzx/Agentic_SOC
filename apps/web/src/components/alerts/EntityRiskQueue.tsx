@@ -13,8 +13,9 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import Link from 'next/link';
 import { clsx } from 'clsx';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isValid } from 'date-fns';
 import {
   entityRiskApi,
   type EntityRiskRecord,
@@ -43,6 +44,18 @@ const SEVERITY_DOT: Record<string, string> = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatSeenAt(raw: string | null | undefined): string {
+  if (!raw) return 'unknown';
+  const cleaned = raw.replace(/([+-]\d{2}:\d{2})Z$/, '$1');
+  const date = new Date(cleaned);
+  if (!isValid(date)) return 'unknown';
+  try {
+    return formatDistanceToNow(date, { addSuffix: true });
+  } catch {
+    return 'unknown';
+  }
+}
 
 function bandFor(score: number, threshold: number): {
   label: string;
@@ -230,10 +243,7 @@ function EntityRow({
           <SeverityHistogram histogram={record.severity_histogram} />
           <span className="text-gray-700">·</span>
           <span className="text-xs text-gray-500" suppressHydrationWarning>
-            last seen{' '}
-            {formatDistanceToNow(new Date(record.last_seen), {
-              addSuffix: true,
-            })}
+            last seen {formatSeenAt(record.last_seen)}
           </span>
         </div>
       </div>
@@ -328,10 +338,7 @@ function EntityDetailDrawer({
                 {record.alert_count}
               </p>
               <p className="text-[10px] text-gray-500 mt-0.5" suppressHydrationWarning>
-                first seen{' '}
-                {formatDistanceToNow(new Date(record.first_seen), {
-                  addSuffix: true,
-                })}
+                first seen {formatSeenAt(record.first_seen)}
               </p>
             </div>
           </div>
@@ -371,7 +378,16 @@ function EntityDetailDrawer({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-200 truncate">
-                          {c.title ?? c.alert_id}
+                          {c.alert_id ? (
+                            <Link
+                              href={`/alerts/${c.alert_id}`}
+                              className="hover:text-brand-300 hover:underline"
+                            >
+                              {c.title ?? c.alert_id}
+                            </Link>
+                          ) : (
+                            (c.title ?? c.alert_id)
+                          )}
                         </span>
                         <span className="text-[10px] text-gray-500 shrink-0">
                           +{Math.round(c.raw_points)}
@@ -381,9 +397,7 @@ function EntityDetailDrawer({
                         {c.source && <span>{c.source}</span>}
                         {c.source && <span className="text-gray-700">·</span>}
                         <span suppressHydrationWarning>
-                          {formatDistanceToNow(new Date(c.observed_at), {
-                            addSuffix: true,
-                          })}
+                          {formatSeenAt(c.observed_at)}
                         </span>
                       </div>
                     </div>

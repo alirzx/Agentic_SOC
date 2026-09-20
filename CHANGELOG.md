@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Entity-risk drawer no longer crashes with `RangeError: Invalid time value`.**
+  Fusion appended `Z` to timezone-aware Splunk `event_time` values, producing
+  `+00:00Z` on contributing alerts. The drawer now sanitizes those timestamps,
+  and fusion emits a single valid UTC `Z` suffix.
+
 - **Entity-risk queue/stats no longer 422 on `tenant_id=default`.** The web
   bundle baked `NEXT_PUBLIC_TENANT_ID=default` while fusion typed the query
   param as UUID. The console now maps `default`/`demo` to the canonical demo

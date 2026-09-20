@@ -31,7 +31,7 @@ import json
 import math
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -51,6 +51,18 @@ _TOPN_KEY = "aisoc:fusion:rba:topn:"
 _PROMOTED_KEY = "aisoc:fusion:rba:promoted:"
 
 ENTITY_TYPES: tuple[str, ...] = ("user", "host", "src_ip", "domain")
+
+
+def isoformat_z(dt: datetime) -> str:
+    """UTC ISO-8601 ending in a single ``Z``.
+
+    Naive datetimes are treated as UTC. Aware datetimes are converted to UTC
+    *without* appending a second ``Z`` — ``isoformat() + 'Z'`` on an aware
+    value produced ``...+00:00Z``, which browsers reject as Invalid Date and
+    date-fns then throws ``RangeError: Invalid time value``.
+    """
+    aware = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return aware.isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
@@ -88,10 +100,10 @@ class EntityRiskRecord:
             "entity_value": self.entity_value,
             "score": round(self.score, 2),
             "alert_count": self.alert_count,
-            "last_seen": self.last_seen.isoformat() + "Z",
+            "last_seen": isoformat_z(self.last_seen),
             "contributing_alerts": self.contributing_alerts,
             "severities": self.severities,
-            "promoted_at": (self.promoted_at.isoformat() + "Z") if self.promoted_at else None,
+            "promoted_at": isoformat_z(self.promoted_at) if self.promoted_at else None,
             "contributors": self.contributors or [],
         }
 
@@ -274,7 +286,7 @@ class EntityRiskEngine:
                 "severity": sig.severity,
                 "detection": sig.detection,
                 "points": sig.points,
-                "at": sig.occurred_at.isoformat() + "Z",
+                "at": isoformat_z(sig.occurred_at),
             }
         )
         if len(contributors) > 25:

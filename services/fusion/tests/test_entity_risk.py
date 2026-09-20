@@ -355,3 +355,22 @@ async def test_tenants_are_isolated(engine: EntityRiskEngine) -> None:
     queue_b = await engine.top_entities(other_tenant)
     assert all(r.tenant_id == str(_TENANT) for r in queue_a)
     assert all(r.tenant_id == str(other_tenant) for r in queue_b)
+
+
+def test_isoformat_z_aware_utc_is_single_suffix() -> None:
+    from datetime import timezone
+
+    from app.services.entity_risk import isoformat_z
+
+    text = isoformat_z(datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc))
+    assert text.endswith("Z")
+    assert "+00:00" not in text
+    assert not text.endswith("+00:00Z")
+
+
+def test_isoformat_z_naive_is_single_suffix() -> None:
+    from app.services.entity_risk import isoformat_z
+
+    text = isoformat_z(datetime(2026, 9, 20, 12, 0, 0))
+    assert text.endswith("Z")
+    assert text.count("Z") == 1
