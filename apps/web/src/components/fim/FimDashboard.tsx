@@ -5,13 +5,9 @@ import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import type { FimEventsPage, FimSummary } from '@/lib/osquery-api';
 import { getFimEvents, getFimSummary } from '@/lib/osquery-api';
+import { getActiveTenantId } from '@/lib/api';
 import { FimSummaryCards } from './FimSummaryCards';
 import { FimEventsTable } from './FimEventsTable';
-
-const TENANT_ID =
-  typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_TENANT_ID ?? 'default')
-    : 'default';
 
 const PAGE_SIZE = 25;
 
@@ -51,12 +47,13 @@ export function FimDashboard() {
   const [pathPrefix, setPathPrefix] = useState('');
   const [since, setSince] = useState('24h');
 
+  const tenantId = getActiveTenantId();
   const sinceISO = sinceToISO(since);
 
   // Events feed
   const eventsKey = [
     'fim-events',
-    TENANT_ID,
+    tenantId,
     page,
     action,
     pathPrefix,
@@ -70,7 +67,7 @@ export function FimDashboard() {
     eventsKey,
     () =>
       getFimEvents({
-        tenant_id: TENANT_ID,
+        tenant_id: tenantId,
         page,
         page_size: PAGE_SIZE,
         action: action || undefined,
@@ -84,14 +81,14 @@ export function FimDashboard() {
   );
 
   // Summary cards
-  const summaryKey = ['fim-summary', TENANT_ID, sinceISO];
+  const summaryKey = ['fim-summary', tenantId, sinceISO];
   const {
     data: summaryData,
     error: summaryError,
     isLoading: summaryLoading,
   } = useSWR<FimSummary>(
     summaryKey,
-    () => getFimSummary({ tenant_id: TENANT_ID, since: sinceISO }),
+    () => getFimSummary({ tenant_id: tenantId, since: sinceISO }),
     {
       onError: () => toast.error('Failed to load FIM summary'),
       refreshInterval: 60_000,

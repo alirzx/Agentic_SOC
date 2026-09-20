@@ -3,11 +3,13 @@
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
 
+import { resolveTenantUuid } from "@/lib/api";
+
 // Same-origin by default — Next.js rewrites proxy `/api/v1/honeytokens/*`
 // to the honeytokens service. Override with `NEXT_PUBLIC_HONEYTOKENS_URL`
 // to debug against a different origin.
 const API = process.env.NEXT_PUBLIC_HONEYTOKENS_URL ?? "";
-const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
+const TENANT_ID = resolveTenantUuid(process.env.NEXT_PUBLIC_TENANT_ID);
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {

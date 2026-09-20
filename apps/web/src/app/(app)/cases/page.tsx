@@ -1,6 +1,7 @@
 import { CasesView } from '@/components/cases/CasesView';
 import {
   normalizeCasesResponse,
+  resolveTenantUuid,
   type CasesResponse,
 } from '@/lib/api';
 
@@ -15,8 +16,6 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-
 function resolveServerApiBase(): string {
   // Prefer the in-cluster mesh URL when running on Fly so SSR doesn't depend
   // on public DNS or TLS. Fall back to the public API base for local dev.
@@ -30,8 +29,7 @@ function resolveServerApiBase(): string {
 async function loadInitialCases(): Promise<CasesResponse | null> {
   const base = resolveServerApiBase();
   if (!base) return null;
-  const tenantId =
-    process.env.NEXT_PUBLIC_TENANT_ID?.trim() || DEFAULT_TENANT_ID;
+  const tenantId = resolveTenantUuid(process.env.NEXT_PUBLIC_TENANT_ID);
   try {
     const res = await fetch(`${base}/api/v1/cases`, {
       headers: {

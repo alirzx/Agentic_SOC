@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Entity-risk queue/stats no longer 422 on `tenant_id=default`.** The web
+  bundle baked `NEXT_PUBLIC_TENANT_ID=default` while fusion typed the query
+  param as UUID. The console now maps `default`/`demo` to the canonical demo
+  tenant UUID, and fusion + the API gateway accept those slugs.
+
 - **UEBA can no longer read an unscoreable baseline as normal behaviour.** A
   feature that had never been observed, had too few samples, or had zero
   variance produced a `0.0` z-score — the same value an observation sitting

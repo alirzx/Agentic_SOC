@@ -9,9 +9,9 @@
  * crossing the rest of the bundle.
  */
 
-const TENANT_ID =
-  process.env.NEXT_PUBLIC_TENANT_ID ||
-  "00000000-0000-0000-0000-000000000001";
+import { resolveTenantUuid } from "@/lib/api";
+
+const TENANT_ID = resolveTenantUuid(process.env.NEXT_PUBLIC_TENANT_ID);
 
 /**
  * Same-origin by default so Next.js rewrites can proxy to the API gateway.

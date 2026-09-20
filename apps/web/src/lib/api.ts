@@ -73,9 +73,32 @@ function wsOrigin(): string {
   return '';
 }
 
-const TENANT_ID =
-  process.env.NEXT_PUBLIC_TENANT_ID ||
-  '00000000-0000-0000-0000-000000000001';
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CANONICAL_DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+const TENANT_SLUG_ALIASES: Readonly<Record<string, string>> = {
+  default: CANONICAL_DEMO_TENANT_ID,
+  demo: CANONICAL_DEMO_TENANT_ID,
+};
+
+/**
+ * Fusion and the core API type `tenant_id` as UUID. The Next bundle used to
+ * bake `NEXT_PUBLIC_TENANT_ID=default`, which 422s those query params.
+ * Map known slugs (and leftover localStorage values) to the demo tenant.
+ * Unknown non-UUID values are returned unchanged so X-Tenant-Id slugs still work.
+ */
+export function resolveTenantUuid(raw: string | null | undefined): string {
+  const value = (raw ?? '').trim();
+  if (!value) {
+    return CANONICAL_DEMO_TENANT_ID;
+  }
+  if (UUID_RE.test(value)) {
+    return value.toLowerCase();
+  }
+  return TENANT_SLUG_ALIASES[value.toLowerCase()] ?? value;
+}
+
+const TENANT_ID = resolveTenantUuid(process.env.NEXT_PUBLIC_TENANT_ID);
 
 export const API_BASES = {
   api: API_BASE,
@@ -112,11 +135,11 @@ export function getActiveTenantId(): string {
   if (typeof window === 'undefined') return TENANT_ID;
   try {
     const override = window.localStorage.getItem(ACTIVE_TENANT_KEY);
-    if (override) return override;
+    if (override) return resolveTenantUuid(override);
     const raw = window.localStorage.getItem(AUTH_USER_KEY);
     if (raw) {
       const user = JSON.parse(raw) as { tenant_id?: string };
-      if (user.tenant_id) return user.tenant_id;
+      if (user.tenant_id) return resolveTenantUuid(user.tenant_id);
     }
   } catch {
     /* localStorage unavailable / malformed payload — fall through */
@@ -128,7 +151,7 @@ export function setActiveTenantId(tenantId: string | null): void {
   if (typeof window === 'undefined') return;
   try {
     if (tenantId) {
-      window.localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
+      window.localStorage.setItem(ACTIVE_TENANT_KEY, resolveTenantUuid(tenantId));
     } else {
       window.localStorage.removeItem(ACTIVE_TENANT_KEY);
     }
@@ -1165,7 +1188,7 @@ export const entityRiskApi = {
     limit?: number;
     promotedOnly?: boolean;
   } = {}): Promise<EntityRiskQueueResponse> => {
-    const tenantId = params.tenantId ?? getActiveTenantId();
+    const tenantId = resolveTenantUuid(params.tenantId ?? getActiveTenantId());
     try {
       const raw = await request<{
         tenant_id?: string;
@@ -1196,7 +1219,7 @@ export const entityRiskApi = {
 
   /** Tenant-scoped queue stats for dashboards (banding, totals, threshold). */
   stats: async (tenantId?: string): Promise<EntityRiskStats> => {
-    const tid = tenantId ?? getActiveTenantId();
+    const tid = resolveTenantUuid(tenantId ?? getActiveTenantId());
     try {
       const raw = await request<
         Partial<EntityRiskStats> & {
@@ -1244,7 +1267,7 @@ export const entityRiskApi = {
     const pathType = entityType === 'ip' ? 'src_ip' : entityType;
     const raw = await request<EntityRiskWire>(
       `${FUSION_PATH}/entity-risk/${pathType}/${encodeURIComponent(entityValue)}`,
-      { params: { tenant_id: tenantId ?? getActiveTenantId() } },
+      { params: { tenant_id: resolveTenantUuid(tenantId ?? getActiveTenantId()) } },
     );
     return mapEntityRiskRecord(raw);
   },
