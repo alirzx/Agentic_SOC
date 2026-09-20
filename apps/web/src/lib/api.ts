@@ -809,8 +809,13 @@ export const alertsApi = {
     } satisfies AlertsResponse;
   },
 
-  get: async (id: string) => {
-    const raw = await request<unknown>(`/api/v1/alerts/${id}`);
+  get: async (id: string, resolve?: { title?: string; host?: string }) => {
+    const raw = await request<unknown>(`/api/v1/alerts/${id}`, {
+      params: {
+        title: resolve?.title,
+        host: resolve?.host,
+      },
+    });
     return normalizeAlert(raw);
   },
 

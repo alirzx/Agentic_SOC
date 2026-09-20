@@ -734,9 +734,16 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
   // the alert to an existing one before running a playbook.
   const [createCaseOpen, setCreateCaseOpen] = useState(false);
 
+  const resolve =
+    typeof window === 'undefined'
+      ? {}
+      : {
+          title: new URLSearchParams(window.location.search).get('title') ?? undefined,
+          host: new URLSearchParams(window.location.search).get('host') ?? undefined,
+        };
   const { data: alert, error, isLoading, mutate } = useSWR(
-    ['alert', alertId],
-    () => alertsApi.get(alertId),
+    ['alert', alertId, resolve.title, resolve.host],
+    () => alertsApi.get(alertId, resolve),
   );
 
   const handleStatusChange = async (newStatus: Alert['status']) => {

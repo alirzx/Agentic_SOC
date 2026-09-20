@@ -208,7 +208,13 @@ class AlertSink:
                 )
             if row is None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
-                return PersistResult(PersistOutcome.DUPLICATE, canonical_id)
+                existing = await self.lookup_dedup(alert.tenant_id, alert.fingerprint())
+                # Legacy rows used a random uuid4 with the same hash; RBA must
+                # link to that stored id, not the fusion-minted uuid5.
+                return PersistResult(
+                    PersistOutcome.DUPLICATE,
+                    existing or canonical_id,
+                )
             return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
         except asyncpg.ForeignKeyViolationError:
             # Unknown tenant — a mis-provisioned connector, not a pipeline bug.

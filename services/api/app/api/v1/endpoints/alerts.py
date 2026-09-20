@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, computed_field
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import String, and_, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
@@ -760,11 +760,69 @@ async def get_alert_queue(
     )
 
 
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+async def _resolve_alert_alias(
+    db: DBSession,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
+    title: str | None,
+    host: str | None,
+):
+    """Map a fusion-minted RBA id onto the live Postgres row.
+
+    Splunk re-polls often stored the notable under a legacy uuid4 while
+    Entities kept a later uuid5 that ``WHERE NOT EXISTS (dedup_hash)``
+    never inserted. Resolve by source-event id, then title (+ host).
+    Always scoped to the caller's tenant.
+    """
+    by_source = await db.execute(
+        select(Alert)
+        .where(
+            Alert.tenant_id == tenant_id,
+            Alert.source_event_ids.contains([str(alert_id)]),
+        )
+        .order_by(Alert.event_time.desc())
+        .limit(1)
+    )
+    found = by_source.scalar_one_or_none()
+    if found is not None:
+        return found
+    if not title:
+        return None
+    filters = [Alert.tenant_id == tenant_id, Alert.title == title]
+    if host:
+        escaped = _escape_like(host)
+        filters.append(
+            or_(
+                Alert.affected_hosts.contains([host]),
+                cast(Alert.raw_event, String).ilike(f"%{escaped}%", escape="\\"),
+            )
+        )
+    result = await db.execute(
+        select(Alert).where(and_(*filters)).order_by(Alert.event_time.desc()).limit(1)
+    )
+    found = result.scalar_one_or_none()
+    if found is not None or not host:
+        return found
+    title_only = await db.execute(
+        select(Alert)
+        .where(Alert.tenant_id == tenant_id, Alert.title == title)
+        .order_by(Alert.event_time.desc())
+        .limit(1)
+    )
+    return title_only.scalar_one_or_none()
+
+
 @router.get("/{alert_id}", response_model=AlertDetailResponse)
 async def get_alert(
     alert_id: uuid.UUID,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
     db: DBSession,
+    title: str | None = Query(default=None, max_length=500),
+    host: str | None = Query(default=None, max_length=256),
 ) -> AlertDetailResponse:
     """Get a single alert by ID, enriched with Investigation Rail data.
 
@@ -783,6 +841,14 @@ async def get_alert(
     """
     result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
     alert = result.scalar_one_or_none()
+    if alert is None:
+        alert = await _resolve_alert_alias(
+            db,
+            current_user.tenant_id,
+            alert_id,
+            title.strip() if title else None,
+            host.strip() if host else None,
+        )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 

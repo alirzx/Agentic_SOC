@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Entity contributing-alert links open the live Splunk notable.** RBA stored
+  fusion-minted UUIDs that Postgres never inserted (legacy row kept the
+  original id). `GET /alerts/{id}` now resolves by title/host, and fusion
+  rewrites the contributor to the persisted row id.
+
 - **Splunk notables are no longer re-created on every poll/Sync.** Fusion's
   Redis dedup window was 5 minutes while Splunk polls every 30 minutes (and
   Sync re-pulls the 90-day window). Replays minted new fingerprints and

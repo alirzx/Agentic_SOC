@@ -380,7 +380,15 @@ function EntityDetailDrawer({
                         <span className="text-gray-200 truncate">
                           {c.alert_id ? (
                             <Link
-                              href={`/alerts/${c.alert_id}`}
+                              href={
+                                c.title
+                                  ? `/alerts/${c.alert_id}?title=${encodeURIComponent(c.title)}${
+                                      record.entity_value
+                                        ? `&host=${encodeURIComponent(record.entity_value)}`
+                                        : ''
+                                    }`
+                                  : `/alerts/${c.alert_id}`
+                              }
                               className="hover:text-brand-300 hover:underline"
                             >
                               {c.title ?? c.alert_id}

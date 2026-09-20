@@ -171,6 +171,24 @@ async def test_replay_same_event_time_does_not_restack(engine: EntityRiskEngine)
 
 
 @pytest.mark.asyncio
+async def test_replay_rewrites_contributor_to_persisted_id(engine: EntityRiskEngine) -> None:
+    from datetime import timezone
+
+    occurred = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    minted = _alert(severity=AlertSeverity.MEDIUM, hostname="win1")
+    minted.event_time = occurred
+    await engine.observe(minted)
+    persisted = _alert(severity=AlertSeverity.MEDIUM, hostname="win1")
+    persisted.event_time = occurred
+    await engine.observe(persisted)
+    rec = await engine.get(_TENANT, "host", "win1")
+    assert rec is not None
+    assert rec.alert_count == 1
+    assert rec.contributors[0]["alert_id"] == str(persisted.id)
+
+
+
+@pytest.mark.asyncio
 async def test_load_compacts_stacked_replay_rows(engine: EntityRiskEngine) -> None:
     from datetime import timezone
 

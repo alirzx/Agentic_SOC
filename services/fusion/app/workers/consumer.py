@@ -7,6 +7,7 @@ results back to Kafka, and persists non-duplicate alerts to Postgres.
 import asyncio
 import contextlib
 import json
+from uuid import UUID
 
 import structlog
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
@@ -312,6 +313,22 @@ class FusionWorker:
                 _METRICS["persist_unavailable"] += 1
             elif result.outcome is PersistOutcome.FAILED:
                 _METRICS["persist_failed"] += 1
+
+        # RBA contributor links must be the Postgres row id. Fusion may mint a
+        # uuid5 that never landed because an earlier poll already stored the
+        # notable under a legacy id.
+        if (
+            result.durable
+            and result.alert_id
+            and self._engine.entity_risk is not None
+            and self._engine.entity_risk.enabled
+        ):
+            try:
+                alert.id = UUID(result.alert_id)
+                fused.id = UUID(result.alert_id)
+                await self._engine.entity_risk.observe(alert)
+            except Exception as exc:  # noqa: BLE001 — RBA must not block publish
+                logger.warning("rba_canonical_observe_failed", error=str(exc))
 
         # Publish fused alert (even duplicates, so downstream can track),
         # carrying the durable row id + persistence outcome (issue #568).

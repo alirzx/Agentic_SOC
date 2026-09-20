@@ -308,8 +308,27 @@ class EntityRiskEngine:
             sig.replay_key and sig.replay_key in seen_replays
         ):
             # Same notable replayed (Splunk overlap / Sync). Do not restack
-            # points or duplicate the contributor row — even when ingest minted
-            # a new alert_id because the fingerprint still drifted.
+            # points. If persist later resolved a legacy Postgres id, rewrite
+            # the contributor link so Entities opens the live row.
+            rewritten = False
+            if sig.alert_id not in (record.contributing_alerts or []):
+                for item in record.contributors or []:
+                    collapse = f"{item.get('detection') or ''}|{item.get('at') or ''}"
+                    if sig.replay_key and (
+                        item.get("replay_key") == sig.replay_key or collapse == sig.replay_key
+                    ):
+                        old_id = item.get("alert_id")
+                        if old_id != sig.alert_id:
+                            item["alert_id"] = sig.alert_id
+                            rewritten = True
+                            record.contributing_alerts = [
+                                sig.alert_id if x == old_id else x
+                                for x in (record.contributing_alerts or [])
+                            ]
+                            if sig.alert_id not in record.contributing_alerts:
+                                record.contributing_alerts.append(sig.alert_id)
+            if rewritten:
+                await self._save(record)
             return record
 
         record.score = self._decay(record.score, record.last_seen, now) + sig.points

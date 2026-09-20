@@ -69,8 +69,9 @@ class _StubConn:
 
 
 class _StubPool:
-    def __init__(self, row):
+    def __init__(self, row, lookup_row=None):
         self.conn = _StubConn(row)
+        self._lookup_row = lookup_row if lookup_row is not None else row
 
     @asynccontextmanager
     async def _acquire(self):
@@ -78,6 +79,10 @@ class _StubPool:
 
     def acquire(self):
         return self._acquire()
+
+    async def fetchrow(self, sql, *args):
+        self.conn.calls.append((sql, args))
+        return self._lookup_row
 
 
 def test_dsn_strips_sqlalchemy_driver():
@@ -142,6 +147,18 @@ async def test_dedup_hit_returns_duplicate():
     result = await sink.persist(_fused())
     assert result.outcome is PersistOutcome.DUPLICATE
     assert result.alert_id == str(_fused().id)  # canonical id still known
+    assert result.durable is True
+
+
+@pytest.mark.asyncio
+async def test_dedup_hit_returns_existing_postgres_id():
+    existing = uuid.uuid4()
+    pool = _StubPool(row=None, lookup_row={"id": str(existing)})
+    sink = AlertSink("postgresql://x")
+    sink._pool = pool
+    result = await sink.persist(_fused())
+    assert result.outcome is PersistOutcome.DUPLICATE
+    assert result.alert_id == str(existing)
     assert result.durable is True
 
 

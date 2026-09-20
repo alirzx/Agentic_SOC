@@ -404,9 +404,29 @@ async def test_get_alert_same_tenant_returns_row(monkeypatch: pytest.MonkeyPatch
     _assert_tenant_scoped(db.executed, user.tenant_id)
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# update_alert
-# ────────────────────────────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_get_alert_resolves_stale_rba_id_by_title(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Entities may link a fusion uuid5 that was never inserted; title finds the live row."""
+    user = _user()
+    live = _alert(
+        user.tenant_id,
+        title="Network - Unapproved Port Activity Detected - Rule",
+        narrative="already filled",
+    )
+    db = _mk_db([None, None, live])
+    fake_envelope = MagicMock(related_entities=[], mini_timeline=[], recommended_actions=[])
+    monkeypatch.setattr(alerts_module, "build_rail_envelope", AsyncMock(return_value=fake_envelope))
+    result = await get_alert(
+        alert_id=uuid.uuid4(),
+        current_user=user,
+        db=db,
+        title=live.title,
+    )
+    assert result.id == live.id
+    _assert_tenant_scoped(db.executed, user.tenant_id)
+
 
 
 @pytest.mark.asyncio
