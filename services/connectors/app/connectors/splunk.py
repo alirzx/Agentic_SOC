@@ -136,6 +136,7 @@ class SplunkConnector(BaseConnector):
                     "Splunk URL",
                     placeholder="https://splunk.example.com:8089",
                     help_text="Management port (default 8089), not the web UI port (8000).",
+                    auth=True,
                 ),
                 Field(
                     "token",
@@ -150,6 +151,7 @@ class SplunkConnector(BaseConnector):
                     "Username",
                     required=False,
                     help_text="Basic auth username (e.g. admin). Used when token is empty.",
+                    auth=True,
                 ),
                 Field(
                     "password",

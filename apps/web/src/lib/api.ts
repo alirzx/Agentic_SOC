@@ -2135,6 +2135,8 @@ export interface ConnectorSchemaField {
   placeholder?: string;
   help_text?: string;
   options?: Array<{ value: string; label: string }>;
+  /** When true, wizard stores this field in vaulted auth_config (with secrets). */
+  auth?: boolean;
 }
 
 /** Forward-looking OAuth hints; rendered as "Hosted OAuth coming soon". */

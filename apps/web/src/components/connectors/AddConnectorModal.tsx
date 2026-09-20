@@ -84,11 +84,13 @@ function buildInitialValues(
 }
 
 /**
- * Split a flat values dict into ``auth_config`` (secrets) and
- * ``connector_config`` (everything else).
+ * Split a flat values dict into ``auth_config`` (vaulted) and
+ * ``connector_config`` (plaintext poll knobs).
  *
- * The backend expects this split because secrets get encrypted and
- * non-secrets stay plaintext for poll-config readability in the UI.
+ * Secrets (`type === 'secret'`) and fields marked ``auth: true`` (e.g.
+ * Splunk ``base_url`` / ``username``) go into ``auth_config``. Everything
+ * else stays in ``connector_config`` so the UI can show poll interval /
+ * custom SPL without decrypting the vault.
  */
 function partitionFormValues(
   fields: ConnectorSchemaField[],
@@ -103,7 +105,7 @@ function partitionFormValues(
     // "operator did not provide".
     const isEmpty = v === '' || v === null || v === undefined;
     if (isEmpty && !f.required) continue;
-    if (f.type === 'secret') {
+    if (f.type === 'secret' || f.auth === true) {
       auth_config[f.name] = v;
     } else {
       connector_config[f.name] = v;

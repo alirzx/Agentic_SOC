@@ -205,7 +205,15 @@ FieldType = Literal["string", "secret", "select", "textarea", "boolean", "number
 
 @dataclass(frozen=True)
 class Field:
-    """A single config form field exposed to the wizard UI."""
+    """A single config form field exposed to the wizard UI.
+
+    ``auth=True`` marks connection-identity fields (URL, username, tenant id)
+    that must travel with secrets in ``auth_config`` even when they are not
+    masked inputs. Without this flag the wizard parks them in plaintext
+    ``connector_config``, and a config-only repair/overwrite can drop them
+    while leaving the password vaulted — Test/Sync then fail with
+    ``missing ... base_url``.
+    """
 
     name: str
     type: FieldType
@@ -216,12 +224,15 @@ class Field:
     help_text: str | None = None
     # Only meaningful for ``type="select"`` — list of {"value", "label"} dicts.
     options: list[dict[str, str]] | None = None
+    # When True (or type=="secret"), the wizard puts this field in auth_config.
+    auth: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         # Strip Nones so the wire format stays compact and the frontend
-        # doesn't have to special-case missing-vs-None.
-        return {k: v for k, v in d.items() if v is not None}
+        # doesn't have to special-case missing-vs-None. Keep ``auth=False``
+        # omitted; only emit when True so older UIs ignore the key safely.
+        return {k: v for k, v in d.items() if v is not None and v is not False}
 
 
 @dataclass(frozen=True)
