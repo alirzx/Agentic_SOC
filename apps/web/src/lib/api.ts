@@ -1182,6 +1182,14 @@ function mapEntityRiskRecord(
       ...c,
       observed_at: normalizeIsoTimestamp(c.observed_at, lastSeen),
     }));
+  const seenContributions = new Set<string>();
+  const uniqueContributions: EntityRiskContribution[] = [];
+  for (const item of contributions) {
+    const marker = `${item.title ?? ''}|${item.observed_at}`;
+    if (seenContributions.has(marker)) continue;
+    seenContributions.add(marker);
+    uniqueContributions.push(item);
+  }
 
   return {
     tenant_id: String(raw.tenant_id ?? ''),
@@ -1195,12 +1203,11 @@ function mapEntityRiskRecord(
     promoted_incident_id: raw.promoted_incident_id ?? null,
     last_seen: lastSeen,
     first_seen: normalizeIsoTimestamp(raw.first_seen, lastSeen),
-    contributions,
+    contributions: uniqueContributions,
     severity_histogram: histogram,
     alert_count:
-      typeof raw.alert_count === 'number'
-        ? raw.alert_count
-        : contributions.length || (raw.contributing_alerts?.length ?? 0),
+      uniqueContributions.length ||
+      (typeof raw.alert_count === 'number' ? raw.alert_count : 0),
   };
 }
 

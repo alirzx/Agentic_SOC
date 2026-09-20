@@ -76,6 +76,24 @@ class EntitySignal:
     severity: str
     detection: str
     occurred_at: datetime
+    replay_key: str | None = None
+
+
+def _unique_contributors(contributors: list[dict] | None) -> list[dict]:
+    """Drop replay copies of the same notable (same rule + observed time)."""
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for item in contributors or []:
+        key = f"{item.get('detection') or ''}|{item.get('at') or ''}|{item.get('alert_id') or ''}"
+        # Prefer collapsing identical rule+time even when alert_id changed
+        # across Splunk re-polls (unstable ingest ids).
+        collapse = f"{item.get('detection') or ''}|{item.get('at') or ''}"
+        marker = collapse if collapse != "|" else key
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique.append(item)
+    return unique
 
 
 @dataclass
@@ -94,17 +112,18 @@ class EntityRiskRecord:
     contributors: list[dict] | None = None
 
     def to_dict(self) -> dict:
+        contributors = _unique_contributors(self.contributors)
         return {
             "tenant_id": self.tenant_id,
             "entity_type": self.entity_type,
             "entity_value": self.entity_value,
             "score": round(self.score, 2),
-            "alert_count": self.alert_count,
+            "alert_count": len(contributors) or self.alert_count,
             "last_seen": isoformat_z(self.last_seen),
             "contributing_alerts": self.contributing_alerts,
             "severities": self.severities,
             "promoted_at": isoformat_z(self.promoted_at) if self.promoted_at else None,
-            "contributors": self.contributors or [],
+            "contributors": contributors,
         }
 
 
@@ -228,6 +247,13 @@ class EntityRiskEngine:
         points = round(weight * confidence_factor, 2)
         detection = alert.title or alert.source
         occurred = alert.event_time or alert.created_at
+        # Vendor event_time (Splunk `_time`) is replay-stable. created_at=now()
+        # is not — do not collapse synthetic/test alerts that share a clock second.
+        replay_key = (
+            f"{detection}|{isoformat_z(alert.event_time)}"
+            if alert.event_time is not None
+            else None
+        )
 
         candidates: list[tuple[str, str | None]] = [
             ("user", alert.username),
@@ -248,6 +274,7 @@ class EntityRiskEngine:
                     severity=alert.severity.value,
                     detection=detection,
                     occurred_at=occurred,
+                    replay_key=replay_key,
                 )
             )
         return signals
@@ -270,14 +297,27 @@ class EntityRiskEngine:
                 contributors=[],
             )
 
+        seen_replays: set[str] = set()
+        for item in record.contributors or []:
+            if item.get("replay_key"):
+                seen_replays.add(str(item["replay_key"]))
+            collapse = f"{item.get('detection') or ''}|{item.get('at') or ''}"
+            if collapse != "|":
+                seen_replays.add(collapse)
+        if sig.alert_id in (record.contributing_alerts or []) or (
+            sig.replay_key and sig.replay_key in seen_replays
+        ):
+            # Same notable replayed (Splunk overlap / Sync). Do not restack
+            # points or duplicate the contributor row — even when ingest minted
+            # a new alert_id because the fingerprint still drifted.
+            return record
+
         record.score = self._decay(record.score, record.last_seen, now) + sig.points
         record.alert_count += 1
         record.last_seen = now
-        if sig.alert_id not in record.contributing_alerts:
-            record.contributing_alerts.append(sig.alert_id)
-            # Cap contributing list to keep payload small in the queue UI.
-            if len(record.contributing_alerts) > 50:
-                record.contributing_alerts = record.contributing_alerts[-50:]
+        record.contributing_alerts.append(sig.alert_id)
+        if len(record.contributing_alerts) > 50:
+            record.contributing_alerts = record.contributing_alerts[-50:]
         record.severities[sig.severity] = record.severities.get(sig.severity, 0) + 1
         contributors = record.contributors or []
         contributors.append(
@@ -287,6 +327,7 @@ class EntityRiskEngine:
                 "detection": sig.detection,
                 "points": sig.points,
                 "at": isoformat_z(sig.occurred_at),
+                "replay_key": sig.replay_key,
             }
         )
         if len(contributors) > 25:
@@ -364,7 +405,7 @@ class EntityRiskEngine:
             last_seen = datetime.fromisoformat(decoded["last_seen"])
         except (KeyError, ValueError):
             last_seen = datetime.utcnow()
-        return EntityRiskRecord(
+        record = EntityRiskRecord(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_value=entity_value,
@@ -376,3 +417,16 @@ class EntityRiskEngine:
             promoted_at=promoted_at,
             contributors=json.loads(decoded.get("contributors", "[]")),
         )
+        unique = _unique_contributors(record.contributors)
+        if unique and record.contributors and len(unique) < len(record.contributors):
+            record.contributors = unique
+            record.contributing_alerts = [
+                str(item["alert_id"]) for item in unique if item.get("alert_id")
+            ]
+            record.alert_count = len(unique)
+            record.score = round(
+                sum(float(item.get("points") or 0) for item in unique),
+                2,
+            )
+            await self._save(record)
+        return record

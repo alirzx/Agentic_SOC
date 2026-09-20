@@ -115,6 +115,32 @@ def _enrich_notable_row(row: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _stable_external_id(row: dict[str, Any]) -> str:
+    """Replay-stable notable identity for checkpoint + ingest dedup.
+
+    Prefer vendor GUIDs. When Splunk omits them (common on ``index=notable``
+    stash rows), hash the firing identity so a 90-day re-poll of the same
+    notable does not mint a new alert on every Sync.
+    """
+    for key in ("source_guid", "orig_sid", "event_id", "source_event_id"):
+        value = row.get(key)
+        if value not in (None, ""):
+            return str(value)
+    cd = row.get("_cd")
+    if cd not in (None, ""):
+        return str(cd)
+    parts = [
+        str(row.get("_time") or ""),
+        str(row.get("search_name") or row.get("source") or ""),
+        str(row.get("host") or row.get("dvc") or row.get("dest") or ""),
+        str(row.get("src") or row.get("src_ip") or ""),
+        str(row.get("dest_port") or ""),
+        str(row.get("orig_rid") or ""),
+    ]
+    digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+    return digest[:32]
+
+
 class SplunkConnector(BaseConnector):
     connector_id = "splunk"
     connector_name = "Splunk SIEM"
@@ -424,16 +450,7 @@ class SplunkConnector(BaseConnector):
 
     @staticmethod
     def _event_tiebreak(row: dict[str, Any]) -> str:
-        name = (
-            row.get("source_guid")
-            or row.get("source_event_id")
-            or row.get("event_id")
-            or row.get("_cd")
-            or row.get("Notable Name")
-            or row.get("notable_name")
-            or ""
-        )
-        return str(name)
+        return _stable_external_id(row)
 
     def _order_and_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         enriched = [_enrich_notable_row(r) if isinstance(r, dict) else r for r in rows]
@@ -494,13 +511,7 @@ class SplunkConnector(BaseConnector):
             }
 
         row = _enrich_notable_row(raw)
-        external_id = str(
-            row.get("source_guid")
-            or row.get("source_event_id")
-            or row.get("event_id")
-            or row.get("_cd")
-            or ""
-        )
+        external_id = _stable_external_id(row)
         title = (
             row.get("search_name")
             or row.get("orig_rule_title")
@@ -514,6 +525,7 @@ class SplunkConnector(BaseConnector):
             or ""
         )
         hostname = row.get("dvc") or row.get("dest") or row.get("host")
+        created_at = row.get("_time")
         return {
             "source": self.connector_id,
             "external_id": external_id,
@@ -524,5 +536,5 @@ class SplunkConnector(BaseConnector):
             "src_ip": row.get("src") or row.get("src_ip"),
             "hostname": hostname,
             "raw_event": row,
-            "created_at": row.get("_time"),
+            "created_at": str(created_at) if created_at is not None else None,
         }

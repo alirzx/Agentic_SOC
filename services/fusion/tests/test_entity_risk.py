@@ -132,6 +132,73 @@ def engine(fake_redis: _FakeRedis) -> EntityRiskEngine:
 
 
 @pytest.mark.asyncio
+async def test_replay_same_alert_id_does_not_restack(engine: EntityRiskEngine) -> None:
+    alert = _alert(severity=AlertSeverity.MEDIUM)
+    await engine.observe(alert)
+    await engine.observe(alert)
+    rec = await engine.get(_TENANT, "user", "alice")
+    assert rec is not None
+    assert rec.alert_count == 1
+    assert len(rec.contributors or []) == 1
+
+
+def test_unique_contributors_collapses_replay_copies() -> None:
+    from app.services.entity_risk import _unique_contributors
+
+    items = [
+        {"alert_id": "a", "detection": "Unapproved Port", "at": "t1"},
+        {"alert_id": "b", "detection": "Unapproved Port", "at": "t1"},
+    ]
+    assert len(_unique_contributors(items)) == 1
+
+
+@pytest.mark.asyncio
+async def test_replay_same_event_time_does_not_restack(engine: EntityRiskEngine) -> None:
+    """Splunk re-polls mint a new alert_id; vendor `_time` must still collapse."""
+    from datetime import timezone
+
+    occurred = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    first = _alert(severity=AlertSeverity.MEDIUM, hostname="win1")
+    first.event_time = occurred
+    second = _alert(severity=AlertSeverity.MEDIUM, hostname="win1")
+    second.event_time = occurred
+    await engine.observe(first)
+    await engine.observe(second)
+    rec = await engine.get(_TENANT, "host", "win1")
+    assert rec is not None
+    assert rec.alert_count == 1
+    assert len(rec.contributors or []) == 1
+
+
+@pytest.mark.asyncio
+async def test_load_compacts_stacked_replay_rows(engine: EntityRiskEngine) -> None:
+    from datetime import timezone
+
+    occurred = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    first = _alert(severity=AlertSeverity.MEDIUM, hostname="win1")
+    first.event_time = occurred
+    await engine.observe(first)
+    rec = await engine.get(_TENANT, "host", "win1")
+    assert rec is not None
+    rec.contributors = (rec.contributors or []) + [
+        {
+            "alert_id": "dup",
+            "detection": rec.contributors[0]["detection"],
+            "at": rec.contributors[0]["at"],
+            "points": rec.contributors[0]["points"],
+        }
+    ]
+    rec.alert_count = 2
+    rec.score = 20.0
+    await engine._save(rec)
+    compacted = await engine.get(_TENANT, "host", "win1")
+    assert compacted is not None
+    assert compacted.alert_count == 1
+    assert len(compacted.contributors or []) == 1
+
+
+
+@pytest.mark.asyncio
 async def test_observe_creates_record_for_each_entity(engine: EntityRiskEngine) -> None:
     alert = _alert(username="alice", hostname="dc01", src_ip="10.0.0.1")
     await engine.observe(alert)

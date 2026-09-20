@@ -182,6 +182,18 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
     if isinstance(finding_uid, str) and finding_uid.strip():
         source_event_ids.append(finding_uid.strip())
 
+    # Detection rule identity — never the per-event finding uid. Putting the
+    # unique event id in rule_id made every Splunk re-poll a new fingerprint.
+    rule_id = None
+    for candidate in (
+        _get_nested(ocsf, "finding", "rule_id"),
+        ocsf.get("rule_id"),
+        _get_nested(ocsf, "unmapped", "search_name"),
+    ):
+        if isinstance(candidate, str) and candidate.strip() and candidate.strip() != (finding_uid or "").strip():
+            rule_id = candidate.strip()
+            break
+
     return RawAlert(
         tenant_id=tenant_id,
         source=_source(ocsf),
@@ -201,6 +213,6 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         connector_type=connector_type,
         ocsf_class_uid=class_uid,
         source_event_ids=source_event_ids,
-        rule_id=finding_uid if isinstance(finding_uid, str) else None,
+        rule_id=rule_id,
         rule_name=_title(ocsf),
     )

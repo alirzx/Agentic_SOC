@@ -44,6 +44,22 @@ def test_normalize_is_idempotent():
     assert once["raw_event"] == row
 
 
+def test_normalize_stable_when_vendor_ids_missing():
+    c = _conn()
+    row = {
+        "search_name": "Network - Unapproved Port Activity Detected - Rule",
+        "_time": "2026-06-01T00:00:00Z",
+        "host": "WIN-017UMT7DCGT.soorinsec.local",
+        "src": "10.0.0.8",
+        "dest_port": "445",
+    }
+    once = c.normalize(row)
+    twice = c.normalize(dict(row))
+    assert once["external_id"]
+    assert once["external_id"] == twice["external_id"]
+    assert once["external_id"] != c.normalize({**row, "dest_port": "3389"})["external_id"]
+
+
 def test_normalize_deterministic_external_id():
     c = _conn()
     assert c.normalize({"_cd": "1:99", "urgency": "low"})["external_id"] == "1:99"

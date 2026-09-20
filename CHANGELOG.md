@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Splunk notables are no longer re-created on every poll/Sync.** Fusion's
+  Redis dedup window was 5 minutes while Splunk polls every 30 minutes (and
+  Sync re-pulls the 90-day window). Replays minted new fingerprints and
+  stacked identical RBA contributor rows. Notable identity is now stable,
+  Postgres is the durable dedup source, RBA ignores the same `alert_id`, and
+  the Entities drawer collapses identical rule+time copies.
+
 - **Alert detail no longer paints a CrowdStrike demo incident.**
   `GET /alerts/{id}` used SWR `fallbackData` of a canned PowerShell/C2
   alert (`CS-2024-789012`). A 404 from a live Splunk notable ID showed that

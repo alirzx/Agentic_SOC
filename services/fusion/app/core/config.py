@@ -68,8 +68,11 @@ class Settings(BaseSettings):
     attack_chain_window_seconds: int = Field(default=3600, alias="AISOC_ATTACK_CHAIN_WINDOW_SECONDS")
 
     # Redis
+    # Redis
     redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")
-    dedup_window_seconds: int = Field(default=300, alias="DEDUP_WINDOW_SECONDS")
+    # Must cover the Splunk first-poll lookback (90d). A 5-minute window let
+    # every Sync after TTL expiry re-fuse the same notable and restack RBA.
+    dedup_window_seconds: int = Field(default=7_776_000, alias="DEDUP_WINDOW_SECONDS")
     correlation_window_seconds: int = Field(default=3600, alias="CORRELATION_WINDOW_SECONDS")
 
     # Database

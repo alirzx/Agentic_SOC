@@ -156,3 +156,11 @@ class TestPromoteNormalizedEvent:
         b = promote_normalized_event(_message())
         assert a is not None and b is not None
         assert a.fingerprint() == b.fingerprint()
+
+    def test_finding_uid_is_not_used_as_rule_id(self):
+        msg = _message()
+        msg["ocsf_event"]["finding"] = {"uid": "UNIQUE-EVENT-1"}
+        alert = promote_normalized_event(msg)
+        assert alert is not None
+        assert alert.source_event_ids == ["UNIQUE-EVENT-1"]
+        assert alert.rule_id != "UNIQUE-EVENT-1"

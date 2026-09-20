@@ -284,7 +284,10 @@ class FusionWorker:
         durable row id + a truthful persistence outcome downstream can trust.
         """
         # Stamp source-event provenance + canonical id (issue #568).
-        if source_event_id and source_event_id not in alert.source_event_ids:
+        # Stamp vendor provenance + canonical id (issue #568). Do *not* append
+        # the ingest envelope event_id when finding.uid is already present —
+        # that extra id changed the fingerprint on every Splunk re-poll.
+        if source_event_id and not alert.source_event_ids:
             alert.source_event_ids.append(source_event_id)
         alert.id = alert.deterministic_id()
 

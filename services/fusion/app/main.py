@@ -74,6 +74,8 @@ async def lifespan(app: FastAPI):
     # is continuous (raw event → alert row). Fail-soft: a missing/unreachable
     # DB never blocks the Kafka pipeline.
     sink = AlertSink(settings.database_url) if settings.alert_sink_enabled else None
+    if sink is not None:
+        dedup.set_sink(sink)
     # Phase A1 — populate the ClickHouse event lake from the raw-events stream.
     # Skip when no host is configured (slim demo stack) so we never open a
     # Client against localhost/empty and burn the worker start budget.

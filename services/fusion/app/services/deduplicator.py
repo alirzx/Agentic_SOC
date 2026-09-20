@@ -2,6 +2,8 @@
 Alert deduplication using fingerprinting and a Redis sliding-window cache.
 """
 
+from typing import Any
+
 import redis.asyncio as aioredis
 import structlog
 
@@ -16,9 +18,14 @@ _DEDUP_PREFIX = "aisoc:fusion:dedup:"
 class Deduplicator:
     """Deduplicates incoming alerts using SHA-256 fingerprints stored in Redis."""
 
-    def __init__(self, redis_client: aioredis.Redis) -> None:
+    def __init__(self, redis_client: aioredis.Redis, sink: Any = None) -> None:
         self._redis = redis_client
         self._window = settings.dedup_window_seconds
+        self._sink = sink
+
+    def set_sink(self, sink: Any) -> None:
+        """Attach the Postgres alert sink for durable fingerprint lookup."""
+        self._sink = sink
 
     async def is_duplicate(self, alert: RawAlert) -> tuple[bool, str | None]:
         """
@@ -39,6 +46,16 @@ class Deduplicator:
                 alert_id=str(alert.id),
             )
             return True, existing.decode()
+
+        if self._sink is not None:
+            try:
+                found = await self._sink.lookup_dedup(alert.tenant_id, fingerprint)
+            except Exception as exc:  # noqa: BLE001 — Redis path remains authoritative if PG is down
+                logger.debug("dedup.postgres_lookup_failed", error=str(exc))
+                found = None
+            if found:
+                await self._redis.set(key, found, ex=self._window)
+                return True, found
 
         return False, None
 

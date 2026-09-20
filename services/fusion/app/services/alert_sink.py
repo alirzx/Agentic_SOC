@@ -218,3 +218,17 @@ class AlertSink:
         except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
             logger.error("alert_sink.persist_failed", error=str(exc))
             return PersistResult(PersistOutcome.FAILED, None)
+
+    async def lookup_dedup(self, tenant_id, fingerprint: str) -> str | None:
+        """Return the existing alert id for this tenant+fingerprint, if any."""
+        if not fingerprint:
+            return None
+        pool = await self._ensure_pool()
+        if pool is None:
+            return None
+        row = await pool.fetchrow(
+            "SELECT id::text AS id FROM alerts WHERE tenant_id = $1 AND dedup_hash = $2::text LIMIT 1",
+            tenant_id,
+            fingerprint,
+        )
+        return str(row["id"]) if row else None
