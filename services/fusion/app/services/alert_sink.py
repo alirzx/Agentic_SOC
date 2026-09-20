@@ -13,9 +13,11 @@ Design constraints:
   resumes when the DB returns" — never crash the consumer.
 * **Idempotent.** The insert is guarded by the alert's dedup fingerprint per
   tenant, so replaying a Kafka batch (consumer-group rebalance, restart
-  mid-batch) cannot produce duplicate rows.
-* **Duplicates are not persisted.** Fusion publishes DUPLICATE decisions
-  downstream for observability, but they must not become new alert rows.
+  mid-batch) cannot produce duplicate rows. Redis-only DUPLICATE decisions
+  still attempt this INSERT so a prior fuse that never reached Postgres
+  cannot leave /alerts empty.
+* **Existing rows are not duplicated.** Fusion publishes DUPLICATE decisions
+  downstream for observability; the sink treats them as idempotent upserts.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from enum import Enum
 import asyncpg
 import structlog
 
-from app.models.alert import FusedAlert, FusionDecision
+from app.models.alert import FusedAlert
 
 logger = structlog.get_logger()
 
@@ -164,9 +166,9 @@ class AlertSink:
         DB is reachable.
         """
         canonical_id = str(fused.id)
-        if fused.fusion_decision == FusionDecision.DUPLICATE:
-            return PersistResult(PersistOutcome.DUPLICATE, canonical_id)
-
+        # Always attempt the idempotent INSERT. Redis-only DUPLICATE must not
+        # skip Postgres: a prior fuse can register the fingerprint while the
+        # sink was down, leaving /alerts empty despite events_ingested > 0.
         pool = await self._ensure_pool()
         if pool is None:
             if not self._connect_failed_logged:

@@ -71,7 +71,7 @@ services:
       # still become /alerts rows (persist is idempotent on dedup_hash).
       KAFKA_AUTO_OFFSET_RESET: earliest
       # Bump group so an already-committed ``latest`` offset is abandoned.
-      KAFKA_CONSUMER_GROUP: aisoc-fusion-consumer-splunk-v2
+      KAFKA_CONSUMER_GROUP: aisoc-fusion-consumer-splunk-v3
     networks:
       - aisoc-demo
     restart: unless-stopped

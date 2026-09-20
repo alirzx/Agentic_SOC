@@ -57,6 +57,14 @@ def extract_provenance(
         connector_type = _product_label(ocsf)
 
     class_uid_raw = ocsf.get("class_uid")
-    class_uid = class_uid_raw if isinstance(class_uid_raw, int) else None
+    class_uid: int | None
+    if isinstance(class_uid_raw, bool):
+        class_uid = None
+    elif isinstance(class_uid_raw, int):
+        class_uid = class_uid_raw
+    elif isinstance(class_uid_raw, float) and class_uid_raw.is_integer():
+        class_uid = int(class_uid_raw)
+    else:
+        class_uid = None
 
     return connector_id, connector_type, class_uid

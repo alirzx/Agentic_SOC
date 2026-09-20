@@ -419,9 +419,15 @@ export function EntityRiskQueue() {
   // Fall back to the queue's threshold (from the engine config) when the
   // stats endpoint is still loading — keeps the score bars stable.
   const threshold = stats?.threshold ?? queue?.threshold ?? 80;
-  const promotedCount = stats?.promoted ?? entities.filter((e) => e.promoted).length;
-  const total = stats?.total ?? entities.length;
-  const alertCount = stats?.alert_count ?? entities.reduce((sum, e) => sum + e.alert_count, 0);
+  const promotedCount =
+    (stats?.promoted && stats.promoted > 0)
+      ? stats.promoted
+      : entities.filter((e) => e.promoted).length;
+  const total = (stats?.total && stats.total > 0) ? stats.total : entities.length;
+  const alertCount =
+    (stats?.alert_count && stats.alert_count > 0)
+      ? stats.alert_count
+      : entities.reduce((sum, e) => sum + e.alert_count, 0);
 
   return (
     <div className="space-y-4">
@@ -510,7 +516,7 @@ export function EntityRiskQueue() {
                 ? 'Unable to load entity risk from fusion.'
                 : promotedOnly
                   ? 'No entities have crossed the promotion threshold yet.'
-                  : 'No entities yet — connect Splunk (or another source) and wait for the first poll.'}
+                  : 'No entities yet — open the Alerts tab for per-notable rows, or Sync Splunk so fusion can roll them up here.'}
             </p>
             <p className="text-[11px] text-gray-600">
               Decay window: 24h · half-life: 4h

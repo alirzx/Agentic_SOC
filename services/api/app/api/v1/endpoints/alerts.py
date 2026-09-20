@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -141,6 +141,12 @@ class AlertListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+    @computed_field
+    @property
+    def alerts(self) -> list[AlertResponse]:
+        """Alias for consoles that historically read ``alerts`` instead of ``items``."""
+        return self.items
 
 
 class AlertUpdateRequest(BaseModel):

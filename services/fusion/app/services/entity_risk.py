@@ -200,6 +200,10 @@ class EntityRiskEngine:
             "promoted_entities": promoted,
             "score_bands": bands,
             "threshold": self._threshold,
+            # UI-facing aliases (apps/web EntityRiskStats).
+            "total": total,
+            "promoted": promoted,
+            "bands": bands,
         }
 
     # ------------------------------------------------------------------

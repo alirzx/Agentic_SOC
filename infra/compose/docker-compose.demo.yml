@@ -299,7 +299,7 @@ services:
       CLICKHOUSE_HOST: ""
       AISOC_LAKE_WRITER_ENABLED: "false"
       KAFKA_AUTO_OFFSET_RESET: earliest
-      KAFKA_CONSUMER_GROUP: aisoc-fusion-consumer-demo-v2
+      KAFKA_CONSUMER_GROUP: aisoc-fusion-consumer-demo-v3
     networks:
       - aisoc-demo
     restart: unless-stopped
@@ -417,6 +417,7 @@ services:
         API_URL: http://api:8000
         AGENTS_URL: http://agents:8084
         REALTIME_URL: http://realtime:4000
+        FUSION_URL: http://fusion:8003
         # NEXT_PUBLIC_* left empty for live Splunk mode (no demo banner/auto-login).
         NEXT_PUBLIC_DEMO_MODE: ""
         NEXT_PUBLIC_DEMO_DEEPLINK: ""
@@ -429,6 +430,7 @@ services:
       - api
       - agents
       - realtime
+      - fusion
     ports:
       - "${AISOC_BIND_ADDR:-0.0.0.0}:${AISOC_WEB_PORT:-5000}:3000"
     environment:
@@ -437,6 +439,7 @@ services:
       API_URL: http://api:8000
       AGENTS_URL: http://agents:8084
       REALTIME_URL: http://realtime:4000
+      FUSION_URL: http://fusion:8003
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: "0.0.0.0"

@@ -759,6 +759,7 @@ export const alertsApi = {
   list: async (filters: AlertFilters = {}) => {
     const raw = await request<{
       alerts?: unknown[];
+      items?: unknown[];
       total?: number;
       page?: number;
       page_size?: number;
@@ -766,8 +767,13 @@ export const alertsApi = {
     }>('/api/v1/alerts', {
       params: filters as Record<string, string>,
     });
+    const rows = Array.isArray(raw.alerts)
+      ? raw.alerts
+      : Array.isArray(raw.items)
+        ? raw.items
+        : [];
     return {
-      alerts: Array.isArray(raw.alerts) ? raw.alerts.map(normalizeAlert) : [],
+      alerts: rows.map(normalizeAlert),
       total: typeof raw.total === 'number' ? raw.total : 0,
       page: typeof raw.page === 'number' ? raw.page : 1,
       pageSize:
@@ -1192,20 +1198,27 @@ export const entityRiskApi = {
   stats: async (tenantId?: string): Promise<EntityRiskStats> => {
     const tid = tenantId ?? getActiveTenantId();
     try {
-      const raw = await request<Partial<EntityRiskStats> & { bands?: Partial<EntityRiskStats['bands']> }>(
-        `${FUSION_PATH}/entity-risk/stats`,
-        { params: { tenant_id: tid } },
-      );
+      const raw = await request<
+        Partial<EntityRiskStats> & {
+          bands?: Partial<EntityRiskStats['bands']>;
+          tracked_entities?: number;
+          promoted_entities?: number;
+          score_bands?: Partial<EntityRiskStats['bands']>;
+        }
+      >(`${FUSION_PATH}/entity-risk/stats`, {
+        params: { tenant_id: tid },
+      });
+      const bandsSrc = raw.bands ?? raw.score_bands ?? {};
       return {
         tenant_id: String(raw.tenant_id ?? tid),
         threshold: typeof raw.threshold === 'number' ? raw.threshold : 80,
-        total: Number(raw.total ?? 0),
-        promoted: Number(raw.promoted ?? 0),
+        total: Number(raw.total ?? raw.tracked_entities ?? 0),
+        promoted: Number(raw.promoted ?? raw.promoted_entities ?? 0),
         bands: {
-          critical: Number(raw.bands?.critical ?? 0),
-          high: Number(raw.bands?.high ?? 0),
-          medium: Number(raw.bands?.medium ?? 0),
-          low: Number(raw.bands?.low ?? 0),
+          critical: Number(bandsSrc.critical ?? 0),
+          high: Number(bandsSrc.high ?? 0),
+          medium: Number(bandsSrc.medium ?? 0),
+          low: Number(bandsSrc.low ?? 0),
         },
         alert_count: Number(raw.alert_count ?? 0),
         alert_to_incident_ratio: raw.alert_to_incident_ratio ?? null,

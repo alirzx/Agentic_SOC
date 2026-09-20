@@ -95,12 +95,15 @@ def test_iocs_and_entities_extraction():
 
 
 @pytest.mark.asyncio
-async def test_duplicate_decision_is_never_persisted():
+async def test_duplicate_decision_still_attempts_idempotent_insert():
+    """Redis DUPLICATE must not skip Postgres — sink INSERT is idempotent."""
+    fused = _fused(FusionDecision.DUPLICATE)
+    pool = _StubPool(row={"id": fused.id})
     sink = AlertSink("postgresql://x")
-    sink._pool = _StubPool(row={"id": uuid.uuid4()})  # would succeed if called
-    result = await sink.persist(_fused(FusionDecision.DUPLICATE))
-    assert result.outcome is PersistOutcome.DUPLICATE
-    assert sink._pool.conn.calls == []
+    sink._pool = pool
+    result = await sink.persist(fused)
+    assert result.outcome is PersistOutcome.INSERTED
+    assert sink._pool.conn.calls  # INSERT was issued
 
 
 @pytest.mark.asyncio
