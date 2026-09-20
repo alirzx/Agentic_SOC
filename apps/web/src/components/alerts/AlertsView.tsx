@@ -268,6 +268,7 @@ export function AlertsView() {
                   ? 'bg-brand-600 text-white'
                   : 'text-gray-400 hover:text-gray-200',
               )}
+              title="Risk-Based Alerting: hosts/users/IPs rolled up from contributing alerts"
             >
               Entities
             </button>

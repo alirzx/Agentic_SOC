@@ -57,6 +57,9 @@ class TestShouldPromote:
     def test_findings_category_always_promotes(self):
         assert should_promote({"class_uid": 2004, "severity_id": 1})
 
+    def test_findings_category_promotes_when_class_uid_is_float(self):
+        assert should_promote({"class_uid": 2001.0, "severity_id": 1.0})
+
     def test_high_severity_non_finding_promotes(self):
         assert should_promote({"class_uid": 3002, "severity_id": 4})
 
