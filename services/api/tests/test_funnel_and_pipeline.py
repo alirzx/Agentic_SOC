@@ -154,8 +154,8 @@ class TestFunnelWindow:
         # _mitre_covered calls db.execute() twice (alert_techs, rule_techs)
         db.execute = AsyncMock(
             side_effect=[
-                _scalars_all_result([]),
-                _scalars_all_result([]),
+                _execute_result_all([]),
+                _execute_result_all([]),
             ]
         )
 
@@ -199,8 +199,8 @@ class TestFunnelWindow:
         db.scalar = AsyncMock(side_effect=[50, 2, 10, 4, 1, 60.0, 3])
         db.execute = AsyncMock(
             side_effect=[
-                _scalars_all_result([]),
-                _scalars_all_result([]),
+                _execute_result_all([]),
+                _execute_result_all([]),
             ]
         )
 
@@ -237,8 +237,8 @@ class TestFunnelWindow:
         db.scalar = AsyncMock(side_effect=[3, 5, 12, 0, 0, None, 0])
         db.execute = AsyncMock(
             side_effect=[
-                _scalars_all_result([]),
-                _scalars_all_result([]),
+                _execute_result_all([]),
+                _execute_result_all([]),
             ]
         )
 
@@ -268,10 +268,11 @@ class TestFunnelWindow:
         db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, None, 0, 0])
         # alert_techs: T1078, T1059
         # rule_techs:  T1059, T1110 → union = {T1078, T1059, T1110} = 3
+        # _mitre_covered now fetches whole JSONB columns (Python-side flatten).
         db.execute = AsyncMock(
             side_effect=[
-                _scalars_all_result(["T1078", "T1059"]),
-                _scalars_all_result(["T1059", "T1110"]),
+                _execute_result_all([(["T1078", "T1059"],)]),
+                _execute_result_all([(["T1059", "T1110"],)]),
             ]
         )
 
@@ -302,8 +303,8 @@ class TestFunnelWindow:
         db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, None, 0, 0])
         db.execute = AsyncMock(
             side_effect=[
-                _scalars_all_result([f"T{i}" for i in range(50)]),
-                _scalars_all_result([]),
+                _execute_result_all([([f"T{i}" for i in range(50)],)]),
+                _execute_result_all([]),
             ]
         )
 
@@ -398,6 +399,28 @@ class TestGetFunnelMetrics:
         assert payload.deltas.mttd_seconds == -10.0
         # Queue: 5 vs 8 → −37.5%
         assert payload.deltas.analyst_queue_depth == -37.5
+
+    @pytest.mark.asyncio
+    async def test_soft_fails_to_zeros_when_window_raises(self) -> None:
+        """A broken SQL path must not 500 the dashboard funnel strip."""
+        from app.api.v1.endpoints.metrics import FunnelMetrics, get_funnel_metrics
+
+        user = _user()
+        db = MagicMock()
+        db.rollback = AsyncMock()
+
+        with patch(
+            "app.api.v1.endpoints.metrics._funnel_window",
+            new=AsyncMock(side_effect=RuntimeError("jsonb_array_elements_text boom")),
+        ):
+            payload = await get_funnel_metrics(user=user, db=db, period="24h")
+
+        assert isinstance(payload, FunnelMetrics)
+        assert payload.events_of_interest == 0
+        assert payload.alerts_generated == 0
+        assert payload.mitre_coverage.covered == 0
+        assert payload.deltas.events_of_interest == 0.0
+        db.rollback.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_period_validation_accepts_known_values(self) -> None:

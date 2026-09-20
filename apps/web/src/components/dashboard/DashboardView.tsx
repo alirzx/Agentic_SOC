@@ -370,12 +370,14 @@ export function DashboardView() {
         : null;
 
   // Live API only — never pad empty series with fabricated demo numbers.
+  // Always merge alerts with EMPTY_METRICS defaults so a partial/failed
+  // payload cannot crash the severity tiles (``metrics.alerts.critical``).
   const apiData = rawMetrics as Partial<DashboardMetrics> | undefined;
   const hasRealAlerts = !!apiData && typeof apiData.alerts?.total === 'number';
   const metrics: DashboardMetrics = hasRealAlerts
     ? {
-        alerts: apiData!.alerts as DashboardMetrics['alerts'],
-        cases: apiData!.cases ?? EMPTY_METRICS.cases,
+        alerts: { ...EMPTY_METRICS.alerts, ...apiData!.alerts },
+        cases: { ...EMPTY_METRICS.cases, ...(apiData!.cases ?? {}) },
         sources: Array.isArray(apiData!.sources) ? apiData!.sources! : [],
         topMitre: Array.isArray(apiData!.topMitre) ? apiData!.topMitre! : [],
         alertsTrend: Array.isArray(apiData!.alertsTrend) ? apiData!.alertsTrend! : [],

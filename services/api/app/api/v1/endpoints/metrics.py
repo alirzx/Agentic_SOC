@@ -25,7 +25,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select, text
+from sqlalchemy import and_, case, func, select, text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.config import settings
@@ -106,7 +106,7 @@ class MitreCoverage(BaseModel):
     ``covered`` counts the distinct techniques observed via either:
       * a tenant alert in the selected window (``Alert.mitre_techniques``), or
       * an enabled tenant/platform detection rule
-        (``DetectionRule.mitre_techniques`` where ``status == 'enabled'``).
+        (``DetectionRule.mitre_techniques`` where ``status == 'active'``).
 
     ``total`` is configurable via ``AISOC_FUNNEL_MITRE_TOTAL`` and defaults to
     the MITRE ATT&CK Enterprise v17 technique count (201) so the ratio is
@@ -760,13 +760,30 @@ async def _events_of_interest(db, tenant_id, start, end) -> int:
         return 0
 
 
+def _safe_jsonb_array_length(column):
+    """Return ``jsonb_array_length(col)`` only when ``col`` is a JSON array.
+
+    Postgres raises if ``jsonb_array_length`` is called on a JSON object or
+    scalar; fusion/connector bugs have historically written object-shaped
+    ``source_event_ids``. Guarding with ``jsonb_typeof`` keeps the funnel
+    from 500ing on a single bad row.
+    """
+    return func.coalesce(
+        case(
+            (func.jsonb_typeof(column) == "array", func.jsonb_array_length(column)),
+            else_=0,
+        ),
+        0,
+    )
+
+
 async def _events_of_interest_from_alerts(db, tenant_id, start, end) -> int:
     """Fallback EOI: sum of ``jsonb_array_length(source_event_ids)`` across
     alerts in the window. Conservative — only counts events that already
     correlated into an alert — but never lies in air-gapped deployments.
     """
     val = await db.scalar(
-        select(func.coalesce(func.sum(func.jsonb_array_length(Alert.source_event_ids)), 0)).where(
+        select(func.coalesce(func.sum(_safe_jsonb_array_length(Alert.source_event_ids)), 0)).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.created_at >= start,
@@ -793,6 +810,13 @@ async def _repeat_alerts_suppressed(db, tenant_id, start, end) -> int:
         )
         return int(result or 0)
     except Exception:  # noqa: BLE001 — analytics table optional; never break the funnel
+        # A failed statement aborts the asyncpg transaction; without rollback
+        # the *next* query in this request (the previous-window funnel pass)
+        # raises InFailedSQLTransactionError → HTTP 500.
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
         return 0
 
 
@@ -811,7 +835,7 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
                     Alert.tenant_id == tenant_id,
                     Alert.created_at >= start,
                     Alert.created_at < end,
-                    func.jsonb_array_length(Alert.source_event_ids) >= 2,
+                    _safe_jsonb_array_length(Alert.source_event_ids) >= 2,
                 )
             )
         )
@@ -936,6 +960,29 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     }
 
 
+def _techniques_from_jsonb_rows(rows) -> set[str]:
+    """Flatten JSONB technique lists fetched as whole columns (not SRF).
+
+    Mirrors the dashboard's Python-side MITRE aggregation — set-returning
+    ``jsonb_array_elements_text`` in SELECT 500s on some Postgres builds
+    (see get_dashboard_metrics comment). Accepts null / non-list cells.
+    """
+    out: set[str] = set()
+    for row in rows:
+        cell = row[0] if row is not None else None
+        if not cell:
+            continue
+        if isinstance(cell, str):
+            if cell:
+                out.add(cell)
+            continue
+        if isinstance(cell, (list, tuple)):
+            for t in cell:
+                if isinstance(t, str) and t:
+                    out.add(t)
+    return out
+
+
 async def _mitre_covered(db, tenant_id, start, end) -> int:
     """Count distinct MITRE techniques visible to this tenant.
 
@@ -943,39 +990,47 @@ async def _mitre_covered(db, tenant_id, start, end) -> int:
       * techniques observed on alerts created in the window
       * techniques referenced by enabled detection rules (tenant-scoped or
         platform-wide where ``tenant_id IS NULL``)
+
+    Soft-fails to alert-only (or 0) when ``detection_rules`` schema is
+    mid-migration (``status`` vs legacy ``enabled``) so the funnel never 500s.
     """
-    alert_techs = (
-        (
-            await db.execute(
-                select(func.distinct(func.jsonb_array_elements_text(Alert.mitre_techniques))).where(
-                    and_(
-                        Alert.tenant_id == tenant_id,
-                        Alert.created_at >= start,
-                        Alert.created_at < end,
-                    )
+    alert_rows = (
+        await db.execute(
+            select(Alert.mitre_techniques).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                    Alert.mitre_techniques.isnot(None),
                 )
             )
         )
-        .scalars()
-        .all()
-    )
+    ).all()
+    techniques = _techniques_from_jsonb_rows(alert_rows)
 
-    rule_techs = (
-        (
+    try:
+        rule_rows = (
             await db.execute(
-                select(func.distinct(func.jsonb_array_elements_text(DetectionRule.mitre_techniques))).where(
+                select(DetectionRule.mitre_techniques).where(
                     and_(
-                        DetectionRule.status == "enabled",
+                        DetectionRule.status == "active",
                         (DetectionRule.tenant_id == tenant_id) | (DetectionRule.tenant_id.is_(None)),
+                        DetectionRule.mitre_techniques.isnot(None),
                     )
                 )
             )
+        ).all()
+        techniques |= _techniques_from_jsonb_rows(rule_rows)
+    except Exception as exc:  # noqa: BLE001 — rules table optional for funnel KPIs
+        logger.warning(
+            "mitre rule coverage skipped: %s",
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
         )
-        .scalars()
-        .all()
-    )
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
-    techniques = {t for t in alert_techs if t} | {t for t in rule_techs if t}
     return len(techniques)
 
 
@@ -1004,8 +1059,46 @@ async def get_funnel_metrics(
 
     mitre_total = int(getattr(settings, "AISOC_FUNNEL_MITRE_TOTAL", 201)) or 201
 
-    current = await _funnel_window(db, user.tenant_id, start, end, mitre_total=mitre_total)
-    previous = await _funnel_window(db, user.tenant_id, prev_start, prev_end, mitre_total=mitre_total)
+    try:
+        current = await _funnel_window(db, user.tenant_id, start, end, mitre_total=mitre_total)
+        previous = await _funnel_window(db, user.tenant_id, prev_start, prev_end, mitre_total=mitre_total)
+    except Exception as exc:  # noqa: BLE001 — dashboard must never hard-fail the funnel strip
+        # Roll back any aborted transaction so the request session stays usable
+        # for subsequent middleware / DI teardown.
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        logger.exception(
+            "funnel metrics failed for tenant=%s period=%s: %s",
+            str(user.tenant_id).replace("\r", "").replace("\n", " ")[:64],
+            period,
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+        zero_deltas = FunnelDeltas(
+            events_of_interest=0.0,
+            correlation_instances=0.0,
+            alerts_generated=0.0,
+            signal_to_noise=0.0,
+            mttd_seconds=0.0,
+            analyst_queue_depth=0.0,
+        )
+        return FunnelMetrics(
+            period=period,
+            events_of_interest=0,
+            correlation_instances=0,
+            alerts_generated=0,
+            signal_to_noise=0.0,
+            mttd_seconds=0.0,
+            analyst_queue_depth=0,
+            correlation_efficiency=0.0,
+            alert_yield=0.0,
+            mitre_coverage=MitreCoverage(covered=0, total=mitre_total, ratio=0.0),
+            deltas=zero_deltas,
+            generated_at=now,
+            repeat_alerts_suppressed=0,
+            repeat_suppression_rate=0.0,
+        )
 
     deltas = FunnelDeltas(
         events_of_interest=_pct_delta(current["events_of_interest"], previous["events_of_interest"]),
