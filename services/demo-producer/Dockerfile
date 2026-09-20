@@ -2,6 +2,13 @@
 # Multi-stage Go build → tiny distroless runtime image.
 FROM golang:1.21-alpine AS builder
 WORKDIR /src
+
+ARG GOPROXY=https://proxy.golang.org,https://goproxy.io,https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.org
+ENV GOPROXY=${GOPROXY} \
+    GOSUMDB=${GOSUMDB} \
+    GOTOOLCHAIN=local
+
 COPY go.mod ./
 RUN go mod download
 COPY main.go ./

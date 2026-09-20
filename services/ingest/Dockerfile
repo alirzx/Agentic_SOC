@@ -3,6 +3,14 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache git ca-certificates gcc musl-dev
 
+# proxy.golang.org returns 403 in some regions; fall through to public mirrors.
+# Override at build time: docker build --build-arg GOPROXY=https://goproxy.cn,direct
+ARG GOPROXY=https://proxy.golang.org,https://goproxy.io,https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.org
+ENV GOPROXY=${GOPROXY} \
+    GOSUMDB=${GOSUMDB} \
+    GOTOOLCHAIN=local
+
 COPY go.mod go.sum ./
 RUN go mod download
 

@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # Bring up the demo stack + Splunk live-ingest spine (no seed data).
-# Rebuilds api + connectors from local source so Splunk schema (username/
-# password, custom SPL) and purge/bootstrap scripts match the repo.
+# Rebuilds api + connectors (+ ingest/fusion/web) from local source so Splunk
+# schema and purge/bootstrap scripts match the repo.
+#
+# If proxy.golang.org is blocked (403), set:
+#   export GOPROXY=https://goproxy.cn,direct
+#   export GOSUMDB=off
+# Or skip rebuilding ingest and reuse the last local/GHCR image:
+#   export AISOC_SKIP_INGEST_BUILD=1
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -10,8 +16,21 @@ COMPOSE=(docker compose --project-directory "$ROOT"
   -f infra/compose/docker-compose.demo.yml
   -f infra/compose/docker-compose.splunk.yml)
 
-echo "==> Building api + connectors + ingest + fusion + web from local source"
-"${COMPOSE[@]}" build api connectors ingest-worker fusion web
+# Prefer a China/public mirror chain when the official Go proxy 403s.
+GOPROXY_VALUE="${GOPROXY:-https://proxy.golang.org,https://goproxy.io,https://goproxy.cn,direct}"
+GOSUMDB_VALUE="${GOSUMDB:-sum.golang.org}"
+BUILD_ARGS=(--build-arg "GOPROXY=${GOPROXY_VALUE}" --build-arg "GOSUMDB=${GOSUMDB_VALUE}")
+
+BUILD_TARGETS=(api connectors fusion web)
+if [[ "${AISOC_SKIP_INGEST_BUILD:-0}" != "1" ]]; then
+  BUILD_TARGETS+=(ingest-worker)
+else
+  echo "==> Skipping ingest-worker build (AISOC_SKIP_INGEST_BUILD=1); using existing image"
+fi
+
+echo "==> Building ${BUILD_TARGETS[*]} from local source"
+echo "    GOPROXY=${GOPROXY_VALUE}"
+"${COMPOSE[@]}" build "${BUILD_ARGS[@]}" "${BUILD_TARGETS[@]}"
 
 echo "==> Starting AiSOC + Splunk ingest spine (api + connectors + ingest + fusion + web)"
 "${COMPOSE[@]}" up -d --remove-orphans --force-recreate \
