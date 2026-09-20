@@ -237,6 +237,49 @@ def test_normalize_parses_notable_stash_raw():
     assert out["raw_event"]["dest_port"] == "3389"
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_lookup_notable_filters_search_name_and_host():
+    c = _conn()
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "N1"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/N1(\?.*)?$").mock(
+        return_value=httpx.Response(
+            200,
+            json={"entry": [{"content": {"dispatchState": "DONE"}}]},
+        )
+    )
+    respx.get(url__regex=r".+/services/search/jobs/N1/results").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "_time": "2026-07-01T12:48:35.000+03:30",
+                        "search_name": "Network - Unapproved Port Activity Detected - Rule",
+                        "dest_port": "3389",
+                        "dvc": "WIN-017UMT7DCGT.soorinsec.local",
+                        "src": "10.1.2.3",
+                        "transport": "tcp",
+                        "urgency": "low",
+                    }
+                ]
+            },
+        )
+    )
+    out = await c.lookup_notable(
+        "Network - Unapproved Port Activity Detected - Rule",
+        "WIN-017UMT7DCGT.soorinsec.local",
+    )
+    assert out is not None
+    assert out["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
+    assert out["raw_event"]["dest_port"] == "3389"
+    body = jobs.calls[0].request.content.decode()
+    assert "Unapproved" in body
+    assert "WIN-017UMT7DCGT" in body
+
+
 def test_timeless_catalog_skips_checkpoint_filter():
     c = _conn()
     c.set_checkpoint({"time": "", "id": "Zzz"})

@@ -115,6 +115,10 @@ def _enrich_notable_row(row: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _spl_quote(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _stable_external_id(row: dict[str, Any]) -> str:
     """Replay-stable notable identity for checkpoint + ingest dedup.
 
@@ -474,6 +478,40 @@ class SplunkConnector(BaseConnector):
         else:
             self._next_checkpoint = None
         return fresh
+
+    async def lookup_notable(self, title: str, host: str | None = None) -> dict[str, Any] | None:
+        """Return the latest index=notable row for this ES rule + host."""
+        title_q = _spl_quote((title or "").strip())
+        if not title_q:
+            return None
+        parts = [
+            "search index=notable",
+            f'(search_name="{title_q}" OR source="{title_q}")',
+        ]
+        if host and host.strip():
+            host_q = _spl_quote(host.strip())
+            parts.append(f'(dvc="{host_q}" OR dest="{host_q}" OR host="{host_q}")')
+        spl = " ".join(parts) + " | sort 0 - _time | head 5"
+        async with httpx.AsyncClient(**self._client_kwargs()) as client:
+            resp = await client.post(
+                f"{self._base_url}/services/search/jobs",
+                headers=self._headers(),
+                data={
+                    "search": spl,
+                    "earliest_time": self._earliest_time,
+                    "latest_time": "now",
+                    "output_mode": "json",
+                },
+            )
+            resp.raise_for_status()
+            sid = self._extract_sid(resp)
+            if not sid:
+                return None
+            await self._await_job(client, sid)
+            rows = await self._collect_results(client, sid)
+        if not rows:
+            return None
+        return self.normalize(rows[0])
 
     async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
         """Run a translated SPL search and return raw rows."""

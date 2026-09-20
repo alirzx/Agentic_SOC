@@ -53,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the demo tenant and writes `affected_hosts`. Alert detail no longer
   SWR-retries 404s into a request storm.
 
+- **Splunk alert detail hydrates the fired notable, not a title-only stub.**
+  Opening a Splunk notable re-queries `index=notable` for that search_name
+  and host, then fills description, severity, dest_port/src, IOCs, raw
+  stash, and MITRE (stash annotations, else the ES rule catalog:
+  Unapproved Port → T1046 / T1571).
+
 - **Entity contributing-alert links open the live Splunk notable.** RBA stored
   fusion-minted UUIDs that Postgres never inserted (legacy row kept the
   original id). `GET /alerts/{id}` now resolves by title/host, and fusion

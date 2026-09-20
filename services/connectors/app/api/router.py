@@ -88,6 +88,15 @@ class ResourceConfigRequest(BaseModel):
     at_ts: str = PydField(default="", description="Optional ISO-8601 point-in-time.")
 
 
+class NotableLookupRequest(BaseModel):
+    """Look up one fired ES notable by search_name + host."""
+
+    auth_config: dict[str, Any] = PydField(default_factory=dict)
+    connector_config: dict[str, Any] = PydField(default_factory=dict)
+    title: str = PydField(..., min_length=1, max_length=500)
+    host: str | None = PydField(default=None, max_length=256)
+
+
 class FederatedQueryRequest(BaseModel):
     """Run a unified query against a single connector instance.
 
@@ -382,6 +391,34 @@ async def run_federated_query(connector_id: str, payload: FederatedQueryRequest)
         "row_count": len(rows),
         "rows": rows,
     }
+
+
+@router.post("/connectors/splunk/lookup_notable")
+async def lookup_splunk_notable(payload: NotableLookupRequest):
+    """Return the latest fired ES notable for a search_name + host pair."""
+    cls = CONNECTOR_REGISTRY.get("splunk")
+    if cls is None:
+        raise HTTPException(status_code=404, detail="Connector 'splunk' not found")
+    kwargs = {**payload.auth_config, **payload.connector_config}
+    try:
+        connector = cls(**kwargs)
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"connector config does not match schema: {exc}",
+        ) from exc
+    lookup = getattr(connector, "lookup_notable", None)
+    if lookup is None:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="lookup_notable not supported")
+    try:
+        notable = await lookup(payload.title, payload.host)
+    except Exception:
+        logger.exception("connector.lookup_notable.runtime_error")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Splunk notable lookup failed. Check connector configuration and connectivity.",
+        ) from None
+    return {"connector_id": "splunk", "notable": notable}
 
 
 @router.post("/connectors/{connector_id}/push_case")

@@ -33,6 +33,7 @@ from app.services.event_sanitiser import (
 )
 from app.services.narrative_loader import build_narrative
 from app.services.narrative_projection import project_alert_to_narrative_inputs
+from app.services.splunk_notable import hydrate_alert, iocs_from_raw, mitre_attack_rows
 from app.services.timestamp_bounds import coerce_with_bounds, now_utc
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,11 @@ class AlertDetailResponse(AlertResponse):
     related_entities: list[RelatedEntity] = []
     mini_timeline: list[MiniTimelineEvent] = []
     recommended_actions: list[RecommendedAction] = []
+    raw_event: dict = {}
+    iocs: list[dict] = []
+    mitre_attack: list[dict] = []
+    source_ref: str | None = None
+    risk_score: int | None = None
 
 
 class AlertSnoozeRequest(BaseModel):
@@ -950,6 +956,9 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
                 exc_info=True,
             )
     envelope = await build_rail_envelope(db, alert)
+    extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
+    techniques = [str(t) for t in (alert.mitre_techniques or []) if t]
+    mitre_attack = extra.get("mitre_attack") if isinstance(extra.get("mitre_attack"), list) else None
     payload = AlertDetailResponse.model_validate(alert)
     return payload.model_copy(
         update={
@@ -957,6 +966,13 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
             "related_entities": envelope.related_entities,
             "mini_timeline": envelope.mini_timeline,
             "recommended_actions": envelope.recommended_actions,
+            "raw_event": alert.raw_event or {},
+            "iocs": extra.get("iocs") if isinstance(extra.get("iocs"), list) else iocs_from_raw(alert.raw_event or {}),
+            "mitre_attack": mitre_attack or mitre_attack_rows(techniques),
+            "source_ref": extra.get("splunk_source_ref")
+            or getattr(alert, "rule_id", None)
+            or ((alert.source_event_ids or [None])[0] if getattr(alert, "source_event_ids", None) else None),
+            "risk_score": alert.priority,
         }
     )
 
@@ -985,6 +1001,7 @@ async def lookup_alert(
         )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    alert = await hydrate_alert(db, alert)
     return await _build_alert_detail(db, alert)
 
 
@@ -1031,6 +1048,7 @@ async def get_alert(
         )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    alert = await hydrate_alert(db, alert)
     return await _build_alert_detail(db, alert)
 
 

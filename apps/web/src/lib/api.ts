@@ -656,13 +656,14 @@ function normalizeAlert(raw: unknown): Alert {
 
   // ── Investigation Rail envelope (W6) ────────────────────────────────────
   const relatedRaw = r.related_entities ?? r.relatedEntities;
-  const relatedEntities = Array.isArray(relatedRaw)
+    const relatedEntities = Array.isArray(relatedRaw)
     ? (relatedRaw as Array<Record<string, unknown>>).map((e) => ({
-        kind: (e.kind ?? 'principal') as RelatedEntity['kind'],
-        type: String(e.type ?? ''),
+        kind: ((e.group ?? e.kind ?? 'principal') as RelatedEntity['kind']),
+        type: String(e.type ?? e.kind ?? ''),
         value: String(e.value ?? ''),
         label: (e.label as string | null | undefined) ?? null,
         pivotPath:
+          (e.pivot as string | null | undefined) ??
           (e.pivot_path as string | null | undefined) ??
           (e.pivotPath as string | null | undefined) ??
           null,

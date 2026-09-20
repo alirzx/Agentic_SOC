@@ -93,6 +93,19 @@ def _mitre(ocsf: dict[str, Any]) -> tuple[list[str], list[str]]:
                 for name in names:
                     if isinstance(name, str) and name and name not in tactics:
                         tactics.append(name)
+    unmapped = ocsf.get("unmapped") if isinstance(ocsf.get("unmapped"), dict) else {}
+    for blob in (
+        unmapped.get("annotations"),
+        unmapped.get("mitre_attack"),
+        ocsf.get("annotations"),
+    ):
+        if isinstance(blob, dict):
+            blob = blob.get("mitre_attack")
+        if isinstance(blob, list):
+            for item in blob:
+                tid = item if isinstance(item, str) else (item.get("id") if isinstance(item, dict) else None)
+                if isinstance(tid, str) and tid and tid not in techniques:
+                    techniques.append(tid)
     return tactics, techniques
 
 

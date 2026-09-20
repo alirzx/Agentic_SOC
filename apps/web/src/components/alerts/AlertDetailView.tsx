@@ -75,6 +75,36 @@ function formatAlertTime(raw: string | undefined, pattern: string): string {
   }
 }
 
+function rawField(alert: Alert, ...keys: string[]): string {
+  const raw = alert.rawEvent ?? {};
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === 'number') {
+      return String(value);
+    }
+  }
+  return '';
+}
+
+function notableHost(alert: Alert): string {
+  return rawField(alert, 'dvc', 'dest', 'host') || (alert.relatedEntities?.find((e) => e.type === 'host')?.value ?? '');
+}
+
+function notableSrc(alert: Alert): string {
+  return rawField(alert, 'src', 'src_ip');
+}
+
+function notablePort(alert: Alert): string {
+  return rawField(alert, 'dest_port');
+}
+
+function notableTransport(alert: Alert): string {
+  return rawField(alert, 'transport');
+}
+
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -938,6 +968,22 @@ export function AlertDetailView({
               <p className="text-sm text-gray-300 leading-relaxed">{alert.description}</p>
             </Section>
 
+            {alert.relatedEntities && alert.relatedEntities.length > 0 && (
+              <Section title="Related entities">
+                <div className="flex flex-wrap gap-2">
+                  {alert.relatedEntities.map((entity) => (
+                    <span
+                      key={`${entity.type}:${entity.value}`}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-20 text-xs text-gray-200 ring-1 ring-inset ring-[#374151]"
+                    >
+                      <span className="uppercase tracking-wide text-gray-500">{entity.type}</span>
+                      {entity.value}
+                    </span>
+                  ))}
+                </div>
+              </Section>
+            )}
+
             {alert.confidenceLabel && (
               <ConfidenceExplainability
                 label={alert.confidenceLabel}
@@ -951,6 +997,10 @@ export function AlertDetailView({
               <div className="space-y-3">
                 <Field label="Source" value={alert.source} />
                 <Field label="Source Ref" value={alert.sourceRef || '—'} />
+                <Field label="Host" value={notableHost(alert) || '—'} />
+                <Field label="Source IP" value={notableSrc(alert) || '—'} />
+                <Field label="Dest Port" value={notablePort(alert) || '—'} />
+                <Field label="Transport" value={notableTransport(alert) || '—'} />
                 <Field label="Tenant" value={alert.tenantId} />
                 <Field label="Assignee" value={alert.assignee || <span className="text-gray-500">Unassigned</span>} />
                 <Field label="Created" value={<span suppressHydrationWarning>{formatAlertTime(alert.createdAt, 'MMM d, yyyy HH:mm:ss')}</span>} />

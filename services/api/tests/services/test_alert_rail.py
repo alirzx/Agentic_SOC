@@ -138,6 +138,23 @@ class TestBuildRelatedEntities:
         assert by_value["evil.example"].group == "network"
         assert by_value["evil.example"].kind == "domain"
 
+    def test_network_group_includes_unapproved_port_and_src(self) -> None:
+        entities = build_related_entities(
+            _alert(
+                raw_event={
+                    "dest_port": "3389",
+                    "transport": "tcp",
+                    "src": "10.1.2.3",
+                    "dvc": "WIN-017UMT7DCGT.soorinsec.local",
+                },
+                affected_hosts=["WIN-017UMT7DCGT.soorinsec.local"],
+                connector_type=None,
+            )
+        )
+        groups = {(e.group, e.kind, e.value) for e in entities}
+        assert ("network", "port", "tcp/3389") in groups
+        assert ("network", "ip", "10.1.2.3") in groups
+
     def test_workflow_group_promotes_rule_and_mitre(self) -> None:
         entities = build_related_entities(
             _alert(

@@ -142,6 +142,9 @@ def _orm_alert(**overrides: Any) -> SimpleNamespace:
         "narrative": None,
         "raw_event": {},
         "enrichment_data": {},
+        "rule_id": None,
+        "rule_name": None,
+        "source_event_ids": [],
         "rule_lineage_id": None,
         "fingerprint": None,
     }
@@ -229,6 +232,11 @@ class TestAlertDetailResponseContract:
             "related_entities",
             "mini_timeline",
             "recommended_actions",
+            "raw_event",
+            "iocs",
+            "mitre_attack",
+            "source_ref",
+            "risk_score",
         }
 
     def test_defaults_are_safe_when_rail_fields_missing(self) -> None:

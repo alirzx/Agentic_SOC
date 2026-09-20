@@ -127,7 +127,10 @@ def _from_blob(blob: Any, keys: Iterable[str]) -> str | None:
     if not isinstance(blob, dict):
         return None
     for key in keys:
-        value = _norm_str(blob.get(key))
+        raw = blob.get(key)
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            raw = str(raw)
+        value = _norm_str(raw)
         if value:
             return value
     return None
@@ -228,7 +231,25 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             value=ip,
             pivot=f"/attack-graph?entity=ip:{ip}",
         )
-    dst_ip = _from_blob(raw_event, ("dst_ip", "destination_ip", "remote_ip"))
+    dst_port = _from_blob(raw_event, ("dest_port", "destination_port", "dport"))
+    if dst_port:
+        transport = _from_blob(raw_event, ("transport", "protocol")) or "tcp"
+        bucket.add(
+            group="network",
+            kind="port",
+            value=f"{transport}/{dst_port}",
+            label="destination port",
+        )
+    src_ip = _from_blob(raw_event, ("src", "src_ip", "source_ip"))
+    if src_ip:
+        bucket.add(
+            group="network",
+            kind="ip",
+            value=src_ip,
+            label="source",
+            pivot=f"/attack-graph?entity=ip:{src_ip}",
+        )
+    dst_ip = _from_blob(raw_event, ("dst_ip", "destination_ip", "remote_ip", "dest_ip"))
     if dst_ip:
         bucket.add(
             group="network",
@@ -253,7 +274,11 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
     # The "what" of the alert — rule name, MITRE coverage, tags that
     # describe the detection logic. These pivot into detection
     # tuning / coverage explorers rather than the entity graph.
-    rule_name = _from_blob(raw_event, ("rule_name", "rule", "detection")) or alert.connector_type
+    rule_name = (
+        _from_blob(raw_event, ("search_name", "rule_name", "rule", "detection"))
+        or getattr(alert, "rule_name", None)
+        or alert.connector_type
+    )
     if rule_name:
         bucket.add(group="workflow", kind="rule", value=rule_name)
     for tactic_obj in alert.mitre_tactics or ():
