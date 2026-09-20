@@ -282,6 +282,7 @@ export function AlertsView() {
                   ? 'bg-gray-700 text-gray-100'
                   : 'text-gray-400 hover:text-gray-200',
               )}
+              title="Per-alert triage grid (one row per notable / detection)"
             >
               Alerts
             </button>

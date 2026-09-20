@@ -50,9 +50,10 @@ function bandFor(score: number, threshold: number): {
   bg: string;
   bar: string;
 } {
+  const safeThreshold = threshold > 0 ? threshold : 80;
   // Bands are anchored on the configured promotion threshold so the queue
   // visually reflects the operator's tuning, not magic numbers.
-  if (score >= threshold) {
+  if (score >= safeThreshold) {
     return {
       label: 'Critical',
       text: 'text-red-300',
@@ -60,7 +61,7 @@ function bandFor(score: number, threshold: number): {
       bar: 'bg-red-500',
     };
   }
-  if (score >= threshold * 0.66) {
+  if (score >= safeThreshold * 0.66) {
     return {
       label: 'High',
       text: 'text-orange-300',
@@ -68,7 +69,7 @@ function bandFor(score: number, threshold: number): {
       bar: 'bg-orange-500',
     };
   }
-  if (score >= threshold * 0.33) {
+  if (score >= safeThreshold * 0.33) {
     return {
       label: 'Medium',
       text: 'text-yellow-300',
@@ -129,7 +130,7 @@ function RatioStat({
 function SeverityHistogram({
   histogram,
 }: {
-  histogram: Record<string, number>;
+  histogram: Partial<Record<string, number>> | null | undefined;
 }) {
   const order: Array<keyof typeof SEVERITY_DOT> = [
     'critical',
@@ -138,10 +139,11 @@ function SeverityHistogram({
     'low',
     'info',
   ];
+  const safe = histogram ?? {};
   return (
     <div className="flex items-center gap-2">
       {order.map((sev) => {
-        const count = histogram[sev] ?? 0;
+        const count = safe[sev] ?? 0;
         if (count === 0) return null;
         return (
           <span
@@ -355,9 +357,9 @@ function EntityDetailDrawer({
               </p>
             ) : (
               <ol className="space-y-1.5">
-                {record.contributions.map((c) => (
+                {record.contributions.map((c, idx) => (
                   <li
-                    key={c.alert_id}
+                    key={`${c.alert_id}-${idx}`}
                     className="flex items-start gap-2 text-sm border border-[#374151]/60 bg-dark-70/80 rounded-lg px-3 py-2"
                   >
                     <span

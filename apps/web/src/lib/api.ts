@@ -1024,7 +1024,7 @@ export interface EntityRiskRecord {
   /** Top contributing alerts, newest first, capped to ~25. */
   contributions: EntityRiskContribution[];
   /** Count by severity over the decay window — drives the queue badge. */
-  severity_histogram: Record<AlertSeverity, number>;
+  severity_histogram: Partial<Record<AlertSeverity | 'info', number>>;
   /** Convenience: total alert count in the decay window. */
   alert_count: number;
 }
@@ -1057,6 +1057,95 @@ export interface EntityRiskStats {
 }
 
 /**
+ * Wire shape from ``services/fusion`` EntityRiskRecord.to_dict — field names
+ * diverged from the UI model (``severities`` vs ``severity_histogram``,
+ * ``contributors`` vs ``contributions``, ``promoted_at`` vs ``promoted``).
+ * Normalize here so the Entities tab never crashes on a live payload.
+ */
+type EntityRiskWire = {
+  tenant_id?: string;
+  entity_type?: string;
+  entity_value?: string;
+  score?: number;
+  alert_count?: number;
+  last_seen?: string;
+  first_seen?: string;
+  threshold?: number;
+  display_score?: number;
+  promoted?: boolean;
+  promoted_at?: string | null;
+  promoted_incident_id?: string | null;
+  severities?: Record<string, number>;
+  severity_histogram?: Record<string, number>;
+  contributing_alerts?: string[];
+  contributors?: Array<{
+    alert_id?: string;
+    severity?: string;
+    detection?: string;
+    title?: string;
+    source?: string;
+    points?: number;
+    raw_points?: number;
+    at?: string;
+    observed_at?: string;
+  }>;
+  contributions?: EntityRiskContribution[];
+};
+
+function mapEntityType(raw: string | undefined): EntityType {
+  if (raw === 'src_ip' || raw === 'ip') return 'ip';
+  if (raw === 'user' || raw === 'host' || raw === 'domain') return raw;
+  return 'host';
+}
+
+function mapEntityRiskRecord(
+  raw: EntityRiskWire,
+  queueThreshold: number = 80,
+): EntityRiskRecord {
+  const score = typeof raw.score === 'number' ? raw.score : 0;
+  const threshold =
+    typeof raw.threshold === 'number' && raw.threshold > 0
+      ? raw.threshold
+      : queueThreshold;
+  const lastSeen = raw.last_seen || new Date().toISOString();
+  const histogram = {
+    ...(raw.severity_histogram ?? {}),
+    ...(raw.severities ?? {}),
+  };
+  const contributions: EntityRiskContribution[] = (
+    raw.contributions ??
+    (raw.contributors ?? []).map((c) => ({
+      alert_id: String(c.alert_id ?? ''),
+      severity: (c.severity as AlertSeverity) || 'info',
+      raw_points: Number(c.raw_points ?? c.points ?? 0),
+      observed_at: String(c.observed_at ?? c.at ?? lastSeen),
+      title: c.title ?? c.detection ?? null,
+      source: c.source ?? null,
+    }))
+  ).filter((c) => c.alert_id);
+
+  return {
+    tenant_id: String(raw.tenant_id ?? ''),
+    entity_type: mapEntityType(raw.entity_type),
+    entity_value: String(raw.entity_value ?? ''),
+    score,
+    display_score:
+      typeof raw.display_score === 'number' ? raw.display_score : Math.round(score),
+    threshold,
+    promoted: Boolean(raw.promoted ?? raw.promoted_at),
+    promoted_incident_id: raw.promoted_incident_id ?? null,
+    last_seen: lastSeen,
+    first_seen: raw.first_seen || lastSeen,
+    contributions,
+    severity_histogram: histogram,
+    alert_count:
+      typeof raw.alert_count === 'number'
+        ? raw.alert_count
+        : contributions.length || (raw.contributing_alerts?.length ?? 0),
+  };
+}
+
+/**
  * Path namespace served by the fusion service. Goes through Next.js
  * rewrites (`/api/v1/fusion/*` → ``${FUSION_HOST}/*``) so the bundle
  * stays same-origin.
@@ -1072,13 +1161,23 @@ export const entityRiskApi = {
   } = {}): Promise<EntityRiskQueueResponse> => {
     const tenantId = params.tenantId ?? getActiveTenantId();
     try {
-      return await request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
+      const raw = await request<{
+        tenant_id?: string;
+        threshold?: number;
+        entities?: EntityRiskWire[];
+      }>(`${FUSION_PATH}/entity-risk/queue`, {
         params: {
           tenant_id: tenantId,
           limit: params.limit ?? 25,
           promoted_only: params.promotedOnly ? 'true' : undefined,
         },
       });
+      const threshold = typeof raw.threshold === 'number' ? raw.threshold : 80;
+      return {
+        tenant_id: String(raw.tenant_id ?? tenantId),
+        threshold,
+        entities: (raw.entities ?? []).map((e) => mapEntityRiskRecord(e, threshold)),
+      };
     } catch {
       // Never break the Alerts page when fusion/RBA is down — empty queue.
       return {
@@ -1093,9 +1192,24 @@ export const entityRiskApi = {
   stats: async (tenantId?: string): Promise<EntityRiskStats> => {
     const tid = tenantId ?? getActiveTenantId();
     try {
-      return await request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
-        params: { tenant_id: tid },
-      });
+      const raw = await request<Partial<EntityRiskStats> & { bands?: Partial<EntityRiskStats['bands']> }>(
+        `${FUSION_PATH}/entity-risk/stats`,
+        { params: { tenant_id: tid } },
+      );
+      return {
+        tenant_id: String(raw.tenant_id ?? tid),
+        threshold: typeof raw.threshold === 'number' ? raw.threshold : 80,
+        total: Number(raw.total ?? 0),
+        promoted: Number(raw.promoted ?? 0),
+        bands: {
+          critical: Number(raw.bands?.critical ?? 0),
+          high: Number(raw.bands?.high ?? 0),
+          medium: Number(raw.bands?.medium ?? 0),
+          low: Number(raw.bands?.low ?? 0),
+        },
+        alert_count: Number(raw.alert_count ?? 0),
+        alert_to_incident_ratio: raw.alert_to_incident_ratio ?? null,
+      };
     } catch {
       return {
         tenant_id: tid,
@@ -1109,12 +1223,17 @@ export const entityRiskApi = {
   },
 
   /** Full risk record for a single entity (drawer detail). */
-  get: (entityType: EntityType, entityValue: string, tenantId?: string) => {
+  get: async (
+    entityType: EntityType,
+    entityValue: string,
+    tenantId?: string,
+  ): Promise<EntityRiskRecord> => {
     const pathType = entityType === 'ip' ? 'src_ip' : entityType;
-    return request<EntityRiskRecord>(
+    const raw = await request<EntityRiskWire>(
       `${FUSION_PATH}/entity-risk/${pathType}/${encodeURIComponent(entityValue)}`,
       { params: { tenant_id: tenantId ?? getActiveTenantId() } },
     );
+    return mapEntityRiskRecord(raw);
   },
 };
 
