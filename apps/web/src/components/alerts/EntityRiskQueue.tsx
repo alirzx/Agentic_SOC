@@ -14,10 +14,13 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import {
+  alertsApi,
   entityRiskApi,
+  type EntityRiskContribution,
   type EntityRiskRecord,
   type EntityRiskStats,
   type EntityType,
@@ -263,6 +266,45 @@ function EntityRow({
   );
 }
 
+function contributionHref(contribution: EntityRiskContribution, host: string): string {
+  if (!contribution.alert_id) return '/alerts';
+  if (!contribution.title) return `/alerts/${contribution.alert_id}`;
+  const params = new URLSearchParams({ title: contribution.title });
+  if (host) params.set('host', host);
+  return `/alerts/${contribution.alert_id}?${params.toString()}`;
+}
+
+function ContributingAlertLink({
+  contribution,
+  host,
+}: {
+  contribution: EntityRiskContribution;
+  host: string;
+}) {
+  const router = useRouter();
+  const href = contributionHref(contribution, host);
+  return (
+    <Link
+      href={href}
+      className="hover:text-brand-300 hover:underline"
+      onClick={(event) => {
+        if (!contribution.title) return;
+        event.preventDefault();
+        void alertsApi
+          .lookup({ title: contribution.title, host })
+          .then((live) => {
+            router.push(`/alerts/${live.id}`);
+          })
+          .catch(() => {
+            router.push(href);
+          });
+      }}
+    >
+      {contribution.title ?? contribution.alert_id}
+    </Link>
+  );
+}
+
 function EntityDetailDrawer({
   entity,
   onClose,
@@ -379,20 +421,10 @@ function EntityDetailDrawer({
                       <div className="flex items-center gap-2">
                         <span className="text-gray-200 truncate">
                           {c.alert_id ? (
-                            <Link
-                              href={
-                                c.title
-                                  ? `/alerts/${c.alert_id}?title=${encodeURIComponent(c.title)}${
-                                      record.entity_value
-                                        ? `&host=${encodeURIComponent(record.entity_value)}`
-                                        : ''
-                                    }`
-                                  : `/alerts/${c.alert_id}`
-                              }
-                              className="hover:text-brand-300 hover:underline"
-                            >
-                              {c.title ?? c.alert_id}
-                            </Link>
+                            <ContributingAlertLink
+                              contribution={c}
+                              host={record.entity_value}
+                            />
                           ) : (
                             (c.title ?? c.alert_id)
                           )}

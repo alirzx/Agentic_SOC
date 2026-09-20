@@ -810,10 +810,63 @@ export const alertsApi = {
   },
 
   get: async (id: string, resolve?: { title?: string; host?: string }) => {
-    const raw = await request<unknown>(`/api/v1/alerts/${id}`, {
+    try {
+      const raw = await request<unknown>(`/api/v1/alerts/${id}`, {
+        params: {
+          title: resolve?.title,
+          host: resolve?.host,
+        },
+      });
+      return normalizeAlert(raw);
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 404) {
+        throw err;
+      }
+      if (resolve?.title || resolve?.host) {
+        try {
+          const raw = await request<unknown>('/api/v1/alerts/lookup', {
+            params: {
+              title: resolve?.title,
+              host: resolve?.host,
+            },
+          });
+          return normalizeAlert(raw);
+        } catch {
+          /* fall through to list search */
+        }
+      }
+      if (resolve?.title) {
+        const listed = await request<{
+          alerts?: unknown[];
+          items?: unknown[];
+        }>('/api/v1/alerts', {
+          params: { search: resolve.title, page_size: 100 },
+        });
+        const rows = Array.isArray(listed.alerts)
+          ? listed.alerts
+          : Array.isArray(listed.items)
+            ? listed.items
+            : [];
+        const alerts = rows.map(normalizeAlert);
+        const wanted = resolve.title.toLowerCase();
+        const match =
+          alerts.find((row) => row.title.toLowerCase() === wanted) ??
+          alerts.find((row) => row.title.toLowerCase().includes(wanted)) ??
+          alerts[0];
+        if (match && match.id !== id) {
+          const raw = await request<unknown>(`/api/v1/alerts/${match.id}`);
+          return normalizeAlert(raw);
+        }
+      }
+      throw err;
+    }
+  },
+
+  lookup: async (resolve: { title?: string; host?: string }) => {
+    const raw = await request<unknown>('/api/v1/alerts/lookup', {
       params: {
-        title: resolve?.title,
-        host: resolve?.host,
+        title: resolve.title,
+        host: resolve.host,
       },
     });
     return normalizeAlert(raw);
@@ -1190,7 +1243,7 @@ function mapEntityRiskRecord(
   const seenContributions = new Set<string>();
   const uniqueContributions: EntityRiskContribution[] = [];
   for (const item of contributions) {
-    const marker = `${item.title ?? ''}|${item.observed_at}`;
+    const marker = (item.title ?? '').trim().toLowerCase() || item.alert_id;
     if (seenContributions.has(marker)) continue;
     seenContributions.add(marker);
     uniqueContributions.push(item);

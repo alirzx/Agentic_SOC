@@ -150,6 +150,12 @@ def test_unique_contributors_collapses_replay_copies() -> None:
         {"alert_id": "b", "detection": "Unapproved Port", "at": "t1"},
     ]
     assert len(_unique_contributors(items)) == 1
+    staggered = [
+        {"alert_id": "a", "detection": "Unapproved Port", "at": "t1"},
+        {"alert_id": "b", "detection": "Unapproved Port", "at": "t2"},
+        {"alert_id": "c", "detection": "Unapproved Port", "at": "t3"},
+    ]
+    assert len(_unique_contributors(staggered)) == 1
 
 
 @pytest.mark.asyncio

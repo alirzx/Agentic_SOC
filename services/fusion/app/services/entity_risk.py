@@ -79,16 +79,28 @@ class EntitySignal:
     replay_key: str | None = None
 
 
-def _unique_contributors(contributors: list[dict] | None) -> list[dict]:
-    """Drop replay copies of the same notable (same rule + observed time)."""
+def _unique_event_copies(contributors: list[dict] | None) -> list[dict]:
+    """Collapse exact replay copies (same rule + observed timestamp)."""
     seen: set[str] = set()
     unique: list[dict] = []
     for item in contributors or []:
-        key = f"{item.get('detection') or ''}|{item.get('at') or ''}|{item.get('alert_id') or ''}"
-        # Prefer collapsing identical rule+time even when alert_id changed
-        # across Splunk re-polls (unstable ingest ids).
-        collapse = f"{item.get('detection') or ''}|{item.get('at') or ''}"
-        marker = collapse if collapse != "|" else key
+        marker = f"{item.get('detection') or ''}|{item.get('at') or ''}"
+        if marker == "|":
+            marker = str(item.get("alert_id") or "")
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique.append(item)
+    return unique
+
+
+def _unique_contributors(contributors: list[dict] | None) -> list[dict]:
+    """Drop Splunk re-polls of the same notable (same detection rule)."""
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for item in contributors or []:
+        detection = str(item.get("detection") or item.get("title") or "").strip().lower()
+        marker = detection or f"{item.get('at') or ''}|{item.get('alert_id') or ''}"
         if marker in seen:
             continue
         seen.add(marker)
@@ -113,11 +125,14 @@ class EntityRiskRecord:
 
     def to_dict(self) -> dict:
         contributors = _unique_contributors(self.contributors)
+        score = round(self.score, 2)
+        if contributors and self.contributors and len(contributors) < len(self.contributors):
+            score = round(sum(float(item.get("points") or 0) for item in contributors), 2)
         return {
             "tenant_id": self.tenant_id,
             "entity_type": self.entity_type,
             "entity_value": self.entity_value,
-            "score": round(self.score, 2),
+            "score": score,
             "alert_count": len(contributors) or self.alert_count,
             "last_seen": isoformat_z(self.last_seen),
             "contributing_alerts": self.contributing_alerts,
@@ -298,15 +313,25 @@ class EntityRiskEngine:
             )
 
         seen_replays: set[str] = set()
+        seen_detections: set[str] = set()
         for item in record.contributors or []:
             if item.get("replay_key"):
                 seen_replays.add(str(item["replay_key"]))
             collapse = f"{item.get('detection') or ''}|{item.get('at') or ''}"
             if collapse != "|":
                 seen_replays.add(collapse)
-        if sig.alert_id in (record.contributing_alerts or []) or (
-            sig.replay_key and sig.replay_key in seen_replays
-        ):
+            detection_key = str(item.get("detection") or "").strip().lower()
+            if detection_key:
+                seen_detections.add(detection_key)
+        sig_detection = (sig.detection or "").strip().lower()
+        is_replay = sig.alert_id in (record.contributing_alerts or []) or (
+            sig.replay_key is not None
+            and (
+                sig.replay_key in seen_replays
+                or (sig_detection and sig_detection in seen_detections)
+            )
+        )
+        if is_replay:
             # Same notable replayed (Splunk overlap / Sync). Do not restack
             # points. If persist later resolved a legacy Postgres id, rewrite
             # the contributor link so Entities opens the live row.
@@ -314,9 +339,13 @@ class EntityRiskEngine:
             if sig.alert_id not in (record.contributing_alerts or []):
                 for item in record.contributors or []:
                     collapse = f"{item.get('detection') or ''}|{item.get('at') or ''}"
-                    if sig.replay_key and (
-                        item.get("replay_key") == sig.replay_key or collapse == sig.replay_key
-                    ):
+                    item_detection = str(item.get("detection") or "").strip().lower()
+                    matches = sig.replay_key and (
+                        item.get("replay_key") == sig.replay_key
+                        or collapse == sig.replay_key
+                        or (sig_detection and item_detection == sig_detection)
+                    )
+                    if matches:
                         old_id = item.get("alert_id")
                         if old_id != sig.alert_id:
                             item["alert_id"] = sig.alert_id
@@ -436,7 +465,7 @@ class EntityRiskEngine:
             promoted_at=promoted_at,
             contributors=json.loads(decoded.get("contributors", "[]")),
         )
-        unique = _unique_contributors(record.contributors)
+        unique = _unique_event_copies(record.contributors)
         if unique and record.contributors and len(unique) < len(record.contributors):
             record.contributors = unique
             record.contributing_alerts = [

@@ -723,7 +723,15 @@ function AnalystOverridePanel({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function AlertDetailView({ alertId }: { alertId: string }) {
+export function AlertDetailView({
+  alertId,
+  title,
+  host,
+}: {
+  alertId: string;
+  title?: string;
+  host?: string;
+}) {
   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'raw'>('overview');
   // Side drawer for the "Explain this alert" structured walkthrough
   // (`POST /api/v1/explain`). Kept local to the detail view because it
@@ -734,13 +742,18 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
   // the alert to an existing one before running a playbook.
   const [createCaseOpen, setCreateCaseOpen] = useState(false);
 
-  const resolve =
-    typeof window === 'undefined'
-      ? {}
-      : {
-          title: new URLSearchParams(window.location.search).get('title') ?? undefined,
-          host: new URLSearchParams(window.location.search).get('host') ?? undefined,
-        };
+  const resolve = {
+    title:
+      title ??
+      (typeof window === 'undefined'
+        ? undefined
+        : new URLSearchParams(window.location.search).get('title') ?? undefined),
+    host:
+      host ??
+      (typeof window === 'undefined'
+        ? undefined
+        : new URLSearchParams(window.location.search).get('host') ?? undefined),
+  };
   const { data: alert, error, isLoading, mutate } = useSWR(
     ['alert', alertId, resolve.title, resolve.host],
     () => alertsApi.get(alertId, resolve),

@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Entities drawer opens the live Splunk notable, not a stale fusion UUID.**
+  Duplicate Unapproved Port rows (same rule, slightly different `_time`)
+  collapse to one contributor. Click looks up Postgres by title/host
+  (`GET /alerts/lookup`) instead of the fusion-minted id that 404s.
+
 - **Entity contributing-alert links open the live Splunk notable.** RBA stored
   fusion-minted UUIDs that Postgres never inserted (legacy row kept the
   original id). `GET /alerts/{id}` now resolves by title/host, and fusion

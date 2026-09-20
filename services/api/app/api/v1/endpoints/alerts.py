@@ -652,6 +652,11 @@ async def list_alerts(
         filters.append(Alert.category == category)
     if assigned_to_me:
         filters.append(Alert.assigned_to_id == current_user.user_id)
+    if search:
+        needle = search.strip()
+        if needle:
+            escaped = _escape_like(needle)
+            filters.append(Alert.title.ilike(f"%{escaped}%", escape="\\"))
     if min_confidence is not None:
         filters.append(Alert.confidence >= min_confidence)
     if confidence_label is not None:
@@ -767,7 +772,7 @@ def _escape_like(value: str) -> str:
 async def _resolve_alert_alias(
     db: DBSession,
     tenant_id: uuid.UUID,
-    alert_id: uuid.UUID,
+    alert_id: uuid.UUID | None,
     title: str | None,
     host: str | None,
 ):
@@ -778,42 +783,129 @@ async def _resolve_alert_alias(
     never inserted. Resolve by source-event id, then title (+ host).
     Always scoped to the caller's tenant.
     """
-    by_source = await db.execute(
-        select(Alert)
-        .where(
-            Alert.tenant_id == tenant_id,
-            Alert.source_event_ids.contains([str(alert_id)]),
-        )
-        .order_by(Alert.event_time.desc())
-        .limit(1)
-    )
-    found = by_source.scalar_one_or_none()
-    if found is not None:
-        return found
-    if not title:
-        return None
-    filters = [Alert.tenant_id == tenant_id, Alert.title == title]
-    if host:
-        escaped = _escape_like(host)
-        filters.append(
-            or_(
-                Alert.affected_hosts.contains([host]),
-                cast(Alert.raw_event, String).ilike(f"%{escaped}%", escape="\\"),
+    if alert_id is not None:
+        by_source = await db.execute(
+            select(Alert)
+            .where(
+                Alert.tenant_id == tenant_id,
+                Alert.source_event_ids.contains([str(alert_id)]),
             )
+            .order_by(Alert.event_time.desc())
+            .limit(1)
         )
-    result = await db.execute(
-        select(Alert).where(and_(*filters)).order_by(Alert.event_time.desc()).limit(1)
+        found = by_source.scalar_one_or_none()
+        if found is not None:
+            return found
+    title_norm = (title or "").strip()
+    host_norm = (host or "").strip()
+    if not title_norm and not host_norm:
+        return None
+    filters = [Alert.tenant_id == tenant_id]
+    if title_norm:
+        filters.append(func.lower(Alert.title) == title_norm.lower())
+    if host_norm:
+        escaped = _escape_like(host_norm)
+        host_clause = or_(
+            Alert.affected_hosts.contains([host_norm]),
+            cast(Alert.raw_event, String).ilike(f"%{escaped}%", escape="\\"),
+        )
+        title_filters = list(filters) + [host_clause]
+        result = await db.execute(
+            select(Alert).where(and_(*title_filters)).order_by(Alert.event_time.desc()).limit(1)
+        )
+        found = result.scalar_one_or_none()
+        if found is not None:
+            return found
+    if title_norm:
+        result = await db.execute(
+            select(Alert)
+            .where(Alert.tenant_id == tenant_id, func.lower(Alert.title) == title_norm.lower())
+            .order_by(Alert.event_time.desc())
+            .limit(1)
+        )
+        found = result.scalar_one_or_none()
+        if found is not None:
+            return found
+        escaped = _escape_like(title_norm)
+        result = await db.execute(
+            select(Alert)
+            .where(
+                Alert.tenant_id == tenant_id,
+                Alert.title.ilike(f"%{escaped}%", escape="\\"),
+            )
+            .order_by(Alert.event_time.desc())
+            .limit(1)
+        )
+        found = result.scalar_one_or_none()
+        if found is not None:
+            return found
+    if host_norm:
+        escaped = _escape_like(host_norm)
+        result = await db.execute(
+            select(Alert)
+            .where(
+                Alert.tenant_id == tenant_id,
+                or_(
+                    Alert.affected_hosts.contains([host_norm]),
+                    cast(Alert.raw_event, String).ilike(f"%{escaped}%", escape="\\"),
+                ),
+            )
+            .order_by(Alert.event_time.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+    return None
+
+
+async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailResponse:
+    if not alert.narrative:
+        try:
+            inputs = project_alert_to_narrative_inputs(alert)
+            narrative_text = build_narrative(inputs)
+            if narrative_text:
+                alert.narrative = narrative_text
+                await db.execute(
+                    update(Alert)
+                    .where(Alert.id == alert.id)
+                    .values(narrative=narrative_text, updated_at=datetime.now(UTC))
+                )
+                await db.commit()
+        except Exception:  # noqa: BLE001 — never let narrative kill a detail view
+            logger.warning(
+                "narrative lazy-fill failed for alert %s; serving without narrative",
+                alert.id,
+                exc_info=True,
+            )
+    envelope = await build_rail_envelope(db, alert)
+    payload = AlertDetailResponse.model_validate(alert)
+    return payload.model_copy(
+        update={
+            "narrative": alert.narrative,
+            "related_entities": envelope.related_entities,
+            "mini_timeline": envelope.mini_timeline,
+            "recommended_actions": envelope.recommended_actions,
+        }
     )
-    found = result.scalar_one_or_none()
-    if found is not None or not host:
-        return found
-    title_only = await db.execute(
-        select(Alert)
-        .where(Alert.tenant_id == tenant_id, Alert.title == title)
-        .order_by(Alert.event_time.desc())
-        .limit(1)
+
+
+@router.get("/lookup", response_model=AlertDetailResponse)
+async def lookup_alert(
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    db: DBSession,
+    title: str | None = Query(default=None, max_length=500),
+    host: str | None = Query(default=None, max_length=256),
+) -> AlertDetailResponse:
+    """Resolve a live Splunk notable by title/host when RBA has a stale fusion id."""
+    alert = await _resolve_alert_alias(
+        db,
+        current_user.tenant_id,
+        None,
+        title.strip() if title else None,
+        host.strip() if host else None,
     )
-    return title_only.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    return await _build_alert_detail(db, alert)
 
 
 @router.get("/{alert_id}", response_model=AlertDetailResponse)
@@ -851,41 +943,7 @@ async def get_alert(
         )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-
-    # ── Lazy-fill narrative for legacy rows ─────────────────────────────
-    # New alerts get a narrative at fusion time. Older rows predate that
-    # column being populated; the first detail-view read materialises
-    # and persists one so we only pay the cost once per row.
-    if not alert.narrative:
-        try:
-            inputs = project_alert_to_narrative_inputs(alert)
-            narrative_text = build_narrative(inputs)
-            if narrative_text:
-                alert.narrative = narrative_text
-                await db.execute(update(Alert).where(Alert.id == alert.id).values(narrative=narrative_text, updated_at=datetime.now(UTC)))
-                await db.commit()
-        except Exception:  # noqa: BLE001 — never let narrative kill a detail view
-            logger.warning(
-                "narrative lazy-fill failed for alert %s; serving without narrative",
-                alert.id,
-                exc_info=True,
-            )
-
-    envelope = await build_rail_envelope(db, alert)
-
-    # ``model_validate`` against the parent class to inherit field
-    # coercion, then merge the rail fields. We don't add the rail data
-    # to the ORM model — keeping the envelope construction in the view
-    # layer means the rail can evolve without migrations.
-    payload = AlertDetailResponse.model_validate(alert)
-    return payload.model_copy(
-        update={
-            "narrative": alert.narrative,
-            "related_entities": envelope.related_entities,
-            "mini_timeline": envelope.mini_timeline,
-            "recommended_actions": envelope.recommended_actions,
-        }
-    )
+    return await _build_alert_detail(db, alert)
 
 
 @router.patch("/{alert_id}", response_model=AlertResponse)

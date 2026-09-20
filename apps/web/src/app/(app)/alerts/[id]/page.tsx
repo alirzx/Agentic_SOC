@@ -8,10 +8,13 @@ export const metadata = {
 
 export default async function AlertDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ title?: string; host?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
   return (
     <ClientOnly
       fallback={
@@ -21,7 +24,7 @@ export default async function AlertDetailPage({
         </div>
       }
     >
-      <AlertDetailView alertId={id} />
+      <AlertDetailView alertId={id} title={query.title} host={query.host} />
     </ClientOnly>
   );
 }
