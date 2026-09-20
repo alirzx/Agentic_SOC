@@ -484,8 +484,8 @@ export function EntityRiskQueue() {
 
       {queueError && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-          Fusion / entity-risk API unreachable — queue stays empty until the live
-          fusion service is reachable. No demo data is shown.
+          Entity-risk queue unavailable — switch to the Alerts tab for the
+          per-alert list. No demo data is shown.
         </div>
       )}
 

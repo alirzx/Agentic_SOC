@@ -63,14 +63,18 @@ def _validate_proxy_path(path: str) -> str:
 
 
 async def _proxy_get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    """Forward GET to fusion if configured. Return None on transport error."""
+    """Forward GET to fusion if configured. Return None on transport/upstream error.
+
+    Entity-risk UI must never hard-fail the console: a down or not-ready
+    fusion worker degrades to an empty queue, not a red banner.
+    """
     if not _FUSION_URL:
         return None
     safe_path = _validate_proxy_path(path)
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(f"{_FUSION_URL}{safe_path}", params=params or {})
-        if resp.status_code >= 500:
+        if resp.status_code >= 400:
             logger.warning(
                 "fusion.upstream_error",
                 extra={
@@ -79,14 +83,7 @@ async def _proxy_get(path: str, params: dict[str, Any] | None = None) -> dict[st
                 },
             )
             return None
-        if resp.status_code == 404:
-            # Let caller surface 404 cleanly.
-            raise HTTPException(status_code=404, detail="not_found")
-        if resp.status_code >= 400:
-            raise HTTPException(status_code=resp.status_code, detail=resp.text)
         return resp.json()
-    except HTTPException:
-        raise
     except httpx.HTTPError as exc:
         logger.warning(
             "fusion.unreachable",
@@ -199,12 +196,21 @@ async def entity_risk_detail(
     # `?`, `#`, or other URL syntax into the proxied path.
     safe_type = quote(entity_type, safe="")
     safe_value = quote(entity_value, safe="")
-    upstream = await _proxy_get(
-        f"/entity-risk/{safe_type}/{safe_value}",
-        params={"tenant_id": str(tenant_id)},
-    )
-    if upstream is not None:
-        return upstream
-    # No fallback record exists when fusion is offline; surface 404 so the
-    # drawer renders its empty state.
-    raise HTTPException(status_code=404, detail="entity_not_found")
+    if not _FUSION_URL:
+        raise HTTPException(status_code=404, detail="entity_not_found")
+    safe_path = _validate_proxy_path(f"/entity-risk/{safe_type}/{safe_value}")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{_FUSION_URL}{safe_path}",
+                params={"tenant_id": str(tenant_id)},
+            )
+        if resp.status_code == 404:
+            raise HTTPException(status_code=404, detail="entity_not_found")
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=404, detail="entity_not_found")
+        return resp.json()
+    except HTTPException:
+        raise
+    except httpx.HTTPError:
+        raise HTTPException(status_code=404, detail="entity_not_found") from None

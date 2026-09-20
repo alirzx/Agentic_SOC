@@ -1065,24 +1065,48 @@ const FUSION_PATH = '/api/v1/fusion';
 
 export const entityRiskApi = {
   /** Top-N entities by current decayed risk score. */
-  queue: (params: {
+  queue: async (params: {
     tenantId?: string;
     limit?: number;
     promotedOnly?: boolean;
-  } = {}) =>
-    request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
-      params: {
-        tenant_id: params.tenantId ?? getActiveTenantId(),
-        limit: params.limit ?? 25,
-        promoted_only: params.promotedOnly ? 'true' : undefined,
-      },
-    }),
+  } = {}): Promise<EntityRiskQueueResponse> => {
+    const tenantId = params.tenantId ?? getActiveTenantId();
+    try {
+      return await request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
+        params: {
+          tenant_id: tenantId,
+          limit: params.limit ?? 25,
+          promoted_only: params.promotedOnly ? 'true' : undefined,
+        },
+      });
+    } catch {
+      // Never break the Alerts page when fusion/RBA is down — empty queue.
+      return {
+        tenant_id: tenantId,
+        threshold: 80,
+        entities: [],
+      };
+    }
+  },
 
   /** Tenant-scoped queue stats for dashboards (banding, totals, threshold). */
-  stats: (tenantId?: string) =>
-    request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
-      params: { tenant_id: tenantId ?? getActiveTenantId() },
-    }),
+  stats: async (tenantId?: string): Promise<EntityRiskStats> => {
+    const tid = tenantId ?? getActiveTenantId();
+    try {
+      return await request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
+        params: { tenant_id: tid },
+      });
+    } catch {
+      return {
+        tenant_id: tid,
+        threshold: 80,
+        total: 0,
+        promoted: 0,
+        bands: { critical: 0, high: 0, medium: 0, low: 0 },
+        alert_count: 0,
+      };
+    }
+  },
 
   /** Full risk record for a single entity (drawer detail). */
   get: (entityType: EntityType, entityValue: string, tenantId?: string) => {
