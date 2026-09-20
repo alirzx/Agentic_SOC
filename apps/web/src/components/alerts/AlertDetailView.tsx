@@ -9,6 +9,7 @@ import {
   agentsApi,
   ledgerApi,
   feedbackApi,
+  ApiError,
   type Alert,
   type AgentInvestigation,
   type ConfidenceFactor,
@@ -757,6 +758,12 @@ export function AlertDetailView({
   const { data: alert, error, isLoading, mutate } = useSWR(
     ['alert', alertId, resolve.title, resolve.host],
     () => alertsApi.get(alertId, resolve),
+    {
+      shouldRetryOnError: (err: unknown) =>
+        !(err instanceof ApiError && err.status === 404),
+      errorRetryCount: 2,
+      revalidateOnFocus: false,
+    },
   );
 
   const handleStatusChange = async (newStatus: Alert['status']) => {

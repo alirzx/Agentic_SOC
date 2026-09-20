@@ -12,6 +12,7 @@ import json
 import uuid
 from contextlib import asynccontextmanager
 
+import asyncpg
 import pytest
 from app.models.alert import (
     AlertSeverity,
@@ -137,6 +138,48 @@ async def test_new_alert_is_inserted_with_canonical_id_and_provenance():
     assert json.loads(args[19]) == ["evt-1"]  # source_event_ids
     assert args[20] == 2004  # ocsf_class_uid
     assert args[21] == "edr-cred-dump-1"  # rule_id
+    assert json.loads(args[23]) == ["WIN-DC01"]  # affected_hosts
+
+
+@pytest.mark.asyncio
+async def test_unknown_tenant_retries_demo_tenant():
+    other = uuid.UUID("11111111-1111-1111-1111-111111111111")
+    fused = _fused()
+    fused.alert.tenant_id = other
+    fused.tenant_id = other
+    fused.id = fused.alert.deterministic_id()
+
+    class _FkThenOkConn:
+        def __init__(self):
+            self.calls: list[tuple] = []
+
+        async def fetchrow(self, sql, *args):
+            self.calls.append((sql, args))
+            if args[1] == other:
+                raise asyncpg.ForeignKeyViolationError()
+            return {"id": args[0]}
+
+    class _FkThenOkPool:
+        def __init__(self):
+            self.conn = _FkThenOkConn()
+
+        @asynccontextmanager
+        async def _acquire(self):
+            yield self.conn
+
+        def acquire(self):
+            return self._acquire()
+
+        async def fetchrow(self, sql, *args):
+            return None
+
+    sink = AlertSink("postgresql://x")
+    sink._pool = _FkThenOkPool()
+    result = await sink.persist(fused)
+    assert result.outcome is PersistOutcome.INSERTED
+    assert sink._pool.conn.calls[0][1][1] == other
+    assert sink._pool.conn.calls[1][1][1] == TENANT
+    assert json.loads(sink._pool.conn.calls[1][1][23]) == ["WIN-DC01"]
 
 
 @pytest.mark.asyncio

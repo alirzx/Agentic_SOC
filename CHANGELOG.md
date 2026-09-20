@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Duplicate Unapproved Port rows (same rule, slightly different `_time`)
   collapse to one contributor. Click looks up Postgres by title/host
   (`GET /alerts/lookup`) instead of the fusion-minted id that 404s.
+  If fusion never persisted the row (unknown-tenant FK, Kafka already
+  consumed), lookup/get now materialize a tenant-scoped alert from the
+  real rule title and host. Fusion retries unknown-tenant inserts against
+  the demo tenant and writes `affected_hosts`. Alert detail no longer
+  SWR-retries 404s into a request storm.
 
 - **Entity contributing-alert links open the live Splunk notable.** RBA stored
   fusion-minted UUIDs that Postgres never inserted (legacy row kept the

@@ -50,6 +50,7 @@ from app.api.v1.endpoints.alerts import (
     get_alert_queue,
     get_alert_stats,
     list_alerts,
+    lookup_alert,
     snooze_alert,
     update_alert,
 )
@@ -426,6 +427,53 @@ async def test_get_alert_resolves_stale_rba_id_by_title(
     )
     assert result.id == live.id
     _assert_tenant_scoped(db.executed, user.tenant_id)
+
+
+@pytest.mark.asyncio
+async def test_get_alert_materializes_splunk_notable_when_postgres_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RBA can show a live notable before fusion persisted it; open must write the row."""
+    user = _user()
+    title = "Network - Unapproved Port Activity Detected - Rule"
+    host = "WIN-017UMT7DCGT.soorinsec.local"
+    db = _mk_db([None, None, None, None, None])
+    fake_envelope = MagicMock(related_entities=[], mini_timeline=[], recommended_actions=[])
+    monkeypatch.setattr(alerts_module, "build_rail_envelope", AsyncMock(return_value=fake_envelope))
+    stale_id = uuid.uuid4()
+    result = await get_alert(
+        alert_id=stale_id,
+        current_user=user,
+        db=db,
+        title=title,
+        host=host,
+    )
+    assert result.id == stale_id
+    assert result.title == title
+    assert db.added
+    assert db.added[0].tenant_id == user.tenant_id
+    assert db.added[0].affected_hosts == [host]
+    assert db.added[0].connector_type == "splunk"
+    db.commit.assert_awaited()
+    _assert_tenant_scoped(db.executed, user.tenant_id)
+
+
+@pytest.mark.asyncio
+async def test_lookup_alert_materializes_when_no_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _user()
+    title = "Network - Unapproved Port Activity Detected - Rule"
+    host = "WIN-017UMT7DCGT.soorinsec.local"
+    db = _mk_db([None, None, None, None])
+    fake_envelope = MagicMock(related_entities=[], mini_timeline=[], recommended_actions=[])
+    monkeypatch.setattr(alerts_module, "build_rail_envelope", AsyncMock(return_value=fake_envelope))
+    result = await lookup_alert(current_user=user, db=db, title=title, host=host)
+    assert result.title == title
+    assert db.added
+    assert db.added[0].tenant_id == user.tenant_id
+    assert db.added[0].affected_hosts == [host]
+    db.commit.assert_awaited()
 
 
 

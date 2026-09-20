@@ -857,6 +857,79 @@ async def _resolve_alert_alias(
     return None
 
 
+_NOTABLE_NS = uuid.UUID("a15c0c00-0000-5568-a150-c000000a1e77")
+
+
+async def _materialize_notable(
+    db: DBSession,
+    tenant_id: uuid.UUID,
+    title: str,
+    host: str | None,
+    alert_id: uuid.UUID | None = None,
+) -> Alert | None:
+    """Write the Splunk notable into the alert store when fusion never persisted it.
+
+    Entity-risk can show a live notable while Postgres is empty (unknown-tenant
+    insert, Kafka already consumed). Opening it from Entities must still land
+    on the real rule + host, not a demo incident.
+    """
+    now = datetime.now(UTC)
+    row_id = alert_id or uuid.uuid5(_NOTABLE_NS, f"{tenant_id}:{title}:{host or ''}")
+    hosts = [host] if host else []
+    alert = Alert(
+        id=row_id,
+        tenant_id=tenant_id,
+        title=title[:500],
+        description=f"Splunk notable on {host}" if host else "Splunk notable",
+        severity="medium",
+        status="new",
+        priority=50,
+        category="siem",
+        mitre_tactics=[],
+        mitre_techniques=[],
+        connector_type="splunk",
+        source_event_ids=[],
+        ai_recommendations=[],
+        affected_ips=[],
+        affected_hosts=hosts,
+        affected_users=[],
+        affected_assets=[],
+        child_alert_ids=[],
+        is_merged=False,
+        raw_event={
+            "source": "splunk",
+            "search_name": title,
+            "host": host,
+        },
+        enrichment_data={},
+        tags=["splunk", "notable"],
+        rule_name=title,
+        event_time=now,
+        first_seen=now,
+        last_seen=now,
+    )
+    try:
+        db.add(alert)
+        await db.commit()
+        await db.refresh(alert)
+        return alert
+    except IntegrityError:
+        await db.rollback()
+        existing = await db.execute(
+            select(Alert).where(Alert.id == row_id, Alert.tenant_id == tenant_id)
+        )
+        found = existing.scalar_one_or_none()
+        if found is not None:
+            return found
+        existing = await db.execute(
+            select(Alert)
+            .where(Alert.tenant_id == tenant_id, func.lower(Alert.title) == title.lower())
+            .order_by(Alert.event_time.desc())
+            .limit(1)
+        )
+        return existing.scalar_one_or_none()
+
+
 async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailResponse:
     if not alert.narrative:
         try:
@@ -903,6 +976,13 @@ async def lookup_alert(
         title.strip() if title else None,
         host.strip() if host else None,
     )
+    if alert is None and title and title.strip():
+        alert = await _materialize_notable(
+            db,
+            current_user.tenant_id,
+            title.strip(),
+            host.strip() if host else None,
+        )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
     return await _build_alert_detail(db, alert)
@@ -940,6 +1020,14 @@ async def get_alert(
             alert_id,
             title.strip() if title else None,
             host.strip() if host else None,
+        )
+    if alert is None and title and title.strip():
+        alert = await _materialize_notable(
+            db,
+            current_user.tenant_id,
+            title.strip(),
+            host.strip() if host else None,
+            alert_id=alert_id,
         )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")

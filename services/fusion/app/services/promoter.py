@@ -96,9 +96,14 @@ def _mitre(ocsf: dict[str, Any]) -> tuple[list[str], list[str]]:
     return tactics, techniques
 
 
-def _title(ocsf: dict[str, Any]) -> str:
-    for key in ("message", "activity_name"):
-        val = ocsf.get(key)
+def _title(ocsf: dict[str, Any], envelope_title: str | None = None) -> str:
+    for val in (
+        _get_nested(ocsf, "finding", "title"),
+        _get_nested(ocsf, "unmapped", "search_name"),
+        envelope_title,
+        ocsf.get("message"),
+        ocsf.get("activity_name"),
+    ):
         if isinstance(val, str) and val.strip():
             return val.strip()[:500]
     class_name = ocsf.get("class_name") or "Security event"
@@ -194,15 +199,20 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
             rule_id = candidate.strip()
             break
 
+    envelope_title = message.get("title")
+    title = _title(ocsf, envelope_title if isinstance(envelope_title, str) else None)
     return RawAlert(
         tenant_id=tenant_id,
         source=_source(ocsf),
-        title=_title(ocsf),
+        title=title,
         description=str(ocsf.get("raw_data") or "")[:2000],
         severity=severity,
         src_ip=_get_nested(ocsf, "src_endpoint", "ip"),
         dst_ip=_get_nested(ocsf, "dst_endpoint", "ip"),
-        hostname=_get_nested(ocsf, "device", "name"),
+        hostname=(
+            _get_nested(ocsf, "device", "name")
+            or _get_nested(ocsf, "unmapped", "host")
+        ),
         username=_get_nested(ocsf, "actor", "user", "name"),
         file_hash=_first_file_hash(ocsf),
         mitre_tactics=tactics,
@@ -214,5 +224,5 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         ocsf_class_uid=class_uid,
         source_event_ids=source_event_ids,
         rule_id=rule_id,
-        rule_name=_title(ocsf),
+        rule_name=title,
     )

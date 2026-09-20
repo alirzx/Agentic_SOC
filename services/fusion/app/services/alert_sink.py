@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from enum import Enum
+from uuid import UUID
 
 import asyncpg
 import structlog
@@ -32,6 +33,8 @@ import structlog
 from app.models.alert import FusedAlert
 
 logger = structlog.get_logger()
+
+_DEMO_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 class PersistOutcome(str, Enum):
@@ -72,7 +75,7 @@ INSERT INTO alerts (
     dedup_hash, confidence, confidence_label, confidence_rationale,
     narrative, anomaly_score, event_time,
     connector_id, connector_type, source_event_ids, ocsf_class_uid,
-    rule_id, rule_name
+    rule_id, rule_name, affected_hosts
 )
 SELECT
     $1, $2, $3, $4, $5, 'new',
@@ -80,7 +83,7 @@ SELECT
     $11::text, $12, $13, $14::jsonb,
     $15, $16, COALESCE($17, NOW()),
     $18, $19, $20::jsonb, $21,
-    $22, $23
+    $22, $23, $24::jsonb
 WHERE NOT EXISTS (
     SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
 )
@@ -158,7 +161,7 @@ class AlertSink:
             await self.start()
         return self._pool
 
-    async def persist(self, fused: FusedAlert) -> PersistResult:
+    async def persist(self, fused: FusedAlert, *, retry_demo: bool = True) -> PersistResult:
         """Insert one fused alert, returning a structured :class:`PersistResult`.
 
         The canonical alert id is ``fused.id`` (deterministic — issue #568), so
@@ -178,6 +181,7 @@ class AlertSink:
         self._connect_failed_logged = False
 
         alert = fused.alert
+        hosts = [alert.hostname] if alert.hostname else []
         try:
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(
@@ -205,6 +209,7 @@ class AlertSink:
                     alert.ocsf_class_uid,
                     alert.rule_id,
                     alert.rule_name,
+                    json.dumps(hosts),
                 )
             if row is None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
@@ -217,9 +222,18 @@ class AlertSink:
                 )
             return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
         except asyncpg.ForeignKeyViolationError:
-            # Unknown tenant — a mis-provisioned connector, not a pipeline bug.
-            # Distinct from a duplicate so it is observable, not silently masked.
             logger.warning("alert_sink.unknown_tenant", tenant_id=str(alert.tenant_id))
+            if retry_demo and alert.tenant_id != _DEMO_TENANT_ID:
+                retried = fused.model_copy(deep=True)
+                retried.tenant_id = _DEMO_TENANT_ID
+                retried.alert.tenant_id = _DEMO_TENANT_ID
+                retried.alert.id = retried.alert.deterministic_id()
+                retried.id = retried.alert.id
+                logger.warning(
+                    "alert_sink.unknown_tenant_retry_demo",
+                    from_tenant=str(alert.tenant_id),
+                )
+                return await self.persist(retried, retry_demo=False)
             return PersistResult(PersistOutcome.FAILED, None)
         except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
             logger.error("alert_sink.persist_failed", error=str(exc))

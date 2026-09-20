@@ -164,3 +164,24 @@ class TestPromoteNormalizedEvent:
         assert alert is not None
         assert alert.source_event_ids == ["UNIQUE-EVENT-1"]
         assert alert.rule_id != "UNIQUE-EVENT-1"
+
+    def test_prefers_finding_title_over_message(self):
+        msg = _message(
+            {
+                "message": "verbose ocsf body",
+                "finding": {
+                    "title": "Network - Unapproved Port Activity Detected - Rule",
+                },
+            }
+        )
+        alert = promote_normalized_event(msg)
+        assert alert is not None
+        assert alert.title == "Network - Unapproved Port Activity Detected - Rule"
+        assert alert.rule_name == alert.title
+
+    def test_envelope_title_beats_generic_message(self):
+        msg = _message({"message": "Security Finding"})
+        msg["title"] = "Network - Unapproved Port Activity Detected - Rule"
+        alert = promote_normalized_event(msg)
+        assert alert is not None
+        assert alert.title == "Network - Unapproved Port Activity Detected - Rule"
