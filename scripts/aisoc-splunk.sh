@@ -66,7 +66,15 @@ echo "==> Sanity: API → connectors + fusion DNS"
 docker exec aisoc-demo-api python -c \
   'import urllib.request; print("connectors", urllib.request.urlopen("http://connectors:8003/livez").status); print("fusion", urllib.request.urlopen("http://fusion:8003/health").status)'
 
+echo "==> Fusion metrics (promoted / persisted)"
+docker exec aisoc-demo-fusion python -c \
+  'import urllib.request,json; print(json.load(urllib.request.urlopen("http://localhost:8003/metrics")))' \
+  || echo "    (metrics not ready yet)"
+
 echo "==> Done. Open http://localhost:${AISOC_WEB_PORT:-5000}"
 echo "    Connect Splunk: Connectors → Add → Splunk SIEM"
 echo "    After Sync, open Alerts → Alerts tab (not Entities) for the per-alert list"
+echo "    If /alerts is empty after Sync, clear checkpoint and Sync again:"
+echo "      docker exec aisoc-demo-postgres psql -U aisoc -d aisoc -c \\\\"
+echo "        \\\"UPDATE connectors SET connector_config = connector_config - 'checkpoint' WHERE connector_type='splunk';\\\""
 echo "    Purge leftover seed rows: pnpm aisoc:purge-demo"

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     kafka_topic_alerts_raw: str = Field(default="aisoc.alerts.raw", alias="KAFKA_TOPIC_ALERTS_RAW")
     kafka_topic_alerts_fused: str = Field(default="aisoc.alerts.fused", alias="KAFKA_TOPIC_ALERTS_FUSED")
     kafka_consumer_group: str = Field(default="aisoc-fusion-consumer", alias="KAFKA_CONSUMER_GROUP")
+    # ``earliest`` is required for the demo/Splunk spine: connectors often
+    # publish to Kafka *before* fusion finishes booting, and ``latest`` would
+    # permanently skip those notables (empty /alerts despite events_ingested>0).
+    # Persist is idempotent on dedup_hash, so replaying a short backlog is safe.
+    kafka_auto_offset_reset: str = Field(default="earliest", alias="KAFKA_AUTO_OFFSET_RESET")
     # Phase 3.1 spine bridge — ingest's normalized-event topic. Fusion promotes
     # findings + high/critical telemetry into RawAlerts (app/services/promoter.py).
     kafka_topic_raw_events: str = Field(default="aisoc.raw_events", alias="KAFKA_TOPIC_RAW_EVENTS")

@@ -87,7 +87,7 @@ class FusionWorker:
             *topics,
             bootstrap_servers=settings.kafka_bootstrap_servers,
             group_id=settings.kafka_consumer_group,
-            auto_offset_reset="latest",
+            auto_offset_reset=settings.kafka_auto_offset_reset,
             # At-least-once: commit offsets only AFTER a message is fully
             # processed (see _consume_loop), not on a background timer that could
             # commit an in-flight message before processing finishes.
@@ -222,7 +222,7 @@ class FusionWorker:
             )
             return
 
-        if topic == settings.kafka_topic_raw_events:
+        if resolved_topic == settings.kafka_topic_raw_events:
             # Phase A1 — archive EVERY normalized event into the ClickHouse lake
             # first, independent of the promotion decision below. A non-promoted
             # Medium event still has to be queryable via /lake/sql.

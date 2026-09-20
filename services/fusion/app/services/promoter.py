@@ -125,13 +125,26 @@ def _event_time(ocsf: dict[str, Any]) -> datetime | None:
     return None
 
 
+def _as_int(value: Any) -> int | None:
+    """Coerce JSON numbers (int/float/str) to int — Go maps often arrive as float."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value.strip())
+    return None
+
+
 def should_promote(ocsf: dict[str, Any]) -> bool:
     """Deterministic promotion decision — see module docstring for policy."""
-    class_uid = ocsf.get("class_uid")
-    if isinstance(class_uid, int) and class_uid // 1000 == _FINDINGS_CATEGORY:
+    class_uid = _as_int(ocsf.get("class_uid"))
+    if class_uid is not None and class_uid // 1000 == _FINDINGS_CATEGORY:
         return True
-    severity_id = ocsf.get("severity_id")
-    return isinstance(severity_id, int) and severity_id >= _PROMOTE_SEVERITY_FLOOR
+    severity_id = _as_int(ocsf.get("severity_id"))
+    return severity_id is not None and severity_id >= _PROMOTE_SEVERITY_FLOOR
 
 
 def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
@@ -158,8 +171,8 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         logger.warning("promoter.non_uuid_tenant", tenant_id=str(tenant_raw)[:64])
         return None
 
-    severity_id = ocsf.get("severity_id")
-    severity = _SEVERITY_BY_ID.get(severity_id if isinstance(severity_id, int) else 0, AlertSeverity.MEDIUM)
+    severity_id = _as_int(ocsf.get("severity_id")) or 0
+    severity = _SEVERITY_BY_ID.get(severity_id, AlertSeverity.MEDIUM)
 
     tactics, techniques = _mitre(ocsf)
     connector_id, connector_type, class_uid = extract_provenance(message, ocsf)

@@ -297,6 +297,9 @@ services:
       REDIS_URL: redis://:redis_dev_secret@redis:6379/3
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       CLICKHOUSE_HOST: ""
+      AISOC_LAKE_WRITER_ENABLED: "false"
+      KAFKA_AUTO_OFFSET_RESET: earliest
+      KAFKA_CONSUMER_GROUP: aisoc-fusion-consumer-demo-v2
     networks:
       - aisoc-demo
     restart: unless-stopped

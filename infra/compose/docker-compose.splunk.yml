@@ -66,6 +66,12 @@ services:
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       # ClickHouse is not in the slim stack — lake writer fails soft.
       CLICKHOUSE_HOST: ""
+      AISOC_LAKE_WRITER_ENABLED: "false"
+      # Replay Kafka backlog so notables published before fusion booted
+      # still become /alerts rows (persist is idempotent on dedup_hash).
+      KAFKA_AUTO_OFFSET_RESET: earliest
+      # Bump group so an already-committed ``latest`` offset is abandoned.
+      KAFKA_CONSUMER_GROUP: aisoc-fusion-consumer-splunk-v2
     networks:
       - aisoc-demo
     restart: unless-stopped

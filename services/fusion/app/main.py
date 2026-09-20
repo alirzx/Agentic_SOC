@@ -75,6 +75,8 @@ async def lifespan(app: FastAPI):
     # DB never blocks the Kafka pipeline.
     sink = AlertSink(settings.database_url) if settings.alert_sink_enabled else None
     # Phase A1 — populate the ClickHouse event lake from the raw-events stream.
+    # Skip when no host is configured (slim demo stack) so we never open a
+    # Client against localhost/empty and burn the worker start budget.
     lake = (
         LakeWriter(
             host=settings.clickhouse_host,
@@ -85,7 +87,7 @@ async def lifespan(app: FastAPI):
             batch_size=settings.lake_batch_size,
             batch_max_age_seconds=settings.lake_batch_max_age_seconds,
         )
-        if settings.lake_writer_enabled
+        if settings.lake_writer_enabled and bool((settings.clickhouse_host or "").strip())
         else None
     )
     # Phase A2 — evaluate the executable detection corpus against the stream.
