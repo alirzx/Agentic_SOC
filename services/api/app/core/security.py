@@ -20,6 +20,7 @@ from app.core.config import settings
 _BCRYPT_MAX_BYTES = 72
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {
+    "super_admin": ["*"],
     "platform_admin": ["*"],
     # ``admin`` is the role string handed out by the dev-mode demo user
     # (see ``app.api.v1.dev_auth``) and by some legacy seed scripts. It
@@ -43,6 +44,8 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "connectors:delete",
         "users:read",
         "users:write",
+        "roles:read",
+        "roles:write",
         "rules:read",
         "rules:write",
         "reports:read",
@@ -151,19 +154,80 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(_to_bcrypt_input(password), bcrypt.gensalt()).decode("utf-8")
 
 
-def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
-    to_encode = data.copy()
+# Hard session lifetime from the original login. Refresh must not extend
+# the console past this window — operators re-authenticate after one day.
+SESSION_MAX_SECONDS = 24 * 60 * 60
+PRIVILEGED_ROLES = frozenset({"super_admin", "platform_admin", "admin"})
+ASSIGNABLE_ROLES = frozenset(
+    {
+        "super_admin",
+        "platform_admin",
+        "admin",
+        "tenant_admin",
+        "soc_lead",
+        "soc_analyst",
+        "threat_hunter",
+        "viewer",
+    }
+)
+
+
+def _unix_now() -> int:
+    return int(datetime.now(UTC).timestamp())
+
+
+def _session_deadline(auth_time: int) -> datetime:
+    return datetime.fromtimestamp(auth_time, tz=UTC) + timedelta(seconds=SESSION_MAX_SECONDS)
+
+
+def _with_auth_time(data: dict[str, Any], auth_time: int | None) -> tuple[dict[str, Any], int]:
+    payload = dict(data)
+    if auth_time is None:
+        raw = payload.get("auth_time")
+        if isinstance(raw, (int, float)):
+            auth_time = int(raw)
+        else:
+            auth_time = _unix_now()
+    payload["auth_time"] = auth_time
+    return payload, auth_time
+
+
+def session_is_expired(payload: dict[str, Any]) -> bool:
+    """True when the login is older than one day (legacy tokens without the claim rely on ``exp``)."""
+    raw = payload.get("auth_time")
+    if not isinstance(raw, (int, float)):
+        return False
+    return datetime.now(UTC) >= _session_deadline(int(raw))
+
+
+def is_privileged_role(role: str) -> bool:
+    return (role or "").strip().lower() in PRIVILEGED_ROLES
+
+
+def create_access_token(
+    data: dict[str, Any],
+    expires_delta: timedelta | None = None,
+    auth_time: int | None = None,
+) -> str:
+    to_encode, auth_time = _with_auth_time(data, auth_time)
+    now = datetime.now(UTC)
     if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = min(expire, _session_deadline(auth_time))
+    if expire <= now:
+        expire = now
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_refresh_token(data: dict[str, Any]) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+def create_refresh_token(data: dict[str, Any], auth_time: int | None = None) -> str:
+    to_encode, auth_time = _with_auth_time(data, auth_time)
+    now = datetime.now(UTC)
+    expire = min(now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS), _session_deadline(auth_time))
+    if expire <= now:
+        expire = now
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

@@ -234,36 +234,25 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
     );
   }
 
-  // Stale / invalid JWTs force 401 even in ENV=development (the API only
-  // falls back to the demo user when *no* Authorization header is sent).
-  // Drop the bad token once and retry without it so the local stack stays usable.
+  // Expired / invalid JWTs must not fall through to the unauthenticated
+  // demo-user shim. Clear the session and send the operator back to login.
   if (
     response.status === 401 &&
     typeof window !== 'undefined' &&
     (headers as Record<string, string>).Authorization
   ) {
     try {
-      window.localStorage.removeItem(AUTH_TOKEN_KEY);
-      window.localStorage.removeItem(AUTH_REFRESH_KEY);
-      window.localStorage.removeItem(AUTH_USER_KEY);
+      window.localStorage.removeItem('aisoc.responder.accessToken');
+      window.localStorage.removeItem('aisoc.responder.refreshToken');
+      window.localStorage.removeItem('aisoc.responder.user');
+      document.cookie = 'aisoc.session=; Max-Age=0; Path=/; SameSite=Lax';
     } catch {
       /* ignore */
     }
-    const retryHeaders = { ...(headers as Record<string, string>) };
-    delete retryHeaders.Authorization;
-    delete retryHeaders.authorization;
-    try {
-      response = await fetch(url, {
-        ...fetchOptions,
-        headers: retryHeaders,
-        cache: 'no-store',
-      });
-    } catch (err) {
-      throw new ApiError(
-        `Network error talking to ${url}: ${(err as Error).message}`,
-        0,
-        '',
-      );
+    const onLogin = window.location.pathname.startsWith('/login') || path.includes('/auth/login');
+    if (!onLogin) {
+      const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+      window.location.assign(`/login?next=${next}`);
     }
   }
 
@@ -287,6 +276,47 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
 export const AUTH_TOKEN_KEY = 'aisoc.responder.accessToken';
 export const AUTH_REFRESH_KEY = 'aisoc.responder.refreshToken';
 export const AUTH_USER_KEY = 'aisoc.responder.user';
+export const SESSION_COOKIE = 'aisoc.session';
+const SESSION_MAX_SECONDS = 24 * 60 * 60;
+
+function readJwtExp(token: string): number | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) {
+      return null;
+    }
+    const padded = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    const json = JSON.parse(atob(padded)) as { exp?: number };
+    return typeof json.exp === 'number' ? json.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenAlive(token: string | null | undefined): boolean {
+  if (!token) {
+    return false;
+  }
+  const exp = readJwtExp(token);
+  if (exp === null) {
+    return false;
+  }
+  return exp * 1000 > Date.now() + 1000;
+}
+
+function writeSessionCookie(maxAgeSeconds: number): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+  document.cookie = `${SESSION_COOKIE}=1; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}; Path=/; SameSite=Lax`;
+}
+
+function clearSessionCookie(): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+  document.cookie = `${SESSION_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
 
 export interface AuthUser {
   id: string;
@@ -317,6 +347,12 @@ function persistAuth(tokens: TokenResponse, user: AuthUser): void {
       window.localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
     }
     window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    const exp = readJwtExp(tokens.access_token);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const maxAge = exp
+      ? Math.min(SESSION_MAX_SECONDS, Math.max(0, exp - nowSec))
+      : SESSION_MAX_SECONDS;
+    writeSessionCookie(maxAge);
   } catch {
     /* localStorage unavailable; ignore */
   }
@@ -358,6 +394,7 @@ export const authApi = {
       window.localStorage.removeItem(AUTH_TOKEN_KEY);
       window.localStorage.removeItem(AUTH_REFRESH_KEY);
       window.localStorage.removeItem(AUTH_USER_KEY);
+      clearSessionCookie();
     } catch {
       /* ignore */
     }
@@ -376,7 +413,20 @@ export const authApi = {
   isAuthenticated(): boolean {
     if (typeof window === 'undefined') return false;
     try {
-      return Boolean(window.localStorage.getItem(AUTH_TOKEN_KEY));
+      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!isTokenAlive(token)) {
+        if (token) {
+          authApi.logout();
+        }
+        return false;
+      }
+      const exp = readJwtExp(token as string);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const maxAge = exp
+        ? Math.min(SESSION_MAX_SECONDS, Math.max(0, exp - nowSec))
+        : SESSION_MAX_SECONDS;
+      writeSessionCookie(maxAge);
+      return true;
     } catch {
       return false;
     }
@@ -426,6 +476,41 @@ export interface MyTenant {
   parent_tenant_id?: string | null;
 }
 
+export type TenantUserRole =
+  | 'super_admin'
+  | 'platform_admin'
+  | 'admin'
+  | 'tenant_admin'
+  | 'soc_lead'
+  | 'soc_analyst'
+  | 'threat_hunter'
+  | 'viewer';
+
+export interface TenantUser {
+  id: string;
+  tenant_id: string;
+  email: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  last_login: string | null;
+  created_at: string;
+}
+
+export interface CreateTenantUserInput {
+  email: string;
+  username: string;
+  password: string;
+  role: TenantUserRole;
+}
+
+export interface UpdateTenantUserInput {
+  username?: string;
+  role?: TenantUserRole;
+  is_active?: boolean;
+  password?: string;
+}
+
 export interface ChildTenant {
   id: string;
   name: string;
@@ -444,6 +529,21 @@ export const tenantsApi = {
    */
   async me(): Promise<MyTenant> {
     return request<MyTenant>('/api/v1/tenants/me/identity');
+  },
+  async listUsers(): Promise<TenantUser[]> {
+    return request<TenantUser[]>('/api/v1/tenants/me/users');
+  },
+  async createUser(input: CreateTenantUserInput): Promise<TenantUser> {
+    return request<TenantUser>('/api/v1/tenants/me/users', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  async updateUser(userId: string, input: UpdateTenantUserInput): Promise<TenantUser> {
+    return request<TenantUser>(`/api/v1/tenants/me/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
   },
 };
 

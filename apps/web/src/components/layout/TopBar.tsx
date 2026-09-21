@@ -7,11 +7,13 @@ import { TimeWindowSelector } from './TimeWindowSelector';
 import { TenantSwitcher } from './TenantSwitcher';
 import { RoleBadge } from './RoleBadge';
 import { useTenant } from './TenantProvider';
+import { authApi, type AuthUser } from '@/lib/api';
 
 // Order matters: longer/more specific paths first so startsWith() picks
 // the right label for nested routes (e.g. /detection/catalog before /detection).
 const routeLabels: Record<string, { title: string; description: string }> = {
   '/detection/catalog': { title: 'Detection Catalog', description: 'Curated rule packs and templates' },
+  '/settings/users': { title: 'Users', description: 'Create operators and change roles' },
   '/settings/rbac': { title: 'Roles & Permissions', description: 'Access control and team management' },
   '/dashboard': { title: 'Dashboard', description: 'SOC overview and metrics' },
   '/alerts': { title: 'Alerts', description: 'Security alerts and incidents' },
@@ -47,6 +49,11 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
   const [now, setNow] = useState<Date | null>(null);
   const [shortcut, setShortcut] = useState<'⌘K' | 'Ctrl K'>('⌘K');
   const { userRole } = useTenant();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  useEffect(() => {
+    setUser(authApi.currentUser());
+  }, []);
+  const initials = (user?.username || user?.email || 'SO').slice(0, 2).toUpperCase();
 
   // Update the clock every second on the client only (avoids hydration drift).
   useEffect(() => {
@@ -219,14 +226,24 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
         </button>
 
         {/* User avatar */}
-        <div className="flex items-center gap-2 cursor-pointer group">
+        <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-teal-20 flex items-center justify-center text-xs font-gilroy-bold text-dark-80">
-            SO
+            {initials}
           </div>
           <div className="hidden lg:block">
-            <p className="text-xs font-gilroy-medium text-amgray-20">SOC Analyst</p>
-            <p className="text-xs text-amgray-50">Admin</p>
+            <p className="text-xs font-gilroy-medium text-amgray-20">{user?.username || user?.email || 'Operator'}</p>
+            <p className="text-xs text-amgray-50">{(user?.role || userRole || 'user').replace(/_/g, ' ')}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              authApi.logout();
+              window.location.assign('/login');
+            }}
+            className="hidden md:inline text-xs text-amgray-40 hover:text-white px-2 py-1 rounded-md border border-[#374151]"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </header>

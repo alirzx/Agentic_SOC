@@ -84,7 +84,7 @@ Restart only the offending subsystem rather than the whole stack. If you intenti
 
 Three causes, in order of likelihood:
 
-1. **Token expired.** Access tokens default to 30 minutes. The web app refreshes silently; CLI / SDK clients must call `/auth/refresh` themselves.
+1. **Token expired.** Access tokens and the console session last one day from login. After that, sign in again. CLI / SDK clients may call `/auth/refresh` only inside that same 24-hour window.
 2. **`SECRET_KEY` rotated.** Existing tokens were signed with the old key. After any `SECRET_KEY` rotation, all sessions are invalidated by design. Users must re-authenticate.
 3. **Tenant mismatch.** The token is for tenant `A` but the request hit a route scoped to tenant `B`. Decode the JWT (no signature check needed for diagnosis): `python -c "import jwt; print(jwt.decode('<token>', options={'verify_signature': False}))"`.
 

@@ -16,6 +16,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    session_is_expired,
     verify_password,
 )
 from app.models.tenant import User
@@ -79,8 +80,9 @@ async def login(request: LoginRequest, db: DBSession) -> TokenResponse:
         "role": user.role,
         "email": user.email,
     }
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
+    auth_time = int(datetime.now(UTC).timestamp())
+    access_token = create_access_token(token_data, auth_time=auth_time)
+    refresh_token = create_refresh_token(token_data, auth_time=auth_time)
 
     return TokenResponse(
         access_token=access_token,
@@ -95,7 +97,13 @@ async def refresh_token(request: RefreshRequest, db: DBSession) -> TokenResponse
         payload = decode_token(request.refresh_token)
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        if session_is_expired(payload):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired. Sign in again.",
+            )
         user_id = payload.get("sub")
+        auth_time = payload.get("auth_time")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from e
 
@@ -110,9 +118,10 @@ async def refresh_token(request: RefreshRequest, db: DBSession) -> TokenResponse
         "role": user.role,
         "email": user.email,
     }
+    bound_auth_time = int(auth_time) if isinstance(auth_time, (int, float)) else None
     return TokenResponse(
-        access_token=create_access_token(token_data),
-        refresh_token=create_refresh_token(token_data),
+        access_token=create_access_token(token_data, auth_time=bound_auth_time),
+        refresh_token=create_refresh_token(token_data, auth_time=bound_auth_time),
     )
 
 

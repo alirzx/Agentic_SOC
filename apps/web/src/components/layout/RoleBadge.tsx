@@ -12,10 +12,35 @@ import { clsx } from 'clsx';
  * informative than a confident-but-wrong label.
  */
 const ROLE_STYLES: Record<string, { label: string; classes: string }> = {
+  super_admin: {
+    label: 'Super admin',
+    classes:
+      'bg-rose-500/10 text-rose-200 border-rose-500/30 dark:bg-rose-500/15',
+  },
+  platform_admin: {
+    label: 'Platform admin',
+    classes:
+      'bg-rose-500/10 text-rose-200 border-rose-500/30 dark:bg-rose-500/15',
+  },
   admin: {
     label: 'Admin',
     classes:
       'bg-rose-500/10 text-rose-200 border-rose-500/30 dark:bg-rose-500/15',
+  },
+  tenant_admin: {
+    label: 'Tenant admin',
+    classes:
+      'bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-500/30',
+  },
+  soc_lead: {
+    label: 'SOC lead',
+    classes:
+      'bg-amber-500/10 text-amber-200 border-amber-500/30 dark:bg-amber-500/15',
+  },
+  soc_analyst: {
+    label: 'Analyst',
+    classes:
+      'bg-brand-500/10 text-brand-200 border-brand-500/30 dark:bg-brand-500/15',
   },
   responder: {
     label: 'Responder',

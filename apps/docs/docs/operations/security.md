@@ -35,8 +35,8 @@ The default install ships with local username/password authentication. Passwords
 
 Tokens issued at login:
 
-- **Access token** — short-lived JWT (`ACCESS_TOKEN_EXPIRE_MINUTES`, default 30 min). Carries `sub`, `role`, `tenant_id`, `exp`, `type=access`. Signed with `SECRET_KEY` using `ALGORITHM` (default HS256).
-- **Refresh token** — longer-lived JWT (`REFRESH_TOKEN_EXPIRE_DAYS`, default 7 days). Used only to mint new access tokens.
+- **Access token** — JWT (`ACCESS_TOKEN_EXPIRE_MINUTES`, default 1440 min / 1 day). Carries `sub`, `role`, `tenant_id`, `auth_time`, `exp`, `type=access`. Signed with `SECRET_KEY` using `ALGORITHM` (default HS256). `auth_time` is the original login instant; refresh cannot extend the session past 24 hours from that moment.
+- **Refresh token** — JWT (`REFRESH_TOKEN_EXPIRE_DAYS`, default 1 day). Used only to mint new access tokens inside the same 24-hour login window. After one day the operator must sign in again.
 
 Rotate `SECRET_KEY` periodically. Doing so invalidates every active session, which is the desired behaviour after a suspected key leak.
 

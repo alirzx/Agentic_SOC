@@ -45,7 +45,7 @@ from fastapi import HTTPException
 # ─── Static role-permission map (the source of truth) ────────────────────
 
 
-WRITE_ROLES = ("admin", "platform_admin", "tenant_admin", "soc_lead", "threat_hunter")
+WRITE_ROLES = ("super_admin", "admin", "platform_admin", "tenant_admin", "soc_lead", "threat_hunter")
 READ_ONLY_ROLES = ("soc_analyst", "viewer", "api_service")
 
 
@@ -99,8 +99,8 @@ def test_role_permissions_map_covers_every_role_under_test() -> None:
     classify it as write or read-only here, this test fails loudly
     instead of silently leaving the new role unaudited.
     """
-    real_roles = set(ROLE_PERMISSIONS) - {"admin", "platform_admin"}
-    audited_roles = set(WRITE_ROLES + READ_ONLY_ROLES) - {"admin", "platform_admin"}
+    real_roles = set(ROLE_PERMISSIONS) - {"admin", "platform_admin", "super_admin"}
+    audited_roles = set(WRITE_ROLES + READ_ONLY_ROLES) - {"admin", "platform_admin", "super_admin"}
     missing = real_roles - audited_roles
     assert (
         not missing

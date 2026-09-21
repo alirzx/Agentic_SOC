@@ -32,8 +32,8 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SECRET_KEY` | `change-me-in-production-at-least-32-chars` | **Required in production.** Signs primary access/refresh JWTs. Generate with `openssl rand -hex 32`. |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Lifetime of an access token |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Lifetime of a refresh token |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Lifetime of an access token (default 1 day). Refresh cannot extend past the original login. |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `1` | Lifetime of a refresh token. The console session always ends one day after login. |
 | `ALGORITHM` | `HS256` | JWT signing algorithm |
 
 ### Migration runner
@@ -363,7 +363,7 @@ These services read the same `AISOC_CORS_ORIGINS` / `CORS_ORIGINS` pair and fall
 ```bash
 # --- API ---
 SECRET_KEY=$(openssl rand -hex 32)
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
 DATABASE_URL=postgresql+asyncpg://aisoc:changeme@localhost:5432/aisoc
 REDIS_URL=redis://localhost:6379/0
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092

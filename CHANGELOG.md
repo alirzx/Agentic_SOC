@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Super-admin user and permission management.** Role `super_admin` has full
+  (`*`) privileges, same as `admin` / `platform_admin`. **Settings → Users**
+  creates operators and changes their roles; only a super admin can assign
+  admin roles. Tenant admins can create SOC analysts/leads and manage RBAC
+  permission sets. Console sessions last **one day** from login (`auth_time`
+  on the JWT); refresh cannot extend past that window. Unauthenticated
+  visitors are redirected to `/login` and cannot open `/dashboard` or other
+  console routes. After login the full sidebar is available.
+
 - **Soorin Agentic SOC runtime contracts** (`services/agents/app/runtime/`).
   Spec-aligned Agent/Tool/Incident/Risk/Decision/Report contracts layered on
   the existing Python stack (no NestJS rewrite). Includes a versioned agent

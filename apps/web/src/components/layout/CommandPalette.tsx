@@ -74,6 +74,7 @@ const NAV_ITEMS: { label: string; href: string; keywords: string[] }[] = [
   { label: 'Attack Graph',    href: '/graph',        keywords: ['graph', 'paths', 'cytoscape'] },
   { label: 'AI Copilot',      href: '/copilot',      keywords: ['assistant', 'chat', 'ai'] },
   { label: 'Connectors',      href: '/connectors',   keywords: ['integrations', 'sources'] },
+  { label: 'Users',           href: '/settings/users', keywords: ['team', 'invite', 'roles', 'admin'] },
   { label: 'Settings',        href: '/settings',     keywords: ['preferences', 'profile', 'tenant'] },
 ];
 

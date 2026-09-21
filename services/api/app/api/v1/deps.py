@@ -38,7 +38,7 @@ from app.api.v1.dev_auth import (
     DEMO_USER_ROLE,
     is_dev_mode,
 )
-from app.core.security import decode_token, has_permission, hash_api_key
+from app.core.security import decode_token, has_permission, hash_api_key, session_is_expired
 from app.db.database import get_db
 from app.models.tenant import ApiKey, User
 
@@ -218,6 +218,11 @@ async def get_current_user(
         token_type: str = payload.get("type", "access")
         if user_id is None or token_type != "access":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        if session_is_expired(payload):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired. Sign in again.",
+            )
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

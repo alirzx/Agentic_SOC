@@ -301,6 +301,11 @@ const navSections: NavSection[] = [
         icon: <PuzzleIcon />,
       },
       {
+        label: 'Users',
+        href: '/settings/users',
+        icon: <CogIcon />,
+      },
+      {
         label: 'Roles & Permissions',
         href: '/settings/rbac',
         icon: <ShieldIcon />,

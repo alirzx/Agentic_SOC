@@ -5,11 +5,11 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
-from app.core.security import get_password_hash
+from app.core.security import ASSIGNABLE_ROLES, get_password_hash, is_privileged_role
 from app.models.tenant import Tenant, User
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
@@ -61,15 +61,35 @@ class UserResponse(BaseModel):
 
 class CreateUserRequest(BaseModel):
     email: EmailStr
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
     role: str = "soc_analyst"
 
 
 class UpdateUserRequest(BaseModel):
-    username: str | None = None
+    username: str | None = Field(default=None, min_length=1, max_length=100)
     role: str | None = None
     is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+def _normalize_role(role: str) -> str:
+    return (role or "").strip().lower()
+
+
+def _assert_assignable_role(actor_role: str, target_role: str) -> str:
+    role = _normalize_role(target_role)
+    if role not in ASSIGNABLE_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown role '{target_role}'",
+        )
+    if is_privileged_role(role) and not is_privileged_role(actor_role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a super admin can assign admin roles",
+        )
+    return role
 
 
 class UpdateTenantSettingsRequest(BaseModel):
@@ -155,12 +175,13 @@ async def create_user(
             detail="User with this email already exists",
         )
 
+    role = _assert_assignable_role(current_user.role, request.role)
     user = User(
         tenant_id=current_user.tenant_id,
         email=request.email,
-        username=request.username,
+        username=request.username.strip(),
         hashed_password=get_password_hash(request.password),
-        role=request.role,
+        role=role,
     )
     db.add(user)
     await db.commit()
@@ -182,10 +203,14 @@ async def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     updates: dict = {}
-    for field in ["username", "role", "is_active"]:
-        val = getattr(request, field, None)
-        if val is not None:
-            updates[field] = val
+    if request.username is not None:
+        updates["username"] = request.username.strip()
+    if request.role is not None:
+        updates["role"] = _assert_assignable_role(current_user.role, request.role)
+    if request.is_active is not None:
+        updates["is_active"] = request.is_active
+    if request.password is not None:
+        updates["hashed_password"] = get_password_hash(request.password)
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)

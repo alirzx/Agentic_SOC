@@ -54,6 +54,9 @@ describe('Sidebar', () => {
 
     const compliance = screen.getByRole('link', { name: /compliance/i });
     expect(compliance).toHaveAttribute('href', '/compliance');
+
+    const users = screen.getByRole('link', { name: /^users$/i });
+    expect(users).toHaveAttribute('href', '/settings/users');
   });
 
   it('renders the MIT license attribution in the footer', () => {

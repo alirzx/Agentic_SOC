@@ -9,6 +9,7 @@ import { TenantProvider } from './TenantProvider';
 import { CopilotDock } from '@/components/copilot/CopilotDock';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import { DemoAutoLogin } from '@/components/demo/DemoAutoLogin';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 import { ClientOnly } from '@/components/util/ClientOnly';
 import { isDemoMode } from '@/lib/demoMode';
 
@@ -39,14 +40,7 @@ export function AppShell({ children }: AppShellProps) {
         No-ops outside demo mode.
       */}
       <DemoAutoLogin />
-      {/*
-        v1.5 (W4 + W5): TimeWindow + Tenant contexts mount once at the shell
-        boundary so every page (and the TopBar) reads from the same source of
-        truth. They sit *inside* SWRConfig so the tenant switcher's
-        `aisoc:tenant-switched` cache-bust reaches the shared cache, and
-        *outside* the visible chrome so a context error doesn't blank the
-        entire app shell.
-      */}
+      <AuthGuard>
       <TimeWindowProvider>
         <TenantProvider>
           <div className="min-h-screen bg-surface-base">
@@ -83,6 +77,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </TenantProvider>
       </TimeWindowProvider>
+      </AuthGuard>
     </SWRConfig>
   );
 }
