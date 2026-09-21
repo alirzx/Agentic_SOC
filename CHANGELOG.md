@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Alert Detail AI Investigation endpoint + DeepSeek / OpenAI-compatible wiring.**
+  `POST /api/v1/agents/investigate` (API → agents) runs the InvestigatorOrchestrator
+  for the selected alert and returns markdown findings, MITRE mapping, and
+  recommended actions for the Alert Detail "Start AI Investigation" button.
+  Compose / `.env.example` now pass `OPENAI_BASE_URL` and all `AISOC_MODEL_PIN_*`
+  roles so Arvan Cloud AI DeepSeek-V4-Flash (or any OpenAI-compatible gateway)
+  drives Investigation and Copilot without code changes.
+
 - **Super-admin user and permission management.** Role `super_admin` has full
   (`*`) privileges, same as `admin` / `platform_admin`. **Settings → Users**
   creates **and edits** operators (email, username, password, role, active

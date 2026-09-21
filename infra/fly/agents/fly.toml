@@ -28,8 +28,9 @@ kill_timeout   = "10s"            # agent runs may need to flush ledger writes
   PORT            = "8084"
   AISOC_DEMO_MODE = "true"
   CORE_API_URL    = "http://aisoc-demo-api.internal:8000"
-  # In demo mode, fall back to deterministic pipeline if no key set
-  AISOC_AGENT_MODE = "deterministic"
+  # Live LLM when OPENAI_BASE_URL + OPENAI_API_KEY (+ AISOC_MODEL_PIN_*) are
+  # set as Fly secrets (e.g. Arvan Cloud AI / DeepSeek-V4-Flash). Without them
+  # the investigator falls back to its deterministic offline path.
   ATTCK_DATA_PATH  = "/app/data/enterprise-attack.json"
 
 [http_service]

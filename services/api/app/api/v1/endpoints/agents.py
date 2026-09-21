@@ -1,77 +1,49 @@
-"""Agent-facing endpoints — capability tools surface (Workstream 4).
+"""Agent-facing endpoints — capability tools + AI Investigation proxy.
 
-This module is the *agent layer's* read-side over the connector platform.
-It does **not** execute anything by itself. Its sole responsibility is to
-answer: *"For this tenant, what verbs is the agent allowed to invoke,
-against which connector instances, with which JSON-Schema-shaped inputs?"*
-
-Why a separate endpoint rather than re-using ``GET /connectors``:
-
-* Different audience. ``/connectors`` is operator-facing (wizard,
-  health rollup, credential management). ``/agents/tools`` is the
-  catalogue an LLM-driven agent reads when it picks a tool to call.
-* Different shape. The agent doesn't care about ``auth_config`` keys
-  or schema-drift fingerprints — it cares about *callable verbs*. So
-  this endpoint pivots from instance → capability → tool descriptor.
-* Different scope-narrowing rules. The agent never sees disabled
-  instances and never sees capabilities outside ``allowed_capabilities``,
-  even if the connector class declares more. ``/connectors`` returns
-  the unfiltered truth.
-
-Tenant scoping invariants:
-
-* Every query filters on ``Connector.tenant_id == current_user.tenant_id``.
-* Disabled instances (``is_enabled = False``) are dropped — there is no
-  "what *would* I be able to do?" view; the agent sees only what it can
-  *actually* invoke right now.
-* Per-instance ``allowed_capabilities`` (managed via
-  ``PUT /connectors/{id}/capabilities``) is intersected with the connector
-  class's declared ``capabilities()`` server-side. A tampered request
-  on the management endpoint can't widen reach because *that* endpoint
-  validates against the declared set; here we just read the column.
+Workstream 4 covers ``GET /agents/tools`` (connector capability catalogue).
+This module also hosts ``POST /agents/investigate`` — the Alert Detail
+"Start AI Investigation" button. That path loads the tenant-scoped alert
+here, then proxies a synchronous investigation to the agents service
+(DeepSeek / OpenAI-compatible via ``OPENAI_BASE_URL``).
 """
 
 from __future__ import annotations
 
 import logging
+import os
+import re
 from typing import Annotated, Any
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.api.v1.endpoints.connectors import _fetch_catalog, _safe_log_val
+from app.models.alert import Alert
 from app.models.connector import Connector
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
+_AGENTS_URL = (os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL") or "http://agents:8084").rstrip("/")
+_SAFE_PROXY_PATH_RE = re.compile(r"^/[A-Za-z0-9_\-./%]*$")
+_INVESTIGATE_TIMEOUT_SECONDS = float(os.getenv("AISOC_ALERT_INVESTIGATE_TIMEOUT", "180"))
+
 
 # --------------------------------------------------------------- Pydantic schemas
 
 
 class AgentToolDescriptor(BaseModel):
-    """One callable verb on one connector instance, as the agent sees it.
-
-    The descriptor is intentionally LLM-friendly:
-
-    * ``name`` is unique per tenant (``{connector_id}.{capability}``) and
-      stable across redeploys, so an agent's tool-choice memory still
-      resolves after a redeployment.
-    * ``description`` is human-readable and pulled from the connector
-      class so updates ship with the connector code, not the agent.
-    * ``input_schema`` follows JSON-Schema conventions so most agent
-      frameworks (LangChain, LangGraph, MCP) can drop it in unchanged.
-    """
+    """One callable verb on one connector instance, as the agent sees it."""
 
     name: str = Field(
         description=(
             "Stable unique identifier for this tool, formatted as "
-            "'<connector_instance_id>.<capability>'. The connector_instance_id "
-            "rather than connector_type so multiple instances of the same "
-            "connector — e.g. two CrowdStrike tenants — are addressable."
+            "'<connector_instance_id>.<capability>'."
         ),
     )
     connector_id: str = Field(description="Connector instance UUID.")
@@ -80,26 +52,12 @@ class AgentToolDescriptor(BaseModel):
         description="Operator-chosen instance display name (e.g. 'CrowdStrike — prod').",
     )
     category: str = Field(description="Catalog category, e.g. 'edr', 'siem', 'iam'.")
-    capability: str = Field(
-        description=("The capability verb (one of the values from the Capability enum, e.g. 'pull_alerts', 'query_logs', 'isolate_host')."),
-    )
-    capability_group: str = Field(
-        description=(
-            "Coarse grouping derived from CAPABILITY_GROUPS in services/connectors. "
-            "Lets an agent pre-filter by intent — e.g. only consider 'CONTAIN' "
-            "verbs when deciding to quarantine a host."
-        ),
-    )
-    description: str = Field(
-        description="Human-readable summary of the verb, surfaced in tool prompts.",
-    )
+    capability: str = Field(description="The capability verb.")
+    capability_group: str = Field(description="Coarse grouping (read/query/pivot/…).")
+    description: str = Field(description="Human-readable summary of the verb.")
     input_schema: dict[str, Any] = Field(
         default_factory=lambda: {"type": "object", "properties": {}},
-        description=(
-            "JSON-Schema for the verb's arguments. Empty by default; concrete "
-            "connectors will fill this in as the per-capability call surface "
-            "stabilises in subsequent workstreams."
-        ),
+        description="JSON-Schema for the verb's arguments.",
     )
 
 
@@ -107,93 +65,79 @@ class AgentToolsResponse(BaseModel):
     """Tenant-wide tool catalogue surfaced to the agent layer."""
 
     tools: list[AgentToolDescriptor]
-    # Lightweight metadata so callers can short-circuit on emptiness
-    # without iterating ``tools``. ``connector_count`` is the number of
-    # *instances* contributing tools (i.e. enabled, non-empty effective
-    # capability set), distinct from total instances on the tenant.
     tool_count: int
     connector_count: int
+
+
+class AlertInvestigateRequest(BaseModel):
+    """Body from Alert Detail — camelCase ``alertId`` matches the web console."""
+
+    alertId: str = Field(..., min_length=1, description="Alert UUID to investigate.")
+
+
+class AgentActionOut(BaseModel):
+    type: str
+    target: str
+    status: str = "proposed"
+
+
+class AgentInvestigationOut(BaseModel):
+    id: str
+    alertId: str
+    status: str
+    findings: str | None = None
+    recommendations: list[str] | None = None
+    actions: list[AgentActionOut] | None = None
+    startedAt: str
+    completedAt: str | None = None
+    model: str | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------- helpers
 
 
-# Coarse grouping mirrors CAPABILITY_GROUPS in
-# ``services/connectors/app/connectors/base.py``. We duplicate it here
-# (rather than import across services) so the API can serve agent
-# descriptors even when the connectors microservice is briefly
-# unavailable. The catalog endpoint already falls back to the bundled
-# manifest in that case; this keeps that resilience consistent.
-#
-# Keep this in sync with the ``Capability`` enum and ``CAPABILITY_GROUPS``
-# in ``services/connectors/app/connectors/base.py``. A capability that
-# lands in the enum but not here will surface to the agent as group
-# "unknown", which is observable but not fatal — it's a soft drift signal.
 _CAPABILITY_GROUP_LOOKUP: dict[str, str] = {
-    # READ — passive pulls of events / records the source already produced.
     "pull_alerts": "read",
     "pull_logs": "read",
     "pull_audit": "read",
     "pull_pcap": "read",
     "pull_file": "read",
-    # QUERY — ad-hoc search across the source's index.
     "query_logs": "query",
     "query_processes": "query",
-    # PIVOT — "given this entity, return everything you know about it".
     "pivot_user": "pivot",
     "pivot_host": "pivot",
     "pivot_ip": "pivot",
     "pivot_hash": "pivot",
     "pivot_domain": "pivot",
-    # ENRICH — return contextual reputation / metadata for a single entity.
     "enrich_user": "enrich",
     "enrich_host": "enrich",
     "enrich_ioc": "enrich",
     "enrich_domain": "enrich",
     "enrich_vuln": "enrich",
     "enrich_asset": "enrich",
-    # CONTAIN — kinetic actions on hosts / files / IOCs.
     "isolate_host": "contain",
     "unisolate_host": "contain",
     "kill_process": "contain",
     "quarantine_file": "contain",
     "block_hash": "contain",
     "block_domain": "contain",
-    # REMEDIATE — kinetic actions on identities / credentials.
     "block_user_signin": "remediate",
     "disable_user": "remediate",
     "revoke_session": "remediate",
     "reset_password": "remediate",
     "revoke_token": "remediate",
-    # TICKET — bidirectional ITSM (Jira / ServiceNow / etc.).
     "push_case": "ticket",
     "push_status": "ticket",
-    # AUDIT — read-only configuration / posture queries.
     "read_audit_trail": "audit",
 }
 
 
 def _capability_group_of(capability: str) -> str:
-    """Return the coarse group for a capability string, or 'unknown'.
-
-    Unknown capabilities are still surfaced (we don't filter them out)
-    because dropping a verb the connector class declared would silently
-    hide functionality from the agent. 'unknown' lets the agent layer
-    log a warning and decide whether to use it anyway. Group names are
-    lowercase to mirror ``CAPABILITY_GROUPS`` in the connectors service.
-    """
     return _CAPABILITY_GROUP_LOOKUP.get(capability, "unknown")
 
 
 def _capability_descriptions(catalog_entry: dict[str, Any]) -> dict[str, str]:
-    """Pull capability descriptions from a catalog entry, with safe defaults.
-
-    The connectors microservice may surface capability metadata as
-    ``[{"value": "pull_alerts", "description": "..."}]`` or as a flat
-    list of strings. We accept both so we don't have to coordinate a
-    breaking change across services — older catalog payloads continue
-    to work, just without rich descriptions.
-    """
     raw = catalog_entry.get("capabilities") or []
     out: dict[str, str] = {}
     for item in raw:
@@ -208,14 +152,45 @@ def _capability_descriptions(catalog_entry: dict[str, Any]) -> dict[str, str]:
 
 
 def _default_description(capability: str) -> str:
-    """Generate a passable description when the catalog doesn't supply one.
-
-    Replaces underscores with spaces and adds a verb-style framing.
-    Cheap, deterministic, and good enough for tool prompts until each
-    connector ships hand-written copy.
-    """
     pretty = capability.replace("_", " ")
     return f"Invoke '{pretty}' on this connector instance."
+
+
+def _validate_agents_path(path: str) -> str:
+    if not isinstance(path, str) or not _SAFE_PROXY_PATH_RE.match(path) or ".." in path or path.startswith("//"):
+        raise HTTPException(status_code=400, detail="invalid_request_path")
+    return path
+
+
+def _build_alert_summary(alert: Alert) -> str:
+    parts = [alert.title]
+    if alert.description:
+        parts.append(alert.description)
+    elif alert.narrative:
+        parts.append(alert.narrative)
+    head = " — ".join(parts[:2])
+    return f"[{alert.severity}] {head}"
+
+
+def _build_raw_alert(alert: Alert) -> dict[str, Any]:
+    return {
+        "id": str(alert.id),
+        "title": alert.title,
+        "description": alert.description,
+        "severity": alert.severity,
+        "status": alert.status,
+        "category": alert.category,
+        "mitre_tactics": alert.mitre_tactics or [],
+        "mitre_techniques": alert.mitre_techniques or [],
+        "connector_type": alert.connector_type,
+        "rule_id": alert.rule_id,
+        "rule_name": alert.rule_name,
+        "narrative": alert.narrative,
+        "affected_ips": alert.affected_ips or [],
+        "affected_hosts": alert.affected_hosts or [],
+        "affected_users": alert.affected_users or [],
+        "raw_event": alert.raw_event or {},
+    }
 
 
 # -------------------------------------------------------------------- endpoints
@@ -226,27 +201,7 @@ async def list_agent_tools(
     current_user: Annotated[AuthUser, Depends(require_permission("connectors:read"))],
     db: DBSession,
 ) -> AgentToolsResponse:
-    """Return the agent's allowed tool surface for this tenant.
-
-    The pivot is **instance × effective capability**:
-
-    1. Pull every enabled connector for the tenant.
-    2. For each instance, look up the connector class's declared
-       capabilities from the live catalog.
-    3. Intersect with the per-instance ``allowed_capabilities`` column
-       (``NULL`` = no downscope; ``[]`` = explicit zero verbs; non-empty
-       list = exact allowlist).
-    4. Emit one ``AgentToolDescriptor`` per surviving (instance, capability)
-       pair.
-
-    Result is sorted deterministically by ``(connector_name, capability)``
-    so two consecutive calls return the same ordering — important for
-    agent caches keyed off tool list hashes.
-    """
-    # 1. Active instances on this tenant. We deliberately don't filter
-    #    on health_status — an agent can still "ask" a degraded
-    #    connector and the call will surface the live failure, which is
-    #    more useful than silently hiding the tool.
+    """Return the agent's allowed tool surface for this tenant."""
     result = await db.execute(
         select(Connector).where(
             Connector.tenant_id == current_user.tenant_id,
@@ -254,13 +209,9 @@ async def list_agent_tools(
         )
     )
     instances = list(result.scalars().all())
-
     if not instances:
         return AgentToolsResponse(tools=[], tool_count=0, connector_count=0)
 
-    # 2. Catalog lookup, once. We index by connector_id (the catalog's
-    #    notion of "type slug", not a UUID) so we can answer per-instance
-    #    questions without N round-trips to the connectors service.
     catalog = await _fetch_catalog()
     catalog_by_type: dict[str, dict[str, Any]] = {
         entry["connector_id"]: entry for entry in catalog if isinstance(entry, dict) and isinstance(entry.get("connector_id"), str)
@@ -272,10 +223,6 @@ async def list_agent_tools(
     for inst in instances:
         catalog_entry = catalog_by_type.get(inst.connector_type)
         if catalog_entry is None:
-            # Stale row — connector class was removed from the build but
-            # the instance row outlived it. Skip silently rather than
-            # crashing; the operator-facing endpoint will already be
-            # surfacing the orphan separately.
             logger.info(
                 "agents.tools.skip_orphan tenant_id=%s connector_id=%s connector_type=%s",
                 current_user.tenant_id,
@@ -287,23 +234,17 @@ async def list_agent_tools(
         declared_descriptions = _capability_descriptions(catalog_entry)
         declared_set = set(declared_descriptions.keys())
 
-        # 3. Apply per-instance downscope.
         if inst.allowed_capabilities is None:
             effective: list[str] = sorted(declared_set)
         else:
             allowed_set = {str(c) for c in inst.allowed_capabilities}
-            # Intersection — if the column ever drifted ahead of the
-            # connector class's declared set (e.g. via a manual SQL
-            # tweak), we still don't surface verbs the class can't
-            # actually execute. Defence-in-depth alongside the
-            # validation in PUT /connectors/{id}/capabilities.
             effective = sorted(allowed_set & declared_set)
 
         if not effective:
             continue
         contributing_instances += 1
 
-        category = catalog_entry.get("category") or inst.category or "uncategorized"
+        category = catalog_entry.get("category") or getattr(inst, "category", None) or "uncategorized"
         connector_id_str = str(inst.id)
 
         for cap in effective:
@@ -317,30 +258,80 @@ async def list_agent_tools(
                     capability=cap,
                     capability_group=_capability_group_of(cap),
                     description=declared_descriptions[cap],
-                    # input_schema left as the empty-object default for
-                    # now. Per-capability argument schemas land with the
-                    # subsequent workstreams that flesh out concrete
-                    # call surfaces (e.g. WS5 for self-healing actions,
-                    # WS8 for ITSM push verbs). Doing it here would
-                    # require touching every connector class twice —
-                    # once now for the surface, once later for the
-                    # logic — and the agent layer is already happy
-                    # with an open object during early integration.
                 ),
             )
 
-    # 4. Deterministic ordering for stable tool-list hashes.
     tools.sort(key=lambda t: (t.connector_name.lower(), t.capability))
-
     logger.info(
         "agents.tools.served tenant_id=%s instances=%d tools=%d",
         current_user.tenant_id,
         contributing_instances,
         len(tools),
     )
-
     return AgentToolsResponse(
         tools=tools,
         tool_count=len(tools),
         connector_count=contributing_instances,
     )
+
+
+@router.post("/investigate", response_model=AgentInvestigationOut)
+async def investigate_alert(
+    body: AlertInvestigateRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    db: DBSession,
+) -> AgentInvestigationOut:
+    """Run AI Investigation on an alert (Alert Detail → Start AI Investigation)."""
+    try:
+        alert_uuid = UUID(body.alertId.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="alertId must be a UUID") from exc
+
+    result = await db.execute(
+        select(Alert).where(Alert.id == alert_uuid, Alert.tenant_id == current_user.tenant_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    path = _validate_agents_path("/api/v1/agents/investigate")
+    payload = {
+        "alertId": str(alert.id),
+        "alert_summary": _build_alert_summary(alert),
+        "raw_alert": _build_raw_alert(alert),
+        "tenant_id": str(current_user.tenant_id),
+    }
+    url = f"{_AGENTS_URL}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=_INVESTIGATE_TIMEOUT_SECONDS) as client:
+            resp = await client.post(url, json=payload)
+    except httpx.HTTPError as exc:
+        logger.exception("agents.investigate.proxy_failed alert_id=%s", alert.id)
+        raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
+
+    if resp.status_code >= 400:
+        detail = resp.text[:500] if resp.text else f"agents returned {resp.status_code}"
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+
+    return AgentInvestigationOut.model_validate(resp.json())
+
+
+@router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)
+async def get_alert_investigation(
+    run_id: str,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+) -> AgentInvestigationOut:
+    """Poll a previously started alert investigation via the agents service."""
+    safe_run_id = re.sub(r"[^A-Za-z0-9_\-]", "", run_id)
+    if not safe_run_id:
+        raise HTTPException(status_code=422, detail="invalid run_id")
+    path = _validate_agents_path(f"/api/v1/agents/investigations/{safe_run_id}")
+    url = f"{_AGENTS_URL}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(url)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
+    return AgentInvestigationOut.model_validate(resp.json())

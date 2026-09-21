@@ -41,7 +41,8 @@ services:
       POSTGRES_USER: aisoc
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aisoc_dev_secret}
     ports:
-      - "127.0.0.1:5432:5432"
+      # Host port overridable when 5432 is already taken (see AISOC_POSTGRES_PORT).
+      - "127.0.0.1:${AISOC_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./services/api/migrations:/docker-entrypoint-initdb.d:ro
@@ -58,7 +59,9 @@ services:
     container_name: aisoc-redis
     command: redis-server --appendonly yes --requirepass redis_dev_secret
     ports:
-      - "127.0.0.1:6379:6379"
+      # Host port overridable when 6379 is already taken (see AISOC_REDIS_PORT).
+      # In-network clients still use redis:6379 — only the host bind changes.
+      - "127.0.0.1:${AISOC_REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -90,11 +93,11 @@ services:
       zookeeper:
         condition: service_healthy
     ports:
-      - "127.0.0.1:9092:9092"
+      - "127.0.0.1:${AISOC_KAFKA_PORT:-9092}:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${AISOC_KAFKA_PORT:-9092}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -390,6 +393,17 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # Direct OpenAI-compatible provider (e.g. Arvan Cloud AI / DeepSeek) OR
+      # LiteLLM gateway. When OPENAI_BASE_URL is set, pin concrete models via
+      # AISOC_MODEL_PIN_* so aliases are not sent to a non-LiteLLM host.
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      AISOC_MODEL_PIN_TRIAGE: ${AISOC_MODEL_PIN_TRIAGE:-}
+      AISOC_MODEL_PIN_RECON: ${AISOC_MODEL_PIN_RECON:-}
+      AISOC_MODEL_PIN_INVESTIGATION: ${AISOC_MODEL_PIN_INVESTIGATION:-}
+      AISOC_MODEL_PIN_COPILOT: ${AISOC_MODEL_PIN_COPILOT:-}
+      AISOC_MODEL_PIN_SUMMARY: ${AISOC_MODEL_PIN_SUMMARY:-}
+      AISOC_MODEL_PIN_REPORT: ${AISOC_MODEL_PIN_REPORT:-}
+      AISOC_MODEL_PIN_NL: ${AISOC_MODEL_PIN_NL:-}
       # Issue #478 — the LiteLLM gateway (below) is the single entry point for
       # live LLM calls when enabled. To route this service through it, set in
       # .env: OPENAI_BASE_URL=http://litellm:4000/v1 and

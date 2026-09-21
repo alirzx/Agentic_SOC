@@ -76,6 +76,27 @@ With neither the gateway nor pin overrides configured, AiSOC uses its
 deterministic offline path. (`OPENAI_MODEL` still applies to the separate
 "explain this alert" / BYOK path.)
 
+## Direct provider (no LiteLLM) — Arvan / DeepSeek
+
+For an OpenAI-compatible gateway such as Arvan Cloud AI DeepSeek-V4-Flash,
+skip LiteLLM and point AiSOC straight at the provider. This is what drives
+**AI Investigation** (`POST /api/v1/agents/investigate`) and **Copilot**:
+
+```bash
+OPENAI_BASE_URL=https://arvancloudai.ir/gateway/models/DeepSeek-V4-Flash/<gateway-token>/v1
+OPENAI_API_KEY=<your-api-key>
+AISOC_MODEL_PIN_TRIAGE=DeepSeek-V4-Flash
+AISOC_MODEL_PIN_RECON=DeepSeek-V4-Flash
+AISOC_MODEL_PIN_INVESTIGATION=DeepSeek-V4-Flash
+AISOC_MODEL_PIN_COPILOT=DeepSeek-V4-Flash
+AISOC_MODEL_PIN_SUMMARY=DeepSeek-V4-Flash
+AISOC_MODEL_PIN_REPORT=DeepSeek-V4-Flash
+AISOC_MODEL_PIN_NL=DeepSeek-V4-Flash
+AISOC_DETERMINISTIC=0
+```
+
+Never commit the API key or gateway token — keep them in `.env` / Fly secrets.
+
 ## Re-point a task to a local model
 
 Duplicate the alias in `infra/litellm/config.yaml` with a local backend. The

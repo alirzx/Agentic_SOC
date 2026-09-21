@@ -96,6 +96,7 @@ export default async function BenchmarkPage() {
           <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
             Public benchmark scoreboard
           </h1>
+          
           <p className="mt-4 max-w-3xl text-lg text-gray-400">
             A deterministic regression harness over the AiSOC substrate &mdash;
             the keyword extractors, the in-harness fusion grouping (a faithful

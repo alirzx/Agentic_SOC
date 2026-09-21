@@ -120,8 +120,9 @@ const nextConfig = {
         destination: `${REALTIME_HOST}/healthz`,
       },
       // Agents service owns contextual actions, playbooks, hunt search,
-      // and copilot chat. These must come before the `/api/v1/:path*`
-      // catch-all so they don't get sent to the core API.
+      // copilot chat, and alert-scoped AI Investigation. These must come
+      // before the `/api/v1/:path*` catch-all so they don't get sent to the
+      // core API.
       //
       // NOTE: `/api/v1/investigations*` is intentionally NOT routed here.
       // The agents service only exposes the *write* side (POST to start a
@@ -133,6 +134,18 @@ const nextConfig = {
       // agents returns 405/404 and breaks the case workspace ledger pane.
       // We let `/api/v1/investigations*` fall through to the core API
       // catch-all at the bottom of this list.
+      // Alert AI Investigation can be served by the API proxy
+      // (`/api/v1/agents/investigate`) OR directly by agents; prefer API
+      // so auth + tenant alert load stay on the core service. Direct
+      // agents routes below are for streaming / internal callers.
+      {
+        source: '/api/v1/agents/investigate',
+        destination: `${API_HOST}/api/v1/agents/investigate`,
+      },
+      {
+        source: '/api/v1/agents/investigations/:path*',
+        destination: `${API_HOST}/api/v1/agents/investigations/:path*`,
+      },
       {
         source: '/api/v1/contextual/:path*',
         destination: `${AGENTS_HOST}/api/v1/contextual/:path*`,

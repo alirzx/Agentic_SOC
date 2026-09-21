@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app._health import install_health_routes
+from app.api.alert_investigate import router as alert_investigate_router
 from app.api.contextual import router as contextual_router
 from app.api.copilot import router as copilot_router
 from app.api.explain import router as explain_router
@@ -199,6 +200,7 @@ instrument_app(app)
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py
+app.include_router(alert_investigate_router)  # POST /api/v1/agents/investigate (Alert Detail UI)
 app.include_router(triage_router)  # prefix: /api/v1  (POST /cases/{id}/triage — router topology, T2.2)
 app.include_router(playbook_router)  # prefix: /api/v1/playbooks
 app.include_router(contextual_router)  # prefix: /api/v1/contextual

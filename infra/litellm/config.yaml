@@ -82,6 +82,16 @@ model_list:
   #     api_base: http://vllm:8000/v1
   #     api_key: os.environ/VLLM_API_KEY
   #
+  # ── Arvan Cloud AI / DeepSeek-V4-Flash (OpenAI-compatible) ────────────────────
+  # Prefer pointing AiSOC directly via OPENAI_BASE_URL + AISOC_MODEL_PIN_* (see
+  # .env.example). To route aliases through LiteLLM instead, set each alias to:
+  #
+  # - model_name: aisoc-investigation
+  #   litellm_params:
+  #     model: openai/DeepSeek-V4-Flash
+  #     api_base: os.environ/ARVAN_OPENAI_BASE_URL
+  #     api_key: os.environ/OPENAI_API_KEY
+  #
   # ── Anthropic example ─────────────────────────────────────────────────────────
   # - model_name: aisoc-report
   #   litellm_params:
