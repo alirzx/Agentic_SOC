@@ -88,6 +88,18 @@ Three causes, in order of likelihood:
 2. **`SECRET_KEY` rotated.** Existing tokens were signed with the old key. After any `SECRET_KEY` rotation, all sessions are invalidated by design. Users must re-authenticate.
 3. **Tenant mismatch.** The token is for tenant `A` but the request hit a route scoped to tenant `B`. Decode the JWT (no signature check needed for diagnosis): `python -c "import jwt; print(jwt.decode('<token>', options={'verify_signature': False}))"`.
 
+### `Email or password incorrect` after creating a user
+
+The Users panel can show the operator as Active while login still fails if the stored hash is not the password they typed (browser autofill on **Save changes** used to overwrite it) or if they signed in with a differently-cased email.
+
+1. Sign in as an admin, open **Settings → Users**, **Edit** that operator, check **Set a new password**, type at least 8 characters, and save.
+2. Sign out, then sign in with that email **or** username and the new password.
+3. If you are locked out of every login, re-enable rows and keep using an admin account:
+
+```bash
+docker exec aisoc-demo-postgres psql -U aisoc -d aisoc -c "UPDATE users SET is_active = true;"
+```
+
 ### `403 Forbidden` despite a valid token
 
 Almost always RBAC. The user has a role, the role lacks the required permission. Check **Settings → Roles** in the UI, or:

@@ -14,7 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creates **and edits** operators (email, username, password, role, active
   flag). You cannot disable your own account. Bootstrap re-enables locked-out
   logins so a self-disable can be recovered. Console sessions last **one day**
-  from login; unauthenticated visitors cannot open `/dashboard`.
+  from login; unauthenticated visitors cannot open `/dashboard`. Login accepts
+  email or username (case-insensitive). The Users editor only hashes a new
+  password when **Set a new password** is checked, so a browser password
+  manager cannot silently replace a newly created operator's login.
 
 - **Soorin Agentic SOC runtime contracts** (`services/agents/app/runtime/`).
   Spec-aligned Agent/Tool/Incident/Risk/Decision/Report contracts layered on

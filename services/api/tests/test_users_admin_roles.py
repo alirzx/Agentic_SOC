@@ -39,3 +39,28 @@ def test_cannot_disable_own_account() -> None:
     assert exc.value.status_code == 400
     _assert_can_deactivate(actor, uuid4(), False)
     _assert_can_deactivate(actor, actor, True)
+
+
+def test_login_identifier_matches_email_or_username_case_insensitively() -> None:
+    from app.api.v1.endpoints.auth import _login_identifier
+
+    assert _login_identifier("  Soc@Soorinsec.IR ") == "soc@soorinsec.ir"
+    assert _login_identifier("SOC") == "soc"
+
+
+def test_created_user_email_is_normalized() -> None:
+    from app.api.v1.endpoints.tenants import _normalize_email, _normalize_password, _normalize_username
+
+    assert _normalize_email("  Soc@Soorinsec.IR ") == "soc@soorinsec.ir"
+    assert _normalize_username("  soc  ") == "soc"
+    assert _normalize_password("  hunter2x  ") == "hunter2x"
+    assert _normalize_password("   ") is None
+    assert _normalize_password(None) is None
+
+
+def test_blank_update_password_is_ignored() -> None:
+    from app.api.v1.endpoints.tenants import UpdateUserRequest
+
+    assert UpdateUserRequest(password=None).password is None
+    assert UpdateUserRequest(password="   ").password is None
+    assert UpdateUserRequest(password="newpass1").password == "newpass1"

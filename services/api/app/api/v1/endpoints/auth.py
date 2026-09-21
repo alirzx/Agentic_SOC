@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, EmailStr
-from sqlalchemy import select, update
+from pydantic import BaseModel, Field
+from sqlalchemy import func, or_, select, update
 
 from app.api.v1.deps import AuthUser, DBSession, get_current_user
 
@@ -25,8 +25,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -58,21 +58,41 @@ class PreferencesPatch(BaseModel):
     preferences: dict[str, Any]
 
 
+def _login_identifier(value: str) -> str:
+    return (value or "").strip().lower()
+
+
+async def _user_for_login(db: DBSession, identifier: str) -> User | None:
+    """Match email or username, ignoring case."""
+    ident = _login_identifier(identifier)
+    if not ident:
+        return None
+    result = await db.execute(
+        select(User).where(
+            or_(
+                func.lower(User.email) == ident,
+                func.lower(User.username) == ident,
+            )
+        )
+    )
+    return result.scalars().first()
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: DBSession) -> TokenResponse:
-    """Authenticate with email/password, return JWT tokens."""
-    result = await db.execute(select(User).where(User.email == request.email, User.is_active.is_(True)))
-    user = result.scalar_one_or_none()
-
-    if user is None or not verify_password(request.password, user.hashed_password):
+    """Authenticate with email or username + password, return JWT tokens."""
+    user = await _user_for_login(db, request.email)
+    password = (request.password or "").strip()
+    if user is None or user.is_active is not True or not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Update last login
     await db.execute(update(User).where(User.id == user.id).values(last_login=datetime.now(UTC)))
+    await db.commit()
+    await db.refresh(user)
 
     token_data = {
         "sub": str(user.id),

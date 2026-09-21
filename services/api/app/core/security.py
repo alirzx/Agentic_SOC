@@ -144,6 +144,8 @@ def _to_bcrypt_input(password: str) -> bytes:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if not hashed_password or hashed_password.startswith("!"):
+        return False
     try:
         return bcrypt.checkpw(_to_bcrypt_input(plain_password), hashed_password.encode("utf-8"))
     except (ValueError, TypeError):

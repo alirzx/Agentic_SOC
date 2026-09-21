@@ -36,7 +36,7 @@ import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import delete, func, or_, select, text, update
 
 from app.api.v1.dev_auth import (
     DEMO_TENANT_ID,
@@ -1663,7 +1663,7 @@ async def _reactivate_all_users(session) -> int:
     """
     result = await session.execute(
         update(User)
-        .where(User.is_active.is_(False))
+        .where(or_(User.is_active.is_(False), User.is_active.is_(None)))
         .values(is_active=True, updated_at=datetime.now(UTC))
     )
     return int(result.rowcount or 0)

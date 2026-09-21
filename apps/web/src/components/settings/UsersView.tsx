@@ -79,6 +79,7 @@ export function UsersView() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
+  const [changePassword, setChangePassword] = useState(false);
   const assignableRoles = useMemo(
     () => ROLE_OPTIONS.filter((item) => canAssignPrivileged || !PRIVILEGED.has(item.value)),
     [canAssignPrivileged],
@@ -86,16 +87,19 @@ export function UsersView() {
 
   const openCreate = () => {
     setEditingId('new');
+    setChangePassword(false);
     setForm(EMPTY_FORM);
   };
 
   const openEdit = (user: TenantUser) => {
     setEditingId(user.id);
+    setChangePassword(false);
     setForm(toForm(user));
   };
 
   const closeEditor = () => {
     setEditingId(null);
+    setChangePassword(false);
     setForm(EMPTY_FORM);
   };
 
@@ -108,9 +112,9 @@ export function UsersView() {
     try {
       if (editingId === 'new') {
         await tenantsApi.createUser({
-          email: form.email,
-          username: form.username,
-          password: form.password,
+          email: form.email.trim(),
+          username: form.username.trim(),
+          password: form.password.trim(),
           role: form.role,
         });
         toast.success('User created');
@@ -122,13 +126,13 @@ export function UsersView() {
           is_active: boolean;
           password?: string;
         } = {
-          email: form.email,
-          username: form.username,
+          email: form.email.trim(),
+          username: form.username.trim(),
           role: form.role,
           is_active: form.is_active,
         };
-        if (form.password.trim()) {
-          payload.password = form.password;
+        if (changePassword && form.password.trim()) {
+          payload.password = form.password.trim();
         }
         await tenantsApi.updateUser(editingId, payload);
         toast.success('User updated');
@@ -191,13 +195,15 @@ export function UsersView() {
       </div>
 
       {editorOpen && (
-        <form onSubmit={saveUser} className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 space-y-4">
+        <form onSubmit={saveUser} autoComplete="off" className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 space-y-4">
           <h3 className="text-sm font-semibold text-gray-100">{isCreate ? 'New user' : 'Edit user'}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block text-sm text-gray-300">
               Email
               <input
                 type="email"
+                name="aisoc-user-email"
+                autoComplete="off"
                 required
                 value={form.email}
                 onChange={(event) => setForm({ ...form, email: event.target.value })}
@@ -208,6 +214,8 @@ export function UsersView() {
               Username
               <input
                 type="text"
+                name="aisoc-user-username"
+                autoComplete="off"
                 required
                 minLength={1}
                 value={form.username}
@@ -215,18 +223,52 @@ export function UsersView() {
                 className="mt-1 w-full bg-dark-20 border border-[#333A47] rounded-lg px-3 py-2 text-sm"
               />
             </label>
-            <label className="block text-sm text-gray-300">
-              {isCreate ? 'Password' : 'New password (optional)'}
-              <input
-                type="password"
-                required={isCreate}
-                minLength={isCreate ? 8 : undefined}
-                value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
-                className="mt-1 w-full bg-dark-20 border border-[#333A47] rounded-lg px-3 py-2 text-sm"
-                placeholder={isCreate ? '' : 'Leave blank to keep current'}
-              />
-            </label>
+            {isCreate ? (
+              <label className="block text-sm text-gray-300">
+                Password
+                <input
+                  type="password"
+                  name="aisoc-user-password"
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  value={form.password}
+                  onChange={(event) => setForm({ ...form, password: event.target.value })}
+                  className="mt-1 w-full bg-dark-20 border border-[#333A47] rounded-lg px-3 py-2 text-sm"
+                />
+              </label>
+            ) : (
+              <div className="block text-sm text-gray-300 md:col-span-2 space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={changePassword}
+                    onChange={(event) => {
+                      setChangePassword(event.target.checked);
+                      if (!event.target.checked) {
+                        setForm({ ...form, password: '' });
+                      }
+                    }}
+                  />
+                  Set a new password
+                </label>
+                {changePassword ? (
+                  <input
+                    type="password"
+                    name="aisoc-user-new-password"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    value={form.password}
+                    onChange={(event) => setForm({ ...form, password: event.target.value })}
+                    className="w-full bg-dark-20 border border-[#333A47] rounded-lg px-3 py-2 text-sm"
+                    placeholder="At least 8 characters"
+                  />
+                ) : (
+                  <p className="text-xs text-gray-500">Leave unchecked to keep the current password.</p>
+                )}
+              </div>
+            )}
             <label className="block text-sm text-gray-300">
               Role
               <select

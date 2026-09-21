@@ -210,7 +210,7 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
         (headers as Record<string, string>).authorization;
       if (!existing) {
         const token = window.localStorage.getItem('aisoc.responder.accessToken');
-        if (token) {
+        if (token && !path.includes('/auth/login')) {
           (headers as Record<string, string>).Authorization = `Bearer ${token}`;
         }
       }
@@ -372,7 +372,7 @@ export const authApi = {
   async login(email: string, password: string): Promise<LoginResult> {
     const tokens = await request<TokenResponse>('/api/v1/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email.trim(), password }),
     });
     // Stash the access token now so the `me` request flows through the
     // standard `Authorization: Bearer …` path in `request()`.

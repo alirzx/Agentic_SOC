@@ -31,7 +31,13 @@ The companion page [Credentials & secrets](./credentials) covers connector-crede
 
 ### Local accounts
 
-The default install ships with local username/password authentication. Passwords are hashed with **bcrypt** (truncated to bcrypt's 72-byte limit, mirroring passlib's historical behaviour) and stored only as the hash. The verifier is implemented in [`services/api/app/core/security.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/core/security.py).
+The default install ships with local username/password authentication. Sign-in
+accepts **email or username**, case-insensitively. Passwords are hashed with
+**bcrypt** (truncated to bcrypt's 72-byte limit, mirroring passlib's historical
+behaviour) and stored only as the hash. The verifier is implemented in [`services/api/app/core/security.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/core/security.py).
+Created operators are stored with a lowercased email and `is_active=true`.
+Editing a user does not rotate the password unless the operator explicitly
+sets a new one.
 
 Tokens issued at login:
 

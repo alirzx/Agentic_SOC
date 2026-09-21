@@ -129,10 +129,10 @@ function LoginInner() {
           <form onSubmit={submit} className="space-y-4" noValidate>
             <label className="block">
               <span className="block text-xs uppercase tracking-wider text-amgray-50 mb-2 font-gilroy-medium">
-                Email
+                Email or username
               </span>
               <input
-                type="email"
+                type="text"
                 autoComplete="username"
                 inputMode="email"
                 autoCapitalize="off"

@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select, update
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from sqlalchemy import func, or_, select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.security import ASSIGNABLE_ROLES, get_password_hash, is_privileged_role
@@ -72,6 +72,29 @@ class UpdateUserRequest(BaseModel):
     role: str | None = None
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def blank_password_is_none(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped or None
+
+
+def _normalize_email(value: str) -> str:
+    return str(value).strip().lower()
+
+
+def _normalize_username(value: str) -> str:
+    return (value or "").strip()
+
+
+def _normalize_password(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = str(value).strip()
+    return stripped or None
 
 
 def _normalize_role(role: str) -> str:
@@ -176,21 +199,37 @@ async def create_user(
     db: DBSession,
 ) -> UserResponse:
     """Create a new user in the current tenant."""
-    # Check email uniqueness
-    existing = await db.execute(select(User).where(User.email == request.email))
+    email = _normalize_email(str(request.email))
+    username = _normalize_username(request.username)
+    password = _normalize_password(request.password)
+    if not username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username is required")
+    if password is None or len(password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters")
+
+    existing = await db.execute(
+        select(User).where(
+            or_(
+                func.lower(User.email) == email,
+                func.lower(User.username) == username.lower(),
+            )
+        )
+    )
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="User with this email already exists",
+            detail="User with this email or username already exists",
         )
 
     role = _assert_assignable_role(current_user.role, request.role)
     user = User(
         tenant_id=current_user.tenant_id,
-        email=request.email,
-        username=request.username.strip(),
-        hashed_password=get_password_hash(request.password),
+        email=email,
+        username=username,
+        hashed_password=get_password_hash(password),
         role=role,
+        is_active=True,
+        is_verified=True,
     )
     db.add(user)
     await db.commit()
@@ -215,8 +254,10 @@ async def update_user(
 
     updates: dict = {}
     if request.email is not None:
-        email = str(request.email).strip().lower()
-        clash = await db.execute(select(User).where(User.email == email, User.id != user_id))
+        email = _normalize_email(str(request.email))
+        clash = await db.execute(
+            select(User).where(func.lower(User.email) == email, User.id != user_id)
+        )
         if clash.scalar_one_or_none() is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -224,13 +265,27 @@ async def update_user(
             )
         updates["email"] = email
     if request.username is not None:
-        updates["username"] = request.username.strip()
+        username = _normalize_username(request.username)
+        if not username:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username is required")
+        clash = await db.execute(
+            select(User).where(func.lower(User.username) == username.lower(), User.id != user_id)
+        )
+        if clash.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User with this username already exists",
+            )
+        updates["username"] = username
     if request.role is not None:
         updates["role"] = _assert_assignable_role(current_user.role, request.role)
     if request.is_active is not None:
         updates["is_active"] = request.is_active
-    if request.password is not None:
-        updates["hashed_password"] = get_password_hash(request.password)
+    password = _normalize_password(request.password)
+    if password is not None:
+        if len(password) < 8:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters")
+        updates["hashed_password"] = get_password_hash(password)
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)
