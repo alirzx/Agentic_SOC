@@ -465,16 +465,28 @@ function AIInvestigation({ alertId }: { alertId: string }) {
 
       {/* Actions */}
       {investigation.actions && investigation.actions.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <p className="text-xs font-medium text-gray-400">Automated Actions Available</p>
           {investigation.actions.map((action, i) => (
-            <div key={i} className="flex items-center justify-between bg-dark-20/60 rounded-lg px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-brand-400 font-mono">{action.type}</span>
-                <span className="text-xs text-gray-500">→</span>
-                <span className="text-xs text-gray-300 font-mono">{action.target}</span>
+            <div
+              key={i}
+              className="flex items-start gap-3 bg-dark-20/60 rounded-lg px-3 py-2 min-w-0 overflow-hidden"
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="text-xs text-brand-400 font-mono break-words whitespace-normal">
+                  {action.type}
+                </p>
+                {action.target && action.target !== action.type && (
+                  <p className="text-xs text-gray-400 break-words whitespace-normal">
+                    <span className="text-gray-500 mr-1">→</span>
+                    {action.target}
+                  </p>
+                )}
               </div>
-              <button className="text-xs bg-brand-600/20 text-brand-400 hover:bg-brand-600/40 px-2 py-1 rounded transition-colors">
+              <button
+                type="button"
+                className="shrink-0 text-xs bg-brand-600/20 text-brand-400 hover:bg-brand-600/40 px-2 py-1 rounded transition-colors"
+              >
                 Execute
               </button>
             </div>
