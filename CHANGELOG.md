@@ -11,12 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Super-admin user and permission management.** Role `super_admin` has full
   (`*`) privileges, same as `admin` / `platform_admin`. **Settings → Users**
-  creates operators and changes their roles; only a super admin can assign
-  admin roles. Tenant admins can create SOC analysts/leads and manage RBAC
-  permission sets. Console sessions last **one day** from login (`auth_time`
-  on the JWT); refresh cannot extend past that window. Unauthenticated
-  visitors are redirected to `/login` and cannot open `/dashboard` or other
-  console routes. After login the full sidebar is available.
+  creates **and edits** operators (email, username, password, role, active
+  flag). You cannot disable your own account. Bootstrap re-enables locked-out
+  logins so a self-disable can be recovered. Console sessions last **one day**
+  from login; unauthenticated visitors cannot open `/dashboard`.
 
 - **Soorin Agentic SOC runtime contracts** (`services/agents/app/runtime/`).
   Spec-aligned Agent/Tool/Incident/Risk/Decision/Report contracts layered on

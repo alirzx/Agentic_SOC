@@ -505,6 +505,7 @@ export interface CreateTenantUserInput {
 }
 
 export interface UpdateTenantUserInput {
+  email?: string;
   username?: string;
   role?: TenantUserRole;
   is_active?: boolean;

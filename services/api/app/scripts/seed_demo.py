@@ -36,7 +36,7 @@ import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, select, text, update
 
 from app.api.v1.dev_auth import (
     DEMO_TENANT_ID,
@@ -1654,6 +1654,21 @@ async def _ensure_user(session, tenant: Tenant) -> User:
     return user
 
 
+async def _reactivate_all_users(session) -> int:
+    """Un-stick operators who disabled their own login.
+
+    Bootstrap must always leave at least one sign-in. Reactivating every
+    inactive row is intentional for the self-hosted lab: Disable still
+    works in the UI, but a lock-out is recovered on the next seed.
+    """
+    result = await session.execute(
+        update(User)
+        .where(User.is_active.is_(False))
+        .values(is_active=True, updated_at=datetime.now(UTC))
+    )
+    return int(result.rowcount or 0)
+
+
 async def _seed_connectors(session, tenant: Tenant) -> int:
     result = await session.execute(select(Connector).where(Connector.tenant_id == tenant.id))
     if result.scalars().first() is not None:
@@ -3206,12 +3221,15 @@ async def _run_bootstrap_only() -> None:
         try:
             tenant = await _ensure_tenant(session)
             user = await _ensure_user(session, tenant)
+            unlocked = await _reactivate_all_users(session)
             await session.commit()
         except Exception:
             await session.rollback()
             raise
     print(f"[seed] tenant: {tenant.id} ({tenant.slug})")
     print(f"[seed] user: {user.email} (role={user.role})")
+    if unlocked:
+        print(f"[seed] re-enabled {unlocked} locked-out login(s)")
     print("[seed] done — connect Splunk (or another source) to populate the dashboard")
 
 
@@ -3287,6 +3305,7 @@ async def _run_full_seed() -> None:
         try:
             tenant = await _ensure_tenant(session)
             user = await _ensure_user(session, tenant)
+            unlocked = await _reactivate_all_users(session)
             new_connectors = await _seed_connectors(session, tenant)
             new_alerts, new_cases = await _seed_alerts_and_cases(session, tenant)
             realistic_alerts, realistic_cases, playbook_runs = await _seed_realistic_incidents(session, tenant)
@@ -3319,6 +3338,7 @@ async def _run_quick_seed(clock: datetime) -> None:
         try:
             tenant = await _ensure_tenant(session)
             user = await _ensure_user(session, tenant)
+            await _reactivate_all_users(session)
             connectors = await _seed_demo_quick_connectors(session, tenant, clock=clock)
             deleted_cases, deleted_alerts, deleted_timelines = await _purge_demo_quick(session, tenant)
             cases, alerts, timelines = await _seed_demo_quick(session, tenant, clock=clock)

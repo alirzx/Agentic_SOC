@@ -26,3 +26,16 @@ def test_unknown_role_is_rejected() -> None:
     with pytest.raises(HTTPException) as exc:
         _assert_assignable_role("admin", "root")
     assert exc.value.status_code == 400
+
+
+def test_cannot_disable_own_account() -> None:
+    from uuid import uuid4
+
+    from app.api.v1.endpoints.tenants import _assert_can_deactivate
+
+    actor = uuid4()
+    with pytest.raises(HTTPException) as exc:
+        _assert_can_deactivate(actor, actor, False)
+    assert exc.value.status_code == 400
+    _assert_can_deactivate(actor, uuid4(), False)
+    _assert_can_deactivate(actor, actor, True)

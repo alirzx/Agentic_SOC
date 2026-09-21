@@ -7,7 +7,6 @@ import {
   ApiError,
   authApi,
   tenantsApi,
-  type CreateTenantUserInput,
   type TenantUser,
   type TenantUserRole,
 } from '@/lib/api';
@@ -27,6 +26,22 @@ const ROLE_OPTIONS: ReadonlyArray<{ value: TenantUserRole; label: string }> = [
 
 const PRIVILEGED = new Set(['super_admin', 'platform_admin', 'admin']);
 
+interface UserFormState {
+  email: string;
+  username: string;
+  password: string;
+  role: TenantUserRole;
+  is_active: boolean;
+}
+
+const EMPTY_FORM: UserFormState = {
+  email: '',
+  username: '',
+  password: '',
+  role: 'soc_analyst',
+  is_active: true,
+};
+
 function roleLabel(role: string): string {
   return ROLE_OPTIONS.find((item) => item.value === role)?.label ?? role.replace(/_/g, ' ');
 }
@@ -42,63 +57,103 @@ function formatWhen(value: string | null): string {
   return date.toLocaleString();
 }
 
+function toForm(user: TenantUser): UserFormState {
+  return {
+    email: user.email,
+    username: user.username,
+    password: '',
+    role: (ROLE_OPTIONS.some((item) => item.value === user.role) ? user.role : 'soc_analyst') as TenantUserRole,
+    is_active: user.is_active,
+  };
+}
+
 export function UsersView() {
   const { data, error, isLoading, mutate } = useSWR('tenant-users', () => tenantsApi.listUsers());
   const [canAssignPrivileged, setCanAssignPrivileged] = useState(false);
+  const [selfId, setSelfId] = useState<string | null>(null);
   useEffect(() => {
-    setCanAssignPrivileged(PRIVILEGED.has((authApi.currentUser()?.role ?? '').toLowerCase()));
+    const me = authApi.currentUser();
+    setCanAssignPrivileged(PRIVILEGED.has((me?.role ?? '').toLowerCase()));
+    setSelfId(me?.id ?? null);
   }, []);
-  const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<CreateTenantUserInput>({
-    email: '',
-    username: '',
-    password: '',
-    role: 'soc_analyst',
-  });
-
+  const [editingId, setEditingId] = useState<string | 'new' | null>(null);
+  const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const assignableRoles = useMemo(
     () => ROLE_OPTIONS.filter((item) => canAssignPrivileged || !PRIVILEGED.has(item.value)),
     [canAssignPrivileged],
   );
 
-  const createUser = async (event: React.FormEvent) => {
+  const openCreate = () => {
+    setEditingId('new');
+    setForm(EMPTY_FORM);
+  };
+
+  const openEdit = (user: TenantUser) => {
+    setEditingId(user.id);
+    setForm(toForm(user));
+  };
+
+  const closeEditor = () => {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const saveUser = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (saving) {
+    if (saving || !editingId) {
       return;
     }
     setSaving(true);
     try {
-      await tenantsApi.createUser(form);
-      toast.success('User created');
-      setForm({ email: '', username: '', password: '', role: 'soc_analyst' });
-      setCreating(false);
+      if (editingId === 'new') {
+        await tenantsApi.createUser({
+          email: form.email,
+          username: form.username,
+          password: form.password,
+          role: form.role,
+        });
+        toast.success('User created');
+      } else {
+        const payload: {
+          email: string;
+          username: string;
+          role: TenantUserRole;
+          is_active: boolean;
+          password?: string;
+        } = {
+          email: form.email,
+          username: form.username,
+          role: form.role,
+          is_active: form.is_active,
+        };
+        if (form.password.trim()) {
+          payload.password = form.password;
+        }
+        await tenantsApi.updateUser(editingId, payload);
+        toast.success('User updated');
+      }
+      closeEditor();
       await mutate();
     } catch (err) {
-      const message = err instanceof ApiError ? err.body || err.message : 'Could not create user';
+      const message = err instanceof ApiError ? err.body || err.message : 'Could not save user';
       toast.error(String(message).slice(0, 240));
     } finally {
       setSaving(false);
     }
   };
 
-  const changeRole = async (user: TenantUser, role: TenantUserRole) => {
-    try {
-      await tenantsApi.updateUser(user.id, { role });
-      toast.success(`Updated ${user.email}`);
-      await mutate();
-    } catch (err) {
-      const message = err instanceof ApiError ? err.body || err.message : 'Could not update role';
-      toast.error(String(message).slice(0, 240));
-    }
-  };
-
   const toggleActive = async (user: TenantUser) => {
+    if (user.id === selfId) {
+      toast.error('You cannot disable your own account');
+      return;
+    }
     try {
       await tenantsApi.updateUser(user.id, { is_active: !user.is_active });
       await mutate();
     } catch (err) {
-      toast.error('Could not update user status');
+      const message = err instanceof ApiError ? err.body || err.message : 'Could not update user status';
+      toast.error(String(message).slice(0, 240));
     }
   };
 
@@ -114,26 +169,30 @@ export function UsersView() {
     return <ErrorState title="Could not load users" description="Check that the API is reachable and you are signed in." />;
   }
 
+  const isCreate = editingId === 'new';
+  const editorOpen = editingId !== null;
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-100">Users</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Create operators and change their roles. Super admins can assign admin access.
+            Create, edit, and change operator roles. You cannot disable your own login.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setCreating((open) => !open)}
+          onClick={() => (editorOpen ? closeEditor() : openCreate())}
           className="bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium px-4 py-2 rounded-lg"
         >
-          {creating ? 'Cancel' : 'Add user'}
+          {editorOpen ? 'Cancel' : 'Add user'}
         </button>
       </div>
 
-      {creating && (
-        <form onSubmit={createUser} className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 space-y-4">
+      {editorOpen && (
+        <form onSubmit={saveUser} className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-gray-100">{isCreate ? 'New user' : 'Edit user'}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block text-sm text-gray-300">
               Email
@@ -157,14 +216,15 @@ export function UsersView() {
               />
             </label>
             <label className="block text-sm text-gray-300">
-              Password
+              {isCreate ? 'Password' : 'New password (optional)'}
               <input
                 type="password"
-                required
-                minLength={8}
+                required={isCreate}
+                minLength={isCreate ? 8 : undefined}
                 value={form.password}
                 onChange={(event) => setForm({ ...form, password: event.target.value })}
                 className="mt-1 w-full bg-dark-20 border border-[#333A47] rounded-lg px-3 py-2 text-sm"
+                placeholder={isCreate ? '' : 'Leave blank to keep current'}
               />
             </label>
             <label className="block text-sm text-gray-300">
@@ -181,13 +241,24 @@ export function UsersView() {
                 ))}
               </select>
             </label>
+            {!isCreate && (
+              <label className="flex items-center gap-2 text-sm text-gray-300 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.is_active}
+                  disabled={editingId === selfId}
+                  onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
+                />
+                Active (can sign in)
+              </label>
+            )}
           </div>
           <button
             type="submit"
             disabled={saving}
             className="bg-teal-600 hover:bg-teal-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg"
           >
-            {saving ? 'Creating…' : 'Create user'}
+            {saving ? 'Saving…' : isCreate ? 'Create user' : 'Save changes'}
           </button>
         </form>
       )}
@@ -215,37 +286,30 @@ export function UsersView() {
                     <div className="text-gray-100">{user.username}</div>
                     <div className="text-xs text-gray-500">{user.email}</div>
                   </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={user.role}
-                      onChange={(event) => changeRole(user, event.target.value as TenantUserRole)}
-                      className="bg-dark-20 border border-[#333A47] rounded-lg px-2 py-1 text-sm"
-                    >
-                      {(PRIVILEGED.has(user.role) && !canAssignPrivileged
-                        ? ROLE_OPTIONS
-                        : assignableRoles
-                      ).map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+                  <td className="px-4 py-3 text-gray-200">{roleLabel(user.role)}</td>
                   <td className="px-4 py-3">
                     <span className={user.is_active ? 'text-emerald-300' : 'text-gray-500'}>
                       {user.is_active ? 'Active' : 'Disabled'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-400">{formatWhen(user.last_login)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 space-x-3">
                     <button
                       type="button"
-                      onClick={() => toggleActive(user)}
-                      className="text-xs text-gray-300 hover:text-white"
+                      onClick={() => openEdit(user)}
+                      className="text-xs text-teal-300 hover:text-white"
                     >
-                      {user.is_active ? 'Disable' : 'Enable'}
+                      Edit
                     </button>
-                    <span className="sr-only">{roleLabel(user.role)}</span>
+                    {user.id !== selfId && (
+                      <button
+                        type="button"
+                        onClick={() => toggleActive(user)}
+                        className="text-xs text-gray-300 hover:text-white"
+                      >
+                        {user.is_active ? 'Disable' : 'Enable'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

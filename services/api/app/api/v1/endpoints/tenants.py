@@ -67,6 +67,7 @@ class CreateUserRequest(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
+    email: EmailStr | None = None
     username: str | None = Field(default=None, min_length=1, max_length=100)
     role: str | None = None
     is_active: bool | None = None
@@ -90,6 +91,14 @@ def _assert_assignable_role(actor_role: str, target_role: str) -> str:
             detail="Only a super admin can assign admin roles",
         )
     return role
+
+
+def _assert_can_deactivate(actor_id: uuid.UUID, target_id: uuid.UUID, is_active: bool | None) -> None:
+    if is_active is False and target_id == actor_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot disable your own account",
+        )
 
 
 class UpdateTenantSettingsRequest(BaseModel):
@@ -202,7 +211,18 @@ async def update_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    _assert_can_deactivate(current_user.user_id, user.id, request.is_active)
+
     updates: dict = {}
+    if request.email is not None:
+        email = str(request.email).strip().lower()
+        clash = await db.execute(select(User).where(User.email == email, User.id != user_id))
+        if clash.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User with this email already exists",
+            )
+        updates["email"] = email
     if request.username is not None:
         updates["username"] = request.username.strip()
     if request.role is not None:
