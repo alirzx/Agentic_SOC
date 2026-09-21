@@ -8,13 +8,47 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 import respx
-from app.connectors.splunk import SplunkConnector
+from app.connectors.splunk import (
+    SplunkConnector,
+    _DEFAULT_NOTABLE_SPL,
+    _is_replaceable_notable_search,
+    _should_oneshot,
+    mission_control_spl,
+)
 
 BASE = "https://splunk.test:8089"
 
 
 def _conn(**kw) -> SplunkConnector:
     return SplunkConnector(base_url=BASE, token="tok", **kw)
+
+
+def test_mission_control_spl_tables_extracted_fields():
+    spl = mission_control_spl()
+    assert spl.startswith("search index=notable")
+    assert "| extract" in spl
+    assert "orig_rule_description" in spl
+    assert "notable_id=coalesce" in spl
+    assert "dest_port" in spl
+    assert "earliest=" not in spl
+    lookup = mission_control_spl('(search_name="Network - Unapproved Port Activity Detected - Rule")', limit=5)
+    assert "search_name=" in lookup
+    assert "| head 5" in lookup
+
+
+def test_old_notable_table_is_replaced_catalog_rest_is_not():
+    old = (
+        "search index=notable "
+        "| table _time source search_name severity urgency host dvc dest "
+        "dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
+    )
+    assert _is_replaceable_notable_search(old)
+    assert _is_replaceable_notable_search("")
+    assert not _is_replaceable_notable_search("| rest /services/saved/searches | table title")
+    assert not _is_replaceable_notable_search(_DEFAULT_NOTABLE_SPL)
+    assert _should_oneshot(_DEFAULT_NOTABLE_SPL)
+    assert _should_oneshot(mission_control_spl())
+    assert not _should_oneshot("| rest /services/saved/searches | table title")
 
 
 # --------------------------------------------------------------------------
@@ -134,13 +168,37 @@ async def test_fetch_alerts_dispatches_configured_saved_search():
 @pytest.mark.asyncio
 async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
     c = _conn(saved_search="")
-    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(return_value=httpx.Response(201, json={"sid": "SID2"}))
-    respx.get(url__regex=r".+/services/search/jobs/SID2/results").mock(return_value=httpx.Response(200, json={"results": []}))
-    respx.get(url__regex=r".+/services/search/jobs/SID2(\?.*)?$").mock(return_value=_done_status())
-
-    await c.fetch_alerts()
-    assert jobs.called
-    assert "notable" in jobs.calls[0].request.content.decode()
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "preview": False,
+                "fields": [{"name": "_time"}, {"name": "search_name"}],
+                "results": [
+                    {
+                        "_time": "2026-07-01T12:48:35.000+03:30",
+                        "notable_id": "af145ac9-6b34-49b9-af4a-afe5e342e47c",
+                        "search_name": "Network - Unapproved Port Activity Detected - Rule",
+                        "dvc": "WIN-017UMT7DCGT.soorinsec.local",
+                        "dest_port": "3389",
+                        "severity": "low",
+                        "orig_rule_title": "Prohibited Port Activity Detected",
+                        "orig_rule_description": "The device connected to a prohibited port.",
+                    }
+                ],
+            },
+        )
+    )
+    out = await c.fetch_alerts()
+    body = jobs.calls[0].request.content.decode()
+    assert "notable" in body
+    assert "extract" in body
+    assert "orig_rule_description" in body
+    assert "exec_mode=oneshot" in body
+    assert len(out) == 1
+    assert out[0]["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
+    assert out[0]["description"].startswith("The device connected")
+    assert out[0]["raw_event"]["dest_port"] == "3389"
 
 
 @respx.mock
@@ -237,23 +295,39 @@ def test_normalize_parses_notable_stash_raw():
     assert out["raw_event"]["dest_port"] == "3389"
 
 
+def test_normalize_mission_control_extract_row():
+    c = _conn()
+    row = {
+        "_time": "2026-07-01T12:48:35.000+03:30",
+        "notable_id": "af145ac9-6b34-49b9-af4a-afe5e342e47c",
+        "search_name": "Network - Unapproved Port Activity Detected - Rule",
+        "detection_id": "6dd9e9ab-1111-2222-3333-444444444444",
+        "dvc": "WIN-017UMT7DCGT.soorinsec.local",
+        "dest_port": "3389",
+        "src": "10.1.2.3",
+        "severity": "low",
+        "orig_rule_title": "Prohibited Port Activity Detected",
+        "orig_rule_description": "The device connected to a prohibited port.",
+        "transport": "tcp",
+        "is_prohibited": "true",
+    }
+    out = c.normalize(row)
+    assert out["title"] == "Network - Unapproved Port Activity Detected - Rule"
+    assert out["description"].startswith("The device connected")
+    assert out["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
+    assert out["external_id"] == "af145ac9-6b34-49b9-af4a-afe5e342e47c"
+    assert out["raw_event"]["detection_id"] == "6dd9e9ab-1111-2222-3333-444444444444"
+
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_lookup_notable_filters_search_name_and_host():
     c = _conn()
     jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
-        return_value=httpx.Response(201, json={"sid": "N1"})
-    )
-    respx.get(url__regex=r".+/services/search/jobs/N1(\?.*)?$").mock(
-        return_value=httpx.Response(
-            200,
-            json={"entry": [{"content": {"dispatchState": "DONE"}}]},
-        )
-    )
-    respx.get(url__regex=r".+/services/search/jobs/N1/results").mock(
         return_value=httpx.Response(
             200,
             json={
+                "preview": False,
                 "results": [
                     {
                         "_time": "2026-07-01T12:48:35.000+03:30",
@@ -262,9 +336,10 @@ async def test_lookup_notable_filters_search_name_and_host():
                         "dvc": "WIN-017UMT7DCGT.soorinsec.local",
                         "src": "10.1.2.3",
                         "transport": "tcp",
-                        "urgency": "low",
+                        "severity": "low",
+                        "orig_rule_description": "The device connected to a prohibited port.",
                     }
-                ]
+                ],
             },
         )
     )
@@ -278,6 +353,9 @@ async def test_lookup_notable_filters_search_name_and_host():
     body = jobs.calls[0].request.content.decode()
     assert "Unapproved" in body
     assert "WIN-017UMT7DCGT" in body
+    assert "extract" in body
+    assert "orig_rule_description" in body
+    assert "exec_mode=oneshot" in body
 
 
 def test_timeless_catalog_skips_checkpoint_filter():

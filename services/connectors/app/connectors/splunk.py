@@ -44,15 +44,22 @@ _SEVERITY_BY_URGENCY = {
     "5": "critical",
 }
 
-# Default SPL used when the operator wants fired ES notables (incidents).
-# Prefer this over the ``| rest`` correlation-search *catalog* (rule definitions).
+# Mission Control stash fields extracted from index=notable ``_raw``.
 # Time window is applied via ``earliest_time`` / poll cadence — do not embed
 # ``earliest=`` in the SPL (it fights the connector's lookback).
-_DEFAULT_NOTABLE_SPL = (
-    "search index=notable "
-    "| table _time source search_name severity urgency host dvc dest "
-    "dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
+_MC_TABLE_FIELDS = (
+    "_time notable_id search_name detection_id dvc dest dest_port "
+    "src src_ip src_port severity security_domain status owner disposition "
+    "orig_rule_title orig_rule_description source_event_id source_guid "
+    "transport is_prohibited"
 )
+_MISSION_CONTROL_PIPELINE = (
+    "| extract "
+    "| eval notable_id=coalesce(source_event_id, source_guid, detection_id) "
+    f"| table {_MC_TABLE_FIELDS} "
+    "| sort 0 - _time"
+)
+_DEFAULT_NOTABLE_SPL = f"search index=notable {_MISSION_CONTROL_PIPELINE}"
 
 # Default scheduler cadence for Splunk (30 minutes).
 _DEFAULT_POLL_INTERVAL_SECONDS = 1800
@@ -119,6 +126,34 @@ def _spl_quote(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def mission_control_spl(filters: str = "", *, limit: int | None = None) -> str:
+    """Fired ES / Mission Control notables as a flat JSON-ready table."""
+    extra = f" {filters.strip()}" if filters.strip() else ""
+    spl = f"search index=notable{extra} {_MISSION_CONTROL_PIPELINE}"
+    if limit is not None:
+        spl = f"{spl} | head {int(limit)}"
+    return spl
+
+
+def _is_replaceable_notable_search(spl: str) -> bool:
+    """True when stored custom SPL is the old stock notable poll (no extract)."""
+    stripped = (spl or "").strip()
+    if not stripped:
+        return True
+    lower = stripped.lower()
+    if lower.startswith("| rest") or "/services/" in lower:
+        return False
+    return lower.startswith("search index=notable") and "| extract" not in lower
+
+
+def _should_oneshot(spl: str) -> bool:
+    """Mission Control notable extract searches wait for JSON in one round-trip."""
+    lower = (spl or "").strip().lower()
+    if lower.startswith("| rest") or "/services/" in lower:
+        return False
+    return "index=notable" in lower and "| extract" in lower
+
+
 def _stable_external_id(row: dict[str, Any]) -> str:
     """Replay-stable notable identity for checkpoint + ingest dedup.
 
@@ -126,7 +161,14 @@ def _stable_external_id(row: dict[str, Any]) -> str:
     stash rows), hash the firing identity so a 90-day re-poll of the same
     notable does not mint a new alert on every Sync.
     """
-    for key in ("source_guid", "orig_sid", "event_id", "source_event_id"):
+    for key in (
+        "notable_id",
+        "source_guid",
+        "source_event_id",
+        "detection_id",
+        "orig_sid",
+        "event_id",
+    ):
         value = row.get(key)
         if value not in (None, ""):
             return str(value)
@@ -205,8 +247,10 @@ class SplunkConnector(BaseConnector):
                     required=False,
                     default=_DEFAULT_NOTABLE_SPL,
                     help_text=(
-                        "Ad-hoc SPL posted to /services/search/jobs. "
-                        "Default pulls fired notables from index=notable. "
+                        "Ad-hoc SPL posted to /services/search/jobs with "
+                        "exec_mode=oneshot when it is an index=notable extract. "
+                        "Default tables Mission Control stash fields "
+                        "(search_name, dvc, dest_port, orig_rule_*). "
                         "Use | rest … only for the ES rule catalog (definitions, not incidents)."
                     ),
                 ),
@@ -304,8 +348,8 @@ class SplunkConnector(BaseConnector):
             headers["Authorization"] = f"Bearer {self._token}"
         return headers
 
-    def _client_kwargs(self) -> dict[str, Any]:
-        kwargs: dict[str, Any] = {"timeout": 60.0, "verify": self._ssl_verify}
+    def _client_kwargs(self, *, timeout: float = 90.0) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {"timeout": timeout, "verify": self._ssl_verify}
         auth = self._auth()
         if auth:
             kwargs["auth"] = auth
@@ -342,67 +386,92 @@ class SplunkConnector(BaseConnector):
                 }
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        # First poll / no checkpoint → backfill window (``earliest_time``).
+        # First poll / no checkpoint → connector earliest_time (default 90d).
         # Later polls → cadence window with a small overlap so we don't miss
         # edge events; connector + fusion dedupe by source_guid / fingerprint.
         if self._checkpoint:
             lookback = max(int(since_seconds), 60) + 120
             earliest = f"-{lookback}s"
-        elif self._custom_search:
-            earliest = self._earliest_time
         else:
-            earliest = f"-{max(1, int(since_seconds))}s"
+            earliest = self._earliest_time
         async with httpx.AsyncClient(**self._client_kwargs()) as client:
-            sid = await self._dispatch(client, earliest)
-            if not sid:
-                return []
-            await self._await_job(client, sid)
-            rows = await self._collect_results(client, sid)
+            rows = await self._fetch_rows(client, earliest)
 
         ordered = self._order_and_checkpoint(rows)
         return [self.normalize(r) for r in ordered]
 
-    async def _dispatch(self, client: httpx.AsyncClient, earliest: str) -> str | None:
-        """Kick off the search job and return its SID."""
+    async def _fetch_rows(self, client: httpx.AsyncClient, earliest: str) -> list[dict[str, Any]]:
+        """Run the configured search and return result rows."""
         custom = self._custom_search
-        if custom:
+        if custom and not _is_replaceable_notable_search(custom):
             search = _normalize_custom_spl(custom)
-            resp = await client.post(
-                f"{self._base_url}/services/search/jobs",
-                headers=self._headers(),
-                data={
-                    "search": search,
-                    "earliest_time": earliest,
-                    "latest_time": "now",
-                    "output_mode": "json",
-                },
+            return await self._run_adhoc(
+                client, search, earliest, oneshot=_should_oneshot(search)
             )
-            resp.raise_for_status()
-            return self._extract_sid(resp)
-
         ss = self._saved_search
         if ss and not ss.startswith("index="):
-            resp = await client.post(
-                f"{self._base_url}/services/saved/searches/{quote(ss, safe='')}/dispatch",
-                headers=self._headers(),
-                data={
-                    "output_mode": "json",
-                    "dispatch.earliest_time": earliest,
-                    "dispatch.latest_time": "now",
-                    "trigger_actions": "0",
-                },
-            )
-            resp.raise_for_status()
-            return self._extract_sid(resp)
+            sid = await self._dispatch_saved(client, ss, earliest)
+            if not sid:
+                return []
+            await self._await_job(client, sid)
+            return await self._collect_results(client, sid)
+        if ss.startswith("index=") and ss[len("index=") :].strip() not in ("", "notable"):
+            index = ss[len("index=") :].strip()
+            return await self._run_adhoc(client, f"search index={index}", earliest, oneshot=False)
+        return await self._run_adhoc(client, mission_control_spl(), earliest, oneshot=True)
 
-        index = ss[len("index=") :] if ss.startswith("index=") else "notable"
+    async def _dispatch_saved(
+        self, client: httpx.AsyncClient, name: str, earliest: str
+    ) -> str | None:
         resp = await client.post(
-            f"{self._base_url}/services/search/jobs",
+            f"{self._base_url}/services/saved/searches/{quote(name, safe='')}/dispatch",
             headers=self._headers(),
-            data={"search": f"search index={index} earliest={earliest}", "output_mode": "json"},
+            data={
+                "output_mode": "json",
+                "dispatch.earliest_time": earliest,
+                "dispatch.latest_time": "now",
+                "trigger_actions": "0",
+            },
         )
         resp.raise_for_status()
         return self._extract_sid(resp)
+
+    async def _run_adhoc(
+        self,
+        client: httpx.AsyncClient,
+        search: str,
+        earliest: str,
+        *,
+        oneshot: bool,
+    ) -> list[dict[str, Any]]:
+        """POST /services/search/jobs. Oneshot returns JSON rows in one round-trip."""
+        data: dict[str, str] = {
+            "search": search,
+            "earliest_time": earliest,
+            "latest_time": "now",
+            "output_mode": "json",
+        }
+        if oneshot:
+            data["exec_mode"] = "oneshot"
+        resp = await client.post(
+            f"{self._base_url}/services/search/jobs",
+            headers=self._headers(),
+            data=data,
+        )
+        resp.raise_for_status()
+        if oneshot:
+            try:
+                body = resp.json()
+            except ValueError:
+                body = None
+            if isinstance(body, dict) and "results" in body:
+                rows = body.get("results") or []
+                return [r for r in rows if isinstance(r, dict)]
+        sid = self._extract_sid(resp)
+        if not sid:
+            return []
+        await self._await_job(client, sid)
+        return await self._collect_results(client, sid)
 
     @staticmethod
     def _extract_sid(resp: httpx.Response) -> str | None:
@@ -484,31 +553,15 @@ class SplunkConnector(BaseConnector):
         title_q = _spl_quote((title or "").strip())
         if not title_q:
             return None
-        parts = [
-            "search index=notable",
-            f'(search_name="{title_q}" OR source="{title_q}")',
-        ]
+        filters = f'(search_name="{title_q}" OR source="{title_q}")'
         if host and host.strip():
             host_q = _spl_quote(host.strip())
-            parts.append(f'(dvc="{host_q}" OR dest="{host_q}" OR host="{host_q}")')
-        spl = " ".join(parts) + " | sort 0 - _time | head 5"
+            filters = f'{filters} (dvc="{host_q}" OR dest="{host_q}" OR host="{host_q}")'
+        spl = mission_control_spl(filters, limit=5)
         async with httpx.AsyncClient(**self._client_kwargs()) as client:
-            resp = await client.post(
-                f"{self._base_url}/services/search/jobs",
-                headers=self._headers(),
-                data={
-                    "search": spl,
-                    "earliest_time": self._earliest_time,
-                    "latest_time": "now",
-                    "output_mode": "json",
-                },
+            rows = await self._run_adhoc(
+                client, spl, self._earliest_time, oneshot=True
             )
-            resp.raise_for_status()
-            sid = self._extract_sid(resp)
-            if not sid:
-                return None
-            await self._await_job(client, sid)
-            rows = await self._collect_results(client, sid)
         if not rows:
             return None
         return self.normalize(rows[0])
@@ -562,14 +615,16 @@ class SplunkConnector(BaseConnector):
             or row.get("_raw")
             or ""
         )
-        hostname = row.get("dvc") or row.get("dest") or row.get("host")
+        hostname = row.get("dvc") or row.get("dest") or row.get("host") or row.get("asset")
         created_at = row.get("_time")
+        if not row.get("notable_id"):
+            row["notable_id"] = external_id
         return {
             "source": self.connector_id,
             "external_id": external_id,
             "event_id": external_id,
             "title": str(title),
-            "description": description[:2000],
+            "description": description[:4000],
             "severity": _map_severity(row.get("urgency") or row.get("severity")),
             "src_ip": row.get("src") or row.get("src_ip"),
             "hostname": hostname,

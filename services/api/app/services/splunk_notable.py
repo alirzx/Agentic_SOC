@@ -61,14 +61,14 @@ _SEVERITY = {
 
 
 def needs_hydrate(alert: Alert) -> bool:
-    """True when the row is a title/host stub missing the Splunk stash."""
+    """True when the row is missing Mission Control extract fields."""
     if (alert.connector_type or "").lower() != "splunk":
         return False
     raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
-    if raw.get("dest_port") or raw.get("_raw") or raw.get("src") or raw.get("src_ip"):
+    if raw.get("orig_rule_description") and (raw.get("detection_id") or raw.get("notable_id")):
         return False
     extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
-    return not extra.get("splunk_hydrate_attempted")
+    return not extra.get("splunk_mc_hydrate_attempted")
 
 
 def extract_mitre_ids(raw: dict[str, Any], title: str | None = None) -> list[str]:
@@ -132,6 +132,9 @@ def iocs_from_raw(raw: dict[str, Any]) -> list[dict[str, str]]:
     port = raw.get("dest_port")
     if port not in (None, ""):
         add("port", f"{raw.get('transport') or 'tcp'}/{port}")
+    src_port = raw.get("src_port")
+    if src_port not in (None, ""):
+        add("port", f"src/{src_port}")
     return out
 
 
@@ -140,12 +143,18 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
     raw = envelope.get("raw_event") if isinstance(envelope.get("raw_event"), dict) else envelope
     if not isinstance(raw, dict):
         raw = {}
-    title = str(envelope.get("title") or raw.get("search_name") or alert.title)
+    title = str(
+        raw.get("search_name")
+        or envelope.get("title")
+        or raw.get("orig_rule_title")
+        or alert.title
+    )
     host = (
         envelope.get("hostname")
         or raw.get("dvc")
         or raw.get("dest")
         or raw.get("host")
+        or raw.get("asset")
     )
     src = envelope.get("src_ip") or raw.get("src") or raw.get("src_ip")
     port = raw.get("dest_port")
@@ -157,13 +166,18 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
         mapped = _SEVERITY.get(str(raw.get("urgency") or raw.get("severity") or "").strip().lower())
         if mapped:
             alert.severity = mapped
-    description = str(envelope.get("description") or "").strip()
-    if not description or description.startswith("Splunk notable"):
+    orig_desc = str(raw.get("orig_rule_description") or "").strip()
+    envelope_desc = str(envelope.get("description") or "").strip()
+    if orig_desc:
+        description = orig_desc
+    elif envelope_desc and not envelope_desc.startswith("Splunk notable"):
+        description = envelope_desc
+    else:
         description = _describe(title, host, src, port, transport)
     alert.title = title[:500]
     alert.description = description[:4000]
-    alert.rule_name = title
-    alert.rule_id = str(raw.get("search_name") or title)
+    alert.rule_name = str(raw.get("orig_rule_title") or title)
+    alert.rule_id = str(raw.get("detection_id") or raw.get("search_name") or title)
     alert.connector_type = "splunk"
     alert.raw_event = raw
     hosts = [str(h) for h in (alert.affected_hosts or []) if h]
@@ -182,7 +196,14 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
     alert.mitre_tactics = [
         _TECHNIQUE_META[tid][0] for tid in techniques if tid in _TECHNIQUE_META and _TECHNIQUE_META[tid][0]
     ]
-    event_id = envelope.get("external_id") or raw.get("source_guid") or raw.get("event_id")
+    event_id = (
+        envelope.get("external_id")
+        or raw.get("notable_id")
+        or raw.get("source_guid")
+        or raw.get("source_event_id")
+        or raw.get("detection_id")
+        or raw.get("event_id")
+    )
     if event_id:
         ids = [str(x) for x in (alert.source_event_ids or [])]
         if str(event_id) not in ids:
@@ -208,6 +229,7 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
             "mitre_attack": mitre_attack_rows(techniques),
             "splunk_source_ref": str(event_id or alert.rule_id or ""),
             "splunk_hydrate_attempted": True,
+            "splunk_mc_hydrate_attempted": True,
         }
     )
     alert.enrichment_data = extra
@@ -276,7 +298,7 @@ async def fetch_notable(
         "host": host,
     }
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(45.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(90.0)) as client:
             resp = await client.post(url, json=payload)
     except httpx.HTTPError as exc:
         logger.warning(

@@ -75,34 +75,103 @@ function formatAlertTime(raw: string | undefined, pattern: string): string {
   }
 }
 
+function formatRawValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => formatRawValue(item)).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    try {
+      const encoded = JSON.stringify(value);
+      return encoded === '{}' || encoded === '[]' ? '' : encoded;
+    } catch {
+      return '';
+    }
+  }
+  return String(value);
+}
+
 function rawField(alert: Alert, ...keys: string[]): string {
   const raw = alert.rawEvent ?? {};
   for (const key of keys) {
-    const value = raw[key];
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim();
-    }
-    if (typeof value === 'number') {
-      return String(value);
+    const text = formatRawValue(raw[key]);
+    if (text) {
+      return text;
     }
   }
   return '';
 }
 
-function notableHost(alert: Alert): string {
-  return rawField(alert, 'dvc', 'dest', 'host') || (alert.relatedEntities?.find((e) => e.type === 'host')?.value ?? '');
-}
+const NOTABLE_DETAIL_FIELDS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'search_name', label: 'Search name' },
+  { key: 'orig_rule_title', label: 'Rule title' },
+  { key: 'notable_id', label: 'Notable ID' },
+  { key: 'detection_id', label: 'Detection ID' },
+  { key: 'source_event_id', label: 'Source event ID' },
+  { key: 'source_guid', label: 'Source GUID' },
+  { key: 'dvc', label: 'Asset' },
+  { key: 'dest', label: 'Dest' },
+  { key: 'dest_port', label: 'Dest port' },
+  { key: 'src', label: 'Src' },
+  { key: 'src_ip', label: 'Src IP' },
+  { key: 'src_port', label: 'Src port' },
+  { key: 'transport', label: 'Transport' },
+  { key: 'severity', label: 'Severity' },
+  { key: 'security_domain', label: 'Security domain' },
+  { key: 'status', label: 'Notable status' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'disposition', label: 'Disposition' },
+  { key: 'is_prohibited', label: 'Prohibited' },
+  { key: '_time', label: 'Event time' },
+];
 
-function notableSrc(alert: Alert): string {
-  return rawField(alert, 'src', 'src_ip');
-}
+const NOTABLE_SKIP_KEYS = new Set([
+  ...NOTABLE_DETAIL_FIELDS.map((field) => field.key),
+  'orig_rule_description',
+  '_raw',
+  '_bkt',
+  '_cd',
+  '_serial',
+  '_si',
+  '_indextime',
+  '_kv',
+  'punct',
+  'linecount',
+  'splunk_server',
+  'timestamp',
+  'eventtype',
+  'timeendpos',
+  'timestartpos',
+  'index',
+  'sourcetype',
+]);
 
-function notablePort(alert: Alert): string {
-  return rawField(alert, 'dest_port');
-}
-
-function notableTransport(alert: Alert): string {
-  return rawField(alert, 'transport');
+function extraNotableFields(alert: Alert): ReadonlyArray<{ key: string; label: string; value: string }> {
+  const raw = alert.rawEvent ?? {};
+  const rows: Array<{ key: string; label: string; value: string }> = [];
+  for (const [key, value] of Object.entries(raw)) {
+    if (NOTABLE_SKIP_KEYS.has(key) || key.startsWith('date_') || key.startsWith('tag::')) {
+      continue;
+    }
+    const text = formatRawValue(value);
+    if (!text) {
+      continue;
+    }
+    rows.push({
+      key,
+      label: key.replace(/^_+/, '').replace(/_/g, ' '),
+      value: text,
+    });
+  }
+  return rows.sort((left, right) => left.key.localeCompare(right.key));
 }
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
@@ -119,7 +188,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start gap-4">
-      <span className="text-xs text-gray-500 w-32 shrink-0 pt-0.5">{label}</span>
+      <span className="text-xs text-gray-500 w-40 shrink-0 pt-0.5">{label}</span>
       <span className="text-sm text-gray-200">{value}</span>
     </div>
   );
@@ -836,6 +905,7 @@ export function AlertDetailView({
     SEVERITY_CONFIG[alert.severity as keyof typeof SEVERITY_CONFIG] ??
     SEVERITY_CONFIG.info;
   const stsCfg = STATUS_CONFIG[alert.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.new;
+  const ruleTitle = rawField(alert, 'orig_rule_title');
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -866,6 +936,9 @@ export function AlertDetailView({
             <span className="text-xs text-gray-500">Risk Score: <span className="text-white font-bold">{alert.riskScore}</span></span>
           </div>
           <h1 className="text-lg font-semibold text-gray-100">{alert.title}</h1>
+          {ruleTitle && ruleTitle !== alert.title && (
+            <p className="text-sm text-gray-400 mt-1">{ruleTitle}</p>
+          )}
           <p className="text-sm text-gray-500 mt-1" suppressHydrationWarning>{alert.source} · {formatAlertTime(alert.createdAt, 'MMM d, yyyy HH:mm:ss')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -965,7 +1038,41 @@ export function AlertDetailView({
             />
 
             <Section title="Description">
-              <p className="text-sm text-gray-300 leading-relaxed">{alert.description}</p>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                {rawField(alert, 'orig_rule_description') || alert.description}
+              </p>
+            </Section>
+
+            <Section title="Notable">
+              <div className="space-y-3">
+                {NOTABLE_DETAIL_FIELDS.map((field) => {
+                  const value = rawField(alert, field.key);
+                  if (!value) {
+                    return null;
+                  }
+                  return <Field key={field.key} label={field.label} value={value} />;
+                })}
+                {extraNotableFields(alert).map((field) => (
+                  <Field key={field.key} label={field.label} value={field.value} />
+                ))}
+                <Field label="Source" value={alert.source} />
+                <Field label="Source Ref" value={alert.sourceRef || rawField(alert, 'notable_id', 'source_guid') || '—'} />
+                <Field label="Tenant" value={alert.tenantId} />
+                <Field label="Assignee" value={alert.assignee || <span className="text-gray-500">Unassigned</span>} />
+                <Field label="Created" value={<span suppressHydrationWarning>{formatAlertTime(alert.createdAt, 'MMM d, yyyy HH:mm:ss')}</span>} />
+                {alert.resolvedAt && (
+                  <Field label="Resolved" value={<span suppressHydrationWarning>{formatAlertTime(alert.resolvedAt, 'MMM d, yyyy HH:mm:ss')}</span>} />
+                )}
+                {alert.tags && alert.tags.length > 0 && (
+                  <Field label="Tags" value={
+                    <div className="flex flex-wrap gap-1">
+                      {alert.tags.map((tag) => (
+                        <span key={tag} className="px-2 py-0.5 bg-dark-20 text-gray-300 text-xs rounded">{tag}</span>
+                      ))}
+                    </div>
+                  } />
+                )}
+              </div>
             </Section>
 
             {alert.relatedEntities && alert.relatedEntities.length > 0 && (
@@ -992,32 +1099,6 @@ export function AlertDetailView({
                 ledgerRunId={alert.ledgerRunId}
               />
             )}
-
-            <Section title="Details">
-              <div className="space-y-3">
-                <Field label="Source" value={alert.source} />
-                <Field label="Source Ref" value={alert.sourceRef || '—'} />
-                <Field label="Host" value={notableHost(alert) || '—'} />
-                <Field label="Source IP" value={notableSrc(alert) || '—'} />
-                <Field label="Dest Port" value={notablePort(alert) || '—'} />
-                <Field label="Transport" value={notableTransport(alert) || '—'} />
-                <Field label="Tenant" value={alert.tenantId} />
-                <Field label="Assignee" value={alert.assignee || <span className="text-gray-500">Unassigned</span>} />
-                <Field label="Created" value={<span suppressHydrationWarning>{formatAlertTime(alert.createdAt, 'MMM d, yyyy HH:mm:ss')}</span>} />
-                {alert.resolvedAt && (
-                  <Field label="Resolved" value={<span suppressHydrationWarning>{formatAlertTime(alert.resolvedAt, 'MMM d, yyyy HH:mm:ss')}</span>} />
-                )}
-                {alert.tags && alert.tags.length > 0 && (
-                  <Field label="Tags" value={
-                    <div className="flex flex-wrap gap-1">
-                      {alert.tags.map((tag) => (
-                        <span key={tag} className="px-2 py-0.5 bg-dark-20 text-gray-300 text-xs rounded">{tag}</span>
-                      ))}
-                    </div>
-                  } />
-                )}
-              </div>
-            </Section>
 
             {/* MITRE ATT&CK */}
             {alert.mitreAttack && alert.mitreAttack.length > 0 && (
