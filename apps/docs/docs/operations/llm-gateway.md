@@ -97,6 +97,17 @@ AISOC_DETERMINISTIC=0
 
 Never commit the API key or gateway token — keep them in `.env` / Fly secrets.
 
+DeepSeek / Arvan gateways are **chat-only**. MITRE→Qdrant embedding is skipped
+automatically when `OPENAI_BASE_URL` points at Arvan/DeepSeek unless you set a
+separate embeddings provider:
+
+```bash
+AISOC_EMBEDDING_BASE_URL=https://api.openai.com/v1
+AISOC_EMBEDDING_API_KEY=<openai-embeddings-key>
+# or explicitly disable:
+AISOC_SKIP_EMBEDDINGS=1
+```
+
 ## Re-point a task to a local model
 
 Duplicate the alias in `infra/litellm/config.yaml` with a local backend. The

@@ -319,6 +319,45 @@ def _load_stub_corpus() -> None:
 # ─── Qdrant Embedding ─────────────────────────────────────────────────────────
 
 
+def _embedding_skip_reason() -> str | None:
+    """Return why ATT&CK embedding should be skipped, or ``None`` to proceed.
+
+    Chat-only OpenAI-compatible gateways (Arvan Cloud AI / DeepSeek-V4-Flash)
+    reject ``/embeddings`` with 424. The OpenAI SDK also inherits
+    ``OPENAI_BASE_URL`` from the environment, so without an explicit embedding
+    endpoint every batch would be mis-routed to the chat model.
+    """
+    if os.getenv("AISOC_SKIP_EMBEDDINGS", "").strip().lower() in ("1", "true", "yes", "on"):
+        return "AISOC_SKIP_EMBEDDINGS is set"
+    embed_base = (os.getenv("AISOC_EMBEDDING_BASE_URL") or "").strip()
+    if embed_base:
+        return None
+    chat_base = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_BASE_URL") or "").strip().lower()
+    if not chat_base:
+        return None
+    if "arvancloudai" in chat_base or "/gateway/models/deepseek" in chat_base:
+        return (
+            "OPENAI_BASE_URL is a chat-only gateway (Arvan/DeepSeek) with no embeddings channel; "
+            "set AISOC_EMBEDDING_BASE_URL (+ key) to enable MITRE RAG embed, or ignore this skip"
+        )
+    return None
+
+
+def _embedding_openai_client(api_key: str) -> Any:
+    """Build an embeddings client that does not accidentally hit the chat gateway."""
+    import openai
+
+    embed_base = (os.getenv("AISOC_EMBEDDING_BASE_URL") or "").strip() or None
+    embed_key = (os.getenv("AISOC_EMBEDDING_API_KEY") or "").strip() or api_key
+    # Explicit base_url overrides env OPENAI_BASE_URL. When no dedicated
+    # embedding endpoint is configured we still construct the client (caller
+    # already passed `_embedding_skip_reason`), defaulting to OpenAI public API.
+    return openai.AsyncOpenAI(
+        api_key=embed_key,
+        base_url=embed_base or "https://api.openai.com/v1",
+    )
+
+
 async def embed_techniques_into_qdrant(
     qdrant_url: str,
     openai_api_key: str,
@@ -328,18 +367,22 @@ async def embed_techniques_into_qdrant(
     Embed ATT&CK technique descriptions into Qdrant for semantic RAG.
     Only embeds techniques that are not already present in the collection.
     """
+    skip = _embedding_skip_reason()
+    if skip:
+        logger.info("ATT&CK Qdrant embedding skipped", reason=skip)
+        return
+
     if not _loaded:
         await load_attck_corpus()
 
     try:
-        import openai
         from qdrant_client import AsyncQdrantClient
         from qdrant_client.models import Distance, PointStruct, VectorParams
     except ImportError as exc:
         logger.warning("Qdrant/OpenAI client not available for ATT&CK embedding", error=str(exc))
         return
 
-    oai = openai.AsyncOpenAI(api_key=openai_api_key)
+    oai = _embedding_openai_client(openai_api_key)
     qdrant = AsyncQdrantClient(url=qdrant_url)
 
     # Ensure collection exists
@@ -356,13 +399,14 @@ async def embed_techniques_into_qdrant(
     techniques_list = list(_techniques.values())
     total = len(techniques_list)
     embedded = 0
+    embed_model = os.getenv("AISOC_EMBEDDING_MODEL", "text-embedding-3-large").strip() or "text-embedding-3-large"
 
     for i in range(0, total, _EMBED_BATCH_SIZE):
         batch = techniques_list[i : i + _EMBED_BATCH_SIZE]
         texts = [f"{t.id} {t.name}: {t.description or ''} Tactics: {', '.join(t.tactic_names or [])}" for t in batch]
         try:
             resp = await oai.embeddings.create(
-                model="text-embedding-3-large",
+                model=embed_model,
                 input=texts,
                 dimensions=3072,
             )
@@ -389,7 +433,15 @@ async def embed_techniques_into_qdrant(
                 total=total,
             )
         except Exception as exc:
-            logger.warning("Batch embedding error", batch_start=i, error=str(exc))
+            err = str(exc)
+            logger.warning("Batch embedding error", batch_start=i, error=err)
+            # Chat-only / missing-channel failures will never succeed on later batches.
+            if "embeddings" in err.lower() or "424" in err or "no available channels" in err.lower():
+                logger.warning(
+                    "ATT&CK embedding aborted after provider rejection",
+                    hint="Set AISOC_EMBEDDING_BASE_URL for a real embeddings API, or AISOC_SKIP_EMBEDDINGS=1",
+                )
+                break
 
     logger.info("ATT&CK embedding complete", total_embedded=embedded)
     await qdrant.close()
@@ -406,18 +458,21 @@ async def semantic_technique_search(
     Perform semantic search over ATT&CK techniques using Qdrant.
     Returns the top_k most relevant techniques.
     """
+    if _embedding_skip_reason():
+        return []
+
     try:
-        import openai
         from qdrant_client import AsyncQdrantClient
     except ImportError:
         return []
 
-    oai = openai.AsyncOpenAI(api_key=openai_api_key)
+    oai = _embedding_openai_client(openai_api_key)
     qdrant = AsyncQdrantClient(url=qdrant_url)
+    embed_model = os.getenv("AISOC_EMBEDDING_MODEL", "text-embedding-3-large").strip() or "text-embedding-3-large"
 
     try:
         emb_resp = await oai.embeddings.create(
-            model="text-embedding-3-large",
+            model=embed_model,
             input=[query],
             dimensions=3072,
         )

@@ -15,7 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recommended actions for the Alert Detail "Start AI Investigation" button.
   Compose / `.env.example` now pass `OPENAI_BASE_URL` and all `AISOC_MODEL_PIN_*`
   roles so Arvan Cloud AI DeepSeek-V4-Flash (or any OpenAI-compatible gateway)
-  drives Investigation and Copilot without code changes.
+  drives Investigation and Copilot without code changes. Chat-only gateways
+  skip MITRE→Qdrant embedding (no `/embeddings` channel) unless
+  `AISOC_EMBEDDING_BASE_URL` is set.
 
 - **Super-admin user and permission management.** Role `super_admin` has full
   (`*`) privileges, same as `admin` / `platform_admin`. **Settings → Users**
