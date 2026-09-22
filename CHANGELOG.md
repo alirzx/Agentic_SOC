@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Alert Detail AI Investigation endpoint + DeepSeek / OpenAI-compatible wiring.**
+- **Workflow SOC executive page.** New sidebar item under Automation (`/workflow-soc`)
+  shows an animated Agentic SOC lifecycle (Connectors → Detect & Fuse → AI Investigation
+  → Verdict & Copilot → Approved Response → **Jira Ticket**) for management walkthroughs.
+  Dark-theme pipe animation with pause/resume and per-stage titles.
   `POST /api/v1/agents/investigate` (API → agents) runs the InvestigatorOrchestrator
   for the selected alert and returns markdown findings, MITRE mapping, and
   recommended actions for the Alert Detail "Start AI Investigation" button.

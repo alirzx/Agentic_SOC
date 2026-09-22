@@ -144,6 +144,15 @@ const CurrencyIcon = () => (
   </svg>
 );
 
+const WorkflowIcon = () => (
+  <svg className="w-5 h-5" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h10.5M3.75 12h16.5m-16.5 5.25H12" />
+    <circle cx="17.25" cy="6.75" r="1.5" strokeWidth={1.5} />
+    <circle cx="20.25" cy="12" r="1.5" strokeWidth={1.5} />
+    <circle cx="15" cy="18" r="1.5" strokeWidth={1.5} />
+  </svg>
+);
+
 const navSections: NavSection[] = [
   {
     items: [
@@ -260,6 +269,11 @@ const navSections: NavSection[] = [
   {
     title: 'Automation',
     items: [
+      {
+        label: 'Workflow SOC',
+        href: '/workflow-soc',
+        icon: <WorkflowIcon />,
+      },
       {
         label: 'Playbooks',
         href: '/playbooks',

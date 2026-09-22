@@ -13,6 +13,7 @@ const PROTECTED_PREFIXES = [
   '/graph',
   '/copilot',
   '/playbooks',
+  '/workflow-soc',
   '/marketplace',
   '/connectors',
   '/settings',
