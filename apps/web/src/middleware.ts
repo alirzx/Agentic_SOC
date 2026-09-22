@@ -14,6 +14,7 @@ const PROTECTED_PREFIXES = [
   '/copilot',
   '/playbooks',
   '/workflow-soc',
+  '/marketplace',
   '/connectors',
   '/settings',
   '/compliance',
