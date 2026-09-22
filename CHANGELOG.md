@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Marketplace console module.** Removed the `/marketplace` app page, `MarketplaceView`,
+  sidebar/TopBar/footer entry points, and related e2e screenshot. Connector plugin index
+  under repo `marketplace/` remains for sync tooling.
+
 ### Added
 
 - **Workflow SOC executive page.** New sidebar item under Automation (`/workflow-soc`)

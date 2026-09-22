@@ -17,7 +17,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/responder",
     "/mesh",
     "/why-open-source",
-    "/marketplace",
+    "/workflow-soc",
     "/compliance",
     "/hunt",
     "/explore",

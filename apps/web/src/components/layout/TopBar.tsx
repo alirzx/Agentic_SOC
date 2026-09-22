@@ -24,7 +24,7 @@ const routeLabels: Record<string, { title: string; description: string }> = {
   '/graph': { title: 'Attack Graph', description: 'Visualize relationships across alerts and assets' },
   '/copilot': { title: 'AI Copilot', description: 'AI-assisted investigation and triage' },
   '/playbooks': { title: 'Playbooks', description: 'Automated response and SOAR workflows' },
-  '/marketplace': { title: 'Marketplace', description: 'Plugins, integrations, and content packs' },
+  '/workflow-soc': { title: 'Workflow SOC', description: 'Agentic SOC lifecycle from ingest to Jira' },
   '/honeytokens': { title: 'Honeytokens', description: 'Deception assets and trip-wire alerts' },
   '/purple-team': { title: 'Purple Team', description: 'Adversary emulation and detection coverage' },
   '/connectors': { title: 'Connectors', description: 'Security tool integrations' },

@@ -46,11 +46,11 @@ describe('Sidebar', () => {
     expect(screen.getByText('Platform')).toBeInTheDocument();
   });
 
-  it('exposes the marketplace and compliance entry points', () => {
+  it('exposes the workflow soc and compliance entry points', () => {
     render(<Sidebar />);
 
-    const marketplace = screen.getByRole('link', { name: /marketplace/i });
-    expect(marketplace).toHaveAttribute('href', '/marketplace');
+    const workflow = screen.getByRole('link', { name: /workflow soc/i });
+    expect(workflow).toHaveAttribute('href', '/workflow-soc');
 
     const compliance = screen.getByRole('link', { name: /compliance/i });
     expect(compliance).toHaveAttribute('href', '/compliance');

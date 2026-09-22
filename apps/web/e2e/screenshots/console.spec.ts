@@ -54,9 +54,9 @@ test("03 — /hunt workbench (natural-language → ES|QL / SPL / KQL)", async ({
   await page.screenshot({ path: OUT("03-hunt-workbench.png"), fullPage: false });
 });
 
-test("04 — Marketplace (plugins, playbooks, detections)", async ({ page }) => {
-  await page.goto("/marketplace");
+test("04 — Workflow SOC (executive lifecycle)", async ({ page }) => {
+  await page.goto("/workflow-soc");
   await page.waitForLoadState("domcontentloaded");
   await page.waitForTimeout(2_500);
-  await page.screenshot({ path: OUT("04-marketplace.png"), fullPage: false });
+  await page.screenshot({ path: OUT("04-workflow-soc.png"), fullPage: false });
 });
