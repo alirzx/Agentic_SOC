@@ -147,11 +147,15 @@ def _is_replaceable_notable_search(spl: str) -> bool:
 
 
 def _should_oneshot(spl: str) -> bool:
-    """Mission Control notable extract searches wait for JSON in one round-trip."""
-    lower = (spl or "").strip().lower()
-    if lower.startswith("| rest") or "/services/" in lower:
-        return False
-    return "index=notable" in lower and "| extract" in lower
+    """Whether to use Splunk ``exec_mode=oneshot``.
+
+    Always ``False``: oneshot silently caps result sets (commonly ~100 rows),
+    which drops the rest of a notable backfill and then advances the
+    checkpoint past the missing events. Use a normal search job + paged
+    ``/results`` instead (#529 follow-up).
+    """
+    _ = spl  # signature kept for call-site clarity / tests
+    return False
 
 
 def _stable_external_id(row: dict[str, Any]) -> str:
@@ -260,7 +264,7 @@ class SplunkConnector(BaseConnector):
                     "Earliest time",
                     required=False,
                     default="-90d@d",
-                    help_text="First-poll / backfill window (e.g. -90d@d). Later polls use the 30m cadence.",
+                    help_text="First-poll / backfill window (e.g. -90d@d). Later polls resume from the saved checkpoint time.",
                 ),
                 Field(
                     "poll_interval_seconds",
@@ -385,15 +389,29 @@ class SplunkConnector(BaseConnector):
                     "error": f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__,
                 }
 
+    def _poll_earliest(self, since_seconds: int) -> str:
+        """SPL earliest_time for this poll.
+
+        * No checkpoint → configured ``earliest_time`` (default ``-90d@d``).
+        * With checkpoint → resume from the stored event timestamp so a long
+          outage or a historical notable dump is not clipped to one poll
+          cadence (the old ``-{poll_interval+120}s`` window dropped anything
+          older than ~32 minutes once a checkpoint existed).
+        * Checkpoint without a parseable time → cadence lookback as fallback.
+        """
+        if not self._checkpoint:
+            return self._earliest_time
+        cp_time = str(self._checkpoint.get("time") or "").strip()
+        if cp_time:
+            return cp_time
+        lookback = max(int(since_seconds), 60) + 120
+        return f"-{lookback}s"
+
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         # First poll / no checkpoint → connector earliest_time (default 90d).
-        # Later polls → cadence window with a small overlap so we don't miss
-        # edge events; connector + fusion dedupe by source_guid / fingerprint.
-        if self._checkpoint:
-            lookback = max(int(since_seconds), 60) + 120
-            earliest = f"-{lookback}s"
-        else:
-            earliest = self._earliest_time
+        # Later polls → from checkpoint time; connector + fusion dedupe by
+        # source_guid / fingerprint so already-accepted rows are skipped.
+        earliest = self._poll_earliest(since_seconds)
         async with httpx.AsyncClient(**self._client_kwargs()) as client:
             rows = await self._fetch_rows(client, earliest)
 
@@ -418,7 +436,7 @@ class SplunkConnector(BaseConnector):
         if ss.startswith("index=") and ss[len("index=") :].strip() not in ("", "notable"):
             index = ss[len("index=") :].strip()
             return await self._run_adhoc(client, f"search index={index}", earliest, oneshot=False)
-        return await self._run_adhoc(client, mission_control_spl(), earliest, oneshot=True)
+        return await self._run_adhoc(client, mission_control_spl(), earliest, oneshot=False)
 
     async def _dispatch_saved(
         self, client: httpx.AsyncClient, name: str, earliest: str
@@ -560,7 +578,7 @@ class SplunkConnector(BaseConnector):
         spl = mission_control_spl(filters, limit=5)
         async with httpx.AsyncClient(**self._client_kwargs()) as client:
             rows = await self._run_adhoc(
-                client, spl, self._earliest_time, oneshot=True
+                client, spl, self._earliest_time, oneshot=False
             )
         if not rows:
             return None

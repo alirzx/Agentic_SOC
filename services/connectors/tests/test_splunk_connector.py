@@ -46,9 +46,18 @@ def test_old_notable_table_is_replaced_catalog_rest_is_not():
     assert _is_replaceable_notable_search("")
     assert not _is_replaceable_notable_search("| rest /services/saved/searches | table title")
     assert not _is_replaceable_notable_search(_DEFAULT_NOTABLE_SPL)
-    assert _should_oneshot(_DEFAULT_NOTABLE_SPL)
-    assert _should_oneshot(mission_control_spl())
+    assert not _should_oneshot(_DEFAULT_NOTABLE_SPL)
+    assert not _should_oneshot(mission_control_spl())
     assert not _should_oneshot("| rest /services/saved/searches | table title")
+
+
+def test_poll_earliest_uses_checkpoint_time_when_present():
+    c = _conn(earliest_time="-90d@d")
+    assert c._poll_earliest(1800) == "-90d@d"
+    c.set_checkpoint({"time": "2026-07-01T12:48:35.000+03:30", "id": "abc"})
+    assert c._poll_earliest(1800) == "2026-07-01T12:48:35.000+03:30"
+    c.set_checkpoint({"time": "", "id": "abc"})
+    assert c._poll_earliest(1800) == "-1920s"
 
 
 # --------------------------------------------------------------------------
@@ -169,11 +178,12 @@ async def test_fetch_alerts_dispatches_configured_saved_search():
 async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
     c = _conn(saved_search="")
     jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "SID-NOTABLE"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-NOTABLE/results").mock(
         return_value=httpx.Response(
             200,
             json={
-                "preview": False,
-                "fields": [{"name": "_time"}, {"name": "search_name"}],
                 "results": [
                     {
                         "_time": "2026-07-01T12:48:35.000+03:30",
@@ -189,16 +199,54 @@ async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
             },
         )
     )
+    respx.get(url__regex=r".+/services/search/jobs/SID-NOTABLE(\?.*)?$").mock(
+        return_value=_done_status()
+    )
     out = await c.fetch_alerts()
     body = jobs.calls[0].request.content.decode()
     assert "notable" in body
     assert "extract" in body
     assert "orig_rule_description" in body
-    assert "exec_mode=oneshot" in body
+    assert "exec_mode=oneshot" not in body
     assert len(out) == 1
     assert out[0]["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
     assert out[0]["description"].startswith("The device connected")
     assert out[0]["raw_event"]["dest_port"] == "3389"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_alerts_with_checkpoint_resumes_from_checkpoint_time():
+    c = _conn(saved_search="")
+    c.set_checkpoint({"time": "2026-07-01T12:48:35.000+03:30", "id": "old"})
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "SID-CP"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-CP/results").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "_time": "2026-09-28T10:00:00.000+00:00",
+                        "notable_id": "new-1",
+                        "search_name": "Fresh Notable",
+                        "severity": "high",
+                    }
+                ]
+            },
+        )
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-CP(\?.*)?$").mock(
+        return_value=_done_status()
+    )
+    out = await c.fetch_alerts(since_seconds=1800)
+    body = jobs.calls[0].request.content.decode()
+    assert "2026-07-01T12%3A48%3A35.000%2B03%3A30" in body or "2026-07-01T12:48:35" in body
+    assert "-1920s" not in body
+    assert "exec_mode=oneshot" not in body
+    assert len(out) == 1
+    assert out[0]["title"] == "Fresh Notable"
 
 
 @respx.mock
@@ -324,10 +372,12 @@ def test_normalize_mission_control_extract_row():
 async def test_lookup_notable_filters_search_name_and_host():
     c = _conn()
     jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "SID-LOOKUP"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-LOOKUP/results").mock(
         return_value=httpx.Response(
             200,
             json={
-                "preview": False,
                 "results": [
                     {
                         "_time": "2026-07-01T12:48:35.000+03:30",
@@ -343,6 +393,9 @@ async def test_lookup_notable_filters_search_name_and_host():
             },
         )
     )
+    respx.get(url__regex=r".+/services/search/jobs/SID-LOOKUP(\?.*)?$").mock(
+        return_value=_done_status()
+    )
     out = await c.lookup_notable(
         "Network - Unapproved Port Activity Detected - Rule",
         "WIN-017UMT7DCGT.soorinsec.local",
@@ -355,7 +408,7 @@ async def test_lookup_notable_filters_search_name_and_host():
     assert "WIN-017UMT7DCGT" in body
     assert "extract" in body
     assert "orig_rule_description" in body
-    assert "exec_mode=oneshot" in body
+    assert "exec_mode=oneshot" not in body
 
 
 def test_timeless_catalog_skips_checkpoint_filter():
