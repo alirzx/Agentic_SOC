@@ -156,6 +156,31 @@ def _as_int(value: Any) -> int | None:
     return None
 
 
+def _as_str(value: Any) -> str | None:
+    """Coerce OCSF / SIEM scalar-or-multivalue fields to a single string.
+
+    Splunk notables often emit ``dest`` / ``dvc`` / ``host`` as multivalue
+    lists (e.g. ``["win-dc-137.attackrange.local"]``). Passing those straight
+    into ``RawAlert.hostname`` raises a Pydantic ``string_type`` error and
+    the fusion consumer drops the message — which is why a healthy Splunk
+    poll can still leave the UI stuck on a single old alert.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            got = _as_str(item)
+            if got:
+                return got
+        return None
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    return None
+
+
 def should_promote(ocsf: dict[str, Any]) -> bool:
     """Deterministic promotion decision — see module docstring for policy."""
     class_uid = _as_int(ocsf.get("class_uid"))
@@ -195,10 +220,10 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
     tactics, techniques = _mitre(ocsf)
     connector_id, connector_type, class_uid = extract_provenance(message, ocsf)
 
-    finding_uid = _get_nested(ocsf, "finding", "uid")
+    finding_uid = _as_str(_get_nested(ocsf, "finding", "uid"))
     source_event_ids: list[str] = []
-    if isinstance(finding_uid, str) and finding_uid.strip():
-        source_event_ids.append(finding_uid.strip())
+    if finding_uid:
+        source_event_ids.append(finding_uid)
 
     # Detection rule identity — never the per-event finding uid. Putting the
     # unique event id in rule_id made every Splunk re-poll a new fingerprint.
@@ -208,8 +233,9 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         ocsf.get("rule_id"),
         _get_nested(ocsf, "unmapped", "search_name"),
     ):
-        if isinstance(candidate, str) and candidate.strip() and candidate.strip() != (finding_uid or "").strip():
-            rule_id = candidate.strip()
+        candidate_str = _as_str(candidate)
+        if candidate_str and candidate_str != (finding_uid or ""):
+            rule_id = candidate_str
             break
 
     envelope_title = message.get("title")
@@ -220,13 +246,13 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         title=title,
         description=str(ocsf.get("raw_data") or "")[:2000],
         severity=severity,
-        src_ip=_get_nested(ocsf, "src_endpoint", "ip"),
-        dst_ip=_get_nested(ocsf, "dst_endpoint", "ip"),
-        hostname=(
+        src_ip=_as_str(_get_nested(ocsf, "src_endpoint", "ip")),
+        dst_ip=_as_str(_get_nested(ocsf, "dst_endpoint", "ip")),
+        hostname=_as_str(
             _get_nested(ocsf, "device", "name")
             or _get_nested(ocsf, "unmapped", "host")
         ),
-        username=_get_nested(ocsf, "actor", "user", "name"),
+        username=_as_str(_get_nested(ocsf, "actor", "user", "name")),
         file_hash=_first_file_hash(ocsf),
         mitre_tactics=tactics,
         mitre_techniques=techniques,

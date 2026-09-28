@@ -185,3 +185,18 @@ class TestPromoteNormalizedEvent:
         alert = promote_normalized_event(msg)
         assert alert is not None
         assert alert.title == "Network - Unapproved Port Activity Detected - Rule"
+
+    def test_multivalue_hostname_from_splunk_dest_is_coerced(self):
+        # Splunk often returns dest/dvc as a multivalue list; Pydantic rejects
+        # list→str and used to drop the whole message in fusion.
+        alert = promote_normalized_event(
+            _message(
+                {
+                    "device": {"name": ["win-dc-137.attackrange.local", "win-dc-137"]},
+                    "src_endpoint": {"ip": ["10.0.0.8"]},
+                }
+            )
+        )
+        assert alert is not None
+        assert alert.hostname == "win-dc-137.attackrange.local"
+        assert alert.src_ip == "10.0.0.8"

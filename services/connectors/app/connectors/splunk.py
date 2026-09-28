@@ -65,6 +65,19 @@ _DEFAULT_NOTABLE_SPL = f"search index=notable {_MISSION_CONTROL_PIPELINE}"
 _DEFAULT_POLL_INTERVAL_SECONDS = 1800
 
 
+def _first_scalar(value: Any) -> Any:
+    """Unwrap Splunk multivalue fields (list/tuple) to the first non-empty item."""
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            if item is None:
+                continue
+            if isinstance(item, str) and not item.strip():
+                continue
+            return item
+        return None
+    return value
+
+
 def _map_severity(raw: Any) -> str:
     key = str(raw if raw is not None else "medium").strip().lower()
     return _SEVERITY_BY_URGENCY.get(key, "medium")
@@ -633,7 +646,14 @@ class SplunkConnector(BaseConnector):
             or row.get("_raw")
             or ""
         )
-        hostname = row.get("dvc") or row.get("dest") or row.get("host") or row.get("asset")
+        hostname = _first_scalar(
+            row.get("dvc") or row.get("dest") or row.get("host") or row.get("asset")
+        )
+        if hostname is not None:
+            hostname = str(hostname)
+        src_ip = _first_scalar(row.get("src") or row.get("src_ip"))
+        if src_ip is not None:
+            src_ip = str(src_ip)
         created_at = row.get("_time")
         if not row.get("notable_id"):
             row["notable_id"] = external_id
@@ -644,7 +664,7 @@ class SplunkConnector(BaseConnector):
             "title": str(title),
             "description": description[:4000],
             "severity": _map_severity(row.get("urgency") or row.get("severity")),
-            "src_ip": row.get("src") or row.get("src_ip"),
+            "src_ip": src_ip,
             "hostname": hostname,
             "raw_event": row,
             "created_at": str(created_at) if created_at is not None else None,
