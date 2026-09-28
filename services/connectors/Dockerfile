@@ -28,9 +28,10 @@ RUN set -eux; \
             "structlog>=24.1,<25" \
             "boto3>=1.34,<2" \
             "apscheduler>=3.10,<4" \
-            "sqlalchemy>=2.0,<3" \
+            "sqlalchemy[asyncio]>=2.0,<3" \
+            "greenlet>=3.0,<4" \
             "asyncpg>=0.29,<0.30" \
-            "cryptography>=42,<43" ; \
+            "cryptography>=42,<49" ; \
     fi
 
 COPY app/ ./app/
