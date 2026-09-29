@@ -70,18 +70,29 @@ class PersistResult:
 
 _INSERT_SQL = """
 INSERT INTO alerts (
-    id, tenant_id, title, description, severity, status,
+    id, tenant_id, title, description, severity, status, priority,
     mitre_tactics, mitre_techniques, iocs, entities, raw_event,
     dedup_hash, confidence, confidence_label, confidence_rationale,
-    narrative, anomaly_score, event_time,
+    narrative, anomaly_score, event_time, first_seen, last_seen,
+    created_at, updated_at, ai_recommendations, tags, enrichment_data,
+    affected_ips, affected_users, affected_assets, child_alert_ids, is_merged,
     connector_id, connector_type, source_event_ids, ocsf_class_uid,
     rule_id, rule_name, affected_hosts
 )
 SELECT
     $1, $2, $3, $4, $5, 'new',
+    CASE $5
+        WHEN 'critical' THEN 95
+        WHEN 'high' THEN 75
+        WHEN 'medium' THEN 50
+        WHEN 'low' THEN 30
+        ELSE 10
+    END,
     $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb,
     $11::text, $12, $13, $14::jsonb,
-    $15, $16, COALESCE($17, NOW()),
+    $15, $16, COALESCE($17, NOW()), COALESCE($17, NOW()), COALESCE($17, NOW()),
+    NOW(), NOW(), '[]'::jsonb, '[]'::jsonb, '{}'::jsonb,
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, FALSE,
     $18, $19, $20::jsonb, $21,
     $22, $23, $24::jsonb
 WHERE NOT EXISTS (

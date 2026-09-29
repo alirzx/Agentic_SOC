@@ -1,0 +1,7 @@
+Splunk
+  → connectors (poll / Sync)     ← اینجا events_ingested زیاد می‌شود (۱۰۷۲۴)
+  → ingest                       ← normalize به OCSF
+  → Kafka topic: aisoc.raw_events
+  → fusion                       ← promote + write به Postgres
+  → جدول alerts
+  → UI تب Alerts

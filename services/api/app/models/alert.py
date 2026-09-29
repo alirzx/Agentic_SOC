@@ -67,6 +67,13 @@ class Alert(Base):
     # rail's "Deep Explain" button via /api/v1/alerts/{id}/explain.
     narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Fusion AlertSink columns (001_init / 052) — written by services/fusion
+    # on every promote. Kept on the ORM so create_all and the sink stay aligned.
+    iocs: Mapped[list] = mapped_column(JSONB, default=list)
+    entities: Mapped[list] = mapped_column(JSONB, default=list)
+    dedup_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    anomaly_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Entities (denormalized for fast querying)
     affected_ips: Mapped[list] = mapped_column(JSONB, default=list)
     affected_hosts: Mapped[list] = mapped_column(JSONB, default=list)
