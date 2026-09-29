@@ -413,8 +413,8 @@ function AlertsTable({
             onFilterChange={onFilterChange}
           />
         </div>
-        <div className="xl:col-span-5 min-w-0">
-          <div className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-7rem)] xl:overflow-hidden xl:flex xl:flex-col min-w-0">
+        <div className="xl:col-span-5 min-w-0 max-w-full overflow-x-hidden">
+          <div className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-7rem)] xl:overflow-hidden xl:flex xl:flex-col min-w-0 max-w-full">
             <InvestigationRail
               alertId={selectedAlertId}
               onClose={() => setSelectedAlertId(null)}

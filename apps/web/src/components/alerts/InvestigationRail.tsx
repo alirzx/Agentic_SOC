@@ -311,18 +311,23 @@ function RelatedEntitiesSection({ entities }: { entities: RelatedEntity[] }) {
     { principal: [], network: [], workflow: [], tenant: [] },
   );
   return (
-    <section className="px-4 py-4 border-b border-[#374151]/40 min-w-0 overflow-hidden">
+    <section className="px-4 py-4 border-b border-[#374151]/40 min-w-0 max-w-full overflow-x-hidden">
       <SectionHeader title="Related entities" count={entities.length} />
-      <div className="space-y-3 min-w-0">
+      <div className="space-y-3 min-w-0 max-w-full">
         {(Object.keys(ENTITY_KIND_CONFIG) as Array<keyof typeof ENTITY_KIND_CONFIG>).map(
           (kind) => {
             const items = grouped[kind];
             if (!items || items.length === 0) return null;
             const cfg = ENTITY_KIND_CONFIG[kind];
             return (
-              <div key={kind}>
+              <div key={kind} className="min-w-0 max-w-full">
                 <p className={clsx('text-xs font-medium', cfg.tone)}>{cfg.label}</p>
-                <ul className="mt-1.5 flex flex-wrap gap-1.5 min-w-0">
+                {/*
+                  Stack chips vertically. Horizontal flex-wrap still overflows
+                  when a grid/flex ancestor keeps min-width:auto for long
+                  monospace labels (rule titles, MITRE tactics).
+                */}
+                <ul className="mt-1.5 flex flex-col gap-1.5 w-full min-w-0 max-w-full">
                   {items.map((e) => (
                     <EntityChip key={`${e.type}:${e.value}`} entity={e} />
                   ))}
@@ -341,20 +346,24 @@ function EntityChip({ entity }: { entity: RelatedEntity }) {
   const inner = (
     <span
       className={clsx(
-        'inline-flex max-w-full min-w-0 items-start gap-1.5 text-xs px-2 py-0.5 rounded border border-[#333A47]/60 bg-dark-20/60 text-gray-200',
+        'flex w-full min-w-0 max-w-full items-start gap-1.5 text-xs px-2 py-0.5 rounded border border-[#333A47]/60 bg-dark-20/60 text-gray-200 box-border',
         entity.pivotPath &&
           'hover:bg-gray-700/60 hover:border-gray-600/60 cursor-pointer transition-colors',
       )}
       title={`${entity.type}: ${entity.value}`}
     >
-      <span className="shrink-0 text-gray-500 font-mono text-[10px]">{entity.type}</span>
-      <span className="font-mono min-w-0 break-words [overflow-wrap:anywhere]">{display}</span>
+      <span className="shrink-0 text-gray-500 font-mono text-[10px] leading-relaxed">
+        {entity.type}
+      </span>
+      <span className="font-mono min-w-0 flex-1 break-all whitespace-normal leading-relaxed">
+        {display}
+      </span>
     </span>
   );
   return (
-    <li className="max-w-full min-w-0">
+    <li className="w-full min-w-0 max-w-full list-none">
       {entity.pivotPath ? (
-        <Link href={entity.pivotPath} className="block max-w-full min-w-0">
+        <Link href={entity.pivotPath} className="block w-full min-w-0 max-w-full">
           {inner}
         </Link>
       ) : (
