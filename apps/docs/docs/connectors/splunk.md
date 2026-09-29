@@ -1,11 +1,11 @@
 ---
 title: Splunk SIEM
-description: Ingest fired notable events (index=notable) into AiSOC every 30 minutes.
+description: Ingest fired notable events (index=agentic*) into AiSOC every 30 minutes.
 ---
 
 # Splunk SIEM
 
-Pulls **fired** Mission Control notables from Splunk ES `index=notable` via the Search REST API (`POST /services/search/jobs`, `exec_mode=oneshot`), every **30 minutes** by default. The poll runs `| extract` and tables stash fields (`search_name`, `dvc`, `orig_rule_*`, `detection_id`, …). Duplicates are skipped (connector checkpoint + fusion fingerprint on `source_guid` / `notable_id`).
+Pulls **fired** notables from Splunk `index=agentic*` via the Search REST API (`POST /services/search/jobs`), every **30 minutes** by default. The poll runs `| extract` and tables stash fields (`search_name`, `dvc`, `orig_rule_*`, `detection_id`, …). Duplicates are skipped (connector checkpoint + fusion fingerprint on `source_guid` / `notable_id`).
 
 ## Setup
 
@@ -26,7 +26,7 @@ pnpm aisoc:purge-demo
 | Verify SSL | **off** |
 
 ```spl
-search index=notable
+search index=agentic*
 | extract
 | eval notable_id=coalesce(source_event_id, source_guid, detection_id)
 | table _time notable_id search_name detection_id dvc dest dest_port src src_ip src_port severity security_domain status owner disposition orig_rule_title orig_rule_description source_event_id source_guid transport is_prohibited

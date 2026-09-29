@@ -44,9 +44,10 @@ _SEVERITY_BY_URGENCY = {
     "5": "critical",
 }
 
-# Mission Control stash fields extracted from index=notable ``_raw``.
+# Mission Control stash fields extracted from ``index=agentic*`` ``_raw``.
 # Time window is applied via ``earliest_time`` / poll cadence — do not embed
 # ``earliest=`` in the SPL (it fights the connector's lookback).
+_DEFAULT_INDEX = "agentic*"
 _MC_TABLE_FIELDS = (
     "_time notable_id search_name detection_id dvc dest dest_port "
     "src src_ip src_port severity security_domain status owner disposition "
@@ -59,7 +60,7 @@ _MISSION_CONTROL_PIPELINE = (
     f"| table {_MC_TABLE_FIELDS} "
     "| sort 0 - _time"
 )
-_DEFAULT_NOTABLE_SPL = f"search index=notable {_MISSION_CONTROL_PIPELINE}"
+_DEFAULT_NOTABLE_SPL = f"search index={_DEFAULT_INDEX} {_MISSION_CONTROL_PIPELINE}"
 
 # Default scheduler cadence for Splunk (30 minutes).
 _DEFAULT_POLL_INTERVAL_SECONDS = 1800
@@ -140,23 +141,32 @@ def _spl_quote(value: str) -> str:
 
 
 def mission_control_spl(filters: str = "", *, limit: int | None = None) -> str:
-    """Fired ES / Mission Control notables as a flat JSON-ready table."""
+    """Fired notables from ``index=agentic*`` as a flat JSON-ready table."""
     extra = f" {filters.strip()}" if filters.strip() else ""
-    spl = f"search index=notable{extra} {_MISSION_CONTROL_PIPELINE}"
+    spl = f"search index={_DEFAULT_INDEX}{extra} {_MISSION_CONTROL_PIPELINE}"
     if limit is not None:
         spl = f"{spl} | head {int(limit)}"
     return spl
 
 
 def _is_replaceable_notable_search(spl: str) -> bool:
-    """True when stored custom SPL is the old stock notable poll (no extract)."""
+    """True when stored custom SPL should be superseded by the current default.
+
+    Covers empty config, legacy ``index=notable`` stock polls (with or without
+    extract), and bare ``index=agentic*`` table polls without extract — so
+    existing connector rows pick up the current Mission Control pipeline.
+    """
     stripped = (spl or "").strip()
     if not stripped:
         return True
     lower = stripped.lower()
     if lower.startswith("| rest") or "/services/" in lower:
         return False
-    return lower.startswith("search index=notable") and "| extract" not in lower
+    if lower.startswith("search index=notable"):
+        return True
+    if lower.startswith(f"search index={_DEFAULT_INDEX.lower()}") and "| extract" not in lower:
+        return True
+    return False
 
 
 def _should_oneshot(spl: str) -> bool:
@@ -174,8 +184,8 @@ def _should_oneshot(spl: str) -> bool:
 def _stable_external_id(row: dict[str, Any]) -> str:
     """Replay-stable notable identity for checkpoint + ingest dedup.
 
-    Prefer vendor GUIDs. When Splunk omits them (common on ``index=notable``
-    stash rows), hash the firing identity so a 90-day re-poll of the same
+    Prefer vendor GUIDs. When Splunk omits them (common on agentic* stash
+    rows), hash the firing identity so a 90-day re-poll of the same
     notable does not mint a new alert on every Sync.
     """
     for key in (
@@ -264,10 +274,9 @@ class SplunkConnector(BaseConnector):
                     required=False,
                     default=_DEFAULT_NOTABLE_SPL,
                     help_text=(
-                        "Ad-hoc SPL posted to /services/search/jobs with "
-                        "exec_mode=oneshot when it is an index=notable extract. "
-                        "Default tables Mission Control stash fields "
-                        "(search_name, dvc, dest_port, orig_rule_*). "
+                        "Ad-hoc SPL posted to /services/search/jobs. "
+                        "Default tables Mission Control stash fields from "
+                        "index=agentic* (search_name, dvc, dest_port, orig_rule_*). "
                         "Use | rest … only for the ES rule catalog (definitions, not incidents)."
                     ),
                 ),
@@ -446,7 +455,7 @@ class SplunkConnector(BaseConnector):
                 return []
             await self._await_job(client, sid)
             return await self._collect_results(client, sid)
-        if ss.startswith("index=") and ss[len("index=") :].strip() not in ("", "notable"):
+        if ss.startswith("index=") and ss[len("index=") :].strip() not in ("", "notable", _DEFAULT_INDEX):
             index = ss[len("index=") :].strip()
             return await self._run_adhoc(client, f"search index={index}", earliest, oneshot=False)
         return await self._run_adhoc(client, mission_control_spl(), earliest, oneshot=False)
@@ -580,7 +589,7 @@ class SplunkConnector(BaseConnector):
         return fresh
 
     async def lookup_notable(self, title: str, host: str | None = None) -> dict[str, Any] | None:
-        """Return the latest index=notable row for this ES rule + host."""
+        """Return the latest index=agentic* row for this ES rule + host."""
         title_q = _spl_quote((title or "").strip())
         if not title_q:
             return None
@@ -599,7 +608,7 @@ class SplunkConnector(BaseConnector):
 
     async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
         """Run a translated SPL search and return raw rows."""
-        index = self._saved_search if self._saved_search.startswith("index=") else "notable"
+        index = self._saved_search if self._saved_search.startswith("index=") else _DEFAULT_INDEX
         spl = to_spl(unified, index=index)
         async with httpx.AsyncClient(**self._client_kwargs()) as client:
             resp = await client.post(

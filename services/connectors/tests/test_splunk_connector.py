@@ -25,7 +25,7 @@ def _conn(**kw) -> SplunkConnector:
 
 def test_mission_control_spl_tables_extracted_fields():
     spl = mission_control_spl()
-    assert spl.startswith("search index=notable")
+    assert spl.startswith("search index=agentic*")
     assert "| extract" in spl
     assert "orig_rule_description" in spl
     assert "notable_id=coalesce" in spl
@@ -44,6 +44,9 @@ def test_old_notable_table_is_replaced_catalog_rest_is_not():
     )
     assert _is_replaceable_notable_search(old)
     assert _is_replaceable_notable_search("")
+    assert _is_replaceable_notable_search(
+        "search index=notable | extract | eval notable_id=coalesce(source_event_id, source_guid, detection_id) | table _time"
+    )
     assert not _is_replaceable_notable_search("| rest /services/saved/searches | table title")
     assert not _is_replaceable_notable_search(_DEFAULT_NOTABLE_SPL)
     assert not _should_oneshot(_DEFAULT_NOTABLE_SPL)
