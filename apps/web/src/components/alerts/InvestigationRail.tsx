@@ -165,23 +165,23 @@ function RailShell({
 }) {
   return (
     <aside
-      className="flex flex-col bg-dark-60 border border-[#374151]/60 rounded-xl overflow-hidden h-full"
+      className="flex flex-col min-w-0 max-w-full bg-dark-60 border border-[#374151]/60 rounded-xl overflow-hidden h-full"
       aria-label="Investigation rail"
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#374151]/60 bg-dark-70/80">
-        <h2 className="text-sm font-semibold text-gray-100 truncate" title={title}>
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#374151]/60 bg-dark-70/80 min-w-0">
+        <h2 className="text-sm font-semibold text-gray-100 truncate min-w-0" title={title}>
           {title}
         </h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close investigation rail"
-          className="text-xs text-gray-500 hover:text-gray-300 px-2 py-0.5 rounded hover:bg-dark-20/60 transition-colors"
+          className="shrink-0 text-xs text-gray-500 hover:text-gray-300 px-2 py-0.5 rounded hover:bg-dark-20/60 transition-colors"
         >
           Close
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto">{children}</div>
+      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">{children}</div>
     </aside>
   );
 }
@@ -291,7 +291,7 @@ function NarrativeSection({ narrative }: { narrative: string | null }) {
   return (
     <section className="px-4 py-4 border-b border-[#374151]/40">
       <SectionHeader title="Narrative" />
-      <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+      <p className="text-sm text-gray-300 whitespace-pre-wrap break-words leading-relaxed">
         {narrative}
       </p>
     </section>
@@ -311,9 +311,9 @@ function RelatedEntitiesSection({ entities }: { entities: RelatedEntity[] }) {
     { principal: [], network: [], workflow: [], tenant: [] },
   );
   return (
-    <section className="px-4 py-4 border-b border-[#374151]/40">
+    <section className="px-4 py-4 border-b border-[#374151]/40 min-w-0 overflow-hidden">
       <SectionHeader title="Related entities" count={entities.length} />
-      <div className="space-y-3">
+      <div className="space-y-3 min-w-0">
         {(Object.keys(ENTITY_KIND_CONFIG) as Array<keyof typeof ENTITY_KIND_CONFIG>).map(
           (kind) => {
             const items = grouped[kind];
@@ -322,7 +322,7 @@ function RelatedEntitiesSection({ entities }: { entities: RelatedEntity[] }) {
             return (
               <div key={kind}>
                 <p className={clsx('text-xs font-medium', cfg.tone)}>{cfg.label}</p>
-                <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                <ul className="mt-1.5 flex flex-wrap gap-1.5 min-w-0">
                   {items.map((e) => (
                     <EntityChip key={`${e.type}:${e.value}`} entity={e} />
                   ))}
@@ -341,20 +341,20 @@ function EntityChip({ entity }: { entity: RelatedEntity }) {
   const inner = (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border border-[#333A47]/60 bg-dark-20/60 text-gray-200',
+        'inline-flex max-w-full min-w-0 items-start gap-1.5 text-xs px-2 py-0.5 rounded border border-[#333A47]/60 bg-dark-20/60 text-gray-200',
         entity.pivotPath &&
           'hover:bg-gray-700/60 hover:border-gray-600/60 cursor-pointer transition-colors',
       )}
       title={`${entity.type}: ${entity.value}`}
     >
-      <span className="text-gray-500 font-mono text-[10px]">{entity.type}</span>
-      <span className="font-mono">{display}</span>
+      <span className="shrink-0 text-gray-500 font-mono text-[10px]">{entity.type}</span>
+      <span className="font-mono min-w-0 break-words [overflow-wrap:anywhere]">{display}</span>
     </span>
   );
   return (
-    <li>
+    <li className="max-w-full min-w-0">
       {entity.pivotPath ? (
-        <Link href={entity.pivotPath} className="inline-block">
+        <Link href={entity.pivotPath} className="block max-w-full min-w-0">
           {inner}
         </Link>
       ) : (
@@ -400,7 +400,7 @@ function TimelineRow({ event }: { event: MiniTimelineEvent }) {
           {event.type}
         </span>
       </div>
-      <p className="mt-0.5 text-gray-200">{event.title}</p>
+      <p className="mt-0.5 text-gray-200 break-words">{event.title}</p>
       {event.description && (
         <p className="mt-0.5 text-gray-500 line-clamp-2">{event.description}</p>
       )}
@@ -431,15 +431,15 @@ function RecommendedActionsSection({ actions }: { actions: RecommendedAction[] }
               >
                 {a.priority}
               </span>
-              <p className="text-sm text-gray-200 flex-1">{a.action}</p>
+              <p className="text-sm text-gray-200 flex-1 min-w-0 break-words">{a.action}</p>
             </div>
             {a.rationale && (
-              <p className="mt-1 text-xs text-gray-500 ml-[3.25rem]">
+              <p className="mt-1 text-xs text-gray-500 ml-[3.25rem] break-words">
                 {a.rationale}
               </p>
             )}
             {a.risk && (
-              <p className="mt-1 text-xs text-amber-400/80 ml-[3.25rem]">
+              <p className="mt-1 text-xs text-amber-400/80 ml-[3.25rem] break-words">
                 Risk: {a.risk}
               </p>
             )}
