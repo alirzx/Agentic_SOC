@@ -42,7 +42,7 @@ from typing import Any
 import structlog
 
 from app.agents.auto_triage_agent import run_auto_triage
-from app.agents.dispositions import NEEDS_REVIEW, normalize_disposition
+from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
@@ -53,6 +53,7 @@ from app.memory.outcomes import AI, lookup_prior, record_outcome, should_auto_su
 from app.models.state import AgentStatus, InvestigationState
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
+from app.workers import case_promoter
 from app.workers.business_context import BusinessContextApplier
 
 logger = structlog.get_logger()
@@ -78,6 +79,8 @@ _METRICS = {
     "bc_mutated": 0,
     "needs_review_fallback": 0,
     "escalated": 0,
+    "cases_promoted": 0,
+    "fp_tagged": 0,
     "outcome_written": 0,
     "outcome_suppressed": 0,
     "persist_retries": 0,
@@ -433,6 +436,13 @@ class FusedAlertTriageWorker:
         # enrichment/investigation failure never fails the triage outcome.
         if state.status is not AgentStatus.COMPLETED:
             await self._maybe_escalate(state)
+            case_id = await self._maybe_promote_case(state, message)
+        else:
+            case_id = None
+            # Noise path: surface FP tag so /alerts filters + tuning see it.
+            if normalize_disposition(str(verdict or ""), default="") in AUTO_CLOSEABLE_DISPOSITIONS:
+                if await case_promoter.tag_false_positive((state.raw_alert or {}).get("id"), state.tenant_id):
+                    _METRICS["fp_tagged"] += 1
 
         return {
             "run_id": str(state.run_id),
@@ -442,6 +452,7 @@ class FusedAlertTriageWorker:
             "confidence": confidence,
             "tier": tier,
             "business_context_rules": bc_matched,
+            "case_id": case_id,
             # Copilot default: triage is read-only, response requires approval.
             "response_dispatched": False,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
@@ -484,6 +495,9 @@ class FusedAlertTriageWorker:
         _METRICS["outcome_suppressed"] += 1
         _METRICS["triaged"] += 1
         await self._record(state, tier="memory", verdict=disposition, confidence=confidence)
+        if disposition in AUTO_CLOSEABLE_DISPOSITIONS:
+            if await case_promoter.tag_false_positive((state.raw_alert or {}).get("id"), state.tenant_id):
+                _METRICS["fp_tagged"] += 1
         with contextlib.suppress(Exception):
             await record_outcome(
                 str(state.tenant_id),
@@ -537,6 +551,17 @@ class FusedAlertTriageWorker:
             _METRICS["escalated"] += 1
         except Exception as exc:  # noqa: BLE001 — escalation is best-effort over a durable verdict
             logger.warning("auto_triage_worker.escalation_failed", run_id=str(state.run_id), error=str(exc))
+
+    async def _maybe_promote_case(self, state: InvestigationState, message: dict[str, Any]) -> str | None:
+        """Turn escalated TPs into Cases with linked alerts + SPL checklists."""
+        try:
+            case_id = await case_promoter.promote_to_case(state, message=message)
+            if case_id:
+                _METRICS["cases_promoted"] += 1
+            return case_id
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("auto_triage_worker.case_promote_failed", run_id=str(state.run_id), error=str(exc))
+            return None
 
     async def _resolve_tenant_llm(self, tenant_id: uuid.UUID) -> Any:
         """Resolve the tenant's LLM config, or None to force deterministic triage."""

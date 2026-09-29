@@ -110,6 +110,27 @@ services:
       - aisoc-demo
     restart: unless-stopped
 
+  # ─── Agents (auto-triage fused alerts → FP tag / Case promote) ─────────────
+  agents:
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_ALERTS_FUSED: aisoc.alerts.fused
+      # Replay fused backlog after enabling the consumer for the first time.
+      KAFKA_AUTO_OFFSET_RESET: earliest
+      KAFKA_CONSUMER_GROUP: aisoc-agents-triage-splunk-v1
+      AISOC_AGENT_ESCALATE_TO_GRAPH: "1"
+      AISOC_AGENT_AUTO_CASE: "1"
+      AISOC_AUTO_CLOSE_THRESHOLD: "0.85"
+      # Same vault key as connectors so Splunk evidence tool can resolve creds.
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}
+
   # Ensure the API can encrypt connector secrets with the same vault key
   # and reach the connectors microservice for Test / catalog.
   api:

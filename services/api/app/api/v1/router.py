@@ -70,6 +70,7 @@ from app.api.v1.endpoints import (
     saved_views,
     shifts,
     sla,
+    soc_funnel,
     stix_taxii,
     tenant_provision,
     tenants,
@@ -89,6 +90,7 @@ api_router.include_router(alerts.router)
 # JSON envelope counterpart to the agent service's NDJSON stream.
 api_router.include_router(alert_explain.router)
 api_router.include_router(cases.router)
+api_router.include_router(soc_funnel.router)
 # Attack-chain timeline (T3.3 — v8.0 parallel team plan).
 # Backs apps/web/src/app/(app)/cases/[id]/attack-chain/page.tsx with a
 # ranked timeline (graph-distance + temporal proximity + risk overlap)
