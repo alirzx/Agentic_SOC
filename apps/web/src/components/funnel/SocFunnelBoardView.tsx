@@ -79,8 +79,9 @@ export function SocFunnelBoardView() {
     setBackfillMsg(null);
     try {
       const result = await socFunnelApi.backfill(hours);
+      const synced = result.stages_updated ?? 0;
       setBackfillMsg(
-        `Scanned ${result.alerts_scanned}: FP ${result.false_positive_tagged}, cases ${result.cases_created}, linked ${result.alerts_linked}`,
+        `Scanned ${result.alerts_scanned}: FP ${result.false_positive_tagged}, cases ${result.cases_created}, linked ${result.alerts_linked}, stages synced ${synced}`,
       );
       await mutate();
     } catch (err) {

@@ -934,6 +934,8 @@ export const socFunnelApi = {
       cases_created: number;
       alerts_linked: number;
       skipped: number;
+      stage_sync?: Record<string, number>;
+      stages_updated?: number;
     }>('/api/v1/soc/funnel/backfill', {
       method: 'POST',
       params: { hours: String(hours) },

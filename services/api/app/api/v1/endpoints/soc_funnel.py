@@ -26,6 +26,8 @@ class BackfillResponse(BaseModel):
     alerts_linked: int
     skipped: int
     reportable: list[dict[str, Any]] = Field(default_factory=list)
+    stage_sync: dict[str, int] = Field(default_factory=dict)
+    stages_updated: int = 0
 
 
 class ReportableResponse(BaseModel):

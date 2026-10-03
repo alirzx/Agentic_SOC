@@ -1,8 +1,10 @@
-"""Unit tests for agentic funnel backfill classification."""
+"""Unit tests for agentic funnel backfill classification + stage derive."""
 
 from __future__ import annotations
 
-from app.services.agentic_funnel import classify_backfill
+from uuid import uuid4
+
+from app.services.agentic_funnel import classify_backfill, derive_funnel_stage
 from app.services.funnel_stages import passes_jira_gate
 
 
@@ -33,3 +35,26 @@ def test_backfill_fp_is_not_jira_eligible():
         {"title": "Network - Unapproved Port Activity Detected - Rule", "severity": "low"}
     )
     assert not passes_jira_gate(disposition=disp)
+
+
+def test_derive_funnel_stage_legacy_paths():
+    assert derive_funnel_stage({"disposition": "false_positive"}) == "suppressed"
+    assert derive_funnel_stage({"disposition": "true_positive"}) == "triaged"
+    assert derive_funnel_stage({"disposition": None, "status": "investigating"}) == "investigating"
+    case_id = uuid4()
+    assert derive_funnel_stage({"case_id": case_id, "disposition": "needs_review"}) == "cased"
+    assert (
+        derive_funnel_stage(
+            {"case_id": case_id, "disposition": "true_positive"},
+            has_external_ref=False,
+        )
+        == "ready_for_jira"
+    )
+    assert (
+        derive_funnel_stage(
+            {"case_id": case_id, "disposition": "true_positive"},
+            has_external_ref=True,
+        )
+        == "jira_pushed"
+    )
+    assert derive_funnel_stage({}) == "ingested"

@@ -113,8 +113,182 @@ def _tasks_for(alert: dict[str, Any], host: str | None, src: str | None, dst: st
     return tasks
 
 
+def derive_funnel_stage(
+    alert: dict[str, Any],
+    *,
+    has_external_ref: bool = False,
+) -> str:
+    """Best-effort stage for a legacy alert row (used by sync + tests).
+
+    Priority (highest wins): jira_pushed → ready_for_jira → cased →
+    suppressed → investigating → triaged → ingested.
+    """
+    disposition = (alert.get("disposition") or "").strip().lower()
+    tags = alert.get("tags")
+    tag_fp = False
+    if isinstance(tags, list):
+        tag_fp = "false_positive" in {str(t).lower() for t in tags}
+    elif isinstance(tags, dict):
+        tag_fp = bool(tags.get("false_positive")) or "false_positive" in {
+            str(t).lower() for t in (tags.get("labels") or [])
+        }
+    if disposition in {"false_positive", "benign", "benign_true_positive"} or tag_fp:
+        if not alert.get("case_id"):
+            return "suppressed"
+    if alert.get("case_id"):
+        if has_external_ref:
+            return "jira_pushed"
+        if disposition in {"true_positive", "escalate", "likely_tp"}:
+            return "ready_for_jira"
+        return "cased"
+    if disposition in {"false_positive", "benign", "benign_true_positive"} or tag_fp:
+        return "suppressed"
+    status = (alert.get("status") or "").strip().lower()
+    if status in {"investigating", "in_progress", "triaging"}:
+        return "investigating"
+    if disposition:
+        return "triaged"
+    return "ingested"
+
+
+async def sync_legacy_funnel_stages(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    since: datetime,
+) -> dict[str, int]:
+    """Bulk-reconcile ``funnel_stage`` from disposition / case / ITSM / status.
+
+    Safe to re-run: never downgrades ``jira_pushed``. Intended for alerts that
+    pre-date the funnel_stage column (all stuck at ``ingested``).
+    """
+    counts: dict[str, int] = {
+        "suppressed": 0,
+        "jira_pushed": 0,
+        "ready_for_jira": 0,
+        "cased": 0,
+        "investigating": 0,
+        "triaged": 0,
+    }
+
+    def _n(result: Any) -> int:
+        try:
+            return int(result.rowcount or 0)
+        except Exception:  # noqa: BLE001
+            return 0
+
+    counts["suppressed"] = _n(
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET funnel_stage = 'suppressed', updated_at = now()
+                 WHERE tenant_id = :tid
+                   AND created_at >= :since
+                   AND case_id IS NULL
+                   AND funnel_stage IS DISTINCT FROM 'suppressed'
+                   AND (
+                         disposition IN ('false_positive','benign','benign_true_positive')
+                      OR tags @> '["false_positive"]'::jsonb
+                   )
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    )
+    has_external_refs = (
+        await db.execute(text("SELECT to_regclass('public.case_external_refs') IS NOT NULL"))
+    ).scalar()
+    if has_external_refs:
+        counts["jira_pushed"] = _n(
+            await db.execute(
+                text(
+                    """
+                    UPDATE alerts
+                       SET funnel_stage = 'jira_pushed', updated_at = now()
+                     WHERE tenant_id = :tid
+                       AND created_at >= :since
+                       AND case_id IS NOT NULL
+                       AND funnel_stage IS DISTINCT FROM 'jira_pushed'
+                       AND EXISTS (
+                             SELECT 1 FROM case_external_refs r
+                              WHERE r.case_id = alerts.case_id
+                       )
+                    """
+                ).bindparams(tid=tenant_id, since=since)
+            )
+        )
+    counts["ready_for_jira"] = _n(
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET funnel_stage = 'ready_for_jira', updated_at = now()
+                 WHERE tenant_id = :tid
+                   AND created_at >= :since
+                   AND case_id IS NOT NULL
+                   AND disposition IN ('true_positive','escalate','likely_tp')
+                   AND funnel_stage NOT IN ('jira_pushed','ready_for_jira')
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    )
+    counts["cased"] = _n(
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET funnel_stage = 'cased', updated_at = now()
+                 WHERE tenant_id = :tid
+                   AND created_at >= :since
+                   AND case_id IS NOT NULL
+                   AND funnel_stage IN ('ingested','triaged','investigating','suppressed')
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    )
+    counts["investigating"] = _n(
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET funnel_stage = 'investigating', updated_at = now()
+                 WHERE tenant_id = :tid
+                   AND created_at >= :since
+                   AND funnel_stage = 'ingested'
+                   AND case_id IS NULL
+                   AND status IN ('investigating','in_progress','triaging')
+                   AND COALESCE(disposition, '') NOT IN
+                       ('false_positive','benign','benign_true_positive')
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    )
+    counts["triaged"] = _n(
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET funnel_stage = 'triaged', updated_at = now()
+                 WHERE tenant_id = :tid
+                   AND created_at >= :since
+                   AND funnel_stage = 'ingested'
+                   AND case_id IS NULL
+                   AND disposition IS NOT NULL
+                   AND disposition NOT IN
+                       ('false_positive','benign','benign_true_positive')
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    )
+    return counts
+
+
 async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 24) -> dict[str, Any]:
-    """Classify + promote/tag alerts from the last ``hours`` for one tenant."""
+    """Classify + promote/tag alerts from the last ``hours`` for one tenant.
+
+    Ends with a legacy ``funnel_stage`` sync so alerts created before the
+    funnel column still land in Triaged / Suppressed / Cased / etc.
+    """
     since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 168)))
     rows = (
         await db.execute(
@@ -188,10 +362,12 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             continue
 
         if alert.get("case_id"):
+            # Already cased — funnel_stage reconciled in sync_legacy_funnel_stages.
             skipped += 1
             continue
 
         if disposition not in {"true_positive", "needs_review", "escalate"}:
+            # Non-promotable but already dispositioned → leave for stage sync (triaged).
             skipped += 1
             continue
         if disposition == "needs_review" and _severity_rank(alert.get("severity")) < 3:
@@ -326,6 +502,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             }
         )
 
+    stage_sync = await sync_legacy_funnel_stages(db, tenant_id=tenant_id, since=since)
     await db.commit()
     return {
         "window_hours": hours,
@@ -335,6 +512,8 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         "alerts_linked": linked,
         "skipped": skipped,
         "reportable": reportable,
+        "stage_sync": stage_sync,
+        "stages_updated": int(sum(stage_sync.values())),
     }
 
 
