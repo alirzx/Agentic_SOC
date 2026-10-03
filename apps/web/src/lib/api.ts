@@ -2085,6 +2085,36 @@ export const casesApi = {
     request<CaseInvestigationBrief>(`/api/v1/cases/${caseId}/brief`),
 
   /**
+   * Auto-generated Markdown case report (no agent investigation required).
+   * Used by the Case Report tab when no investigation-run report exists.
+   */
+  getReportMarkdown: async (caseId: string): Promise<string> => {
+    const headers: Record<string, string> = {
+      Accept: 'text/markdown, text/plain;q=0.9, */*;q=0.8',
+      'X-Tenant-Id': TENANT_ID,
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        /* localStorage unavailable; ignore */
+      }
+    }
+    const url = `${API_BASE}/api/v1/cases/${caseId}/report.md`;
+    const response = await fetch(url, { headers, cache: 'no-store' });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /cases/${caseId}/report.md`,
+        response.status,
+        detail,
+      );
+    }
+    return response.text();
+  },
+
+  /**
    * Open the per-case auto-summary HTML artifact in a new tab.
    *
    * We deliberately fetch with the auth headers (instead of a plain

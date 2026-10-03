@@ -43,7 +43,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -59,6 +59,7 @@ from app.services.case_postmortem_html import render_case_postmortem_html
 from app.services.case_investigation_brief import (
     CaseInvestigationBrief,
     build_case_investigation_brief,
+    render_case_report_markdown,
 )
 from app.services.case_summary import build_case_summary
 from app.services.case_summary_html import render_case_summary_html
@@ -1253,6 +1254,37 @@ async def case_investigation_brief(
     if brief is None:
         raise HTTPException(status_code=404, detail="Case not found.")
     return brief
+
+
+@router.get(
+    "/{case_id}/report.md",
+    summary="Auto-generated case report (Markdown)",
+    response_class=PlainTextResponse,
+)
+async def case_auto_report_markdown(
+    case_id: str,
+    db: DBSession,
+    user: AuthUser,
+) -> PlainTextResponse:
+    """Always-available Markdown report for the Case Report tab.
+
+    Built from the same investigation brief as ``/brief`` (outcome, what we
+    did, evidence, linked alert reports). Does not require an agent
+    investigation run — agent-authored reports remain available under
+    ``/investigations/{run_id}/report.md`` when present.
+    """
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    brief = await build_case_investigation_brief(db, cid, tenant_id=user.tenant_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    markdown = render_case_report_markdown(brief)
+    case_label = brief.case_number or str(cid)[:8]
+    filename = _safe_filename_segment(f"case-{case_label}-report") + ".md"
+    return PlainTextResponse(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @router.get(

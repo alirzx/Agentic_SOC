@@ -10,6 +10,7 @@ from app.services.case_investigation_brief import (
     BriefInputs,
     build_brief_from_rows,
     derive_case_outcome,
+    render_case_report_markdown,
 )
 
 
@@ -81,3 +82,9 @@ def test_build_brief_includes_alerts_evidence_and_actions():
     assert any(a.kind == "triage" for a in brief.what_we_did)
     assert any(a.kind == "task" for a in brief.what_we_did)
     assert "Jira" in (brief.next_step or "")
+    md = render_case_report_markdown(brief)
+    assert md.startswith("# Case Report — Password spray cluster")
+    assert "Likely incident" in md
+    assert "ESCU - Detect Password Spray" in md
+    assert "Source IP 203.0.113.9" in md
+    assert "## Next step" in md

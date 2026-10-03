@@ -1841,6 +1841,18 @@ function ReportPanel({
 }) {
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const {
+    data: autoMarkdown,
+    error: autoError,
+    isLoading: autoLoading,
+    mutate: retryAuto,
+  } = useSWR(
+    !markdown && caseId ? ['case-report-md', caseId] : null,
+    () => casesApi.getReportMarkdown(caseId),
+    { revalidateOnFocus: false },
+  );
+  const displayMarkdown = markdown || autoMarkdown || '';
+  const isAuto = !markdown && Boolean(autoMarkdown);
 
   const handleDownloadPdf = async () => {
     if (!runId) return;
@@ -1855,11 +1867,28 @@ function ReportPanel({
     }
   };
 
-  if (!markdown) {
+  if (!displayMarkdown) {
+    if (autoLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+          <p className="text-sm font-medium text-slate-300">Generating report…</p>
+          <p className="mt-1 text-xs text-slate-500">Building from triage, evidence, and linked alerts.</p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
-        <p className="text-sm font-medium text-slate-300">No report yet</p>
-        <p className="mt-1 text-xs text-slate-500">Run an investigation to generate a report.</p>
+        <p className="text-sm font-medium text-slate-300">Could not load report</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {autoError instanceof Error ? autoError.message : 'Try again or run Investigate with agent.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => void retryAuto()}
+          className="mt-3 text-[11px] text-teal-300 underline hover:text-teal-200"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -1867,12 +1896,18 @@ function ReportPanel({
   return (
     <div className="rounded-xl border border-slate-800/80 bg-slate-900/40">
       <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Incident Report</h3>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Incident Report</h3>
+          {isAuto ? (
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Auto-generated from case triage · run Investigate for a deeper agent report
+            </p>
+          ) : null}
+        </div>
         <div className="flex items-center gap-3">
-          {/* Download Markdown */}
           <button
             onClick={() => {
-              const blob = new Blob([markdown], { type: 'text/markdown' });
+              const blob = new Blob([displayMarkdown], { type: 'text/markdown' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
@@ -1884,7 +1919,6 @@ function ReportPanel({
           >
             Download .md
           </button>
-          {/* Download PDF */}
           {runId && (
             <button
               onClick={handleDownloadPdf}
@@ -1914,7 +1948,7 @@ function ReportPanel({
         </div>
       )}
       <pre className="overflow-auto whitespace-pre-wrap p-4 font-mono text-[11px] leading-relaxed text-slate-300">
-        {markdown}
+        {displayMarkdown}
       </pre>
     </div>
   );
