@@ -156,6 +156,9 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     """
                     UPDATE alerts
                        SET disposition = :d,
+                           funnel_stage = CASE
+                             WHEN :d IN ('false_positive','benign','benign_true_positive')
+                             THEN 'suppressed' ELSE 'triaged' END,
                            status = CASE WHEN :d IN ('false_positive','benign','benign_true_positive')
                                          THEN 'resolved' ELSE status END,
                            resolved_at = CASE WHEN :d IN ('false_positive','benign','benign_true_positive')
@@ -173,6 +176,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     UPDATE alerts
                        SET tags = COALESCE(tags, '[]'::jsonb) || CAST(:tag AS JSONB),
                            disposition = COALESCE(NULLIF(disposition, ''), :d),
+                           funnel_stage = 'suppressed',
                            status = 'resolved',
                            resolved_at = COALESCE(resolved_at, now()),
                            updated_at = now()
@@ -255,6 +259,11 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 now=now,
             )
         )
+        next_stage = (
+            "ready_for_jira"
+            if disposition in {"true_positive", "escalate", "likely_tp"}
+            else "cased"
+        )
         await db.execute(
             text(
                 """
@@ -263,6 +272,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                        disposition = COALESCE(NULLIF(disposition, ''), :d),
                        tags = COALESCE(tags, '[]'::jsonb) || CAST(:tag AS JSONB),
                        status = CASE WHEN status IN ('new','triaging') THEN 'in_progress' ELSE status END,
+                       funnel_stage = :stage,
                        updated_at = now()
                  WHERE tenant_id = :tid AND id = ANY(CAST(:ids AS UUID[]))
                 """
@@ -272,6 +282,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 tag=json.dumps(["agentic-promoted", "reportable"]),
                 tid=tenant_id,
                 ids=[str(x) for x in sibling_ids],
+                stage=next_stage,
             )
         )
         for task in _tasks_for(alert, host, src, dst):
@@ -392,4 +403,79 @@ async def list_reportable(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int 
         "false_positives": int(fps or 0),
         "reportable_cases": items,
         "reportable_count": len(items),
+    }
+
+
+async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 24) -> dict[str, Any]:
+    """Stage counts + sample alerts for the SOC Funnel UI board."""
+    from app.services.funnel_stages import BOARD_ORDER, STAGE_LABELS
+
+    since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 168)))
+    counts_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT COALESCE(funnel_stage, 'ingested') AS stage, COUNT(*)::int AS n
+                  FROM alerts
+                 WHERE tenant_id = :tid AND created_at >= :since
+                 GROUP BY 1
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    ).mappings().all()
+    count_map = {str(r["stage"]): int(r["n"]) for r in counts_rows}
+    stages = [
+        {
+            "id": stage,
+            "label": STAGE_LABELS.get(stage, stage),
+            "count": count_map.get(stage, 0),
+        }
+        for stage in BOARD_ORDER
+    ]
+    samples = (
+        await db.execute(
+            text(
+                """
+                SELECT id, title, severity, status, disposition, funnel_stage,
+                       confidence, case_id, created_at
+                  FROM alerts
+                 WHERE tenant_id = :tid AND created_at >= :since
+                 ORDER BY created_at DESC
+                 LIMIT 80
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    ).mappings().all()
+    by_stage: dict[str, list[dict[str, Any]]] = {s: [] for s in BOARD_ORDER}
+    for row in samples:
+        stage = str(row.get("funnel_stage") or "ingested")
+        if stage not in by_stage:
+            by_stage[stage] = []
+        if len(by_stage[stage]) >= 8:
+            continue
+        by_stage[stage].append(
+            {
+                "id": str(row["id"]),
+                "title": row["title"],
+                "severity": row["severity"],
+                "status": row["status"],
+                "disposition": row.get("disposition"),
+                "funnel_stage": stage,
+                "confidence": row.get("confidence"),
+                "case_id": str(row["case_id"]) if row.get("case_id") else None,
+                "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+            }
+        )
+    total = sum(s["count"] for s in stages)
+    suppressed = count_map.get("suppressed", 0)
+    ready = count_map.get("ready_for_jira", 0) + count_map.get("jira_pushed", 0)
+    return {
+        "window_hours": hours,
+        "alerts_total": total,
+        "stages": stages,
+        "samples_by_stage": by_stage,
+        "ratios": {
+            "suppression_rate": round(suppressed / total, 4) if total else 0.0,
+            "ready_for_jira_rate": round(ready / total, 4) if total else 0.0,
+        },
     }

@@ -637,6 +637,15 @@ export interface RecommendedAction {
   risk?: string | null;
 }
 
+export type FunnelStage =
+  | 'ingested'
+  | 'triaged'
+  | 'suppressed'
+  | 'investigating'
+  | 'cased'
+  | 'ready_for_jira'
+  | 'jira_pushed';
+
 export interface Alert {
   id: string;
   title: string;
@@ -662,6 +671,8 @@ export interface Alert {
   ledgerRunId?: string;
   /** Analyst-corrected verdict (Tier 1.5 override loop). */
   disposition?: 'true_positive' | 'false_positive' | 'benign' | 'escalate' | null;
+  /** Product funnel stage (ingested → … → jira_pushed). */
+  funnelStage?: FunnelStage;
   // ─── Investigation Rail envelope (W6) ─────────────────────────────────────
   //
   // The list endpoint never populates these — they're only present
@@ -834,6 +845,7 @@ function normalizeAlert(raw: unknown): Alert {
       (r.rawEvent as Record<string, unknown> | undefined),
     assignee: pickStr('assignee', 'assignee'),
     caseId: pickStr('case_id', 'caseId'),
+    funnelStage: (pickStr('funnel_stage', 'funnelStage') as FunnelStage | undefined) ?? 'ingested',
     tags,
     createdAt:
       pickStr('created_at', 'createdAt') ??
@@ -879,7 +891,69 @@ export interface AlertFilters {
   page?: number;
   pageSize?: number;
   tenantId?: string;
+  funnel_stage?: FunnelStage | string;
+  disposition?: string;
 }
+
+export interface FunnelBoardStage {
+  id: string;
+  label: string;
+  count: number;
+}
+
+export interface FunnelBoardAlert {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+  disposition?: string | null;
+  funnel_stage: string;
+  confidence?: number | null;
+  case_id?: string | null;
+  created_at?: string | null;
+}
+
+export interface FunnelBoardResponse {
+  window_hours: number;
+  alerts_total: number;
+  stages: FunnelBoardStage[];
+  samples_by_stage: Record<string, FunnelBoardAlert[]>;
+  ratios: { suppression_rate: number; ready_for_jira_rate: number };
+}
+
+export const socFunnelApi = {
+  board: (hours = 24) =>
+    request<FunnelBoardResponse>('/api/v1/soc/funnel/board', {
+      params: { hours: String(hours) },
+    }),
+  backfill: (hours = 24) =>
+    request<{
+      window_hours: number;
+      alerts_scanned: number;
+      false_positive_tagged: number;
+      cases_created: number;
+      alerts_linked: number;
+      skipped: number;
+    }>('/api/v1/soc/funnel/backfill', {
+      method: 'POST',
+      params: { hours: String(hours) },
+    }),
+  pushItsm: (body: {
+    case_id: string;
+    connector_ids: string[];
+    analyst_approved?: boolean;
+  }) =>
+    request<{
+      case_id: string;
+      gated: boolean;
+      gate_reason?: string | null;
+      report_preview?: string | null;
+      results: Array<Record<string, unknown>>;
+    }>('/api/v1/soc/funnel/push-itsm', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+};
 
 export const alertsApi = {
   list: async (filters: AlertFilters = {}) => {

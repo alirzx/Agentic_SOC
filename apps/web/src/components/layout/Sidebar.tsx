@@ -173,6 +173,11 @@ const navSections: NavSection[] = [
         badgeColor: 'bg-red-500',
       },
       {
+        label: 'SOC Funnel',
+        href: '/soc-funnel',
+        icon: <WorkflowIcon />,
+      },
+      {
         label: 'Investigation Queue',
         href: '/queue',
         icon: <InboxIcon />,

@@ -58,6 +58,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.connector import Connector
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services.funnel_stages import (
+    JIRA_PUSHED,
+    disposition_from_case_tags,
+    passes_jira_gate,
+)
+from app.services.incident_report import build_incident_report
 
 logger = logging.getLogger(__name__)
 
@@ -284,6 +290,106 @@ async def _fetch_existing_refs(
 # ---------------------------------------------------------------------- public API
 
 
+async def _resolve_case_disposition(
+    db: AsyncSession,
+    *,
+    case_id: uuid.UUID | None,
+    tenant_id: uuid.UUID,
+    case_tags: Any,
+) -> str | None:
+    """Prefer linked alert dispositions; fall back to case tags."""
+    if case_id is None:
+        return disposition_from_case_tags(case_tags)
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT disposition
+                  FROM alerts
+                 WHERE tenant_id = :tid
+                   AND case_id = :cid
+                   AND disposition IS NOT NULL
+                 ORDER BY
+                   CASE disposition
+                     WHEN 'true_positive' THEN 1
+                     WHEN 'escalate' THEN 2
+                     WHEN 'likely_tp' THEN 3
+                     WHEN 'needs_review' THEN 4
+                     ELSE 5
+                   END
+                 LIMIT 1
+                """
+            ).bindparams(tid=tenant_id, cid=case_id)
+        )
+    ).fetchone()
+    if row and row[0]:
+        return str(row[0])
+    return disposition_from_case_tags(case_tags)
+
+
+async def _enrich_case_description_with_report(
+    db: AsyncSession,
+    *,
+    case_payload: dict[str, Any],
+    tenant_id: uuid.UUID,
+    disposition: str | None,
+) -> dict[str, Any]:
+    """Attach a standard incident report body when the description is thin."""
+    case_id_raw = case_payload.get("id")
+    try:
+        case_id = uuid.UUID(str(case_id_raw)) if case_id_raw else None
+    except (ValueError, TypeError):
+        case_id = None
+    alert_rows: list[Any] = []
+    if case_id is not None:
+        alert_rows = (
+            await db.execute(
+                text(
+                    """
+                    SELECT id, title, severity, disposition, confidence, ai_summary,
+                           narrative, mitre_techniques, mitre_tactics,
+                           affected_hosts, affected_ips, affected_users, iocs,
+                           ai_recommendations
+                      FROM alerts
+                     WHERE tenant_id = :tid AND case_id = :cid
+                     ORDER BY created_at DESC
+                     LIMIT 10
+                    """
+                ).bindparams(tid=tenant_id, cid=case_id)
+            )
+        ).fetchall()
+    primary = dict(alert_rows[0]._mapping) if alert_rows else {}
+    evidence = []
+    for row in alert_rows:
+        m = dict(row._mapping)
+        if m.get("ai_summary"):
+            evidence.append(str(m["ai_summary"])[:500])
+    report = build_incident_report(
+        title=str(case_payload.get("title") or primary.get("title") or "Incident"),
+        severity=str(case_payload.get("severity") or primary.get("severity") or "medium"),
+        disposition=disposition or primary.get("disposition"),
+        confidence=primary.get("confidence"),
+        summary=str(case_payload.get("description") or primary.get("ai_summary") or "")[:2000],
+        narrative=primary.get("narrative"),
+        mitre_techniques=case_payload.get("mitre_techniques") or primary.get("mitre_techniques"),
+        mitre_tactics=primary.get("mitre_tactics"),
+        hosts=primary.get("affected_hosts"),
+        ips=primary.get("affected_ips"),
+        users=primary.get("affected_users"),
+        iocs=primary.get("iocs"),
+        evidence=evidence,
+        recommended_actions=primary.get("ai_recommendations"),
+        case_id=str(case_id) if case_id else None,
+        alert_ids=[str(dict(r._mapping)["id"]) for r in alert_rows],
+        aisoc_url=getattr(settings, "PUBLIC_APP_URL", None) or getattr(settings, "WEB_BASE_URL", None),
+    )
+    enriched = dict(case_payload)
+    existing = str(enriched.get("description") or "").strip()
+    if len(existing) < 200 or "## Executive summary" not in existing:
+        enriched["description"] = report
+    return enriched
+
+
 async def fanout_create_case(
     db: AsyncSession,
     *,
@@ -292,6 +398,8 @@ async def fanout_create_case(
     connector_ids: list[uuid.UUID],
     pushed_by: str | None = None,
     timeout_seconds: float | None = None,
+    analyst_approved: bool = False,
+    skip_jira_gate: bool = False,
 ) -> list[FanoutResult]:
     """Push the just-created case to ``connector_ids`` in parallel-ish order.
 
@@ -305,16 +413,59 @@ async def fanout_create_case(
     Per-backend errors are captured into ``FanoutResult`` and never
     raise; the caller (``POST /api/v1/cases``) gets a list it can
     surface in the response without changing its 201 status.
+
+    Product funnel P3: Jira/ITSM push is refused for FP/benign and for
+    unapproved ``needs_review`` unless ``analyst_approved`` / ``skip_jira_gate``.
     """
     if not connector_ids:
         return []
 
-    timeout = float(timeout_seconds or settings.CONNECTORS_SERVICE_TIMEOUT_SECONDS)
-    targets = await _fetch_connectors_by_id(db, tenant_id, connector_ids)
     case_payload = _serialize_case_for_push(case_row)
     case_id = uuid.UUID(case_payload["id"]) if case_payload.get("id") else None
+    disposition = await _resolve_case_disposition(
+        db,
+        case_id=case_id,
+        tenant_id=tenant_id,
+        case_tags=case_payload.get("tags"),
+    )
+    if not skip_jira_gate and not passes_jira_gate(
+        disposition=disposition,
+        severity=case_payload.get("severity"),
+        tags=case_payload.get("tags"),
+        analyst_approved=analyst_approved,
+    ):
+        logger.info(
+            "case_fanout.jira_gated case=%s disposition=%s analyst_approved=%s",
+            case_id,
+            disposition,
+            analyst_approved,
+        )
+        return [
+            FanoutResult(
+                connector_id=cid,
+                connector_type="jira",
+                connector_name="gated",
+                status="skipped",
+                error=(
+                    f"Jira gate blocked push (disposition={disposition or 'unknown'}; "
+                    "needs true_positive/escalate or analyst approval)"
+                ),
+            )
+            for cid in connector_ids
+        ]
+
+    case_payload = await _enrich_case_description_with_report(
+        db,
+        case_payload=case_payload,
+        tenant_id=tenant_id,
+        disposition=disposition,
+    )
+
+    timeout = float(timeout_seconds or settings.CONNECTORS_SERVICE_TIMEOUT_SECONDS)
+    targets = await _fetch_connectors_by_id(db, tenant_id, connector_ids)
 
     results: list[FanoutResult] = []
+    any_ok = False
     for connector in targets:
         result = await _push_one_case(
             db=db,
@@ -324,7 +475,22 @@ async def fanout_create_case(
             pushed_by=pushed_by,
             timeout_seconds=timeout,
         )
+        if result.status == "ok":
+            any_ok = True
         results.append(result)
+    if any_ok and case_id is not None:
+        try:
+            await db.execute(
+                text(
+                    """
+                    UPDATE alerts
+                       SET funnel_stage = :stage, updated_at = now()
+                     WHERE tenant_id = :tid AND case_id = :cid
+                    """
+                ).bindparams(stage=JIRA_PUSHED, tid=tenant_id, cid=case_id)
+            )
+        except Exception:  # noqa: BLE001 — stage bump is best-effort
+            logger.exception("case_fanout.funnel_stage_bump_failed case=%s", case_id)
     return results
 
 

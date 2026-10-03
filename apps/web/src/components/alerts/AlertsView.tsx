@@ -101,6 +101,16 @@ function FiltersBar({
 }) {
   const severities = ['all', 'critical', 'high', 'medium', 'low', 'info'] as const;
   const statuses = ['all', 'new', 'investigating', 'resolved', 'false_positive'] as const;
+  const funnelStages = [
+    'all',
+    'ingested',
+    'triaged',
+    'suppressed',
+    'investigating',
+    'cased',
+    'ready_for_jira',
+    'jira_pushed',
+  ] as const;
 
   return (
     <div className="flex items-center gap-3 flex-wrap py-3 px-4 bg-dark-70/80 border border-[#374151]/60 rounded-xl">
@@ -134,6 +144,29 @@ function FiltersBar({
             )}
           >
             {s === 'all' ? 'All status' : s.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+      <div className="w-px h-4 bg-gray-700" />
+      <div className="flex items-center gap-1 flex-wrap">
+        {funnelStages.map((s) => (
+          <button
+            key={s}
+            onClick={() =>
+              onChange({
+                ...filters,
+                funnel_stage: s === 'all' ? undefined : s,
+                page: 1,
+              })
+            }
+            className={clsx(
+              'text-xs px-2.5 py-1 rounded-lg transition-colors',
+              (s === 'all' && !filters.funnel_stage) || filters.funnel_stage === s
+                ? 'bg-cyan-700/80 text-cyan-100'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-dark-20/60'
+            )}
+          >
+            {s === 'all' ? 'All stages' : s.replace(/_/g, ' ')}
           </button>
         ))}
       </div>
@@ -200,6 +233,14 @@ function AlertRow({
 
       <div className="flex items-center gap-2 shrink-0">
         {alert.confidenceLabel && <ConfidencePill label={alert.confidenceLabel} />}
+        {alert.funnelStage && alert.funnelStage !== 'ingested' && (
+          <span
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-300 bg-cyan-500/10 shrink-0"
+            title={`Funnel stage: ${alert.funnelStage}`}
+          >
+            {alert.funnelStage.replace(/_/g, ' ')}
+          </span>
+        )}
         <SeverityBadge severity={alert.severity} />
         <StatusBadge status={alert.status} />
         <span className="text-xs text-gray-600 w-24 text-right" suppressHydrationWarning>

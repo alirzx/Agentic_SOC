@@ -136,14 +136,27 @@ def _build_db_with_connectors(
     refs_result = MagicMock()
     refs_result.fetchall.return_value = [SimpleNamespace(_mapping=ref) for ref in (refs or [])]
 
+    # Product funnel P3: fanout_create_case first resolves disposition, then
+    # optionally loads linked alerts for the incident report, then selects
+    # connectors. Empty results keep the gate open for legacy cases.
+    disposition_result = MagicMock()
+    disposition_result.fetchone.return_value = None
+    enrich_result = MagicMock()
+    enrich_result.fetchall.return_value = []
+
     side_effects: list[Any] = []
     if refs is not None:
         # Status-change path: refs first, connectors second, then writes.
         side_effects.append(refs_result)
-    side_effects.append(select_result)
+        side_effects.append(select_result)
+    else:
+        # Create path: disposition → enrich alerts → connectors → writes.
+        side_effects.append(disposition_result)
+        side_effects.append(enrich_result)
+        side_effects.append(select_result)
     # Pad out write responses; AsyncMock side_effect runs out → re-uses
     # the last entry only if it's a callable, so we explicitly pad.
-    for _ in range(8):
+    for _ in range(12):
         side_effects.append(MagicMock())
 
     db.execute = AsyncMock(side_effect=side_effects)
@@ -303,6 +316,34 @@ async def test_post_returns_error_on_non_dict_body() -> None:
 # ---------------------------------------------------------------------------
 # fanout_create_case
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fanout_create_case_gates_false_positive_disposition() -> None:
+    """Product funnel P3: never push FP/benign to Jira."""
+    tenant_id = uuid.uuid4()
+    case = _make_case_row()
+    connector = _make_connector(connector_type="jira", tenant_id=tenant_id)
+    # First execute = disposition lookup → FP; gate must short-circuit before POST.
+    fp_disp = MagicMock()
+    fp_disp.fetchone.return_value = ("false_positive",)
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[fp_disp])
+
+    with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
+        post_mock = AsyncMock()
+        mock_client.return_value.__aenter__.return_value.post = post_mock
+        results = await fanout_create_case(
+            db,
+            case_row=case,
+            tenant_id=tenant_id,
+            connector_ids=[connector.id],
+        )
+
+    assert len(results) == 1
+    assert results[0].status == "skipped"
+    assert "blocked" in (results[0].error or "").lower()
+    post_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio

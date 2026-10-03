@@ -87,6 +87,7 @@ class AlertResponse(BaseModel):
     confidence_label: str | None = None
     confidence_rationale: list | None = None
     disposition: str | None = None
+    funnel_stage: str = "ingested"
     affected_ips: list
     affected_hosts: list
     affected_users: list
@@ -639,6 +640,8 @@ async def list_alerts(
     search: str | None = Query(default=None),
     min_confidence: int | None = Query(default=None, ge=0, le=100),
     confidence_label: str | None = Query(default=None),
+    funnel_stage: str | None = Query(default=None),
+    disposition: str | None = Query(default=None),
 ) -> AlertListResponse:
     """List alerts for the current tenant with filtering and pagination.
 
@@ -647,7 +650,11 @@ async def list_alerts(
     that pre-date the confidence column will have NULL and therefore won't
     match either filter — that's intentional; analysts who care about
     confidence should only see alerts that actually carry the signal.
+
+    `funnel_stage` / `disposition` power the SOC Funnel board filters.
     """
+    from app.services.funnel_stages import FUNNEL_STAGES, normalize_stage
+
     filters = [Alert.tenant_id == current_user.tenant_id]
 
     if severity:
@@ -674,6 +681,16 @@ async def list_alerts(
                 detail="confidence_label must be one of: high, medium, low",
             )
         filters.append(Alert.confidence_label == confidence_label)
+    if funnel_stage is not None:
+        stage = normalize_stage(funnel_stage, default="")
+        if stage not in FUNNEL_STAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"funnel_stage must be one of: {', '.join(FUNNEL_STAGES)}",
+            )
+        filters.append(Alert.funnel_stage == stage)
+    if disposition is not None:
+        filters.append(Alert.disposition == disposition.strip().lower())
 
     # Count
     count_result = await db.execute(select(func.count()).select_from(Alert).where(and_(*filters)))

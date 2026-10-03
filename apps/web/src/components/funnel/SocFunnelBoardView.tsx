@@ -1,0 +1,186 @@
+'use client';
+
+/**
+ * SOC Funnel Board — live stage tracking for the product path
+ * Ingested → Triaged / Suppressed → Investigating → Cased → Ready for Jira → Jira.
+ */
+
+import { useState } from 'react';
+import useSWR from 'swr';
+import Link from 'next/link';
+import { clsx } from 'clsx';
+import { socFunnelApi, type FunnelBoardAlert, type FunnelBoardStage } from '@/lib/api';
+
+const STAGE_ACCENT: Record<string, string> = {
+  ingested: 'border-sky-500/40 bg-sky-500/5',
+  triaged: 'border-cyan-500/40 bg-cyan-500/5',
+  suppressed: 'border-gray-500/40 bg-gray-500/5',
+  investigating: 'border-brand-500/40 bg-brand-500/5',
+  cased: 'border-amber-500/40 bg-amber-500/5',
+  ready_for_jira: 'border-orange-500/40 bg-orange-500/5',
+  jira_pushed: 'border-emerald-500/40 bg-emerald-500/5',
+};
+
+function StageColumn({
+  stage,
+  alerts,
+}: {
+  stage: FunnelBoardStage;
+  alerts: FunnelBoardAlert[];
+}) {
+  return (
+    <section
+      className={clsx(
+        'min-w-[200px] flex-1 rounded-xl border p-3 flex flex-col gap-2',
+        STAGE_ACCENT[stage.id] || 'border-[#374151]/60 bg-dark-70/60',
+      )}
+    >
+      <header className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-gray-100">{stage.label}</h2>
+        <span className="text-xs font-mono text-gray-400">{stage.count}</span>
+      </header>
+      <ul className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto">
+        {alerts.length === 0 ? (
+          <li className="text-[11px] text-gray-600 py-2">No alerts in window</li>
+        ) : (
+          alerts.map((alert) => (
+            <li key={alert.id}>
+              <Link
+                href={`/alerts/${alert.id}`}
+                className="block rounded-lg border border-[#374151]/50 bg-dark-20/40 px-2.5 py-2 hover:border-brand-500/40 transition-colors"
+              >
+                <p className="text-xs text-gray-200 line-clamp-2">{alert.title}</p>
+                <p className="mt-1 text-[10px] text-gray-500 font-mono uppercase tracking-wide">
+                  {alert.severity}
+                  {alert.disposition ? ` · ${alert.disposition}` : ''}
+                </p>
+              </Link>
+            </li>
+          ))
+        )}
+      </ul>
+    </section>
+  );
+}
+
+export function SocFunnelBoardView() {
+  const [hours, setHours] = useState(24);
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const { data, error, isLoading, mutate } = useSWR(
+    ['soc-funnel-board', hours],
+    () => socFunnelApi.board(hours),
+    { refreshInterval: 30_000 },
+  );
+
+  const runBackfill = async () => {
+    setBusy(true);
+    setBackfillMsg(null);
+    try {
+      const result = await socFunnelApi.backfill(hours);
+      setBackfillMsg(
+        `Scanned ${result.alerts_scanned}: FP ${result.false_positive_tagged}, cases ${result.cases_created}, linked ${result.alerts_linked}`,
+      );
+      await mutate();
+    } catch (err) {
+      setBackfillMsg(err instanceof Error ? err.message : 'Backfill failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stages = data?.stages ?? [];
+  const samples = data?.samples_by_stage ?? {};
+
+  return (
+    <div className="flex flex-col gap-4 p-4 md:p-6">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-white">SOC Funnel</h1>
+          <p className="text-sm text-gray-400 mt-1 max-w-2xl">
+            Track alerts from ingest through auto-triage, investigation, case, and gated Jira push.
+            Noise exits at Suppressed; only real incidents reach Ready for Jira.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {[24, 48, 168].map((h) => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => setHours(h)}
+              className={clsx(
+                'text-xs px-2.5 py-1 rounded-lg border transition-colors',
+                hours === h
+                  ? 'bg-brand-600 border-brand-500 text-white'
+                  : 'border-[#374151] text-gray-400 hover:text-gray-200',
+              )}
+            >
+              {h === 168 ? '7d' : `${h}h`}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void runBackfill()}
+            className="text-xs px-3 py-1.5 rounded-lg bg-dark-20 border border-[#374151] text-gray-200 hover:border-brand-500/50 disabled:opacity-50"
+          >
+            {busy ? 'Running…' : 'Run backfill'}
+          </button>
+        </div>
+      </header>
+
+      {data ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Stat label="Alerts in window" value={String(data.alerts_total)} />
+          <Stat
+            label="Suppression rate"
+            value={`${Math.round((data.ratios.suppression_rate || 0) * 100)}%`}
+          />
+          <Stat
+            label="Ready / pushed"
+            value={`${Math.round((data.ratios.ready_for_jira_rate || 0) * 100)}%`}
+          />
+          <Stat label="Window" value={`${data.window_hours}h`} />
+        </div>
+      ) : null}
+
+      {backfillMsg ? (
+        <p className="text-xs text-gray-400 font-mono border border-[#374151]/50 rounded-lg px-3 py-2">
+          {backfillMsg}
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="text-sm text-red-400">Failed to load funnel board.</p>
+      ) : null}
+      {isLoading && !data ? (
+        <p className="text-sm text-gray-500">Loading funnel stages…</p>
+      ) : null}
+
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {stages.map((stage) => (
+          <StageColumn
+            key={stage.id}
+            stage={stage}
+            alerts={samples[stage.id] || []}
+          />
+        ))}
+      </div>
+
+      <p className="text-[11px] text-gray-600">
+        Tip: filter Alerts by funnel stage, or open a case and use Promote → Jira only when
+        disposition is true_positive / escalate (needs_review requires analyst approval).
+      </p>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[#374151]/50 bg-dark-70/70 px-3 py-2.5">
+      <p className="text-[11px] text-gray-500 uppercase tracking-wide">{label}</p>
+      <p className="text-lg font-semibold text-gray-100 mt-0.5">{value}</p>
+    </div>
+  );
+}

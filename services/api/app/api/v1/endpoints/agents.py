@@ -287,12 +287,23 @@ async def investigate_alert(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="alertId must be a UUID") from exc
 
+    from sqlalchemy import update
+
+    from app.services.funnel_stages import INVESTIGATING, READY_FOR_JIRA, TRIAGED
+
     result = await db.execute(
         select(Alert).where(Alert.id == alert_uuid, Alert.tenant_id == current_user.tenant_id)
     )
     alert = result.scalar_one_or_none()
     if alert is None:
         raise HTTPException(status_code=404, detail="Alert not found")
+
+    await db.execute(
+        update(Alert)
+        .where(Alert.id == alert.id, Alert.tenant_id == current_user.tenant_id)
+        .values(funnel_stage=INVESTIGATING)
+    )
+    await db.commit()
 
     path = _validate_agents_path("/api/v1/agents/investigate")
     payload = {
@@ -313,7 +324,23 @@ async def investigate_alert(
         detail = resp.text[:500] if resp.text else f"agents returned {resp.status_code}"
         raise HTTPException(status_code=resp.status_code, detail=detail)
 
-    return AgentInvestigationOut.model_validate(resp.json())
+    out = AgentInvestigationOut.model_validate(resp.json())
+    # After a successful investigation, park at ready_for_jira when already
+    # cased/TP; otherwise leave at investigating so the board reflects work.
+    next_stage = READY_FOR_JIRA if alert.case_id or (alert.disposition or "") in {
+        "true_positive",
+        "escalate",
+        "likely_tp",
+    } else INVESTIGATING
+    if out.status == "failed":
+        next_stage = TRIAGED
+    await db.execute(
+        update(Alert)
+        .where(Alert.id == alert.id, Alert.tenant_id == current_user.tenant_id)
+        .values(funnel_stage=next_stage)
+    )
+    await db.commit()
+    return out
 
 
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)

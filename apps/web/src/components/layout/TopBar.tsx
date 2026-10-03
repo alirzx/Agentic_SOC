@@ -17,6 +17,10 @@ const routeLabels: Record<string, { title: string; description: string }> = {
   '/settings/rbac': { title: 'Roles & Permissions', description: 'Access control and team management' },
   '/dashboard': { title: 'Dashboard', description: 'SOC overview and metrics' },
   '/alerts': { title: 'Alerts', description: 'Security alerts and incidents' },
+  '/soc-funnel': {
+    title: 'SOC Funnel',
+    description: 'Track ingest → triage → case → gated Jira',
+  },
   '/cases': { title: 'Cases', description: 'Incident case management' },
   '/hunt': { title: 'Threat Hunting', description: 'Proactive threat hunts and queries' },
   '/detection': { title: 'Detection Rules', description: 'SIEM detection rules and tuning' },

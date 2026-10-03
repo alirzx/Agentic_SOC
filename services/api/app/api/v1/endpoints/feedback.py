@@ -124,10 +124,27 @@ async def submit_alert_override(
         )
 
     now = datetime.now(UTC)
+    from app.services.funnel_stages import (
+        READY_FOR_JIRA,
+        SUPPRESSED,
+        TRIAGED,
+    )
+
+    corrected = payload.corrected_verdict
+    if corrected in {"false_positive", "benign", "benign_true_positive"}:
+        next_stage = SUPPRESSED
+    elif corrected in {"true_positive", "escalate"}:
+        next_stage = READY_FOR_JIRA if alert.case_id else TRIAGED
+    else:
+        next_stage = TRIAGED
     await db.execute(
         update(Alert)
         .where(Alert.id == alert_uuid, Alert.tenant_id == user.tenant_id)
-        .values(disposition=payload.corrected_verdict, updated_at=now)
+        .values(
+            disposition=corrected,
+            funnel_stage=next_stage,
+            updated_at=now,
+        )
     )
     await db.commit()
 

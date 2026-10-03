@@ -25,6 +25,7 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
+from app.funnel.stages import CASED, READY_FOR_JIRA, SUPPRESSED, passes_investigation_gate
 from app.investigator import ledger as ledger_module
 from app.models.state import InvestigationState
 
@@ -52,19 +53,20 @@ def auto_case_enabled() -> bool:
 
 
 def should_promote(*, verdict: str, severity: str | None, confidence: float) -> bool:
-    """Decide whether an escalated alert becomes a Case."""
+    """Decide whether an escalated alert becomes a Case (investigation gate)."""
     disposition = normalize_disposition(verdict, default=NEEDS_REVIEW)
     if disposition in AUTO_CLOSEABLE_DISPOSITIONS:
         return False
+    # Product funnel P1: shared gate (high/critical OR medium@≥0.70 for needs_review;
+    # all true_positive / escalate / likely_tp promote).
+    if passes_investigation_gate(
+        disposition=disposition, severity=severity, confidence=confidence
+    ):
+        return True
+    # Preserve prior TP→case behaviour for low/info TPs outside the severity floor.
     sev = (severity or "medium").strip().lower()
-    if disposition == TRUE_POSITIVE:
-        return sev in _SEVERITY_FLOOR or sev in {"low", "info"}  # all TPs → case
-    if disposition in {NEEDS_REVIEW, "escalate"}:
-        if sev in {"high", "critical"}:
-            return True
-        if sev == "medium" and confidence >= 0.55:
-            return True
-        return False
+    if disposition == TRUE_POSITIVE and (sev in _SEVERITY_FLOOR or sev in {"low", "info"}):
+        return True
     return False
 
 
@@ -181,12 +183,14 @@ async def tag_false_positive(alert_id: str | None, tenant_id: uuid.UUID) -> bool
                              COALESCE(tags, '[]'::jsonb) || $3::jsonb
                            ) AS t(v)
                        ),
+                       funnel_stage = $4,
                        updated_at = now()
                  WHERE id = $1 AND tenant_id = $2
                 """,
                 alert_uuid,
                 tenant_id,
                 json.dumps([_TAG_FP]),
+                SUPPRESSED,
             )
         return True
     except Exception as exc:  # noqa: BLE001
@@ -322,6 +326,13 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     json.dumps(tags),
                     now,
                 )
+                # TP / escalate → ready_for_jira; needs_review stays at cased
+                # until an analyst approves the ITSM push (P3 gate).
+                next_stage = (
+                    READY_FOR_JIRA
+                    if verdict in {TRUE_POSITIVE, "escalate", "likely_tp"}
+                    else CASED
+                )
                 await conn.execute(
                     """
                     UPDATE alerts
@@ -333,6 +344,7 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                                ) AS t(v)
                            ),
                            status = CASE WHEN status IN ('new', 'triaging') THEN 'in_progress' ELSE status END,
+                           funnel_stage = $5,
                            updated_at = now()
                      WHERE tenant_id = $2 AND id = ANY($3::uuid[])
                     """,
@@ -340,6 +352,7 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     state.tenant_id,
                     linked_ids,
                     json.dumps([_TAG_PROMOTED, _TAG_REPORTABLE]),
+                    next_stage,
                 )
                 for task in tasks:
                     await conn.execute(

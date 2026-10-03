@@ -49,7 +49,9 @@ from app.core.cost_telemetry import CostTracker
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.llm.factory import llm_override
-from app.memory.outcomes import AI, lookup_prior, record_outcome, should_auto_suppress
+from app.funnel.stages import INVESTIGATING, passes_investigation_gate
+from app.memory.outcomes import AI, HUMAN, lookup_prior, record_outcome, should_auto_suppress
+from app.memory.override_priors import lookup_human_override, should_suppress_from_override
 from app.models.state import AgentStatus, InvestigationState
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
@@ -358,6 +360,11 @@ class FusedAlertTriageWorker:
             suppressed = await self._maybe_suppress_from_memory(state, fingerprint, bc_matched)
             if suppressed is not None:
                 return suppressed
+            # Phase 4 — analyst override:v2 priors (coarse signature) suppress
+            # repeat FP/benign even when the evidence fingerprint differs.
+            override_suppressed = await self._maybe_suppress_from_override(state, bc_matched)
+            if override_suppressed is not None:
+                return override_suppressed
 
         decision = governor.check(str(state.tenant_id), fingerprint)
 
@@ -429,14 +436,34 @@ class FusedAlertTriageWorker:
                 )
                 _METRICS["outcome_written"] += 1
 
-        # Issue #569: route escalations (anything NOT auto-closed — TP,
-        # low-confidence, needs_review) through the full investigation graph.
-        # High-confidence FP/BTP already terminated (status COMPLETED) and
-        # skip enrichment. Best-effort: the verdict is already durable, so an
-        # enrichment/investigation failure never fails the triage outcome.
+        # Issue #569 + product funnel P1 gate: only alerts that pass the
+        # investigation gate (TP/escalate, or needs_review at high sev /
+        # medium@≥0.70) enter deep investigation + case promotion. Noise
+        # stays at funnel_stage=triaged for human queue review.
         if state.status is not AgentStatus.COMPLETED:
-            await self._maybe_escalate(state)
-            case_id = await self._maybe_promote_case(state, message)
+            alert_blob = message.get("alert") if isinstance(message.get("alert"), dict) else {}
+            sev = str(
+                alert_blob.get("severity")
+                or (state.raw_alert or {}).get("severity")
+                or "medium"
+            )
+            if passes_investigation_gate(
+                disposition=str(verdict or ""),
+                severity=sev,
+                confidence=float(confidence or 0.0),
+            ):
+                await self._set_funnel_stage(state, INVESTIGATING)
+                await self._maybe_escalate(state)
+                case_id = await self._maybe_promote_case(state, message)
+            else:
+                case_id = None
+                logger.info(
+                    "auto_triage_worker.investigation_gated",
+                    run_id=str(state.run_id),
+                    verdict=verdict,
+                    severity=sev,
+                    confidence=confidence,
+                )
         else:
             case_id = None
             # Noise path: surface FP tag so /alerts filters + tuning see it.
@@ -457,6 +484,89 @@ class FusedAlertTriageWorker:
             "response_dispatched": False,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
         }
+
+    async def _maybe_suppress_from_override(
+        self,
+        state: InvestigationState,
+        bc_matched: list[str],
+    ) -> dict[str, Any] | None:
+        """Phase 4 — suppress from analyst override:v2 institutional memory."""
+        alert = state.raw_alert or {}
+        try:
+            prior = await lookup_human_override(str(state.tenant_id), alert)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("auto_triage_worker.override_lookup_failed", error=str(exc))
+            return None
+        if not should_suppress_from_override(prior):
+            return None
+        assert prior is not None
+        disposition = normalize_disposition(
+            str(prior.get("corrected_verdict") or ""), default=NEEDS_REVIEW
+        )
+        confidence = 0.95
+        state.verdict = disposition
+        state.confidence = confidence
+        state.status = AgentStatus.COMPLETED
+        state.confidence_basis = ["analyst_override: human FP/benign prior"]
+        state.add_finding(
+            f"Auto-resolved from analyst override memory: prior corrected_verdict={disposition}."
+        )
+        _METRICS["outcome_suppressed"] += 1
+        _METRICS["triaged"] += 1
+        await self._record(state, tier="override", verdict=disposition, confidence=confidence)
+        if disposition in AUTO_CLOSEABLE_DISPOSITIONS:
+            if await case_promoter.tag_false_positive(alert.get("id"), state.tenant_id):
+                _METRICS["fp_tagged"] += 1
+        with contextlib.suppress(Exception):
+            fingerprint = get_governor().evidence_fingerprint(str(state.tenant_id), alert)
+            await record_outcome(
+                str(state.tenant_id),
+                fingerprint,
+                disposition=disposition,
+                confidence=confidence,
+                author=HUMAN,
+                alert_id=alert.get("id"),
+            )
+        return {
+            "run_id": str(state.run_id),
+            "incident_id": str(state.incident_id),
+            "tenant_id": str(state.tenant_id),
+            "verdict": disposition,
+            "confidence": confidence,
+            "tier": "override",
+            "suppressed_by_override": True,
+            "business_context_rules": bc_matched,
+            "response_dispatched": False,
+            "proposed_actions": [],
+        }
+
+    async def _set_funnel_stage(self, state: InvestigationState, stage: str) -> None:
+        """Best-effort funnel_stage bump while deep investigation runs."""
+        alert_id = (state.raw_alert or {}).get("id")
+        if not alert_id:
+            return
+        pool = await ledger_module.get_pool()
+        if pool is None:
+            return
+        try:
+            alert_uuid = uuid.UUID(str(alert_id))
+        except (ValueError, TypeError):
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE alerts
+                       SET funnel_stage = $3, updated_at = now()
+                     WHERE id = $1 AND tenant_id = $2
+                       AND funnel_stage NOT IN ('cased', 'ready_for_jira', 'jira_pushed')
+                    """,
+                    alert_uuid,
+                    state.tenant_id,
+                    stage,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("auto_triage_worker.funnel_stage_failed", error=str(exc))
 
     async def _maybe_suppress_from_memory(
         self,

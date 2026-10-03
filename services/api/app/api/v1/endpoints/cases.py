@@ -495,6 +495,8 @@ async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) ->
                 tenant_id=user.tenant_id,
                 connector_ids=body.push_to_connector_ids,
                 pushed_by=getattr(user, "email", None),
+                # Operator selected ITSM targets on create ⇒ analyst approval.
+                analyst_approved=True,
             )
             await db.commit()
             response.fanout_results = results

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.services.agentic_funnel import classify_backfill
+from app.services.funnel_stages import passes_jira_gate
 
 
 def test_existing_disposition_wins():
@@ -20,3 +21,15 @@ def test_noisy_low_is_fp():
 
 def test_high_severity_promotes():
     assert classify_backfill({"title": "Something odd", "severity": "critical"}) == "true_positive"
+
+
+def test_backfill_tp_is_jira_eligible():
+    disp = classify_backfill({"title": "Detect Password Spray Attempts", "severity": "medium"})
+    assert passes_jira_gate(disposition=disp)
+
+
+def test_backfill_fp_is_not_jira_eligible():
+    disp = classify_backfill(
+        {"title": "Network - Unapproved Port Activity Detected - Rule", "severity": "low"}
+    )
+    assert not passes_jira_gate(disposition=disp)

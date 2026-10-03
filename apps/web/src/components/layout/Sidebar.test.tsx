@@ -52,6 +52,9 @@ describe('Sidebar', () => {
     const workflow = screen.getByRole('link', { name: /workflow soc/i });
     expect(workflow).toHaveAttribute('href', '/workflow-soc');
 
+    const funnel = screen.getByRole('link', { name: /soc funnel/i });
+    expect(funnel).toHaveAttribute('href', '/soc-funnel');
+
     const compliance = screen.getByRole('link', { name: /compliance/i });
     expect(compliance).toHaveAttribute('href', '/compliance');
 

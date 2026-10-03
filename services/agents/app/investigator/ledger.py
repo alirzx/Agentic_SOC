@@ -491,6 +491,12 @@ async def persist_auto_triage(
                     # only advanced to 'resolved' when auto-triage auto-closed a
                     # benign/FP alert at high confidence; otherwise the alert
                     # stays open for escalation / human review.
+                    # Funnel stage: suppressed on auto-close, else triaged.
+                    from app.funnel.stages import stage_after_triage
+
+                    funnel_stage = stage_after_triage(
+                        disposition=verdict, auto_closed=bool(auto_closed)
+                    )
                     await conn.execute(
                         """
                         UPDATE alerts
@@ -500,6 +506,12 @@ async def persist_auto_triage(
                                ai_recommendations = $6::jsonb,
                                status = CASE WHEN $7 THEN 'resolved' ELSE status END,
                                resolved_at = CASE WHEN $7 THEN now() ELSE resolved_at END,
+                               funnel_stage = CASE
+                                   WHEN funnel_stage IN ('cased', 'ready_for_jira', 'jira_pushed', 'investigating')
+                                        AND NOT $7
+                                   THEN funnel_stage
+                                   ELSE $8
+                               END,
                                updated_at = now()
                          WHERE id = $1 AND tenant_id = $2
                         """,
@@ -510,6 +522,7 @@ async def persist_auto_triage(
                         (rationale or "")[:8000] or None,
                         json.dumps(recommendations),
                         auto_closed,
+                        funnel_stage,
                     )
         logger.info(
             "ledger.auto_triage_persisted",

@@ -40,6 +40,8 @@ class Alert(Base):
 
     # Analyst verdict / disposition (set via feedback endpoint)
     disposition: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    # Product funnel stage (migration 056) — ingested → … → jira_pushed
+    funnel_stage: Mapped[str] = mapped_column(String(32), default="ingested", nullable=False, index=True)
     # Timestamp when an analyst first viewed / started triaging the alert (for MTTD)
     first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
