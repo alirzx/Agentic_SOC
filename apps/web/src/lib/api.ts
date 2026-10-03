@@ -940,6 +940,25 @@ export const socFunnelApi = {
       method: 'POST',
       params: { hours: String(hours) },
     }),
+  /** Collapse display-identical duplicate alerts/cases for this tenant. */
+  dedupeExact: (dryRun = false) =>
+    request<{
+      cases: {
+        groups_collapsed: number;
+        cases_deleted: number;
+        cases_kept: number;
+        dry_run: boolean;
+      };
+      alerts: {
+        groups_collapsed: number;
+        alerts_deleted: number;
+        alerts_kept: number;
+        dry_run: boolean;
+      };
+    }>('/api/v1/soc/funnel/dedupe-exact', {
+      method: 'POST',
+      params: { dry_run: String(dryRun) },
+    }),
   pushItsm: (body: {
     case_id: string;
     connector_ids: string[];

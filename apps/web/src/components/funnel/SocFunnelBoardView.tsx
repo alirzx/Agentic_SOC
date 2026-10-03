@@ -91,6 +91,24 @@ export function SocFunnelBoardView() {
     }
   };
 
+  const runDedupe = async () => {
+    setBusy(true);
+    setBackfillMsg(null);
+    try {
+      const result = await socFunnelApi.dedupeExact(false);
+      setBackfillMsg(
+        `Removed duplicates — alerts: ${result.alerts.alerts_deleted} deleted ` +
+          `(${result.alerts.groups_collapsed} groups), cases: ${result.cases.cases_deleted} deleted ` +
+          `(${result.cases.groups_collapsed} groups)`,
+      );
+      await mutate();
+    } catch (err) {
+      setBackfillMsg(err instanceof Error ? err.message : 'Dedupe failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const stages = data?.stages ?? [];
   const samples = data?.samples_by_stage ?? {};
 
@@ -127,6 +145,15 @@ export function SocFunnelBoardView() {
             className="text-xs px-3 py-1.5 rounded-lg bg-dark-20 border border-[#374151] text-gray-200 hover:border-brand-500/50 disabled:opacity-50"
           >
             {busy ? 'Running…' : 'Run backfill'}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void runDedupe()}
+            className="text-xs px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-100 hover:bg-orange-500/25 disabled:opacity-50"
+            title="Delete alerts/cases that look identical (same title, rule, entities)"
+          >
+            {busy ? 'Running…' : 'Remove duplicates'}
           </button>
         </div>
       </header>

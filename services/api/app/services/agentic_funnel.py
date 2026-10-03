@@ -757,12 +757,20 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         )
     ).mappings().all()
     by_stage: dict[str, list[dict[str, Any]]] = {s: [] for s in BOARD_ORDER}
+    seen_title_by_stage: dict[str, set[str]] = {s: set() for s in BOARD_ORDER}
     for row in samples:
         stage = str(row.get("funnel_stage") or "ingested")
         if stage not in by_stage:
             by_stage[stage] = []
+            seen_title_by_stage[stage] = set()
         if len(by_stage[stage]) >= 8:
             continue
+        title_key = str(row.get("title") or "").strip().lower()
+        # Don't list the same ESCU title eight times in a column sample.
+        if title_key and title_key in seen_title_by_stage[stage]:
+            continue
+        if title_key:
+            seen_title_by_stage[stage].add(title_key)
         by_stage[stage].append(
             {
                 "id": str(row["id"]),

@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.services.exact_dedupe import (
+    alert_display_key,
     case_content_key,
     normalize_case_description,
     pick_canonical_alert,
@@ -88,3 +89,33 @@ def test_pick_canonical_alert_prefers_cased():
     a = {"id": uuid4(), "case_id": None, "created_at": older}
     b = {"id": uuid4(), "case_id": uuid4(), "created_at": older + timedelta(hours=1)}
     assert pick_canonical_alert([a, b])["id"] == b["id"]
+
+
+def test_alert_display_key_ignores_source_event_ids():
+    base = {
+        "title": "ESCU - Access LSASS Memory for Dump Creation - Rule",
+        "severity": "medium",
+        "rule_id": "access_lsass_memory_for_dump_creation",
+        "rule_name": "ESCU - Access LSASS Memory for Dump Creation - Rule",
+        "disposition": "true_positive",
+        "affected_hosts": [],
+        "affected_ips": [],
+        "affected_users": [],
+    }
+    a = {**base, "source_event_ids": ["evt-1"], "dedup_hash": "aaa"}
+    b = {**base, "source_event_ids": ["evt-2"], "dedup_hash": "bbb"}
+    assert alert_display_key(a) == alert_display_key(b)
+
+
+def test_alert_display_key_keeps_different_hosts_apart():
+    a = {
+        "title": "ESCU - Access LSASS Memory for Dump Creation - Rule",
+        "severity": "medium",
+        "rule_id": "x",
+        "disposition": "true_positive",
+        "affected_hosts": ["host-a"],
+        "affected_ips": [],
+        "affected_users": [],
+    }
+    b = {**a, "affected_hosts": ["host-b"]}
+    assert alert_display_key(a) != alert_display_key(b)
