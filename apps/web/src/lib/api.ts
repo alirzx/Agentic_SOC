@@ -911,6 +911,8 @@ export interface FunnelBoardAlert {
   confidence?: number | null;
   case_id?: string | null;
   created_at?: string | null;
+  /** How many alerts in this stage share the same title (sample is one representative). */
+  same_title_count?: number;
 }
 
 export interface FunnelBoardResponse {

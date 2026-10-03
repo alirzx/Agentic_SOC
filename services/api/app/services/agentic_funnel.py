@@ -742,35 +742,42 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         }
         for stage in BOARD_ORDER
     ]
+    # One representative alert per (stage, title) plus how many share that title.
+    # Column header count = all alerts; the card list is unique titles (not a bug).
     samples = (
         await db.execute(
             text(
                 """
+                WITH ranked AS (
+                  SELECT id, title, severity, status, disposition, funnel_stage,
+                         confidence, case_id, created_at,
+                         COUNT(*) OVER (
+                           PARTITION BY COALESCE(funnel_stage, 'ingested'), lower(trim(title))
+                         ) AS same_title_count,
+                         ROW_NUMBER() OVER (
+                           PARTITION BY COALESCE(funnel_stage, 'ingested'), lower(trim(title))
+                           ORDER BY created_at DESC
+                         ) AS rn
+                    FROM alerts
+                   WHERE tenant_id = :tid AND created_at >= :since
+                )
                 SELECT id, title, severity, status, disposition, funnel_stage,
-                       confidence, case_id, created_at
-                  FROM alerts
-                 WHERE tenant_id = :tid AND created_at >= :since
+                       confidence, case_id, created_at, same_title_count
+                  FROM ranked
+                 WHERE rn = 1
                  ORDER BY created_at DESC
-                 LIMIT 80
+                 LIMIT 200
                 """
             ).bindparams(tid=tenant_id, since=since)
         )
     ).mappings().all()
     by_stage: dict[str, list[dict[str, Any]]] = {s: [] for s in BOARD_ORDER}
-    seen_title_by_stage: dict[str, set[str]] = {s: set() for s in BOARD_ORDER}
     for row in samples:
         stage = str(row.get("funnel_stage") or "ingested")
         if stage not in by_stage:
             by_stage[stage] = []
-            seen_title_by_stage[stage] = set()
-        if len(by_stage[stage]) >= 8:
+        if len(by_stage[stage]) >= 12:
             continue
-        title_key = str(row.get("title") or "").strip().lower()
-        # Don't list the same ESCU title eight times in a column sample.
-        if title_key and title_key in seen_title_by_stage[stage]:
-            continue
-        if title_key:
-            seen_title_by_stage[stage].add(title_key)
         by_stage[stage].append(
             {
                 "id": str(row["id"]),
@@ -782,6 +789,7 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 "confidence": row.get("confidence"),
                 "case_id": str(row["case_id"]) if row.get("case_id") else None,
                 "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+                "same_title_count": int(row.get("same_title_count") or 1),
             }
         )
     total = sum(s["count"] for s in stages)

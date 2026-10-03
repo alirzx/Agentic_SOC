@@ -3,7 +3,8 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { alertsApi, type Alert, type AlertFilters, type ConfidenceLabel } from '@/lib/api';
+import { useSearchParams } from 'next/navigation';
+import { alertsApi, type Alert, type AlertFilters, type ConfidenceLabel, type FunnelStage } from '@/lib/api';
 import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { EntityRiskQueue } from './EntityRiskQueue';
@@ -253,8 +254,28 @@ function AlertRow({
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
+const FUNNEL_STAGE_QUERY = new Set<string>([
+  'ingested',
+  'triaged',
+  'suppressed',
+  'investigating',
+  'cased',
+  'ready_for_jira',
+  'jira_pushed',
+]);
+
 export function AlertsView() {
-  const [filters, setFilters] = useState<AlertFilters>({ page: 1, pageSize: 25 });
+  const searchParams = useSearchParams();
+  const stageFromUrl = searchParams.get('funnel_stage');
+  const initialStage =
+    stageFromUrl && FUNNEL_STAGE_QUERY.has(stageFromUrl)
+      ? (stageFromUrl as FunnelStage)
+      : undefined;
+  const [filters, setFilters] = useState<AlertFilters>({
+    page: 1,
+    pageSize: 25,
+    funnel_stage: initialStage,
+  });
   // Default to the entity-centric queue — that's the whole point of Wave 1's
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.

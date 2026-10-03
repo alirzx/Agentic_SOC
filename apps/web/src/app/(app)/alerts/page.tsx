@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { AlertsView } from '@/components/alerts/AlertsView';
 
 export const metadata = {
@@ -5,5 +6,9 @@ export const metadata = {
 };
 
 export default function AlertsPage() {
-  return <AlertsView />;
+  return (
+    <Suspense fallback={null}>
+      <AlertsView />
+    </Suspense>
+  );
 }

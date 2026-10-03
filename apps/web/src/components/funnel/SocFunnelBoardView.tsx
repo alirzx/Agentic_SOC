@@ -28,6 +28,7 @@ function StageColumn({
   stage: FunnelBoardStage;
   alerts: FunnelBoardAlert[];
 }) {
+  const listed = alerts.reduce((n, a) => n + (a.same_title_count ?? 1), 0);
   return (
     <section
       className={clsx(
@@ -37,28 +38,60 @@ function StageColumn({
     >
       <header className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-gray-100">{stage.label}</h2>
-        <span className="text-xs font-mono text-gray-400">{stage.count}</span>
+        <Link
+          href={`/alerts?funnel_stage=${encodeURIComponent(stage.id)}`}
+          className="text-xs font-mono text-gray-400 hover:text-brand-300"
+          title={`Open all ${stage.count} alerts in Alerts`}
+        >
+          {stage.count}
+        </Link>
       </header>
       <ul className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto">
         {alerts.length === 0 ? (
           <li className="text-[11px] text-gray-600 py-2">No alerts in window</li>
         ) : (
-          alerts.map((alert) => (
-            <li key={alert.id}>
-              <Link
-                href={`/alerts/${alert.id}`}
-                className="block rounded-lg border border-[#374151]/50 bg-dark-20/40 px-2.5 py-2 hover:border-brand-500/40 transition-colors"
-              >
-                <p className="text-xs text-gray-200 line-clamp-2">{alert.title}</p>
-                <p className="mt-1 text-[10px] text-gray-500 font-mono uppercase tracking-wide">
-                  {alert.severity}
-                  {alert.disposition ? ` · ${alert.disposition}` : ''}
-                </p>
-              </Link>
-            </li>
-          ))
+          alerts.map((alert) => {
+            const copies = alert.same_title_count ?? 1;
+            return (
+              <li key={alert.id}>
+                <Link
+                  href={`/alerts/${alert.id}`}
+                  className="block rounded-lg border border-[#374151]/50 bg-dark-20/40 px-2.5 py-2 hover:border-brand-500/40 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs text-gray-200 line-clamp-2">{alert.title}</p>
+                    {copies > 1 ? (
+                      <span
+                        className="shrink-0 rounded border border-orange-500/30 bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-mono text-orange-200"
+                        title={`${copies} alerts share this title in ${stage.label}`}
+                      >
+                        ×{copies}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-500 font-mono uppercase tracking-wide">
+                    {alert.severity}
+                    {alert.disposition ? ` · ${alert.disposition}` : ''}
+                  </p>
+                </Link>
+              </li>
+            );
+          })
         )}
       </ul>
+      {stage.count > 0 ? (
+        <p className="text-[10px] text-gray-600">
+          {alerts.length} title{alerts.length === 1 ? '' : 's'} shown
+          {listed < stage.count ? ` · ${stage.count} alerts total` : ''}
+          {' · '}
+          <Link
+            href={`/alerts?funnel_stage=${encodeURIComponent(stage.id)}`}
+            className="text-gray-500 hover:text-brand-300 underline-offset-2 hover:underline"
+          >
+            view all
+          </Link>
+        </p>
+      ) : null}
     </section>
   );
 }
