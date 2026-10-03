@@ -56,6 +56,10 @@ from app.services.case_fanout import (
 )
 from app.services.case_postmortem import build_case_postmortem
 from app.services.case_postmortem_html import render_case_postmortem_html
+from app.services.case_investigation_brief import (
+    CaseInvestigationBrief,
+    build_case_investigation_brief,
+)
 from app.services.case_summary import build_case_summary
 from app.services.case_summary_html import render_case_summary_html
 
@@ -1226,6 +1230,29 @@ async def _emit_summary_breadcrumb(
         )
     )
     await db.commit()
+
+
+@router.get(
+    "/{case_id}/brief",
+    response_model=CaseInvestigationBrief,
+    summary="Investigation brief — evidence, alert reports, outcome",
+)
+async def case_investigation_brief(
+    case_id: str,
+    db: DBSession,
+    user: AuthUser,
+) -> CaseInvestigationBrief:
+    """Short analyst-facing brief: what we did, evidence, and outcome.
+
+    Distinct from ``/summary`` (archival snapshot) — this is the on-screen
+    Case workspace panel answering: incident vs FP, what triage/investigation
+    produced, and what to do next.
+    """
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    brief = await build_case_investigation_brief(db, cid, tenant_id=user.tenant_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    return brief
 
 
 @router.get(

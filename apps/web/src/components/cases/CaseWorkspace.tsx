@@ -39,6 +39,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { InvestigationLedger } from './InvestigationLedger';
+import { CaseInvestigationBriefPanel } from './CaseInvestigationBriefPanel';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 
 type WorkspaceTab =
@@ -878,6 +879,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       {/* Overview: Three-pane layout */}
       {activeTab === 'overview' && (
       <div className="space-y-4">
+        <CaseInvestigationBriefPanel caseId={caseRecord.id || caseId} />
         {/*
           Ambient Copilot — case-scoped contextual AI. We pass a compact
           snapshot of the case (no embedded alert blobs or full timeline) so the

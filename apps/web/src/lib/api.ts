@@ -1732,6 +1732,35 @@ export interface CaseAutoSummary {
   recommendations: CaseSummaryRecommendation[];
 }
 
+/** On-screen Case brief — evidence, alert reports, investigation actions, outcome. */
+export interface CaseInvestigationBrief {
+  case_id: string;
+  case_number?: string | null;
+  title: string;
+  severity: string;
+  status: string;
+  generated_at: string;
+  outcome: 'incident' | 'false_positive' | 'benign' | 'needs_review' | 'escalated' | 'unknown' | string;
+  outcome_label: string;
+  outcome_rationale: string;
+  disposition_counts: Record<string, number>;
+  ready_for_jira: boolean;
+  jira_pushed: boolean;
+  what_we_did: Array<{ kind: string; label: string; detail?: string | null }>;
+  evidence: Array<{ kind: string; text: string; source?: string | null }>;
+  alerts: Array<{
+    id: string;
+    title: string;
+    severity: string;
+    disposition?: string | null;
+    funnel_stage?: string | null;
+    summary?: string | null;
+    confidence?: number | null;
+  }>;
+  mitre_techniques: string[];
+  next_step?: string | null;
+}
+
 export interface CaseFilters {
   status?: string;
   priority?: string;
@@ -2050,6 +2079,10 @@ export const casesApi = {
     request<CaseAutoSummary>(`/api/v1/cases/${caseId}/summary`, {
       params: { format: 'json' },
     }),
+
+  /** Investigation brief for the Case overview panel. */
+  getInvestigationBrief: (caseId: string) =>
+    request<CaseInvestigationBrief>(`/api/v1/cases/${caseId}/brief`),
 
   /**
    * Open the per-case auto-summary HTML artifact in a new tab.
