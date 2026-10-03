@@ -1,12 +1,17 @@
-"""Agentic SOC product funnel — stages + promotion / Jira gates.
+"""Agentic SOC product funnel — stages + triage / investigation / Jira gates.
 
 Tracks where each alert sits on the path:
 
     ingested → triaged | suppressed → investigating → cased
              → ready_for_jira → jira_pushed
 
-Gates keep Jira free of noise: only real incidents with evidence
-(and not FP/benign / unapproved needs_review) may push to ITSM.
+Aligned with the Triage data-requirements doc:
+
+* Triage decides whether investigation is worth it (classification,
+  severity, FP likelihood, light entity context).
+* Investigation solves the case (cmdline, network, baselines, …).
+* Ready for Jira is only for real incidents with evidence — not every
+  heuristic true_positive that got a Case during backfill.
 """
 
 from __future__ import annotations
@@ -42,7 +47,6 @@ STAGE_LABELS: dict[str, str] = {
     JIRA_PUSHED: "Jira pushed",
 }
 
-# Ordered for board left→right (suppressed is a side exit after triage).
 BOARD_ORDER: tuple[str, ...] = (
     INGESTED,
     TRIAGED,
@@ -83,6 +87,42 @@ def _as_unit_confidence(confidence: float | int | None) -> float:
     return max(0.0, min(1.0, value))
 
 
+def has_triage_meaningful_metadata(
+    *,
+    rule_id: str | None = None,
+    rule_name: str | None = None,
+    mitre_techniques: list[Any] | None = None,
+    analytic_story: str | None = None,
+    security_domain: str | None = None,
+) -> bool:
+    """Triage doc §4 — meaningful minimum beyond signature/src/severity.
+
+    At least one of: rule id/name, MITRE technique, analytic story, security domain.
+    """
+    if (rule_id or "").strip():
+        return True
+    if (rule_name or "").strip():
+        return True
+    if (analytic_story or "").strip():
+        return True
+    if (security_domain or "").strip():
+        return True
+    if mitre_techniques and any(str(t).strip() for t in mitre_techniques):
+        return True
+    return False
+
+
+def has_investigation_evidence(
+    *,
+    ai_summary: str | None = None,
+    narrative: str | None = None,
+) -> bool:
+    """Light evidence signal that Investigation produced usable output."""
+    summary = (ai_summary or "").strip()
+    narr = (narrative or "").strip()
+    return len(summary) >= 80 or len(narr) >= 80
+
+
 def passes_investigation_gate(
     *,
     disposition: str | None,
@@ -91,11 +131,10 @@ def passes_investigation_gate(
 ) -> bool:
     """True when an alert may enter deep investigation / Case promotion.
 
-    Policy (product funnel P1):
-    * Never for FP / benign auto-closeables.
-    * Always for ``true_positive`` / ``likely_tp`` / ``escalate``.
-    * For ``needs_review``: severity high/critical, OR medium with
-      confidence ≥ 0.70 (70).
+    Triage → Investigation handoff (doc §2):
+    * Never for FP / benign.
+    * ``true_positive`` / ``likely_tp`` / ``escalate`` → investigate.
+    * ``needs_review``: high/critical, OR medium with confidence ≥ 0.70.
     """
     d = (disposition or "").strip().lower()
     if not d or d in _AUTO_CLOSEABLE:
@@ -113,6 +152,69 @@ def passes_investigation_gate(
     return d in _ESCALATE_VERDICTS and sev in _HIGH_SEV
 
 
+def passes_ready_for_jira_stage(
+    *,
+    disposition: str | None,
+    severity: str | None = None,
+    confidence: float | int | None = None,
+    case_id: Any = None,
+    tags: Any = None,
+    rule_id: str | None = None,
+    rule_name: str | None = None,
+    mitre_techniques: list[Any] | None = None,
+    analytic_story: str | None = None,
+    security_domain: str | None = None,
+    ai_summary: str | None = None,
+    narrative: str | None = None,
+    analyst_approved: bool = False,
+) -> bool:
+    """Stage gate for ``ready_for_jira`` (stricter than bare TP+case).
+
+    Simple policy (triage doc + product funnel):
+
+    1. Must have a Case.
+    2. Disposition must be TP / escalate / likely_tp (needs_review only with
+       analyst approval). Never FP/benign.
+    3. PLUS at least one evidence bar:
+       * severity high/critical, OR
+       * medium + confidence ≥ 70% + triage-meaningful metadata, OR
+       * investigation evidence (ai_summary / narrative), OR
+       * explicit analyst approval.
+    """
+    if not case_id:
+        return False
+    if not passes_jira_gate(
+        disposition=disposition,
+        severity=severity,
+        confidence=confidence,
+        tags=tags,
+        analyst_approved=analyst_approved,
+        require_evidence_bar=False,
+    ):
+        return False
+    if analyst_approved:
+        return True
+    sev = (severity or "medium").strip().lower()
+    conf = _as_unit_confidence(confidence)
+    if sev in _HIGH_SEV:
+        return True
+    if has_investigation_evidence(ai_summary=ai_summary, narrative=narrative):
+        return True
+    if (
+        sev == "medium"
+        and conf >= 0.70
+        and has_triage_meaningful_metadata(
+            rule_id=rule_id,
+            rule_name=rule_name,
+            mitre_techniques=mitre_techniques,
+            analytic_story=analytic_story,
+            security_domain=security_domain,
+        )
+    ):
+        return True
+    return False
+
+
 def passes_jira_gate(
     *,
     disposition: str | None,
@@ -120,15 +222,21 @@ def passes_jira_gate(
     confidence: float | int | None = None,
     tags: Any = None,
     analyst_approved: bool = False,
+    require_evidence_bar: bool = True,
+    rule_id: str | None = None,
+    rule_name: str | None = None,
+    mitre_techniques: list[Any] | None = None,
+    analytic_story: str | None = None,
+    security_domain: str | None = None,
+    ai_summary: str | None = None,
+    narrative: str | None = None,
+    case_id: Any = None,
 ) -> bool:
     """True when a case/alert may be pushed to Jira / ITSM.
 
-    Policy (product funnel P3):
-    * Never for FP / benign.
-    * ``needs_review`` stays internal unless ``analyst_approved``.
-    * ``true_positive`` / ``escalate`` / ``likely_tp`` may push.
-    * ``reportable`` tag alone is not enough without a non-FP disposition
-      (defense against noisy auto-promotion).
+    Disposition filter always applies. When ``require_evidence_bar`` is True
+    (default for real pushes), also require the Ready-for-Jira evidence bar
+    so medium heuristic TPs without investigation do not flood Jira.
     """
     d = (disposition or "").strip().lower()
     tag_set = _tag_set(tags)
@@ -136,19 +244,35 @@ def passes_jira_gate(
         return False
     if d == "needs_review" and not analyst_approved:
         return False
-    # Explicit analyst/operator approval unlocks any non-FP disposition.
     if analyst_approved and d not in _AUTO_CLOSEABLE:
         return True
-    if d in _JIRA_VERDICTS:
-        return True
-    if "reportable" in tag_set and d in _JIRA_VERDICTS:
-        return True
-    # Legacy cases with no disposition yet: allow (caller selected ITSM
-    # targets). Noise must be explicitly dispositioned/tagged to block.
+    if d not in _JIRA_VERDICTS and d:
+        return False
+    # Unknown disposition: only with explicit analyst approval (operator push).
     if not d:
+        return analyst_approved
+    if not require_evidence_bar:
         return True
-    # Severity/confidence are advisory for logging; disposition is the gate.
-    _ = severity, confidence
+    # Evidence bar (same as ready_for_jira stage, case optional for push API).
+    sev = (severity or "medium").strip().lower()
+    conf = _as_unit_confidence(confidence)
+    if sev in _HIGH_SEV:
+        return True
+    if has_investigation_evidence(ai_summary=ai_summary, narrative=narrative):
+        return True
+    if (
+        sev == "medium"
+        and conf >= 0.70
+        and has_triage_meaningful_metadata(
+            rule_id=rule_id,
+            rule_name=rule_name,
+            mitre_techniques=mitre_techniques,
+            analytic_story=analytic_story,
+            security_domain=security_domain,
+        )
+    ):
+        return True
+    _ = case_id
     return False
 
 

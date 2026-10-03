@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from app.services.funnel_stages import (
     READY_FOR_JIRA,
     SUPPRESSED,
     TRIAGED,
     passes_investigation_gate,
     passes_jira_gate,
+    passes_ready_for_jira_stage,
     stage_after_triage,
 )
 from app.services.incident_report import build_incident_report
@@ -47,10 +50,44 @@ def test_jira_gate_blocks_fp_and_unapproved_needs_review():
     assert not passes_jira_gate(disposition="false_positive")
     assert not passes_jira_gate(disposition="needs_review", analyst_approved=False)
     assert passes_jira_gate(disposition="needs_review", analyst_approved=True)
-    assert passes_jira_gate(disposition="true_positive")
-    assert passes_jira_gate(disposition="escalate")
-    # Legacy unknown disposition still allowed (operator-selected ITSM).
-    assert passes_jira_gate(disposition=None)
+    # TP alone is not enough — evidence bar required (triage doc).
+    assert not passes_jira_gate(disposition="true_positive", severity="medium", confidence=0.4)
+    assert passes_jira_gate(disposition="true_positive", severity="high")
+    assert passes_jira_gate(disposition="escalate", severity="critical")
+    # Unknown disposition only with analyst approval (operator ITSM select).
+    assert not passes_jira_gate(disposition=None)
+    assert passes_jira_gate(disposition=None, analyst_approved=True)
+
+
+def test_ready_for_jira_stage_evidence_bar():
+    case_id = uuid4()
+    # Medium TP + case without metadata/evidence → cased, not ready.
+    assert not passes_ready_for_jira_stage(
+        disposition="true_positive",
+        severity="medium",
+        confidence=0.4,
+        case_id=case_id,
+    )
+    assert passes_ready_for_jira_stage(
+        disposition="true_positive",
+        severity="high",
+        case_id=case_id,
+    )
+    assert passes_ready_for_jira_stage(
+        disposition="true_positive",
+        severity="medium",
+        confidence=0.8,
+        case_id=case_id,
+        rule_name="ESCU - Password Spray",
+        mitre_techniques=["T1110"],
+    )
+    assert passes_ready_for_jira_stage(
+        disposition="true_positive",
+        severity="medium",
+        confidence=0.2,
+        case_id=case_id,
+        ai_summary="x" * 90,
+    )
 
 
 def test_incident_report_has_required_sections():

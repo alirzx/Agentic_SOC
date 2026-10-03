@@ -100,8 +100,8 @@ export function SocFunnelBoardView() {
         <div>
           <h1 className="text-xl font-semibold text-white">SOC Funnel</h1>
           <p className="text-sm text-gray-400 mt-1 max-w-2xl">
-            Track alerts from ingest through auto-triage, investigation, case, and gated Jira push.
-            Noise exits at Suppressed; only real incidents reach Ready for Jira.
+            Track alerts from ingest through triage → investigation → case → gated Jira.
+            Triage decides if investigation is worth it; Ready for Jira needs evidence, not every TP.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -178,8 +178,9 @@ export function SocFunnelBoardView() {
       </div>
 
       <p className="text-[11px] text-gray-600">
-        Tip: filter Alerts by funnel stage, or open a case and use Promote → Jira only when
-        disposition is true_positive / escalate (needs_review requires analyst approval).
+        Ready for Jira requires Case + TP/escalate plus an evidence bar: high/critical
+        severity, or medium with confidence ≥70% and rule/MITRE metadata, or investigation
+        summary — not every heuristic true_positive. needs_review needs analyst approval.
       </p>
     </div>
   );

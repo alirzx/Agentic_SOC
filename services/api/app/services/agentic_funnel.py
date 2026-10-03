@@ -122,7 +122,11 @@ def derive_funnel_stage(
 
     Priority (highest wins): jira_pushed → ready_for_jira → cased →
     suppressed → investigating → triaged → ingested.
+
+    Ready for Jira uses the triage evidence bar (see ``passes_ready_for_jira_stage``).
     """
+    from app.services.funnel_stages import passes_ready_for_jira_stage
+
     disposition = (alert.get("disposition") or "").strip().lower()
     tags = alert.get("tags")
     tag_fp = False
@@ -138,7 +142,18 @@ def derive_funnel_stage(
     if alert.get("case_id"):
         if has_external_ref:
             return "jira_pushed"
-        if disposition in {"true_positive", "escalate", "likely_tp"}:
+        if passes_ready_for_jira_stage(
+            disposition=disposition,
+            severity=alert.get("severity"),
+            confidence=alert.get("confidence") or alert.get("ai_score"),
+            case_id=alert.get("case_id"),
+            tags=tags,
+            rule_id=alert.get("rule_id"),
+            rule_name=alert.get("rule_name"),
+            mitre_techniques=alert.get("mitre_techniques"),
+            ai_summary=alert.get("ai_summary"),
+            narrative=alert.get("narrative"),
+        ):
             return "ready_for_jira"
         return "cased"
     if disposition in {"false_positive", "benign", "benign_true_positive"} or tag_fp:
@@ -217,6 +232,8 @@ async def sync_legacy_funnel_stages(
                 ).bindparams(tid=tenant_id, since=since)
             )
         )
+    # Ready for Jira — triage evidence bar (NOT every TP+case):
+    # high/critical OR investigation prose OR (medium + conf≥70 + rule/MITRE).
     counts["ready_for_jira"] = _n(
         await db.execute(
             text(
@@ -228,11 +245,68 @@ async def sync_legacy_funnel_stages(
                    AND case_id IS NOT NULL
                    AND disposition IN ('true_positive','escalate','likely_tp')
                    AND funnel_stage NOT IN ('jira_pushed','ready_for_jira')
+                   AND (
+                         lower(severity) IN ('high','critical')
+                      OR length(COALESCE(ai_summary, '')) >= 80
+                      OR length(COALESCE(narrative, '')) >= 80
+                      OR (
+                           lower(severity) = 'medium'
+                       AND COALESCE(
+                             confidence,
+                             CASE
+                               WHEN ai_score IS NULL THEN 0
+                               WHEN ai_score <= 1 THEN CAST(ROUND(ai_score * 100) AS int)
+                               ELSE CAST(ROUND(ai_score) AS int)
+                             END
+                           ) >= 70
+                       AND (
+                             NULLIF(rule_id, '') IS NOT NULL
+                          OR NULLIF(rule_name, '') IS NOT NULL
+                          OR jsonb_array_length(COALESCE(mitre_techniques, '[]'::jsonb)) > 0
+                       )
+                      )
+                   )
                 """
             ).bindparams(tid=tenant_id, since=since)
         )
     )
-    counts["cased"] = _n(
+    # Demote heuristic TP+case noise that was previously marked ready_for_jira.
+    demoted = _n(
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET funnel_stage = 'cased', updated_at = now()
+                 WHERE tenant_id = :tid
+                   AND created_at >= :since
+                   AND case_id IS NOT NULL
+                   AND funnel_stage = 'ready_for_jira'
+                   AND NOT (
+                         lower(severity) IN ('high','critical')
+                      OR length(COALESCE(ai_summary, '')) >= 80
+                      OR length(COALESCE(narrative, '')) >= 80
+                      OR (
+                           lower(severity) = 'medium'
+                       AND COALESCE(
+                             confidence,
+                             CASE
+                               WHEN ai_score IS NULL THEN 0
+                               WHEN ai_score <= 1 THEN CAST(ROUND(ai_score * 100) AS int)
+                               ELSE CAST(ROUND(ai_score) AS int)
+                             END
+                           ) >= 70
+                       AND (
+                             NULLIF(rule_id, '') IS NOT NULL
+                          OR NULLIF(rule_name, '') IS NOT NULL
+                          OR jsonb_array_length(COALESCE(mitre_techniques, '[]'::jsonb)) > 0
+                       )
+                      )
+                   )
+                """
+            ).bindparams(tid=tenant_id, since=since)
+        )
+    )
+    counts["cased"] = demoted + _n(
         await db.execute(
             text(
                 """
@@ -295,7 +369,9 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             text(
                 """
                 SELECT id, title, severity, status, disposition, case_id, tags,
-                       affected_hosts, affected_ips, raw_event, created_at
+                       affected_hosts, affected_ips, raw_event, created_at,
+                       rule_id, rule_name, mitre_techniques, confidence, ai_score,
+                       ai_summary, narrative
                   FROM alerts
                  WHERE tenant_id = :tid AND created_at >= :since
                  ORDER BY created_at DESC
@@ -435,9 +511,24 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 now=now,
             )
         )
+        from app.services.funnel_stages import passes_ready_for_jira_stage
+
         next_stage = (
             "ready_for_jira"
-            if disposition in {"true_positive", "escalate", "likely_tp"}
+            if passes_ready_for_jira_stage(
+                disposition=disposition,
+                severity=severity,
+                confidence=alert.get("confidence") or alert.get("ai_score"),
+                case_id=case_id,
+                tags=alert.get("tags"),
+                rule_id=alert.get("rule_id") if isinstance(alert.get("rule_id"), str) else None,
+                rule_name=alert.get("rule_name") if isinstance(alert.get("rule_name"), str) else None,
+                mitre_techniques=alert.get("mitre_techniques")
+                if isinstance(alert.get("mitre_techniques"), list)
+                else None,
+                ai_summary=alert.get("ai_summary") if isinstance(alert.get("ai_summary"), str) else None,
+                narrative=alert.get("narrative") if isinstance(alert.get("narrative"), str) else None,
+            )
             else "cased"
         )
         await db.execute(

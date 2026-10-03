@@ -2,9 +2,14 @@
 
 Kept byte-small and dependency-free so the Kafka auto-triage worker can
 advance ``alerts.funnel_stage`` without importing the API package.
+
+Ready-for-Jira evidence bar matches the triage input-requirements doc:
+high/critical, or medium@≥0.70 with MITRE/rule signal, or findings prose.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 INGESTED = "ingested"
 TRIAGED = "triaged"
@@ -54,4 +59,27 @@ def passes_investigation_gate(
         if sev == "medium" and conf >= 0.70:
             return True
         return False
+    return False
+
+
+def passes_ready_for_jira_stage(
+    *,
+    disposition: str | None,
+    severity: str | None,
+    confidence: float | int | None,
+    mitre_techniques: list[Any] | None = None,
+    findings: list[Any] | None = None,
+) -> bool:
+    """Mirror of API Ready-for-Jira evidence bar (no case_id check here)."""
+    d = (disposition or "").strip().lower()
+    if d not in {"true_positive", "escalate", "likely_tp"}:
+        return False
+    sev = (severity or "medium").strip().lower()
+    conf = _as_unit_confidence(confidence)
+    if sev in _HIGH_SEV:
+        return True
+    if any(len(str(f).strip()) >= 80 for f in (findings or [])[:5]):
+        return True
+    if sev == "medium" and conf >= 0.70 and mitre_techniques:
+        return True
     return False

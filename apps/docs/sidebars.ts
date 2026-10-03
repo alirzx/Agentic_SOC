@@ -46,6 +46,7 @@ const sidebars: SidebarsConfig = {
       label: "Console",
       items: [
         "console/funnel-kpis",
+        "console/triage-input-requirements",
         "console/queue",
         "console/rule-tuning",
         "console/investigation-rail",

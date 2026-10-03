@@ -25,7 +25,13 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
-from app.funnel.stages import CASED, READY_FOR_JIRA, SUPPRESSED, passes_investigation_gate
+from app.funnel.stages import (
+    CASED,
+    READY_FOR_JIRA,
+    SUPPRESSED,
+    passes_investigation_gate,
+    passes_ready_for_jira_stage,
+)
 from app.investigator import ledger as ledger_module
 from app.models.state import InvestigationState
 
@@ -326,11 +332,15 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     json.dumps(tags),
                     now,
                 )
-                # TP / escalate → ready_for_jira; needs_review stays at cased
-                # until an analyst approves the ITSM push (P3 gate).
                 next_stage = (
                     READY_FOR_JIRA
-                    if verdict in {TRUE_POSITIVE, "escalate", "likely_tp"}
+                    if passes_ready_for_jira_stage(
+                        disposition=verdict,
+                        severity=severity,
+                        confidence=float(state.confidence or 0.0),
+                        mitre_techniques=mitre,
+                        findings=list(state.findings or []),
+                    )
                     else CASED
                 )
                 await conn.execute(

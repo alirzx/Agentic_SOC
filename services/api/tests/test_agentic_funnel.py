@@ -25,16 +25,18 @@ def test_high_severity_promotes():
     assert classify_backfill({"title": "Something odd", "severity": "critical"}) == "true_positive"
 
 
-def test_backfill_tp_is_jira_eligible():
+def test_backfill_tp_is_jira_eligible_only_with_evidence_bar():
     disp = classify_backfill({"title": "Detect Password Spray Attempts", "severity": "medium"})
-    assert passes_jira_gate(disposition=disp)
+    # Medium heuristic TP alone must NOT flood Jira.
+    assert not passes_jira_gate(disposition=disp, severity="medium", confidence=0.4)
+    assert passes_jira_gate(disposition=disp, severity="high")
 
 
 def test_backfill_fp_is_not_jira_eligible():
     disp = classify_backfill(
         {"title": "Network - Unapproved Port Activity Detected - Rule", "severity": "low"}
     )
-    assert not passes_jira_gate(disposition=disp)
+    assert not passes_jira_gate(disposition=disp, severity="low")
 
 
 def test_derive_funnel_stage_legacy_paths():
@@ -43,9 +45,21 @@ def test_derive_funnel_stage_legacy_paths():
     assert derive_funnel_stage({"disposition": None, "status": "investigating"}) == "investigating"
     case_id = uuid4()
     assert derive_funnel_stage({"case_id": case_id, "disposition": "needs_review"}) == "cased"
+    # Medium TP + case without evidence bar → cased (not Ready for Jira).
     assert (
         derive_funnel_stage(
-            {"case_id": case_id, "disposition": "true_positive"},
+            {"case_id": case_id, "disposition": "true_positive", "severity": "medium"},
+            has_external_ref=False,
+        )
+        == "cased"
+    )
+    assert (
+        derive_funnel_stage(
+            {
+                "case_id": case_id,
+                "disposition": "true_positive",
+                "severity": "high",
+            },
             has_external_ref=False,
         )
         == "ready_for_jira"

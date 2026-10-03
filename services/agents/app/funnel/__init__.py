@@ -9,6 +9,7 @@ from app.funnel.stages import (
     SUPPRESSED,
     TRIAGED,
     passes_investigation_gate,
+    passes_ready_for_jira_stage,
     stage_after_triage,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "SUPPRESSED",
     "TRIAGED",
     "passes_investigation_gate",
+    "passes_ready_for_jira_stage",
     "stage_after_triage",
 ]

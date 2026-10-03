@@ -395,6 +395,7 @@ async def test_fanout_create_case_happy_path_persists_external_ref() -> None:
             tenant_id=tenant_id,
             connector_ids=[connector.id],
             pushed_by="operator@tryaisoc.com",
+            analyst_approved=True,
         )
 
     assert len(results) == 1
@@ -431,6 +432,7 @@ async def test_fanout_create_case_credential_vault_failure_short_circuits() -> N
             case_row=case,
             tenant_id=tenant_id,
             connector_ids=[connector.id],
+            analyst_approved=True,
         )
 
     assert len(results) == 1
@@ -461,6 +463,7 @@ async def test_fanout_create_case_unsupported_capability_is_recorded() -> None:
             case_row=case,
             tenant_id=tenant_id,
             connector_ids=[connector.id],
+            analyst_approved=True,
         )
 
     assert len(results) == 1
@@ -493,6 +496,7 @@ async def test_fanout_create_case_missing_external_id_is_error() -> None:
             case_row=case,
             tenant_id=tenant_id,
             connector_ids=[connector.id],
+            analyst_approved=True,
         )
 
     assert len(results) == 1
