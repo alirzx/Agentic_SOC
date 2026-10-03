@@ -308,30 +308,65 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     )
 
                 linked_ids = [alert_uuid] + [r["id"] for r in related_rows]
-                case_id = uuid.uuid4()
-                tags = {_TAG_PROMOTED: True, _TAG_REPORTABLE: True, "source": "agentic_funnel"}
-                await conn.execute(
+                # Reuse an open agentic case with the same title instead of
+                # minting near-identical duplicates for every ESCU firing.
+                existing_case = await conn.fetchval(
                     """
-                    INSERT INTO aisoc_cases (
-                        id, tenant_id, title, description, severity, status,
-                        mitre_techniques, alert_ids, tags,
-                        opened_at, created_at, updated_at, created_by
-                    ) VALUES (
-                        $1, $2, $3, $4, $5, 'new',
-                        $6::jsonb, $7::uuid[], $8::jsonb,
-                        $9, $9, $9, 'agentic-funnel'
-                    )
+                    SELECT id FROM aisoc_cases
+                     WHERE tenant_id = $1
+                       AND title = $2
+                       AND status NOT IN ('resolved', 'closed')
+                       AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                     ORDER BY opened_at ASC
+                     LIMIT 1
                     """,
-                    case_id,
                     state.tenant_id,
                     title,
-                    description,
-                    severity if severity in {"info", "low", "medium", "high", "critical"} else "medium",
-                    json.dumps([str(m) for m in mitre]),
-                    linked_ids,
-                    json.dumps(tags),
-                    now,
                 )
+                created_new = existing_case is None
+                case_id = existing_case or uuid.uuid4()
+                tags = {_TAG_PROMOTED: True, _TAG_REPORTABLE: True, "source": "agentic_funnel"}
+                if created_new:
+                    await conn.execute(
+                        """
+                        INSERT INTO aisoc_cases (
+                            id, tenant_id, title, description, severity, status,
+                            mitre_techniques, alert_ids, tags,
+                            opened_at, created_at, updated_at, created_by
+                        ) VALUES (
+                            $1, $2, $3, $4, $5, 'new',
+                            $6::jsonb, $7::uuid[], $8::jsonb,
+                            $9, $9, $9, 'agentic-funnel'
+                        )
+                        """,
+                        case_id,
+                        state.tenant_id,
+                        title,
+                        description,
+                        severity if severity in {"info", "low", "medium", "high", "critical"} else "medium",
+                        json.dumps([str(m) for m in mitre]),
+                        linked_ids,
+                        json.dumps(tags),
+                        now,
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        UPDATE aisoc_cases
+                           SET alert_ids = (
+                                 SELECT ARRAY(
+                                   SELECT DISTINCT x
+                                     FROM unnest(COALESCE(alert_ids, ARRAY[]::uuid[]) || $2::uuid[]) AS t(x)
+                                 )
+                               ),
+                               updated_at = $3
+                         WHERE id = $1 AND tenant_id = $4
+                        """,
+                        case_id,
+                        linked_ids,
+                        now,
+                        state.tenant_id,
+                    )
                 next_stage = (
                     READY_FOR_JIRA
                     if passes_ready_for_jira_stage(
@@ -364,35 +399,36 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     json.dumps([_TAG_PROMOTED, _TAG_REPORTABLE]),
                     next_stage,
                 )
-                for task in tasks:
-                    await conn.execute(
-                        """
-                        INSERT INTO aisoc_case_tasks
-                          (id, case_id, tenant_id, title, status, created_at, updated_at, created_by)
-                        VALUES
-                          ($1, $2, $3, $4, 'todo', $5, $5, 'agentic-funnel')
-                        """,
-                        uuid.uuid4(),
-                        case_id,
-                        state.tenant_id,
-                        task["title"][:500],
-                        now,
-                    )
-                    # Store SPL / description as a system comment when present
-                    if task.get("description"):
+                if created_new:
+                    for task in tasks:
                         await conn.execute(
                             """
-                            INSERT INTO aisoc_case_comments
-                              (id, case_id, tenant_id, author, body, is_system, created_at)
+                            INSERT INTO aisoc_case_tasks
+                              (id, case_id, tenant_id, title, status, created_at, updated_at, created_by)
                             VALUES
-                              ($1, $2, $3, 'agentic-funnel', $4, TRUE, $5)
+                              ($1, $2, $3, $4, 'todo', $5, $5, 'agentic-funnel')
                             """,
                             uuid.uuid4(),
                             case_id,
                             state.tenant_id,
-                            f"{task['title']}\n\n{task['description']}"[:8000],
+                            task["title"][:500],
                             now,
                         )
+                        # Store SPL / description as a system comment when present
+                        if task.get("description"):
+                            await conn.execute(
+                                """
+                                INSERT INTO aisoc_case_comments
+                                  (id, case_id, tenant_id, author, body, is_system, created_at)
+                                VALUES
+                                  ($1, $2, $3, 'agentic-funnel', $4, TRUE, $5)
+                                """,
+                                uuid.uuid4(),
+                                case_id,
+                                state.tenant_id,
+                                f"{task['title']}\n\n{task['description']}"[:8000],
+                                now,
+                            )
         logger.info(
             "case_promoter.created",
             case_id=str(case_id),

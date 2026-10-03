@@ -12,6 +12,7 @@ from sqlalchemy import text
 from app.api.v1.deps import AuthUser, DBSession
 from app.services import agentic_funnel
 from app.services.case_fanout import fanout_create_case
+from app.services.exact_dedupe import dedupe_exact
 from app.services.funnel_stages import READY_FOR_JIRA, passes_jira_gate
 from app.services.incident_report import build_incident_report
 
@@ -91,6 +92,34 @@ async def post_funnel_backfill(
     """Classify existing alerts: FP-tag noise, promote importants into Cases + tasks."""
     payload = await agentic_funnel.run_backfill(db, tenant_id=user.tenant_id, hours=hours)
     return BackfillResponse(**payload)
+
+
+class DedupeExactResponse(BaseModel):
+    cases: dict[str, Any]
+    alerts: dict[str, Any]
+
+
+@router.post(
+    "/funnel/dedupe-exact",
+    response_model=DedupeExactResponse,
+    summary="Delete exact-duplicate alerts and cases",
+)
+async def post_funnel_dedupe_exact(
+    db: DBSession,
+    user: AuthUser,
+    dry_run: bool = Query(
+        False,
+        description="When true, report what would be deleted without writing.",
+    ),
+) -> DedupeExactResponse:
+    """Collapse exact duplicate alerts/cases for the caller's tenant.
+
+    Keeps one canonical row per group (richest / oldest), re-links alerts onto
+    the surviving case, then deletes the rest. Agentic funnel cases that share
+    the same title+severity are treated as duplicates.
+    """
+    payload = await dedupe_exact(db, tenant_id=user.tenant_id, dry_run=dry_run)
+    return DedupeExactResponse(**payload)
 
 
 @router.post("/funnel/push-itsm", response_model=PushItsmResponse, summary="Push case to Jira (gated)")

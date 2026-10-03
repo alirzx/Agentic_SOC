@@ -476,7 +476,6 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         ).fetchall()
         sibling_ids.extend(r[0] for r in sibs)
 
-        case_id = uuid.uuid4()
         now = datetime.now(UTC)
         title = str(alert.get("title") or "Agentic SOC case")[:500]
         severity = str(alert.get("severity") or "medium")
@@ -488,29 +487,68 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             f"Primary alert: {alert_id}\n"
             f"Linked alerts: {len(sibling_ids)}\n"
         )
-        await db.execute(
-            text(
-                """
-                INSERT INTO aisoc_cases (
-                    id, tenant_id, title, description, severity, status,
-                    alert_ids, tags, opened_at, created_at, updated_at, created_by
-                ) VALUES (
-                    :id, :tid, :title, :description, :severity, 'new',
-                    CAST(:alert_ids AS UUID[]), CAST(:tags AS JSONB),
-                    :now, :now, :now, 'agentic-funnel-backfill'
-                )
-                """
-            ).bindparams(
-                id=case_id,
-                tid=tenant_id,
-                title=title,
-                description=description,
-                severity=severity,
-                alert_ids=[str(x) for x in sibling_ids],
-                tags=json.dumps({"agentic-promoted": True, "reportable": True, "source": "backfill"}),
-                now=now,
+        # Attach to an existing open agentic case with the same title instead
+        # of creating one near-identical case per uncased alert.
+        existing = (
+            await db.execute(
+                text(
+                    """
+                    SELECT id, alert_ids FROM aisoc_cases
+                     WHERE tenant_id = :tid
+                       AND title = :title
+                       AND status NOT IN ('resolved', 'closed')
+                       AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                     ORDER BY opened_at ASC
+                     LIMIT 1
+                    """
+                ).bindparams(tid=tenant_id, title=title)
             )
-        )
+        ).fetchone()
+        created_new = existing is None
+        if existing is not None:
+            case_id = existing[0]
+            prior = list(existing[1] or [])
+            merged = list(dict.fromkeys([*prior, *sibling_ids]))
+            await db.execute(
+                text(
+                    """
+                    UPDATE aisoc_cases
+                       SET alert_ids = CAST(:alert_ids AS UUID[]),
+                           updated_at = :now
+                     WHERE id = :id AND tenant_id = :tid
+                    """
+                ).bindparams(
+                    id=case_id,
+                    tid=tenant_id,
+                    alert_ids=[str(x) for x in merged],
+                    now=now,
+                )
+            )
+        else:
+            case_id = uuid.uuid4()
+            await db.execute(
+                text(
+                    """
+                    INSERT INTO aisoc_cases (
+                        id, tenant_id, title, description, severity, status,
+                        alert_ids, tags, opened_at, created_at, updated_at, created_by
+                    ) VALUES (
+                        :id, :tid, :title, :description, :severity, 'new',
+                        CAST(:alert_ids AS UUID[]), CAST(:tags AS JSONB),
+                        :now, :now, :now, 'agentic-funnel-backfill'
+                    )
+                    """
+                ).bindparams(
+                    id=case_id,
+                    tid=tenant_id,
+                    title=title,
+                    description=description,
+                    severity=severity,
+                    alert_ids=[str(x) for x in sibling_ids],
+                    tags=json.dumps({"agentic-promoted": True, "reportable": True, "source": "backfill"}),
+                    now=now,
+                )
+            )
         from app.services.funnel_stages import passes_ready_for_jira_stage
 
         next_stage = (
@@ -552,35 +590,36 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 stage=next_stage,
             )
         )
-        for task in _tasks_for(alert, host, src, dst):
-            await db.execute(
-                text(
-                    """
-                    INSERT INTO aisoc_case_tasks
-                      (id, case_id, tenant_id, title, status, created_at, updated_at, created_by)
-                    VALUES
-                      (:id, :cid, :tid, :title, 'todo', :now, :now, 'agentic-funnel-backfill')
-                    """
-                ).bindparams(id=uuid.uuid4(), cid=case_id, tid=tenant_id, title=task["title"][:500], now=now)
-            )
-            if task.get("description"):
+        if created_new:
+            for task in _tasks_for(alert, host, src, dst):
                 await db.execute(
                     text(
                         """
-                        INSERT INTO aisoc_case_comments
-                          (id, case_id, tenant_id, author, body, is_system, created_at)
+                        INSERT INTO aisoc_case_tasks
+                          (id, case_id, tenant_id, title, status, created_at, updated_at, created_by)
                         VALUES
-                          (:id, :cid, :tid, 'agentic-funnel-backfill', :body, TRUE, :now)
+                          (:id, :cid, :tid, :title, 'todo', :now, :now, 'agentic-funnel-backfill')
                         """
-                    ).bindparams(
-                        id=uuid.uuid4(),
-                        cid=case_id,
-                        tid=tenant_id,
-                        body=f"{task['title']}\n\n{task['description']}"[:8000],
-                        now=now,
-                    )
+                    ).bindparams(id=uuid.uuid4(), cid=case_id, tid=tenant_id, title=task["title"][:500], now=now)
                 )
-        cases_created += 1
+                if task.get("description"):
+                    await db.execute(
+                        text(
+                            """
+                            INSERT INTO aisoc_case_comments
+                              (id, case_id, tenant_id, author, body, is_system, created_at)
+                            VALUES
+                              (:id, :cid, :tid, 'agentic-funnel-backfill', :body, TRUE, :now)
+                            """
+                        ).bindparams(
+                            id=uuid.uuid4(),
+                            cid=case_id,
+                            tid=tenant_id,
+                            body=f"{task['title']}\n\n{task['description']}"[:8000],
+                            now=now,
+                        )
+                    )
+            cases_created += 1
         linked += len(sibling_ids)
         reportable.append(
             {
@@ -590,6 +629,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 "disposition": disposition,
                 "alert_count": len(sibling_ids),
                 "check": (f"Review {src} ↔ {dst}" if src and dst else f"Review {host or title}"),
+                "reused_existing_case": not created_new,
             }
         )
 
