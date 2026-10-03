@@ -152,7 +152,15 @@ export function SocFunnelBoardView() {
       ) : null}
 
       {error ? (
-        <p className="text-sm text-red-400">Failed to load funnel board.</p>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+          <p className="text-sm text-red-300">Failed to load funnel board.</p>
+          <p className="text-xs text-red-400/90 font-mono mt-1 break-all">
+            {error instanceof Error ? error.message : String(error)}
+          </p>
+          <p className="text-[11px] text-gray-500 mt-1">
+            If this is 404, rebuild/recreate the API container on the latest commit.
+          </p>
+        </div>
       ) : null}
       {isLoading && !data ? (
         <p className="text-sm text-gray-500">Loading funnel stages…</p>
