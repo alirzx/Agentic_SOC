@@ -6,6 +6,9 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from app.services.splunk_notable import (
+    _has_wide_annotation_fields,
+    _merge_stash_into_raw_event,
+    _unwrap_splunk_stash,
     apply_notable,
     extract_mitre_ids,
     iocs_from_raw,
@@ -140,3 +143,74 @@ def test_apply_notable_sets_mitre_from_annotations_mitre_attack():
     assert alert.mitre_techniques == ["T1110.003"]
     assert alert.raw_event["annotations_mitre_attack"] == "T1110.003"
     assert alert.enrichment_data.get("splunk_wide_reenrich_attempted") is True
+
+
+def test_unwrap_ocsf_nested_raw_data():
+    ocsf = {
+        "class_uid": 2001,
+        "message": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+        "finding": {"uid": "e0158673-3e13-41a4-951e-1f0633f881e6@@notable@@time1790668163"},
+        "raw_data": (
+            '{"source":"splunk","raw_event":{"search_name":"ESCU - Detect Password Spray '
+            'Attack Behavior From Source - Rule","src":"B_309",'
+            '"source_event_id":"e0158673-3e13-41a4-951e-1f0633f881e6@@notable@@time1790668163",'
+            '"orig_rule_description":"Password spray"}}'
+        ),
+    }
+    stash = _unwrap_splunk_stash(ocsf)
+    assert stash["src"] == "B_309"
+    assert "Password spray" in stash["orig_rule_description"]
+    assert not _has_wide_annotation_fields(ocsf)
+
+
+def test_merge_wide_fields_into_ocsf_raw_for_raw_tab():
+    ocsf = {
+        "class_uid": 2001,
+        "message": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+        "raw_data": '{"source":"splunk","raw_event":{"src":"B_309"}}',
+        "metadata": {"product": {"name": "splunk"}},
+    }
+    stash = {
+        "search_name": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+        "annotations_mitre_attack": "T1110.003",
+        "annotations_analytic_story": "Compromised User Account",
+        "src": "B_309",
+        "orig_rule_description": "Password spray analytic.",
+    }
+    merged = _merge_stash_into_raw_event(ocsf, stash)
+    assert merged["annotations_mitre_attack"] == "T1110.003"
+    assert merged["splunk_notable"]["annotations_mitre_attack"] == "T1110.003"
+    assert merged["class_uid"] == 2001
+    assert _has_wide_annotation_fields(merged)
+
+
+def test_apply_notable_merges_into_existing_ocsf_raw_event():
+    alert = _alert(
+        mitre_techniques=[],
+        affected_users=[],
+        raw_event={
+            "class_uid": 2001,
+            "message": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+            "finding": {"uid": "nid@@notable@@1"},
+            "raw_data": '{"source":"splunk","raw_event":{"src":"B_309"}}',
+            "metadata": {"product": {"name": "splunk"}},
+            "src_endpoint": {"ip": "B_309"},
+        },
+    )
+    apply_notable(
+        alert,
+        {
+            "title": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+            "severity": "medium",
+            "raw_event": {
+                "search_name": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+                "annotations_mitre_attack": "T1110.003",
+                "src": "B_309",
+                "orig_rule_description": "Password spray analytic.",
+                "notable_id": "nid@@notable@@1",
+            },
+        },
+    )
+    assert alert.raw_event["class_uid"] == 2001
+    assert alert.raw_event["annotations_mitre_attack"] == "T1110.003"
+    assert alert.mitre_techniques == ["T1110.003"]

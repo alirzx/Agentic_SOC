@@ -89,12 +89,17 @@ class ResourceConfigRequest(BaseModel):
 
 
 class NotableLookupRequest(BaseModel):
-    """Look up one fired ES notable by search_name + host."""
+    """Look up one fired ES notable by search_name + host / notable id."""
 
     auth_config: dict[str, Any] = PydField(default_factory=dict)
     connector_config: dict[str, Any] = PydField(default_factory=dict)
-    title: str = PydField(..., min_length=1, max_length=500)
+    title: str = PydField(default="", max_length=500)
     host: str | None = PydField(default=None, max_length=256)
+    notable_id: str | None = PydField(
+        default=None,
+        max_length=512,
+        description="source_event_id / notable_id / source_guid when known",
+    )
 
 
 class FederatedQueryRequest(BaseModel):
@@ -407,11 +412,16 @@ async def lookup_splunk_notable(payload: NotableLookupRequest):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"connector config does not match schema: {exc}",
         ) from exc
+    if not (payload.title or "").strip() and not (payload.notable_id or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="title or notable_id is required",
+        )
     lookup = getattr(connector, "lookup_notable", None)
     if lookup is None:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="lookup_notable not supported")
     try:
-        notable = await lookup(payload.title, payload.host)
+        notable = await lookup(payload.title, payload.host, payload.notable_id)
     except Exception:
         logger.exception("connector.lookup_notable.runtime_error")
         raise HTTPException(

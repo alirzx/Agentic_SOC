@@ -60,23 +60,78 @@ _SEVERITY = {
 }
 
 
+def _is_ocsf_shape(raw: dict[str, Any]) -> bool:
+    return "class_uid" in raw or "raw_data" in raw or "category_uid" in raw
+
+
+def _unwrap_splunk_stash(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return the innermost Splunk notable stash from an alert.raw_event blob."""
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    nested = raw.get("splunk_notable")
+    if isinstance(nested, dict) and (
+        nested.get("annotations_mitre_attack")
+        or nested.get("search_name")
+        or nested.get("orig_rule_description")
+    ):
+        return nested
+    if not _is_ocsf_shape(raw) and (
+        raw.get("search_name") or raw.get("orig_rule_description") or raw.get("annotations_mitre_attack")
+    ):
+        return raw
+    raw_data = raw.get("raw_data")
+    if isinstance(raw_data, str) and raw_data.lstrip().startswith("{"):
+        try:
+            outer = json.loads(raw_data)
+        except json.JSONDecodeError:
+            outer = None
+        if isinstance(outer, dict):
+            inner = outer.get("raw_event")
+            if isinstance(inner, dict):
+                return inner
+            if str(outer.get("source") or "").lower() == "splunk":
+                return outer
+    finding = raw.get("finding")
+    if isinstance(finding, dict) and finding.get("uid"):
+        return {"source_event_id": finding.get("uid"), "notable_id": finding.get("uid")}
+    return {}
+
+
 def _is_splunk_alert(alert: Alert) -> bool:
     if (alert.connector_type or "").lower() == "splunk":
         return True
     tags = alert.tags or []
-    return any(str(t).lower() == "splunk" for t in tags)
-
-
-def _has_wide_annotation_fields(raw: dict[str, Any]) -> bool:
-    """True when the stash already carries the wide Mission Control columns."""
-    if raw.get("annotations_mitre_attack"):
+    if any(str(t).lower() == "splunk" for t in tags):
         return True
-    annotations = raw.get("annotations")
+    raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
+    meta = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+    product = meta.get("product") if isinstance(meta.get("product"), dict) else {}
+    if str(product.get("name") or "").lower() == "splunk":
+        return True
+    if str(product.get("vendor_name") or "").lower() == "splunk":
+        return True
+    raw_data = raw.get("raw_data")
+    if isinstance(raw_data, str) and "splunk" in raw_data.lower():
+        return True
+    return False
+
+
+def _annotation_present(blob: dict[str, Any]) -> bool:
+    if blob.get("annotations_mitre_attack"):
+        return True
+    annotations = blob.get("annotations")
     if isinstance(annotations, dict) and annotations.get("mitre_attack"):
         return True
     if isinstance(annotations, str) and "mitre_attack" in annotations:
         return True
     return False
+
+
+def _has_wide_annotation_fields(raw: dict[str, Any]) -> bool:
+    """True when the stash already carries the wide Mission Control columns."""
+    if _annotation_present(raw):
+        return True
+    return _annotation_present(_unwrap_splunk_stash(raw))
 
 
 def needs_hydrate(alert: Alert) -> bool:
@@ -85,10 +140,12 @@ def needs_hydrate(alert: Alert) -> bool:
         return False
     raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
     extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
-    # Older polls had orig_rule_* but dropped MITRE annotations — re-fetch.
-    if not _has_wide_annotation_fields(raw) and not extra.get("splunk_wide_reenrich_attempted"):
+    # Always retry until wide annotations land — a prior failed attempt must not
+    # permanently skip (lookup used to fail on src-only entities).
+    if not _has_wide_annotation_fields(raw):
         return True
-    if raw.get("orig_rule_description") and (raw.get("detection_id") or raw.get("notable_id")):
+    stash = _unwrap_splunk_stash(raw)
+    if stash.get("orig_rule_description") and (stash.get("detection_id") or stash.get("notable_id")):
         return False
     return not extra.get("splunk_mc_hydrate_attempted")
 
@@ -163,6 +220,69 @@ def iocs_from_raw(raw: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
+_WIDE_RAW_KEYS = (
+    "annotations_mitre_attack",
+    "annotations",
+    "annotations_analytic_story",
+    "annotations_kill_chain_phases",
+    "annotations_cis20",
+    "annotations_nist",
+    "annotations_data_source",
+    "annotations_type",
+    "annotations_type_list",
+    "orig_rule_title",
+    "orig_rule_description",
+    "search_name",
+    "detection_id",
+    "notable_id",
+    "source_event_id",
+    "source_guid",
+    "src",
+    "src_ip",
+    "dest",
+    "dest_ip",
+    "dest_port",
+    "dvc",
+    "host",
+    "severity",
+    "transport",
+    "is_prohibited",
+    "EventID",
+    "Image",
+    "Path",
+    "user",
+)
+
+
+def _merge_stash_into_raw_event(existing: dict[str, Any], stash: dict[str, Any]) -> dict[str, Any]:
+    """Keep OCSF wrapper (Raw tab) but surface wide Splunk fields at the top."""
+    if not isinstance(existing, dict) or not _is_ocsf_shape(existing):
+        return stash
+    merged = dict(existing)
+    merged["splunk_notable"] = stash
+    for key in _WIDE_RAW_KEYS:
+        value = stash.get(key)
+        if value not in (None, ""):
+            merged[key] = value
+    raw_data = existing.get("raw_data")
+    if isinstance(raw_data, str) and raw_data.lstrip().startswith("{"):
+        try:
+            outer = json.loads(raw_data)
+        except json.JSONDecodeError:
+            outer = None
+        if isinstance(outer, dict):
+            inner = outer.get("raw_event")
+            if isinstance(inner, dict):
+                outer["raw_event"] = {**inner, **stash}
+            else:
+                outer["raw_event"] = stash
+            for key in ("annotations_mitre_attack", "annotations"):
+                if stash.get(key) not in (None, ""):
+                    outer[key] = stash.get(key)
+            merged["raw_data"] = json.dumps(outer, ensure_ascii=False)
+    return merged
+
+
 def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
     """Copy a normalized Splunk notable onto an existing Alert row."""
     raw = envelope.get("raw_event") if isinstance(envelope.get("raw_event"), dict) else envelope
@@ -204,11 +324,11 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
     alert.rule_name = str(raw.get("orig_rule_title") or title)
     alert.rule_id = str(raw.get("detection_id") or raw.get("search_name") or title)
     alert.connector_type = "splunk"
-    alert.raw_event = raw
+    existing_raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
+    alert.raw_event = _merge_stash_into_raw_event(existing_raw, raw)
     hosts = [str(h) for h in (alert.affected_hosts or []) if h]
     if host and str(host) not in hosts:
         hosts.append(str(host))
-    alert.affected_hosts = hosts
     ips = [str(i) for i in (alert.affected_ips or []) if i]
     if src and _looks_ip(src) and str(src) not in ips:
         ips.append(str(src))
@@ -216,6 +336,15 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
     if dest_ip and _looks_ip(dest_ip) and str(dest_ip) not in ips:
         ips.append(str(dest_ip))
     alert.affected_ips = ips
+    users = [str(u) for u in (getattr(alert, "affected_users", None) or []) if u]
+    if src and not _looks_ip(src):
+        if str(src) not in hosts:
+            hosts.append(str(src))
+        if str(src) not in users:
+            users.append(str(src))
+    alert.affected_hosts = hosts
+    if hasattr(alert, "affected_users"):
+        alert.affected_users = users
     techniques = extract_mitre_ids(raw, title)
     alert.mitre_techniques = techniques
     alert.mitre_tactics = [
@@ -257,6 +386,7 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
             "splunk_mc_hydrate_attempted": True,
             "splunk_wide_reenrich_attempted": True,
             "splunk_wide_reenrich_at": datetime.now(UTC).isoformat(),
+            "splunk_wide_reenrich_ok": _annotation_present(raw) or bool(techniques),
         }
     )
     alert.enrichment_data = extra
@@ -270,32 +400,50 @@ async def hydrate_alert(db: AsyncSession, alert: Alert, *, force: bool = False) 
     """Fetch the live Splunk notable and persist it onto ``alert`` when stubby."""
     if not force and not needs_hydrate(alert):
         return alert
-    title = (alert.title or alert.rule_name or "").strip()
-    host = ""
-    if alert.affected_hosts:
-        host = str(alert.affected_hosts[0])
     raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
-    host = (
-        host
-        or str(raw.get("dvc") or "")
-        or str(raw.get("dest") or "")
-        or str(raw.get("host") or "")
+    stash = _unwrap_splunk_stash(raw)
+    title = (
+        alert.title
+        or alert.rule_name
+        or str(stash.get("search_name") or raw.get("message") or "")
+    ).strip()
+    entity = ""
+    if alert.affected_hosts:
+        entity = str(alert.affected_hosts[0])
+    entity = (
+        entity
+        or str(stash.get("dvc") or "")
+        or str(stash.get("dest") or "")
+        or str(stash.get("host") or "")
+        or str(stash.get("src") or "")
+        or str(stash.get("src_ip") or "")
     )
-    envelope = await fetch_notable(db, alert.tenant_id, title, host or None)
+    if not entity:
+        src_ep = raw.get("src_endpoint") if isinstance(raw.get("src_endpoint"), dict) else {}
+        entity = str(src_ep.get("ip") or src_ep.get("hostname") or "")
+    notable_id = str(
+        stash.get("source_event_id")
+        or stash.get("notable_id")
+        or stash.get("source_guid")
+        or ""
+    )
+    if not notable_id and isinstance(raw.get("finding"), dict):
+        notable_id = str(raw["finding"].get("uid") or "")
+    envelope = await fetch_notable(
+        db,
+        alert.tenant_id,
+        title,
+        entity or None,
+        notable_id=notable_id or None,
+    )
     if envelope is None:
-        # Preserve existing stash; only synthesize when the row is still stubby.
-        if not raw.get("orig_rule_description"):
-            apply_notable(
-                alert,
-                {
-                    "title": title,
-                    "hostname": host,
-                    "raw_event": raw or {"search_name": title, "host": host},
-                },
-            )
+        # Do not permanently burn the attempt when Splunk returned nothing —
+        # leave the flag unset for non-force so a later retry can succeed.
         extra = dict(alert.enrichment_data or {})
-        extra["splunk_wide_reenrich_attempted"] = True
-        extra["splunk_wide_reenrich_at"] = datetime.now(UTC).isoformat()
+        extra["splunk_wide_reenrich_last_miss_at"] = datetime.now(UTC).isoformat()
+        if force:
+            extra["splunk_wide_reenrich_attempted"] = True
+            extra["splunk_wide_reenrich_ok"] = False
         alert.enrichment_data = extra
         alert.updated_at = datetime.now(UTC)
     else:
@@ -318,9 +466,10 @@ async def reenrich_tenant_splunk_alerts(
     Targets Splunk-sourced alerts missing ``annotations_mitre_attack`` / nested
     MITRE annotations (the columns added to the Mission Control SPL table).
     """
-    from sqlalchemy import or_
+    from sqlalchemy import String, cast, or_
 
     lim = max(1, min(int(limit), 5000))
+    # Include OCSF-wrapped Splunk findings that never got connector_type=splunk.
     q = (
         select(Alert)
         .where(Alert.tenant_id == tenant_id)
@@ -328,13 +477,14 @@ async def reenrich_tenant_splunk_alerts(
             or_(
                 Alert.connector_type == "splunk",
                 Alert.tags.contains(["splunk"]),
+                cast(Alert.raw_event, String).ilike("%splunk%"),
             )
         )
         .order_by(Alert.created_at.desc())
-        .limit(lim)
+        .limit(lim * 2)
     )
     rows = (await db.execute(q)).scalars().all()
-    candidates = [a for a in rows if force or needs_hydrate(a)]
+    candidates = [a for a in rows if _is_splunk_alert(a) and (force or needs_hydrate(a))][:lim]
     enriched = 0
     skipped = 0
     failed = 0
@@ -440,9 +590,10 @@ async def fetch_notable(
     tenant_id: uuid.UUID,
     title: str,
     host: str | None,
+    notable_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Ask the connectors service for the matching index=notable row."""
-    if not title:
+    """Ask the connectors service for the matching index=agentic* notable row."""
+    if not (title or "").strip() and not (notable_id or "").strip():
         return None
     result = await db.execute(
         select(Connector).where(
@@ -463,8 +614,9 @@ async def fetch_notable(
     payload = {
         "auth_config": auth,
         "connector_config": connector.connector_config or {},
-        "title": title,
+        "title": title or "",
         "host": host,
+        "notable_id": notable_id,
     }
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(90.0)) as client:

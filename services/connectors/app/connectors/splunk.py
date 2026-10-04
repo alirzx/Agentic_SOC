@@ -656,23 +656,67 @@ class SplunkConnector(BaseConnector):
             self._next_checkpoint = None
         return fresh
 
-    async def lookup_notable(self, title: str, host: str | None = None) -> dict[str, Any] | None:
-        """Return the latest index=agentic* row for this ES rule + host."""
-        title_q = _spl_quote((title or "").strip())
-        if not title_q:
-            return None
-        filters = f'(search_name="{title_q}" OR source="{title_q}")'
-        if host and host.strip():
-            host_q = _spl_quote(host.strip())
-            filters = f'{filters} (dvc="{host_q}" OR dest="{host_q}" OR host="{host_q}")'
-        spl = mission_control_spl(filters, limit=5)
+    async def lookup_notable(
+        self,
+        title: str,
+        host: str | None = None,
+        notable_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Return the latest index=agentic* row for this ES rule (+ optional entity/id).
+
+        Tries, in order:
+        1. ``notable_id`` / ``source_event_id`` / ``source_guid``
+        2. ``search_name`` + entity (host/dvc/dest/**src**)
+        3. ``search_name`` alone (entity filter often fails for identity rules
+           where the only entity is ``src=B_309`` not ``host``)
+        """
         async with httpx.AsyncClient(**self._client_kwargs()) as client:
+            nid = (notable_id or "").strip()
+            if nid:
+                nid_q = _spl_quote(nid)
+                rows = await self._run_adhoc(
+                    client,
+                    mission_control_spl(
+                        f'(notable_id="{nid_q}" OR source_event_id="{nid_q}" OR source_guid="{nid_q}")',
+                        limit=5,
+                    ),
+                    self._earliest_time,
+                    oneshot=False,
+                )
+                if rows:
+                    return self.normalize(rows[0])
+
+            title_q = _spl_quote((title or "").strip())
+            if not title_q:
+                return None
+            title_filter = f'(search_name="{title_q}" OR source="{title_q}")'
+            entity = (host or "").strip()
+            if entity:
+                entity_q = _spl_quote(entity)
+                # Include src/src_ip — password-spray style notables often only set src.
+                entity_filter = (
+                    f'{title_filter} ('
+                    f'dvc="{entity_q}" OR dest="{entity_q}" OR host="{entity_q}" '
+                    f'OR src="{entity_q}" OR src_ip="{entity_q}")'
+                )
+                rows = await self._run_adhoc(
+                    client,
+                    mission_control_spl(entity_filter, limit=5),
+                    self._earliest_time,
+                    oneshot=False,
+                )
+                if rows:
+                    return self.normalize(rows[0])
+
             rows = await self._run_adhoc(
-                client, spl, self._earliest_time, oneshot=False
+                client,
+                mission_control_spl(title_filter, limit=5),
+                self._earliest_time,
+                oneshot=False,
             )
-        if not rows:
-            return None
-        return self.normalize(rows[0])
+            if not rows:
+                return None
+            return self.normalize(rows[0])
 
     async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
         """Run a translated SPL search and return raw rows."""
