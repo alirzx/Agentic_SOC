@@ -142,6 +142,23 @@ export function SocFunnelBoardView() {
     }
   };
 
+  const runReenrichSplunk = async () => {
+    setBusy(true);
+    setBackfillMsg(null);
+    try {
+      const result = await socFunnelApi.reenrichSplunk({ limit: 500, force: true });
+      setBackfillMsg(
+        `Splunk re-enrich — scanned ${result.scanned}, enriched ${result.enriched}, ` +
+          `skipped ${result.skipped}, failed ${result.failed}, cases updated ${result.cases_updated}`,
+      );
+      await mutate();
+    } catch (err) {
+      setBackfillMsg(err instanceof Error ? err.message : 'Splunk re-enrich failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const stages = data?.stages ?? [];
   const samples = data?.samples_by_stage ?? {};
 
@@ -187,6 +204,15 @@ export function SocFunnelBoardView() {
             title="Delete alerts/cases that look identical (same title, rule, entities)"
           >
             {busy ? 'Running…' : 'Remove duplicates'}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void runReenrichSplunk()}
+            className="text-xs px-3 py-1.5 rounded-lg bg-sky-500/15 border border-sky-500/40 text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
+            title="Re-fetch annotations_mitre_attack and other wide Splunk fields onto existing alerts/cases"
+          >
+            {busy ? 'Running…' : 'Re-enrich Splunk'}
           </button>
         </div>
       </header>

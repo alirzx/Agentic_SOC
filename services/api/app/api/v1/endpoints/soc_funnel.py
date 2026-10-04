@@ -15,6 +15,7 @@ from app.services.case_fanout import fanout_create_case
 from app.services.exact_dedupe import dedupe_exact
 from app.services.funnel_stages import READY_FOR_JIRA, passes_jira_gate
 from app.services.incident_report import build_incident_report
+from app.services.splunk_notable import reenrich_tenant_splunk_alerts
 
 router = APIRouter(prefix="/soc", tags=["soc-funnel"])
 
@@ -99,6 +100,18 @@ class DedupeExactResponse(BaseModel):
     alerts: dict[str, Any]
 
 
+class ReenrichSplunkResponse(BaseModel):
+    scanned: int
+    candidates: int
+    enriched: int
+    skipped: int
+    failed: int
+    cases_updated: int
+    sample_alert_ids: list[str] = Field(default_factory=list)
+    dry_run: bool = False
+    force: bool = False
+
+
 @router.post(
     "/funnel/dedupe-exact",
     response_model=DedupeExactResponse,
@@ -120,6 +133,37 @@ async def post_funnel_dedupe_exact(
     """
     payload = await dedupe_exact(db, tenant_id=user.tenant_id, dry_run=dry_run)
     return DedupeExactResponse(**payload)
+
+
+@router.post(
+    "/funnel/reenrich-splunk",
+    response_model=ReenrichSplunkResponse,
+    summary="Re-enrich existing Splunk alerts with wide notable fields",
+)
+async def post_funnel_reenrich_splunk(
+    db: DBSession,
+    user: AuthUser,
+    limit: int = Query(500, ge=1, le=5000),
+    force: bool = Query(
+        False,
+        description="Re-fetch even when a previous wide re-enrich was attempted.",
+    ),
+    dry_run: bool = Query(False, description="Count candidates without calling Splunk."),
+) -> ReenrichSplunkResponse:
+    """Pull ``annotations_mitre_attack`` and other wide MC fields onto existing alerts.
+
+    Uses the connectors Splunk ``lookup_notable`` path (new Mission Control SPL
+    table), updates alert ``raw_event`` / ``mitre_techniques``, then unions MITRE
+    onto linked cases.
+    """
+    payload = await reenrich_tenant_splunk_alerts(
+        db,
+        tenant_id=user.tenant_id,
+        limit=limit,
+        force=force,
+        dry_run=dry_run,
+    )
+    return ReenrichSplunkResponse(**payload)
 
 
 @router.post("/funnel/push-itsm", response_model=PushItsmResponse, summary="Push case to Jira (gated)")

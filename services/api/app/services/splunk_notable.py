@@ -60,14 +60,36 @@ _SEVERITY = {
 }
 
 
+def _is_splunk_alert(alert: Alert) -> bool:
+    if (alert.connector_type or "").lower() == "splunk":
+        return True
+    tags = alert.tags or []
+    return any(str(t).lower() == "splunk" for t in tags)
+
+
+def _has_wide_annotation_fields(raw: dict[str, Any]) -> bool:
+    """True when the stash already carries the wide Mission Control columns."""
+    if raw.get("annotations_mitre_attack"):
+        return True
+    annotations = raw.get("annotations")
+    if isinstance(annotations, dict) and annotations.get("mitre_attack"):
+        return True
+    if isinstance(annotations, str) and "mitre_attack" in annotations:
+        return True
+    return False
+
+
 def needs_hydrate(alert: Alert) -> bool:
-    """True when the row is missing Mission Control extract fields."""
-    if (alert.connector_type or "").lower() != "splunk":
+    """True when the row is missing Mission Control / wide annotation fields."""
+    if not _is_splunk_alert(alert):
         return False
     raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
+    extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
+    # Older polls had orig_rule_* but dropped MITRE annotations — re-fetch.
+    if not _has_wide_annotation_fields(raw) and not extra.get("splunk_wide_reenrich_attempted"):
+        return True
     if raw.get("orig_rule_description") and (raw.get("detection_id") or raw.get("notable_id")):
         return False
-    extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
     return not extra.get("splunk_mc_hydrate_attempted")
 
 
@@ -75,6 +97,7 @@ def extract_mitre_ids(raw: dict[str, Any], title: str | None = None) -> list[str
     """Collect MITRE technique IDs from a notable row, then the ES catalog."""
     found: list[str] = []
     for key in (
+        "annotations_mitre_attack",
         "annotations.mitre_attack",
         "orig_rule.annotations.mitre_attack",
         "mitre_attack",
@@ -85,6 +108,8 @@ def extract_mitre_ids(raw: dict[str, Any], title: str | None = None) -> list[str
     annotations = raw.get("annotations")
     if isinstance(annotations, dict):
         _extend_ids(found, annotations.get("mitre_attack"))
+    else:
+        _extend_ids(found, annotations)
     orig = raw.get("orig_rule")
     if isinstance(orig, dict):
         nested = orig.get("annotations")
@@ -230,6 +255,8 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
             "splunk_source_ref": str(event_id or alert.rule_id or ""),
             "splunk_hydrate_attempted": True,
             "splunk_mc_hydrate_attempted": True,
+            "splunk_wide_reenrich_attempted": True,
+            "splunk_wide_reenrich_at": datetime.now(UTC).isoformat(),
         }
     )
     alert.enrichment_data = extra
@@ -239,31 +266,173 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
     alert.updated_at = datetime.now(UTC)
 
 
-async def hydrate_alert(db: AsyncSession, alert: Alert) -> Alert:
+async def hydrate_alert(db: AsyncSession, alert: Alert, *, force: bool = False) -> Alert:
     """Fetch the live Splunk notable and persist it onto ``alert`` when stubby."""
-    if not needs_hydrate(alert):
+    if not force and not needs_hydrate(alert):
         return alert
     title = (alert.title or alert.rule_name or "").strip()
     host = ""
     if alert.affected_hosts:
         host = str(alert.affected_hosts[0])
     raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
-    host = host or str(raw.get("host") or "")
+    host = (
+        host
+        or str(raw.get("dvc") or "")
+        or str(raw.get("dest") or "")
+        or str(raw.get("host") or "")
+    )
     envelope = await fetch_notable(db, alert.tenant_id, title, host or None)
     if envelope is None:
-        apply_notable(
-            alert,
-            {
-                "title": title,
-                "hostname": host,
-                "raw_event": raw or {"search_name": title, "host": host},
-            },
-        )
+        # Preserve existing stash; only synthesize when the row is still stubby.
+        if not raw.get("orig_rule_description"):
+            apply_notable(
+                alert,
+                {
+                    "title": title,
+                    "hostname": host,
+                    "raw_event": raw or {"search_name": title, "host": host},
+                },
+            )
+        extra = dict(alert.enrichment_data or {})
+        extra["splunk_wide_reenrich_attempted"] = True
+        extra["splunk_wide_reenrich_at"] = datetime.now(UTC).isoformat()
+        alert.enrichment_data = extra
+        alert.updated_at = datetime.now(UTC)
     else:
         apply_notable(alert, envelope)
     await db.commit()
     await db.refresh(alert)
     return alert
+
+
+async def reenrich_tenant_splunk_alerts(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    limit: int = 500,
+    force: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Re-fetch wide Splunk notable fields for existing alerts and sync case MITRE.
+
+    Targets Splunk-sourced alerts missing ``annotations_mitre_attack`` / nested
+    MITRE annotations (the columns added to the Mission Control SPL table).
+    """
+    from sqlalchemy import or_
+
+    lim = max(1, min(int(limit), 5000))
+    q = (
+        select(Alert)
+        .where(Alert.tenant_id == tenant_id)
+        .where(
+            or_(
+                Alert.connector_type == "splunk",
+                Alert.tags.contains(["splunk"]),
+            )
+        )
+        .order_by(Alert.created_at.desc())
+        .limit(lim)
+    )
+    rows = (await db.execute(q)).scalars().all()
+    candidates = [a for a in rows if force or needs_hydrate(a)]
+    enriched = 0
+    skipped = 0
+    failed = 0
+    sample_ids: list[str] = []
+    for alert in candidates:
+        if dry_run:
+            enriched += 1
+            if len(sample_ids) < 20:
+                sample_ids.append(str(alert.id))
+            continue
+        before = _has_wide_annotation_fields(
+            alert.raw_event if isinstance(alert.raw_event, dict) else {}
+        )
+        try:
+            await hydrate_alert(db, alert, force=True)
+            after = _has_wide_annotation_fields(
+                alert.raw_event if isinstance(alert.raw_event, dict) else {}
+            )
+            if after and (force or not before or alert.mitre_techniques):
+                enriched += 1
+                if len(sample_ids) < 20:
+                    sample_ids.append(str(alert.id))
+            else:
+                skipped += 1
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            logger.warning(
+                "splunk_notable.reenrich_failed alert=%s err=%s",
+                str(alert.id).replace("\r", " ").replace("\n", " ")[:64],
+                str(exc).replace("\r", " ").replace("\n", " ")[:200],
+            )
+
+    cases_updated = 0
+    if not dry_run and enriched:
+        cases_updated = await _sync_case_mitre_from_alerts(db, tenant_id=tenant_id)
+        await db.commit()
+
+    return {
+        "scanned": len(rows),
+        "candidates": len(candidates),
+        "enriched": enriched,
+        "skipped": skipped,
+        "failed": failed,
+        "cases_updated": cases_updated,
+        "sample_alert_ids": sample_ids,
+        "dry_run": dry_run,
+        "force": force,
+    }
+
+
+async def _sync_case_mitre_from_alerts(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+) -> int:
+    """Union MITRE techniques from linked alerts onto open aisoc_cases."""
+    from sqlalchemy import text
+
+    result = await db.execute(
+        text(
+            """
+            WITH alert_tech AS (
+              SELECT c.id AS case_id,
+                     COALESCE(
+                       (
+                         SELECT jsonb_agg(DISTINCT upper(t))
+                           FROM alerts a
+                           CROSS JOIN LATERAL jsonb_array_elements_text(
+                             CASE
+                               WHEN jsonb_typeof(COALESCE(a.mitre_techniques, '[]'::jsonb)) = 'array'
+                               THEN COALESCE(a.mitre_techniques, '[]'::jsonb)
+                               ELSE '[]'::jsonb
+                             END
+                           ) AS t(t)
+                          WHERE a.tenant_id = :tid
+                            AND (
+                              a.case_id = c.id
+                              OR a.id = ANY(COALESCE(c.alert_ids, ARRAY[]::uuid[]))
+                            )
+                            AND t ~* '^T[0-9]'
+                       ),
+                       '[]'::jsonb
+                     ) AS techniques
+                FROM aisoc_cases c
+               WHERE c.tenant_id = :tid
+                 AND c.status NOT IN ('closed')
+            )
+            UPDATE aisoc_cases c
+               SET mitre_techniques = a.techniques,
+                   updated_at = now()
+              FROM alert_tech a
+             WHERE c.id = a.case_id
+               AND a.techniques <> '[]'::jsonb
+               AND COALESCE(c.mitre_techniques, '[]'::jsonb) IS DISTINCT FROM a.techniques
+            """
+        ).bindparams(tid=tenant_id)
+    )
+    return int(result.rowcount or 0)
 
 
 async def fetch_notable(

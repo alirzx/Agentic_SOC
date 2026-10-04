@@ -961,6 +961,26 @@ export const socFunnelApi = {
       method: 'POST',
       params: { dry_run: String(dryRun) },
     }),
+  /** Re-fetch wide Splunk notable fields (MITRE annotations, etc.) onto existing alerts. */
+  reenrichSplunk: (opts?: { limit?: number; force?: boolean; dryRun?: boolean }) =>
+    request<{
+      scanned: number;
+      candidates: number;
+      enriched: number;
+      skipped: number;
+      failed: number;
+      cases_updated: number;
+      sample_alert_ids: string[];
+      dry_run: boolean;
+      force: boolean;
+    }>('/api/v1/soc/funnel/reenrich-splunk', {
+      method: 'POST',
+      params: {
+        limit: String(opts?.limit ?? 500),
+        force: String(opts?.force ?? true),
+        dry_run: String(opts?.dryRun ?? false),
+      },
+    }),
   pushItsm: (body: {
     case_id: string;
     connector_ids: string[];

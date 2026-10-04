@@ -56,7 +56,8 @@ def test_needs_hydrate_when_mission_control_fields_missing():
     assert needs_hydrate(_alert(raw_event={"dest_port": "3389"})) is True
 
 
-def test_needs_hydrate_false_when_extract_fields_present():
+def test_needs_hydrate_when_orig_rule_present_but_mitre_annotations_missing():
+    """Older polls had MC extract fields but dropped annotations_mitre_attack."""
     alert = _alert(
         raw_event={
             "orig_rule_description": "The device connected to a prohibited port.",
@@ -64,7 +65,24 @@ def test_needs_hydrate_false_when_extract_fields_present():
             "dest_port": "3389",
         }
     )
+    assert needs_hydrate(alert) is True
+
+
+def test_needs_hydrate_false_when_wide_annotations_present():
+    alert = _alert(
+        raw_event={
+            "orig_rule_description": "The device connected to a prohibited port.",
+            "detection_id": "6dd9e9ab-1111-2222-3333-444444444444",
+            "annotations_mitre_attack": "T1046",
+            "dest_port": "3389",
+        }
+    )
     assert needs_hydrate(alert) is False
+
+
+def test_extract_mitre_from_annotations_mitre_attack_field():
+    ids = extract_mitre_ids({"annotations_mitre_attack": "T1110.003"})
+    assert ids == ["T1110.003"]
 
 
 def test_apply_notable_uses_orig_rule_description_and_ids():
@@ -100,3 +118,25 @@ def test_apply_notable_uses_orig_rule_description_and_ids():
     iocs = iocs_from_raw(alert.raw_event)
     assert {"type": "port", "value": "tcp/3389"} in iocs
     assert any(row["technique_id"] == "T1046" for row in mitre_attack_rows(alert.mitre_techniques))
+
+
+def test_apply_notable_sets_mitre_from_annotations_mitre_attack():
+    alert = _alert(mitre_techniques=[])
+    apply_notable(
+        alert,
+        {
+            "title": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+            "severity": "medium",
+            "raw_event": {
+                "search_name": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+                "annotations_mitre_attack": "T1110.003",
+                "annotations": '{"mitre_attack":["T1110.003"],"analytic_story":["Compromised User Account"]}',
+                "orig_rule_description": "Password spray analytic.",
+                "detection_id": "abc",
+                "notable_id": "nid-1",
+            },
+        },
+    )
+    assert alert.mitre_techniques == ["T1110.003"]
+    assert alert.raw_event["annotations_mitre_attack"] == "T1110.003"
+    assert alert.enrichment_data.get("splunk_wide_reenrich_attempted") is True
