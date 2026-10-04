@@ -30,6 +30,9 @@ def test_mission_control_spl_tables_extracted_fields():
     assert "orig_rule_description" in spl
     assert "notable_id=coalesce" in spl
     assert "dest_port" in spl
+    assert "annotations_mitre_attack" in spl
+    assert "annotations_analytic_story" in spl
+    assert "EventID" in spl
     assert "earliest=" not in spl
     lookup = mission_control_spl('(search_name="Network - Unapproved Port Activity Detected - Rule")', limit=5)
     assert "search_name=" in lookup
@@ -46,6 +49,15 @@ def test_old_notable_table_is_replaced_catalog_rest_is_not():
     assert _is_replaceable_notable_search("")
     assert _is_replaceable_notable_search(
         "search index=notable | extract | eval notable_id=coalesce(source_event_id, source_guid, detection_id) | table _time"
+    )
+    # Older agentic* MC pipeline without MITRE columns must be upgraded.
+    assert _is_replaceable_notable_search(
+        "search index=agentic* | extract "
+        "| eval notable_id=coalesce(source_event_id, source_guid, detection_id) "
+        "| table _time notable_id search_name detection_id dvc dest dest_port "
+        "src src_ip src_port severity security_domain status owner disposition "
+        "orig_rule_title orig_rule_description source_event_id source_guid "
+        "transport is_prohibited | sort 0 - _time"
     )
     assert not _is_replaceable_notable_search("| rest /services/saved/searches | table title")
     assert not _is_replaceable_notable_search(_DEFAULT_NOTABLE_SPL)
@@ -368,6 +380,25 @@ def test_normalize_mission_control_extract_row():
     assert out["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
     assert out["external_id"] == "af145ac9-6b34-49b9-af4a-afe5e342e47c"
     assert out["raw_event"]["detection_id"] == "6dd9e9ab-1111-2222-3333-444444444444"
+
+
+def test_normalize_extracts_mitre_from_annotations():
+    c = _conn()
+    row = {
+        "_time": "2026-09-29T11:19:26.000+03:30",
+        "search_name": "ESCU - Detect Password Spray Attack Behavior From Source - Rule",
+        "source_event_id": "e0158673-3e13-41a4-951e-1f0633f881e6@@notable@@time1790668163",
+        "severity": "medium",
+        "annotations_mitre_attack": "T1110.003",
+        "annotations": (
+            '{"analytic_story":["Compromised User Account"],'
+            '"mitre_attack":["T1110.003"],"type":"TTP"}'
+        ),
+        "src": "B_309",
+    }
+    out = c.normalize(row)
+    assert out["mitre_techniques"] == ["T1110.003"]
+    assert out["raw_event"]["annotations_mitre_attack"] == "T1110.003"
 
 
 @respx.mock

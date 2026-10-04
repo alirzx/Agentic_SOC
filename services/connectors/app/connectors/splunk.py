@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import re
 from typing import Any
 from urllib.parse import quote
@@ -47,12 +48,24 @@ _SEVERITY_BY_URGENCY = {
 # Mission Control stash fields extracted from ``index=agentic*`` ``_raw``.
 # Time window is applied via ``earliest_time`` / poll cadence — do not embed
 # ``earliest=`` in the SPL (it fights the connector's lookback).
+#
+# Keep this list wide: ESCU / ES notables carry MITRE + analytic-story
+# annotations and endpoint/identity context that triage needs. Verified
+# against live Splunk ``index=agentic* | extract | fieldsummary``.
 _DEFAULT_INDEX = "agentic*"
 _MC_TABLE_FIELDS = (
-    "_time notable_id search_name detection_id dvc dest dest_port "
-    "src src_ip src_port severity security_domain status owner disposition "
+    "_time notable_id search_name detection_id detection_type "
+    "dvc dest dest_ip dest_port dest_nt_host dest_os dest_owner dest_priority "
+    "dest_category dest_bunit dest_country dest_city dest_mac "
+    "src src_ip src_port host user user_name "
+    "severity urgency status owner disposition security_domain transport is_prohibited "
     "orig_rule_title orig_rule_description source_event_id source_guid "
-    "transport is_prohibited"
+    "annotations annotations_mitre_attack annotations_analytic_story "
+    "annotations_kill_chain_phases annotations_cis20 annotations_nist "
+    "annotations_data_source annotations_type annotations_type_list "
+    "action EventID Image Path ProcessID ImageLoaded ScriptBlockText "
+    "entity entity_type risk_object risk_score normalized_risk_object "
+    "contributing_events_search app authentication_method signature signature_id"
 )
 _MISSION_CONTROL_PIPELINE = (
     "| extract "
@@ -61,6 +74,7 @@ _MISSION_CONTROL_PIPELINE = (
     "| sort 0 - _time"
 )
 _DEFAULT_NOTABLE_SPL = f"search index={_DEFAULT_INDEX} {_MISSION_CONTROL_PIPELINE}"
+_MITRE_TECH_RE = re.compile(r"\bT\d{4}(?:\.\d{3})?\b", re.IGNORECASE)
 
 # Default scheduler cadence for Splunk (30 minutes).
 _DEFAULT_POLL_INTERVAL_SECONDS = 1800
@@ -153,20 +167,73 @@ def _is_replaceable_notable_search(spl: str) -> bool:
     """True when stored custom SPL should be superseded by the current default.
 
     Covers empty config, legacy ``index=notable`` stock polls (with or without
-    extract), and bare ``index=agentic*`` table polls without extract — so
-    existing connector rows pick up the current Mission Control pipeline.
+    extract), bare ``index=agentic*`` table polls without extract, and older
+    Mission Control pipelines that omit MITRE annotation columns — so existing
+    connector rows pick up the current wide field table.
     """
     stripped = (spl or "").strip()
     if not stripped:
         return True
     lower = stripped.lower()
+    if lower == _DEFAULT_NOTABLE_SPL.lower():
+        return False
     if lower.startswith("| rest") or "/services/" in lower:
         return False
     if lower.startswith("search index=notable"):
         return True
-    if lower.startswith(f"search index={_DEFAULT_INDEX.lower()}") and "| extract" not in lower:
-        return True
+    if lower.startswith(f"search index={_DEFAULT_INDEX.lower()}"):
+        if "| extract" not in lower:
+            return True
+        # Prior defaults that already used extract but dropped MITRE / wide fields.
+        if "annotations_mitre_attack" not in lower:
+            return True
     return False
+
+
+def _mitre_techniques_from_row(row: dict[str, Any]) -> list[str]:
+    """Pull MITRE technique IDs from flattened or nested notable annotations."""
+    found: list[str] = []
+
+    def _extend(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, list):
+            for item in value:
+                _extend(item)
+            return
+        if isinstance(value, dict):
+            for key in ("mitre_attack", "technique_id", "id", "technique"):
+                if key in value:
+                    _extend(value.get(key))
+            return
+        text = str(value).strip()
+        if not text:
+            return
+        if text.startswith("{") or text.startswith("["):
+            try:
+                _extend(json.loads(text))
+                return
+            except (ValueError, TypeError):
+                pass
+        for match in _MITRE_TECH_RE.findall(text):
+            tid = match.upper()
+            if tid not in found:
+                found.append(tid)
+
+    for key in (
+        "annotations_mitre_attack",
+        "annotations.mitre_attack",
+        "mitre_attack",
+        "mitre",
+        "signature",
+    ):
+        _extend(row.get(key))
+    annotations = row.get("annotations")
+    if isinstance(annotations, dict):
+        _extend(annotations.get("mitre_attack"))
+    else:
+        _extend(annotations)
+    return found
 
 
 def _should_oneshot(spl: str) -> bool:
@@ -276,7 +343,8 @@ class SplunkConnector(BaseConnector):
                     help_text=(
                         "Ad-hoc SPL posted to /services/search/jobs. "
                         "Default tables Mission Control stash fields from "
-                        "index=agentic* (search_name, dvc, dest_port, orig_rule_*). "
+                        "index=agentic* including annotations_mitre_attack, "
+                        "orig_rule_*, dest/src, endpoint/identity context. "
                         "Use | rest … only for the ES rule catalog (definitions, not incidents)."
                     ),
                 ),
@@ -666,6 +734,9 @@ class SplunkConnector(BaseConnector):
         created_at = row.get("_time")
         if not row.get("notable_id"):
             row["notable_id"] = external_id
+        mitre = _mitre_techniques_from_row(row)
+        if mitre and not row.get("annotations_mitre_attack"):
+            row["annotations_mitre_attack"] = mitre
         return {
             "source": self.connector_id,
             "external_id": external_id,
@@ -675,6 +746,7 @@ class SplunkConnector(BaseConnector):
             "severity": _map_severity(row.get("urgency") or row.get("severity")),
             "src_ip": src_ip,
             "hostname": hostname,
+            "mitre_techniques": mitre,
             "raw_event": row,
             "created_at": str(created_at) if created_at is not None else None,
         }
