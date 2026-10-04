@@ -106,6 +106,7 @@ class ReenrichSplunkResponse(BaseModel):
     enriched: int
     skipped: int
     failed: int
+    timed_out: int = 0
     cases_updated: int
     sample_alert_ids: list[str] = Field(default_factory=list)
     dry_run: bool = False

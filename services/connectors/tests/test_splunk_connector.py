@@ -405,10 +405,8 @@ def test_normalize_extracts_mitre_from_annotations():
 @pytest.mark.asyncio
 async def test_lookup_notable_filters_search_name_and_host():
     c = _conn()
+    # Lookups use oneshot + return results in the POST body (fast path).
     jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
-        return_value=httpx.Response(201, json={"sid": "SID-LOOKUP"})
-    )
-    respx.get(url__regex=r".+/services/search/jobs/SID-LOOKUP/results").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -427,9 +425,6 @@ async def test_lookup_notable_filters_search_name_and_host():
             },
         )
     )
-    respx.get(url__regex=r".+/services/search/jobs/SID-LOOKUP(\?.*)?$").mock(
-        return_value=_done_status()
-    )
     out = await c.lookup_notable(
         "Network - Unapproved Port Activity Detected - Rule",
         "WIN-017UMT7DCGT.soorinsec.local",
@@ -439,10 +434,10 @@ async def test_lookup_notable_filters_search_name_and_host():
     assert out["raw_event"]["dest_port"] == "3389"
     body = jobs.calls[0].request.content.decode()
     assert "Unapproved" in body
-    assert "WIN-017UMT7DCGT" in body
     assert "extract" in body
     assert "orig_rule_description" in body
-    assert "exec_mode=oneshot" not in body
+    assert "exec_mode=oneshot" in body
+    assert "earliest_time=-30d" in body
 
 
 def test_timeless_catalog_skips_checkpoint_filter():

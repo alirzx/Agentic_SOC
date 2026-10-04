@@ -969,6 +969,7 @@ export const socFunnelApi = {
       enriched: number;
       skipped: number;
       failed: number;
+      timed_out?: number;
       cases_updated: number;
       sample_alert_ids: string[];
       dry_run: boolean;

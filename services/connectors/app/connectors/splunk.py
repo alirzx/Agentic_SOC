@@ -664,13 +664,13 @@ class SplunkConnector(BaseConnector):
     ) -> dict[str, Any] | None:
         """Return the latest index=agentic* row for this ES rule (+ optional entity/id).
 
-        Tries, in order:
-        1. ``notable_id`` / ``source_event_id`` / ``source_guid``
-        2. ``search_name`` + entity (host/dvc/dest/**src**)
-        3. ``search_name`` alone (entity filter often fails for identity rules
-           where the only entity is ``src=B_309`` not ``host``)
+        Optimized for re-enrich / hydrate: at most **two** oneshot searches
+        over a 30-day window (not a full job + 90-day poll).
         """
-        async with httpx.AsyncClient(**self._client_kwargs()) as client:
+        # Lookups are small (head 5) — oneshot is fine and much faster than
+        # create-job + poll, which was hanging the bulk re-enrich loop.
+        lookup_earliest = "-30d"
+        async with httpx.AsyncClient(**self._client_kwargs(timeout=60.0)) as client:
             nid = (notable_id or "").strip()
             if nid:
                 nid_q = _spl_quote(nid)
@@ -678,10 +678,10 @@ class SplunkConnector(BaseConnector):
                     client,
                     mission_control_spl(
                         f'(notable_id="{nid_q}" OR source_event_id="{nid_q}" OR source_guid="{nid_q}")',
-                        limit=5,
+                        limit=3,
                     ),
-                    self._earliest_time,
-                    oneshot=False,
+                    lookup_earliest,
+                    oneshot=True,
                 )
                 if rows:
                     return self.normalize(rows[0])
@@ -689,33 +689,25 @@ class SplunkConnector(BaseConnector):
             title_q = _spl_quote((title or "").strip())
             if not title_q:
                 return None
-            title_filter = f'(search_name="{title_q}" OR source="{title_q}")'
-            entity = (host or "").strip()
-            if entity:
-                entity_q = _spl_quote(entity)
-                # Include src/src_ip — password-spray style notables often only set src.
-                entity_filter = (
-                    f'{title_filter} ('
-                    f'dvc="{entity_q}" OR dest="{entity_q}" OR host="{entity_q}" '
-                    f'OR src="{entity_q}" OR src_ip="{entity_q}")'
-                )
-                rows = await self._run_adhoc(
-                    client,
-                    mission_control_spl(entity_filter, limit=5),
-                    self._earliest_time,
-                    oneshot=False,
-                )
-                if rows:
-                    return self.normalize(rows[0])
-
+            # Single title search; prefer entity match in Python (avoids a 2nd Splunk trip).
             rows = await self._run_adhoc(
                 client,
-                mission_control_spl(title_filter, limit=5),
-                self._earliest_time,
-                oneshot=False,
+                mission_control_spl(f'(search_name="{title_q}" OR source="{title_q}")', limit=10),
+                lookup_earliest,
+                oneshot=True,
             )
             if not rows:
                 return None
+            entity = (host or "").strip().lower()
+            if entity:
+                for row in rows:
+                    enriched = _enrich_notable_row(row) if isinstance(row, dict) else row
+                    hay = " ".join(
+                        str(enriched.get(k) or "").lower()
+                        for k in ("dvc", "dest", "host", "src", "src_ip")
+                    )
+                    if entity in hay:
+                        return self.normalize(enriched)
             return self.normalize(rows[0])
 
     async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:

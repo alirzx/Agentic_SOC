@@ -396,7 +396,13 @@ def apply_notable(alert: Alert, envelope: dict[str, Any]) -> None:
     alert.updated_at = datetime.now(UTC)
 
 
-async def hydrate_alert(db: AsyncSession, alert: Alert, *, force: bool = False) -> Alert:
+async def hydrate_alert(
+    db: AsyncSession,
+    alert: Alert,
+    *,
+    force: bool = False,
+    commit: bool = True,
+) -> Alert:
     """Fetch the live Splunk notable and persist it onto ``alert`` when stubby."""
     if not force and not needs_hydrate(alert):
         return alert
@@ -448,8 +454,9 @@ async def hydrate_alert(db: AsyncSession, alert: Alert, *, force: bool = False) 
         alert.updated_at = datetime.now(UTC)
     else:
         apply_notable(alert, envelope)
-    await db.commit()
-    await db.refresh(alert)
+    if commit:
+        await db.commit()
+        await db.refresh(alert)
     return alert
 
 
@@ -466,6 +473,8 @@ async def reenrich_tenant_splunk_alerts(
     Targets Splunk-sourced alerts missing ``annotations_mitre_attack`` / nested
     MITRE annotations (the columns added to the Mission Control SPL table).
     """
+    import asyncio
+
     from sqlalchemy import String, cast, or_
 
     lim = max(1, min(int(limit), 5000))
@@ -488,8 +497,16 @@ async def reenrich_tenant_splunk_alerts(
     enriched = 0
     skipped = 0
     failed = 0
+    timed_out = 0
     sample_ids: list[str] = []
-    for alert in candidates:
+    total = len(candidates)
+    logger.info(
+        "splunk_notable.reenrich_start scanned=%s candidates=%s force=%s",
+        len(rows),
+        total,
+        force,
+    )
+    for idx, alert in enumerate(candidates, start=1):
         if dry_run:
             enriched += 1
             if len(sample_ids) < 20:
@@ -499,16 +516,29 @@ async def reenrich_tenant_splunk_alerts(
             alert.raw_event if isinstance(alert.raw_event, dict) else {}
         )
         try:
-            await hydrate_alert(db, alert, force=True)
+            # Cap each Splunk round-trip so one stuck job can't wedge the whole run.
+            await asyncio.wait_for(
+                hydrate_alert(db, alert, force=True, commit=False),
+                timeout=45.0,
+            )
             after = _has_wide_annotation_fields(
                 alert.raw_event if isinstance(alert.raw_event, dict) else {}
             )
-            if after and (force or not before or alert.mitre_techniques):
+            if after and (not before or alert.mitre_techniques):
                 enriched += 1
                 if len(sample_ids) < 20:
                     sample_ids.append(str(alert.id))
             else:
                 skipped += 1
+        except asyncio.TimeoutError:
+            timed_out += 1
+            failed += 1
+            logger.warning(
+                "splunk_notable.reenrich_timeout alert=%s idx=%s/%s",
+                str(alert.id).replace("\r", " ").replace("\n", " ")[:64],
+                idx,
+                total,
+            )
         except Exception as exc:  # noqa: BLE001
             failed += 1
             logger.warning(
@@ -516,11 +546,28 @@ async def reenrich_tenant_splunk_alerts(
                 str(alert.id).replace("\r", " ").replace("\n", " ")[:64],
                 str(exc).replace("\r", " ").replace("\n", " ")[:200],
             )
+        if idx % 10 == 0 or idx == total:
+            await db.commit()
+            logger.info(
+                "splunk_notable.reenrich_progress idx=%s/%s enriched=%s skipped=%s failed=%s",
+                idx,
+                total,
+                enriched,
+                skipped,
+                failed,
+            )
+            print(
+                f"[reenrich] {idx}/{total} enriched={enriched} skipped={skipped} "
+                f"failed={failed} timed_out={timed_out}",
+                flush=True,
+            )
 
     cases_updated = 0
-    if not dry_run and enriched:
-        cases_updated = await _sync_case_mitre_from_alerts(db, tenant_id=tenant_id)
+    if not dry_run:
         await db.commit()
+        if enriched:
+            cases_updated = await _sync_case_mitre_from_alerts(db, tenant_id=tenant_id)
+            await db.commit()
 
     return {
         "scanned": len(rows),
@@ -528,6 +575,7 @@ async def reenrich_tenant_splunk_alerts(
         "enriched": enriched,
         "skipped": skipped,
         "failed": failed,
+        "timed_out": timed_out,
         "cases_updated": cases_updated,
         "sample_alert_ids": sample_ids,
         "dry_run": dry_run,
@@ -619,8 +667,15 @@ async def fetch_notable(
         "notable_id": notable_id,
     }
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(90.0)) as client:
+        # Keep under the bulk re-enrich per-alert wait_for (45s).
+        async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=5.0)) as client:
             resp = await client.post(url, json=payload)
+    except httpx.TimeoutException as exc:
+        logger.warning(
+            "splunk_notable.timeout err=%s",
+            str(exc).replace("\r", " ").replace("\n", " ")[:240],
+        )
+        return None
     except httpx.HTTPError as exc:
         logger.warning(
             "splunk_notable.unreachable err=%s",
@@ -628,6 +683,11 @@ async def fetch_notable(
         )
         return None
     if resp.status_code >= 400:
+        logger.warning(
+            "splunk_notable.lookup_http status=%s body=%s",
+            resp.status_code,
+            resp.text.replace("\r", " ").replace("\n", " ")[:200],
+        )
         return None
     body = resp.json()
     row = body.get("notable") if isinstance(body, dict) else None
