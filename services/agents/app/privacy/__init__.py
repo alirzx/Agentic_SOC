@@ -6,6 +6,17 @@ the process for a third-party LLM. See :mod:`app.privacy.redactor`.
 
 from __future__ import annotations
 
+from app.privacy.context import PrivacyConfigurationError, current_privacy_gateway, privacy_context, privacy_enabled
+from app.privacy.gateway import PrivacyGateway
 from app.privacy.redactor import Pseudonymizer, RedactionConfig, default_pseudonymizer
 
-__all__ = ["Pseudonymizer", "RedactionConfig", "default_pseudonymizer"]
+__all__ = [
+    "PrivacyConfigurationError",
+    "PrivacyGateway",
+    "Pseudonymizer",
+    "RedactionConfig",
+    "current_privacy_gateway",
+    "default_pseudonymizer",
+    "privacy_context",
+    "privacy_enabled",
+]

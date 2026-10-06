@@ -3,10 +3,12 @@ executes the model's selected calls, feeds results back, and terminates."""
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 
 import pytest
 from app.agents.tool_loop import run_with_tools
+from app.privacy.context import privacy_context
 from app.tools.registry import Tool, ToolRegistry, default_registry
 
 
@@ -75,3 +77,59 @@ async def test_tool_loop_is_bounded_by_max_iters():
     assert out["truncated"] is True
     assert out["iterations"] == 3
     assert len(out["tool_trace"]) == 3
+
+
+class _PrivacyToolLLM:
+    model = "privacy-tool-loop-test"
+
+    def __init__(self) -> None:
+        self.calls = []
+        self.alias = ""
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls.append(list(messages))
+        if len(self.calls) == 1:
+            rendered = " ".join(str(getattr(message, "content", "")) for message in messages)
+            self.alias = re.search(r"HOST_[A-F0-9]{24}", rendered).group(0)
+            return _tool_call("lookup_host", {"host": self.alias})
+        tool_content = str(getattr(messages[-1], "content", ""))
+        assert "dc01.example.local" not in tool_content
+        assert self.alias in tool_content
+        return _final(f"Investigated {self.alias}")
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_decodes_arguments_and_reprojects_results(monkeypatch):
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", "abcdef0123456789abcdef0123456789")
+    executed = []
+
+    def lookup_host(host):
+        executed.append(host)
+        return {"hostname": host, "status": "contained"}
+
+    registry = ToolRegistry(
+        [
+            Tool(
+                name="lookup_host",
+                description="Look up an internal host.",
+                parameters={"type": "object", "properties": {"host": {"type": "string"}}, "required": ["host"]},
+                fn=lookup_host,
+            )
+        ]
+    )
+    llm = _PrivacyToolLLM()
+    with privacy_context("tenant-a"):
+        result = await run_with_tools(
+            llm,
+            system="You are an analyst.",
+            user="Investigate dc01.example.local",
+            registry=registry,
+        )
+
+    assert executed == ["dc01.example.local"]
+    assert result["content"] == "Investigated dc01.example.local"
+    assert "dc01.example.local" not in str(llm.calls)

@@ -31,6 +31,33 @@ The gateway sits in front of the LLM tier of the
 reachable, AiSOC still degrades to its **deterministic offline path** — the
 gateway is never on the critical path for a baseline triage.
 
+## Tenant privacy projection
+
+Routing and privacy enforcement are separate controls. The agents service can
+call a configured gateway or a provider directly, so its privacy boundary is
+the sanctioned invocation layer in `app.llm.contract`, immediately before
+network egress. Enable it with a deployment-wide high-entropy key:
+
+```bash
+AISOC_LLM_PRIVACY_ENABLED=1
+AISOC_PRIVACY_TOKEN_KEY=<at-least-32-random-bytes>
+```
+
+For each tenant, private IP, host, asset, user, and email identities become
+stable typed HMAC aliases. Secrets and credential-like values are irreversibly
+replaced with `[REDACTED_SECRET]`. The provider response is restored locally
+from the active request map; unknown aliases are never guessed. Internal
+storage, Splunk queries, tools, Kafka, Postgres, and the entity graph continue
+to use canonical values.
+
+Keep the key consistent across agents replicas and restarts. Changing it
+changes every alias; V1 intentionally has no persistent alias catalog or key
+rotation migration. If privacy is enabled but the key or tenant context is
+missing, the call fails before network access. This V1 boundary covers the
+agents service's sanctioned chat calls. API-service-owned LLM synthesis paths
+remain a separate deployment boundary and must not be described as protected
+until they are routed through a shared service/package in a follow-up release.
+
 ## Task aliases
 
 The shipped aliases mirror AiSOC's workloads. They live in

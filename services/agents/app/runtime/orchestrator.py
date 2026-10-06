@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.privacy.context import privacy_context
+
 from .contracts import AgentContext, AgentResult, hash_payload
 from .idempotency import IdempotencyStore
 from .incident import IncidentState, IncidentStateMachine
@@ -74,7 +76,8 @@ class SocOrchestrator:
             tracker = None
             owns_tracker = False
         try:
-            return await self._run_pipeline(context)
+            with privacy_context(context.tenant_id):
+                return await self._run_pipeline(context)
         finally:
             if tracker is not None and owns_tracker:
                 try:

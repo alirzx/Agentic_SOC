@@ -117,6 +117,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.rate_limit import RateLimitDecision, TokenBucketLimiter
+from app.privacy.context import privacy_context
 from app.security.llm_resolver import LlmConfig, resolve_llm_config
 
 logger = structlog.get_logger()
@@ -574,7 +575,7 @@ async def _llm_summary(
         return fallback
 
     try:
-        import httpx
+        from app.llm.contract import safe_chat_completions_request
 
         base = llm_config.base_url.rstrip("/")
         url = f"{base}/v1/chat/completions"
@@ -613,14 +614,15 @@ async def _llm_summary(
             },
         ]
 
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
-                url,
-                headers={"Authorization": f"Bearer {llm_config.api_key}"},
-                json={"model": model, "messages": messages, "max_tokens": 320},
-            )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
+        payload = await safe_chat_completions_request(
+            api_key=llm_config.api_key,
+            model=model,
+            messages=messages,
+            url=url,
+            timeout=20,
+            max_tokens=320,
+        )
+        return payload["choices"][0]["message"]["content"].strip()
 
     except Exception as exc:
         logger.warning("explain.llm_error", error=str(exc))
@@ -648,11 +650,11 @@ async def _stream_explanation(req: ExplainRequest, llm_config: LlmConfig) -> Asy
         fallback_summary = _build_summary(alert, mitre_ids)
         # Run the LLM call concurrently with the deterministic emissions
         # so the drawer paints fast even on a cold network.
-        summary_task = asyncio.create_task(_llm_summary(alert, mitre_cards, fallback_summary, llm_config))
-
-        yield _frame({"kind": "section", "id": "summary", "title": "What happened"})
-        # Stream the summary word-by-word once it resolves.
-        summary_text = await summary_task
+        with privacy_context(req.tenant_id):
+            summary_task = asyncio.create_task(_llm_summary(alert, mitre_cards, fallback_summary, llm_config))
+            yield _frame({"kind": "section", "id": "summary", "title": "What happened"})
+            # Stream the summary word-by-word once it resolves.
+            summary_text = await summary_task
         for word in summary_text.split(" "):
             yield _frame({"kind": "delta", "section": "summary", "text": word + " "})
             await asyncio.sleep(0.005)

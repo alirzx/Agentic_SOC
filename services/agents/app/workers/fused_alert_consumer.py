@@ -46,13 +46,14 @@ from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, n
 from app.agents.triage_agent import run_triage
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
+from app.funnel.stages import INVESTIGATING, passes_investigation_gate
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.llm.factory import llm_override
-from app.funnel.stages import INVESTIGATING, passes_investigation_gate
 from app.memory.outcomes import AI, HUMAN, lookup_prior, record_outcome, should_auto_suppress
 from app.memory.override_priors import lookup_human_override, should_suppress_from_override
 from app.models.state import AgentStatus, InvestigationState
+from app.privacy.context import privacy_context
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
 from app.workers import case_promoter
@@ -386,7 +387,14 @@ class FusedAlertTriageWorker:
                 if use_llm and cfg is not None:
                     # Route the LLM call through the tenant's BYOK key/model so
                     # auto-triage actually honours per-tenant credentials.
-                    with llm_override(api_key=cfg.api_key, base_url=cfg.base_url, model=cfg.model):
+                    with (
+                        privacy_context(str(state.tenant_id)),
+                        llm_override(
+                            api_key=cfg.api_key,
+                            base_url=cfg.base_url,
+                            model=cfg.model,
+                        ),
+                    ):
                         state, tier = await self._llm_triage(state)
                 else:
                     state = await run_triage(state)

@@ -1,107 +1,118 @@
-"""Tests for the evidence pseudonymizer (Phase 1.4).
-
-Pure/offline: app.privacy.redactor is stdlib-only, so this imports directly.
-Gated in the CI agents job.
-"""
+"""Offline invariants for stable tenant-scoped SOC pseudonymization."""
 
 from __future__ import annotations
 
-from app.privacy.redactor import Pseudonymizer, RedactionConfig, default_pseudonymizer
+from app.privacy.redactor import Pseudonymizer, RedactionConfig
 
-# Realistic mixed evidence: customer PII + public threat indicators.
-GOLDEN = (
-    "User ACME\\alice logged in from 10.0.0.5 to DC01.acme.local, "
-    "opened C:\\Users\\alice\\secret.docx, emailed alice@acme.corp, "
-    "then beaconed to evil-c2.example (8.8.8.8) using key AKIAIOSFODNN7EXAMPLE."
-)
-
-# Raw customer values that must NEVER survive redaction.
-CUSTOMER_PII = [
-    "ACME\\alice",
-    "10.0.0.5",
-    "DC01.acme.local",
-    "C:\\Users\\alice\\secret.docx",
-    "alice@acme.corp",
-    "AKIAIOSFODNN7EXAMPLE",
-]
-
-# Public threat indicators that SHOULD survive (they are IOCs, not PII).
-PUBLIC_IOCS = ["evil-c2.example", "8.8.8.8"]
+KEY = "0123456789abcdef0123456789abcdef"
 
 
-def test_zero_raw_customer_pii_survives_redaction():
-    p = default_pseudonymizer(tenant_id="t1")
-    redacted = p.redact(GOLDEN)
-    for pii in CUSTOMER_PII:
-        assert pii not in redacted, f"raw PII leaked into outbound payload: {pii!r} in {redacted!r}"
+def codec(tenant: str = "tenant-a", **kwargs) -> Pseudonymizer:
+    return Pseudonymizer(tenant_id=tenant, token_key=KEY, **kwargs)
 
 
-def test_public_iocs_are_preserved_for_analysis():
-    p = default_pseudonymizer()
-    redacted = p.redact(GOLDEN)
-    for ioc in PUBLIC_IOCS:
-        assert ioc in redacted, f"public IOC was over-redacted: {ioc!r}"
+def token_for(field: str, value: str, *, tenant: str = "tenant-a") -> str:
+    return codec(tenant).redact_value({field: value})[field]
 
 
-def test_tokens_are_typed_and_present():
-    p = default_pseudonymizer()
-    redacted = p.redact(GOLDEN)
-    assert "IP_1" in redacted  # internal IP
-    assert any(t in redacted for t in ("EMAIL_1", "EMAIL_2"))
-    assert any(t in redacted for t in ("PATH_1", "PATH_2"))
-    assert any(t.startswith("SECRET_") for t in p.mapping)
-    assert any(t.startswith("USER_") for t in p.mapping)
+def test_stable_aliases_across_instances_and_discovery_order() -> None:
+    first = codec()
+    second = codec()
+    a_ip = first.redact_value({"src_ip": "10.20.3.7"})["src_ip"]
+    first.redact_value({"user": "EXAMPLE\\alice", "hostname": "dc01.example.local"})
+    second.redact_value({"hostname": "other.example.local", "user": "other"})
+    b_ip = second.redact_value({"src_ip": "10.20.3.7"})["src_ip"]
+    assert a_ip == b_ip
+    assert token_for("hostname", "DC01.EXAMPLE.LOCAL.") == token_for("hostname", "dc01.example.local")
+    assert token_for("user", "EXAMPLE\\Alice") == token_for("user", "example\\alice")
+    assert token_for("user", "alice@example.local") == token_for("user", "ALICE@EXAMPLE.LOCAL")
 
 
-def test_rehydrate_round_trips():
-    p = default_pseudonymizer()
-    redacted = p.redact(GOLDEN)
-    assert p.rehydrate(redacted) == GOLDEN
+def test_tenants_and_entity_types_have_distinct_namespaces() -> None:
+    assert token_for("user", "server01", tenant="tenant-a") != token_for("user", "server01", tenant="tenant-b")
+    assert token_for("user", "server01") != token_for("asset", "server01")
+    assert token_for("hostname", "server01") != token_for("asset", "server01")
 
 
-def test_tokens_are_stable_within_a_run():
-    p = default_pseudonymizer()
-    a = p.redact("host 10.0.0.5 and again 10.0.0.5")
-    # Same original -> same token, both occurrences.
-    assert a.count("IP_1") == 2
+def test_ip_canonicalization_and_safe_network_semantics() -> None:
+    v4 = token_for("src_ip", "010.020.003.007")
+    # Leading-zero IPv4 is deliberately rejected by ipaddress, not conflated.
+    assert v4 == "010.020.003.007"
+    assert token_for("src_ip", "10.20.3.7").startswith("IP_V4_PRIVATE_")
+    assert token_for("src_ip", " 10.20.3.7 ") == token_for("src_ip", "10.20.3.7")
+    assert token_for("src_ip", "2001:0db8:0:0:0:0:0:1") == token_for("src_ip", "2001:db8::1")
+    assert token_for("src_ip", "8.8.8.8").startswith("IP_V4_PUBLIC_")
 
 
-def test_public_ip_not_redacted_internal_ip_is():
-    p = default_pseudonymizer()
-    out = p.redact("internal 192.168.1.9 external 1.1.1.1")
-    assert "192.168.1.9" not in out
-    assert "1.1.1.1" in out
+def test_nested_projection_removes_identities_and_masks_secrets() -> None:
+    original = {
+        "src_ip": "10.20.3.7",
+        "hostname": "dc01.example.local",
+        "asset": "workstation-22",
+        "user": "EXAMPLE\\alice",
+        "email": "alice@example.local",
+        "details": ["EXAMPLE\\alice used dc01.example.local from 10.20.3.7"],
+        "password": "SyntheticSecretValue",
+    }
+    p = codec()
+    safe = p.redact_value(original)
+    rendered = str(safe)
+    for private in ("10.20.3.7", "dc01.example.local", "workstation-22", "EXAMPLE\\alice", "alice@example.local", "SyntheticSecretValue"):
+        assert private not in rendered
+    assert safe["password"] == "[REDACTED_SECRET]"
+    restored = p.rehydrate(safe)
+    for field in ("src_ip", "hostname", "asset", "user", "email"):
+        assert restored[field] == original[field]
+    assert restored["password"] == "[REDACTED_SECRET]"
+    assert "SyntheticSecretValue" not in p.mapping.values()
 
 
-def test_structured_username_field_is_pseudonymized():
-    p = default_pseudonymizer()
-    out = p.redact_value({"username": "bob", "action": "login", "src_ip": "10.1.2.3"})
-    assert out["username"].startswith("USER_")
-    assert out["action"] == "login"
-    assert out["src_ip"] != "10.1.2.3"  # internal IP redacted inside string value
+def test_camel_case_and_list_field_hints_win_over_free_text_rules() -> None:
+    p = codec()
+    safe = p.redact_value({"ClientIP": ["8.8.8.8"], "UserId": "Alice", "host.name": "DC01.EXAMPLE.COM"})
+    assert safe["ClientIP"][0].startswith("IP_V4_PUBLIC_")
+    assert safe["UserId"].startswith("USER_")
+    assert safe["host.name"].startswith("HOST_")
+    assert "Alice" not in p.redact("actor=Alice connected")
 
 
-def test_config_can_disable_a_category():
-    # Disable emails + internal hostnames so the full address survives; IPs stay on.
-    p = Pseudonymizer(config=RedactionConfig(redact_emails=False, redact_internal_hostnames=False))
-    out = p.redact("mail alice@acme.corp from 10.0.0.5")
-    assert "alice@acme.corp" in out  # emails off (and host off, so domain survives)
-    assert "10.0.0.5" not in out  # ips still on
+def test_exact_rehydration_only_leaves_unknown_alias_unchanged() -> None:
+    p = codec()
+    safe = p.redact_value({"hostname": "dc01.example.local"})
+    assert p.rehydrate(safe)["hostname"] == "dc01.example.local"
+    assert p.rehydrate("HOST_DEADBEEF") == "HOST_DEADBEEF"
+    known = safe["hostname"]
+    assert p.rehydrate(known + "FFFF") == known + "FFFF"
 
 
-def test_mapping_is_per_instance():
-    p1 = default_pseudonymizer()
-    p2 = default_pseudonymizer()
-    p1.redact("10.0.0.5")
-    assert p1.mapping  # p1 learned a mapping
-    assert not p2.mapping  # p2 is independent (per-run isolation)
+def test_public_iocs_preserved_in_text_but_structured_org_ip_protected() -> None:
+    p = codec()
+    text = p.redact("internal 10.20.3.7 contacted known IOC 8.8.8.8 and evil.example")
+    assert "10.20.3.7" not in text
+    assert "8.8.8.8" in text
+    assert "evil.example" in text
+    assert p.redact_value({"source_ip": "8.8.8.8"})["source_ip"] != "8.8.8.8"
 
 
-def test_default_config_is_all_on():
-    cfg = RedactionConfig()
-    assert cfg.redact_internal_ips
-    assert cfg.redact_emails
-    assert cfg.redact_paths
-    assert cfg.redact_secrets
-    assert cfg.redact_internal_hostnames
-    assert cfg.redact_usernames
+def test_secret_shapes_are_irreversibly_masked_and_key_never_appears() -> None:
+    p = codec()
+    safe = p.redact(f"password=ExampleSecret api_key=sk-abcdefghijklmnopqrstuvwxyz123456 key={KEY}")
+    assert "ExampleSecret" not in safe
+    assert "sk-abcdefghijklmnopqrstuvwxyz123456" not in safe
+    assert KEY not in safe
+    assert "[REDACTED_SECRET]" in safe
+    assert not any(value.startswith("sk-") for value in p.mapping.values())
+
+
+def test_config_can_disable_non_secret_category() -> None:
+    p = codec(config=RedactionConfig(redact_emails=False, redact_internal_hostnames=False))
+    out = p.redact("mail alice@example.corp from 10.0.0.5")
+    assert "alice@example.corp" in out
+    assert "10.0.0.5" not in out
+
+
+def test_active_reverse_maps_are_instance_local() -> None:
+    first, second = codec(), codec()
+    first.redact("10.0.0.5")
+    assert first.mapping
+    assert not second.mapping

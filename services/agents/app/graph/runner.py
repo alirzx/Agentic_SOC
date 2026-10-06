@@ -27,6 +27,7 @@ import structlog
 from app.agents.dispositions import NEEDS_REVIEW
 from app.investigator import ledger as ledger_module
 from app.models.state import AgentStatus, InvestigationState
+from app.privacy.context import privacy_context
 
 logger = structlog.get_logger()
 
@@ -78,23 +79,24 @@ async def _run(
     timed_out = False
     try:
         async with asyncio.timeout(budget.max_seconds):
-            async for step in graph.astream(state_dict):
-                if not isinstance(step, dict):
-                    continue
-                for node, out in step.items():
-                    seq += 1
-                    if isinstance(out, dict):
-                        merged.update(out)
-                    if tenant_uuid is not None:
-                        await ledger_module.record_event(
-                            run_id=state.run_id,
-                            tenant_id=tenant_uuid,
-                            seq=seq,
-                            kind="graph_step",
-                            agent=str(node),
-                            summary=f"graph node '{node}' completed",
-                            payload={"node": str(node)},
-                        )
+            with privacy_context(tenant_ref):
+                async for step in graph.astream(state_dict):
+                    if not isinstance(step, dict):
+                        continue
+                    for node, out in step.items():
+                        seq += 1
+                        if isinstance(out, dict):
+                            merged.update(out)
+                        if tenant_uuid is not None:
+                            await ledger_module.record_event(
+                                run_id=state.run_id,
+                                tenant_id=tenant_uuid,
+                                seq=seq,
+                                kind="graph_step",
+                                agent=str(node),
+                                summary=f"graph node '{node}' completed",
+                                payload={"node": str(node)},
+                            )
     except TimeoutError:
         timed_out = True
         logger.warning("investigation.budget_timeout", run_id=str(state.run_id), max_seconds=budget.max_seconds)

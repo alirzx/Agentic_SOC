@@ -19,9 +19,9 @@ from collections import OrderedDict
 from typing import Protocol, runtime_checkable
 
 
-def cache_key(*, model: str, prompt: str, user_input: str) -> str:
+def cache_key(*, model: str, prompt: str, user_input: str, namespace: str = "") -> str:
     h = hashlib.sha256()
-    for part in (model, prompt, user_input):
+    for part in (namespace, model, prompt, user_input):
         h.update(part.encode("utf-8"))
         h.update(b"\x00")  # field separator so a||b != ab
     return h.hexdigest()
@@ -73,11 +73,11 @@ class ResponseCache:
     def __init__(self, backend: CacheBackend | None = None) -> None:
         self._backend: CacheBackend = backend or InMemoryResponseCache()
 
-    def lookup(self, *, model: str, prompt: str, user_input: str) -> str | None:
-        return self._backend.get(cache_key(model=model, prompt=prompt, user_input=user_input))
+    def lookup(self, *, model: str, prompt: str, user_input: str, namespace: str = "") -> str | None:
+        return self._backend.get(cache_key(model=model, prompt=prompt, user_input=user_input, namespace=namespace))
 
-    def store(self, *, model: str, prompt: str, user_input: str, response: str) -> None:
-        self._backend.set(cache_key(model=model, prompt=prompt, user_input=user_input), response)
+    def store(self, *, model: str, prompt: str, user_input: str, response: str, namespace: str = "") -> None:
+        self._backend.set(cache_key(model=model, prompt=prompt, user_input=user_input, namespace=namespace), response)
 
     def clear(self) -> None:
         """Drop all cached entries (test isolation / manual invalidation)."""

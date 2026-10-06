@@ -18,6 +18,7 @@ from typing import Any
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from app.llm import safe_ainvoke
 from app.tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
@@ -41,7 +42,7 @@ async def run_with_tools(
     trace: list[dict[str, Any]] = []
 
     for iteration in range(1, max_iters + 1):
-        response = await bound.ainvoke(messages)
+        response = await safe_ainvoke(bound, messages)
         messages.append(response)
         tool_calls = getattr(response, "tool_calls", None) or []
         if not tool_calls:
