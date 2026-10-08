@@ -41,12 +41,36 @@ network egress. Enable it with a deployment-wide high-entropy key:
 ```bash
 AISOC_LLM_PRIVACY_ENABLED=1
 AISOC_PRIVACY_TOKEN_KEY=<at-least-32-random-bytes>
+AISOC_LLM_PRIVACY_STREAM_MAX_CHARS=1000000
+# Separate key used by an authenticated upstream to sign X-Tenant-Id:
+AISOC_AGENTS_TENANT_SIGNING_KEY=<different-at-least-32-random-bytes>
 ```
 
-For each tenant, private IP, host, asset, user, and email identities become
-stable typed HMAC aliases. Secrets and credential-like values are irreversibly
-replaced with `[REDACTED_SECRET]`. The provider response is restored locally
-from the active request map; unknown aliases are never guessed. Internal
+For each tenant, private IP, host, asset, user, email, and path identities
+become stable typed HMAC aliases. Structured classification is semantic and
+path-aware: fields such as `device.name`, `src_endpoint.ip`, `account.name`,
+and Splunk `entity` / `risk_object` values with a sibling type are recognized
+without flattening away their parent context. Valid addresses retain their
+IPv4/IPv6 scope prefix. A non-placeholder malformed value in an IP-semantic
+field, such as `src_ip="B_309"`, becomes a reversible `IP_OPAQUE_*` alias
+instead of falling through in plaintext.
+
+The projector first discovers authoritative identities across the complete
+structured value and then transforms it. Repeats in titles, narratives, and
+quoted Splunk search expressions therefore use the same alias regardless of
+dictionary order. Contextual forms such as `hostname=...`, `user="..."`, and
+`| search dest="..."` are recognized, while unrelated public domains, URLs,
+hashes, CVEs, MITRE IDs, and plain-text public IOC addresses remain available
+for model reasoning. Common absence sentinels (`unknown`, `n/a`, `none`,
+`null`, `not available`, and `-`) stay readable rather than becoming false
+identities.
+
+Secrets and credential-like values are irreversibly replaced with
+`[REDACTED_SECRET]`. The provider response is restored locally from the active
+request map; unknown or partial aliases are never guessed. When privacy is
+active, the central LLM boundary also injects one system instruction explaining
+that aliases are opaque stable identities which must be preserved exactly and
+must not be decoded, abbreviated, or treated as malicious evidence. Internal
 storage, Splunk queries, tools, Kafka, Postgres, and the entity graph continue
 to use canonical values.
 
@@ -57,6 +81,49 @@ missing, the call fails before network access. This V1 boundary covers the
 agents service's sanctioned chat calls. API-service-owned LLM synthesis paths
 remain a separate deployment boundary and must not be described as protected
 until they are routed through a shared service/package in a follow-up release.
+
+Direct Copilot, contextual Copilot, Explain, and NL-playbook requests do not
+trust a browser-controlled `X-Tenant-Id` by itself. An authenticated upstream
+must either set `request.state.authenticated_tenant_id` or add
+`X-AiSOC-Tenant-Signature`, the HMAC of the tenant identifier using
+`AISOC_AGENTS_TENANT_SIGNING_KEY`. For explicit local development only,
+`AISOC_AGENTS_ALLOW_UNSIGNED_TENANT_HEADER=1` accepts the unsigned header; the
+agents service refuses that escape hatch when `AISOC_ENV=production`. With
+privacy enabled, an unavailable trusted tenant causes deterministic fallback or
+failure before provider egress.
+
+Both the root and demo Compose definitions pass the privacy settings into the
+agents container with privacy disabled and secret values empty by default.
+
+### Offline privacy smoke tests
+
+From `services/agents`, use a temporary synthetic key. Both commands are local
+and make zero network calls:
+
+```bash
+export AISOC_PRIVACY_TOKEN_KEY="$(openssl rand -hex 32)"
+PYTHONPATH=. python -m app.scripts.privacy_smoke --tenant-id synthetic-smoke
+PYTHONPATH=. python -m app.scripts.privacy_splunk_smoke --tenant-id synthetic-smoke
+```
+
+Each prints `ORIGINAL`, `PROVIDER_SAFE`, and `REHYDRATED`, then finishes with
+`INVARIANTS: PASS`.
+
+### Optional real-provider A/B probe
+
+The provider probe is opt-in and never runs in CI. It uses the fused-alert
+state builder, auto-triage agent, central model factory, safe invocation
+contract, and privacy gateway. It never prints API keys, privacy keys, or a
+credential-bearing provider URL:
+
+```bash
+PYTHONPATH=. python -m app.scripts.privacy_provider_probe --privacy on
+PYTHONPATH=. python -m app.scripts.privacy_provider_probe --privacy off
+```
+
+These commands perform a real provider call using `OPENAI_BASE_URL`,
+`OPENAI_API_KEY`, and `AISOC_MODEL_PIN_TRIAGE`. Use synthetic input only and
+compare the ON/OFF results for operational A/B validation.
 
 ## Task aliases
 
