@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from app.playbook import (
@@ -61,7 +61,7 @@ class DraftFromNLRequest(BaseModel):
 
 
 @router.post("/draft-from-nl", summary="Draft a playbook from natural language")
-async def draft_playbook_from_nl(req: DraftFromNLRequest) -> dict:
+async def draft_playbook_from_nl(req: DraftFromNLRequest, request: Request) -> dict:
     """Turn an analyst-authored sentence into a draft playbook.
 
     The returned playbook ships with ``enabled=false`` so the editor
@@ -75,7 +75,13 @@ async def draft_playbook_from_nl(req: DraftFromNLRequest) -> dict:
     if len(prompt) > 4000:
         raise HTTPException(status_code=400, detail="prompt is too long (max 4000 chars)")
 
-    result = await draft_from_nl(prompt, allow_llm=bool(req.allow_llm))
+    from app.privacy.tenant import resolve_request_tenant
+
+    result = await draft_from_nl(
+        prompt,
+        allow_llm=bool(req.allow_llm),
+        tenant_id=resolve_request_tenant(request),
+    )
     return result.to_dict()
 
 

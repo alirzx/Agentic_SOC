@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -115,6 +115,7 @@ def _title_from_message(msg: str) -> str:
 async def _get_openai_reply(
     conversation: dict[str, Any],
     user_message: str,
+    tenant_id: str | None = None,
 ) -> str:
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
@@ -139,13 +140,16 @@ async def _get_openai_reply(
             messages.append({"role": m["role"], "content": m["content"]})
         messages.append({"role": "user", "content": user_message})
 
-        body = await safe_chat_completions_request(
-            api_key=api_key,
-            model=resolve_model_alias("copilot"),
-            messages=messages,
-            url=chat_completions_url(),
-            max_tokens=512,
-        )
+        from app.privacy.context import privacy_context
+
+        with privacy_context(tenant_id or ""):
+            body = await safe_chat_completions_request(
+                api_key=api_key,
+                model=resolve_model_alias("copilot"),
+                messages=messages,
+                url=chat_completions_url(),
+                max_tokens=512,
+            )
         return body["choices"][0]["message"]["content"]
     except Exception as exc:
         logger.warning("copilot.openai_error", error=str(exc))
@@ -190,7 +194,10 @@ async def get_conversation(conversation_id: str) -> dict[str, Any]:
 
 
 @router.post("/chat", response_model=CopilotChatResponse)
-async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
+async def chat(req: CopilotChatRequest, request: Request) -> CopilotChatResponse:
+    from app.privacy.tenant import resolve_request_tenant
+
+    tenant_id = resolve_request_tenant(request)
     conv_id = req.conversationId or str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
 
@@ -212,7 +219,7 @@ async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
     }
     conv["messages"].append(user_msg)
 
-    reply_text = await _get_openai_reply(conv, req.message)
+    reply_text = await _get_openai_reply(conv, req.message, tenant_id)
 
     assistant_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -230,8 +237,11 @@ async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
 
 
 @router.post("/chat/stream")
-async def chat_stream(req: CopilotChatRequest) -> StreamingResponse:
+async def chat_stream(req: CopilotChatRequest, request: Request) -> StreamingResponse:
     """Stream a chat reply as NDJSON deltas."""
+    from app.privacy.tenant import resolve_request_tenant
+
+    tenant_id = resolve_request_tenant(request)
 
     conv_id = req.conversationId or str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
@@ -253,7 +263,7 @@ async def chat_stream(req: CopilotChatRequest) -> StreamingResponse:
     }
     conv["messages"].append(user_msg)
 
-    reply_text = await _get_openai_reply(conv, req.message)
+    reply_text = await _get_openai_reply(conv, req.message, tenant_id)
     msg_id = str(uuid.uuid4())
 
     async def _stream() -> AsyncIterator[bytes]:

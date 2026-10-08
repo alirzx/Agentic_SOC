@@ -393,3 +393,76 @@ class TestDraftFromNL:
         # crash on a non-string input (called directly by tests / CLI).
         result = asyncio.run(draft_from_nl(12345, allow_llm=False))  # type: ignore[arg-type]
         assert isinstance(result, DraftResult)
+
+
+class TestLLMPrivacyAndRole:
+    def test_llm_factory_uses_nl_role(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, Any] = {}
+        sentinel = object()
+
+        def _make(role: str, **kwargs: Any) -> Any:
+            captured.update(role=role, kwargs=kwargs)
+            return sentinel
+
+        monkeypatch.setattr("app.llm.factory.make_chat_model", _make)
+        assert nl_drafter._llm_factory() is sentinel
+        assert captured == {"role": "nl", "kwargs": {}}
+
+    def test_privacy_on_with_tenant_uses_protected_llm_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.privacy.context import current_privacy_gateway
+
+        monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+        monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", "0123456789abcdef0123456789abcdef")
+        captured: list[Any] = []
+        good = {
+            "id": "privacy-draft",
+            "name": "Privacy Draft",
+            "version": "1.0.0",
+            "trigger": {"on": "alert"},
+            "steps": [
+                {
+                    "id": "abc12345",
+                    "name": "Notify",
+                    "type": "notify",
+                    "params": {},
+                    "on_failure": "abort",
+                    "retry_max": 0,
+                    "timeout_seconds": 30,
+                }
+            ],
+        }
+
+        class _PrivacyLLM:
+            async def ainvoke(self, messages: Any, **_kwargs: Any) -> Any:
+                assert current_privacy_gateway() is not None
+                captured.extend(messages)
+                return _Resp(json.dumps(good))
+
+        monkeypatch.setattr(nl_drafter, "_llm_factory", _PrivacyLLM)
+        result = asyncio.run(
+            draft_from_nl(
+                "Notify the SOC about hostname=endpoint01.corp.synthetic.test",
+                allow_llm=True,
+                tenant_id="tenant-a",
+            )
+        )
+        assert result.used_llm is True
+        provider_text = "\n".join(str(getattr(message, "content", message)) for message in captured)
+        assert "endpoint01.corp.synthetic.test" not in provider_text
+        assert "HOST_" in provider_text
+
+    def test_privacy_on_without_tenant_uses_substrate_before_factory(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+        monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", "0123456789abcdef0123456789abcdef")
+        calls = 0
+
+        def _factory() -> Any:
+            nonlocal calls
+            calls += 1
+            raise AssertionError("LLM factory must not be reached")
+
+        monkeypatch.setattr(nl_drafter, "_llm_factory", _factory)
+        result = asyncio.run(draft_from_nl("Notify the SOC", allow_llm=True))
+        assert calls == 0
+        assert result.used_llm is False
+        assert "notify" in _step_types(result.playbook)

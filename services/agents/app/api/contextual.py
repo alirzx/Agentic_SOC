@@ -41,12 +41,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.llm import safe_ainvoke, safe_astream
-from app.llm.factory import resolve_model_alias
+from app.llm.factory import make_chat_model, resolve_model_alias
+from app.privacy.context import privacy_context, privacy_enabled
+from app.privacy.tenant import resolve_request_tenant
 from app.prompt_serialization import summarize_structure_for_llm
 
 logger = structlog.get_logger()
@@ -358,7 +360,7 @@ def _build_messages(req: ContextualActionRequest) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
-async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
+async def _call_llm(system: str, user: str, _model: str) -> tuple[str, int]:
     """Invoke the configured LLM. Returns (markdown, tokens_used).
 
     Falls back to a deterministic stub response when ``OPENAI_API_KEY`` is
@@ -369,12 +371,11 @@ async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
 
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_openai import ChatOpenAI
     except ImportError as exc:
         logger.warning("contextual.llm.import_failed", error=str(exc))
         return _fallback_response(system, user), 0
 
-    llm = ChatOpenAI(model=model, temperature=0.2)
+    llm = make_chat_model("copilot", temperature=0.2)
     response = await safe_ainvoke(llm, [SystemMessage(content=system), HumanMessage(content=user)])
     text = response.content if isinstance(response.content, str) else str(response.content)
     tokens = 0
@@ -383,7 +384,7 @@ async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
     return text, tokens
 
 
-async def _stream_llm(system: str, user: str, model: str) -> AsyncIterator[str]:
+async def _stream_llm(system: str, user: str, _model: str) -> AsyncIterator[str]:
     """Yield response delta chunks. Used by the NDJSON streaming endpoint."""
     if not os.getenv("OPENAI_API_KEY"):
         # Fake-stream the fallback in 8-character chunks for a nice UX in the
@@ -395,14 +396,13 @@ async def _stream_llm(system: str, user: str, model: str) -> AsyncIterator[str]:
 
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_openai import ChatOpenAI
     except ImportError:
         text = _fallback_response(system, user)
         for i in range(0, len(text), 8):
             yield text[i : i + 8]
         return
 
-    llm = ChatOpenAI(model=model, temperature=0.2, streaming=True)
+    llm = make_chat_model("copilot", temperature=0.2, streaming=True)
     async for chunk in safe_astream(llm, [SystemMessage(content=system), HumanMessage(content=user)]):
         if hasattr(chunk, "content") and chunk.content:
             yield chunk.content if isinstance(chunk.content, str) else str(chunk.content)
@@ -443,14 +443,16 @@ async def list_actions() -> ContextualActionsCatalogue:
     response_model=ContextualActionResponse,
     summary="One-shot contextual AI action",
 )
-async def run_action(req: ContextualActionRequest) -> ContextualActionResponse:
+async def run_action(req: ContextualActionRequest, request: Request) -> ContextualActionResponse:
     started = time.monotonic()
+    tenant_id = resolve_request_tenant(request)
     system, user = _build_messages(req)
     model = resolve_model_alias("copilot")
 
     fallback = not bool(os.getenv("OPENAI_API_KEY"))
     try:
-        content, tokens = await _call_llm(system, user, model)
+        with privacy_context(tenant_id or ""):
+            content, tokens = await _call_llm(system, user, model)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "contextual.action.llm_error",
@@ -502,12 +504,13 @@ async def run_action(req: ContextualActionRequest) -> ContextualActionResponse:
     "/action/stream",
     summary="Streaming variant — emits NDJSON lines: {delta} until {done:true}",
 )
-async def run_action_stream(req: ContextualActionRequest) -> StreamingResponse:
+async def run_action_stream(req: ContextualActionRequest, request: Request) -> StreamingResponse:
+    tenant_id = resolve_request_tenant(request)
     system, user = _build_messages(req)
     model = resolve_model_alias("copilot")
     title = _TITLES.get((req.page, req.action), f"{req.page} · {req.action}")
     suggestions = _FOLLOW_UPS.get((req.page, req.action), [])
-    fallback = not bool(os.getenv("OPENAI_API_KEY"))
+    fallback = not bool(os.getenv("OPENAI_API_KEY")) or (privacy_enabled() and not tenant_id)
 
     async def gen() -> AsyncIterator[bytes]:
         # Header frame so the UI can render the title before tokens arrive.
@@ -526,11 +529,14 @@ async def run_action_stream(req: ContextualActionRequest) -> StreamingResponse:
         ).encode()
 
         try:
-            async for chunk in _stream_llm(system, user, model):
-                yield (json.dumps({"delta": chunk}) + "\n").encode()
+            with privacy_context(tenant_id or ""):
+                async for chunk in _stream_llm(system, user, model):
+                    yield (json.dumps({"delta": chunk}) + "\n").encode()
         except Exception:  # noqa: BLE001
             logger.exception("contextual.stream.error")
-            yield (json.dumps({"error": "Streaming failed. Please try again."}) + "\n").encode()
+            text = _fallback_response(system, user)
+            for i in range(0, len(text), 8):
+                yield (json.dumps({"delta": text[i : i + 8]}) + "\n").encode()
 
         # Footer frame with metadata + suggested follow-ups.
         yield (

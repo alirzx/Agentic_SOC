@@ -609,7 +609,7 @@ def _llm_factory() -> Any | None:
     except Exception:
         return None
     try:
-        return make_chat_model()
+        return make_chat_model("nl")
     except Exception as exc:
         logger.info("nl_drafter: no chat model available (%s)", exc)
         return None
@@ -688,7 +688,12 @@ async def _llm_draft(prompt: str) -> Playbook | None:
 # ---------------------------------------------------------------------------
 
 
-async def draft_from_nl(prompt: str, *, allow_llm: bool = True) -> DraftResult:
+async def draft_from_nl(
+    prompt: str,
+    *,
+    allow_llm: bool = True,
+    tenant_id: str | None = None,
+) -> DraftResult:
     """Draft a playbook from an analyst-authored natural-language prompt.
 
     Returns a :class:`DraftResult` carrying the playbook plus
@@ -706,7 +711,14 @@ async def draft_from_nl(prompt: str, *, allow_llm: bool = True) -> DraftResult:
     pb: Playbook | None = None
     used_llm = False
     if allow_llm:
-        pb = await _llm_draft(prompt)
+        from app.privacy.context import PrivacyConfigurationError, privacy_context
+
+        try:
+            with privacy_context(tenant_id or ""):
+                pb = await _llm_draft(prompt)
+        except PrivacyConfigurationError as exc:
+            logger.info("nl_drafter: privacy context unavailable; using substrate (%s)", exc)
+            pb = None
         used_llm = pb is not None
 
     if pb is None:
