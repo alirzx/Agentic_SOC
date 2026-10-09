@@ -35,6 +35,8 @@ from app.playbook import (
     nl_drafter,
 )
 
+pytestmark = pytest.mark.usefixtures("privacy_disabled")
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

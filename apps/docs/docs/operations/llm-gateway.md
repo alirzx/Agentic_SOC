@@ -1,15 +1,17 @@
 ---
-title: LLM gateway (LiteLLM)
-description: Route every live LLM call through a single LiteLLM gateway — assign local or hosted models per task by alias, and get centralized latency/token/cost/error metrics — without changing AiSOC code.
+title: LLM routing and privacy gateway
+description: Operate model routing and the centralized privacy boundary for sanctioned services/agents external chat egress.
 ---
 
-# LLM gateway (LiteLLM)
+# LLM routing and privacy gateway
 
 AiSOC runs several distinct LLM workloads — triage, recon, investigation, the
 contextual copilot, summaries, reports, and natural-language generation. The
-**LiteLLM gateway** is the single entry point for every *live* LLM call these
-workloads make. AiSOC asks for a **logical task alias**; the gateway decides
-which real provider and model that alias resolves to.
+**LiteLLM gateway** is the preferred routing entry point for these workloads.
+AiSOC asks for a **logical task alias**; the gateway decides which real
+provider and model that alias resolves to. Direct OpenAI-compatible routing is
+also supported, so privacy enforcement belongs in the agents-service client
+boundary rather than in one particular routing deployment.
 
 ```
 AiSOC task ──▶ alias (e.g. "aisoc-triage") ──▶ LiteLLM ──▶ real model
@@ -55,6 +57,48 @@ IPv4/IPv6 scope prefix. A non-placeholder malformed value in an IP-semantic
 field, such as `src_ip="B_309"`, becomes a reversible `IP_OPAQUE_*` alias
 instead of falling through in plaintext.
 
+The provider-bound pipeline is:
+
+```text
+Internal canonical evidence
+→ context minimization / prompt serialization
+→ semantic and path-aware identity discovery
+→ irreversible secret masking
+→ tenant-scoped deterministic pseudonymization
+→ privacy-aware system guidance
+→ LLM input contract
+→ external chat provider
+→ exact active-session rehydration
+```
+
+The identity families are `USER`, `EMAIL`, `HOST`, `IP`, `IP_OPAQUE`,
+`ASSET`, and `PATH`. `SECRET` values are not identities: they become
+`[REDACTED_SECRET]` and never enter the reverse map. Examples use synthetic
+values only:
+
+```text
+src_ip=B_309                          → IP_OPAQUE_...
+device.name=endpoint01.synthetic.test → HOST_...
+user=unknown                          → unknown
+session_token=synthetic-secret        → [REDACTED_SECRET]
+```
+
+Current sanctioned agents-service chat surfaces are:
+
+| Surface | Provider boundary | Tenant context |
+| --- | --- | --- |
+| Auto-triage and specialized router agents | `safe_ainvoke` | fused worker, graph runner, or router |
+| Full investigator agents | `safe_ainvoke` | investigator run/stream lifetime |
+| Generic Copilot and Explain | `safe_chat_completions_request` | trusted request tenant |
+| Contextual Copilot | `safe_ainvoke` / `safe_astream` | trusted request tenant |
+| NL playbook drafting | `safe_ainvoke` | trusted request tenant; deterministic fallback otherwise |
+| New runtime triage/investigation | `safe_ainvoke` | `SocOrchestrator.run` lifetime |
+| Optional NL-query enhancement | `safe_chat_completions_request` | caller-bound context; currently no production caller |
+
+`app.runtime.llm_gateway.LLMGateway` and the generic tool-loop helper currently
+have no production caller. The static no-bypass test still guards them against
+future direct model invocation.
+
 The projector first discovers authoritative identities across the complete
 structured value and then transforms it. Repeats in titles, narratives, and
 quoted Splunk search expressions therefore use the same alias regardless of
@@ -74,6 +118,23 @@ must not be decoded, abbreviated, or treated as malicious evidence. Internal
 storage, Splunk queries, tools, Kafka, Postgres, and the entity graph continue
 to use canonical values.
 
+HMAC aliases are not decrypted. Each active gateway session retains only an
+in-memory `alias → original` mapping. A provider-emitted alias in a tool
+argument is restored before the local tool executes; any private identity
+included in the next model turn is projected again before egress.
+
+Privacy-enabled streaming is intentionally buffered up to
+`AISOC_LLM_PRIVACY_STREAM_MAX_CHARS`. The boundary reassembles all provider
+chunks before exact restoration, so an alias split between chunks is never
+partially exposed to the caller. Privacy-disabled streaming preserves the
+underlying chunk behavior.
+
+The response cache uses only provider-safe projected prompt material. Its
+namespace includes the tenant-derived privacy namespace and privacy policy
+version, preventing cross-tenant and cross-policy reuse. The stable identity
+HMAC namespace remains `aisoc-privacy-v1`; the current projection/cache policy
+is `v1.1`.
+
 Keep the key consistent across agents replicas and restarts. Changing it
 changes every alias; V1 intentionally has no persistent alias catalog or key
 rotation migration. If privacy is enabled but the key or tenant context is
@@ -92,6 +153,12 @@ agents service refuses that escape hatch when `AISOC_ENV=production`. With
 privacy enabled, an unavailable trusted tenant causes deterministic fallback or
 failure before provider egress.
 
+A public-looking FQDN is protected when a structured field, nested path,
+typed entity, or contextual label establishes that it is tenant-owned. A
+public-looking FQDN appearing only in unconstrained prose may remain visible so
+public IOC reasoning is not destroyed. Organization-owned domain and CIDR
+inventory is intentionally deferred.
+
 Both the root and demo Compose definitions pass the privacy settings into the
 agents container with privacy disabled and secret values empty by default.
 
@@ -101,6 +168,7 @@ From `services/agents`, use a temporary synthetic key. Both commands are local
 and make zero network calls:
 
 ```bash
+export AISOC_LLM_PRIVACY_ENABLED=1
 export AISOC_PRIVACY_TOKEN_KEY="$(openssl rand -hex 32)"
 PYTHONPATH=. python -m app.scripts.privacy_smoke --tenant-id synthetic-smoke
 PYTHONPATH=. python -m app.scripts.privacy_splunk_smoke --tenant-id synthetic-smoke
@@ -124,6 +192,34 @@ PYTHONPATH=. python -m app.scripts.privacy_provider_probe --privacy off
 These commands perform a real provider call using `OPENAI_BASE_URL`,
 `OPENAI_API_KEY`, and `AISOC_MODEL_PIN_TRIAGE`. Use synthetic input only and
 compare the ON/OFF results for operational A/B validation.
+
+### Hermetic regression checks
+
+Privacy-sensitive tests own their environment. Run the same focused selection
+once with a synthetic privacy-enabled parent shell and once with both privacy
+variables absent; both runs must pass. This proves a developer's exported
+variables cannot silently change test semantics. Provider calls are mocked in
+unit tests, and the optional probe above is the only intentionally real chat
+test.
+
+### External model egress outside the chat boundary
+
+At startup, `app.tools.mitre_full` can send the public ATT&CK technique corpus
+to a configured embeddings API before storing vectors in Qdrant. This contains
+public corpus text, not tenant evidence, and is intentionally outside the chat
+Privacy Gateway. The same module exposes a semantic-search embedding helper,
+but no production caller currently uses it. It must not be connected to
+tenant-private query text until the separate embedding privacy policy exists.
+
+### V1.1 boundaries and later work
+
+V1.1 does not implement data-classification tiers, an
+`ALLOW/TOKENIZE/MASK/BLOCK/LOCAL_ONLY` policy engine, organization-owned
+CIDR/domain inventory, a persistent encrypted token vault, key-rotation
+migration, output DLP, provider sensitivity routing, configurable token scope,
+tenant-private embedding policy, or a cross-service privacy gateway. These are
+later-phase controls and must not be inferred from the agents-service chat
+boundary described here.
 
 ## Task aliases
 
@@ -156,7 +252,7 @@ OPENAI_BASE_URL=http://litellm:4000/v1     # send AiSOC's calls to the gateway
 # OPENAI_API_KEY=${LITELLM_MASTER_KEY}     # (in the AiSOC services' environment)
 ```
 
-AiSOC now requests a task **alias** for every live call, so an alias only
+Factory-routed agents workloads request a task **alias**, so an alias only
 resolves when it reaches the gateway. If you don't run the gateway, pin each
 role to a concrete provider model instead (the **escape hatch**):
 

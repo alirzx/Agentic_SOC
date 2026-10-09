@@ -9,7 +9,10 @@ from types import SimpleNamespace
 import pytest
 from app.agents.tool_loop import run_with_tools
 from app.privacy.context import privacy_context
+from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE
 from app.tools.registry import Tool, ToolRegistry, default_registry
+
+pytestmark = pytest.mark.usefixtures("privacy_disabled")
 
 
 class _FakeLLM:
@@ -91,6 +94,7 @@ class _PrivacyToolLLM:
 
     async def ainvoke(self, messages):
         self.calls.append(list(messages))
+        assert [getattr(message, "content", "") for message in messages].count(PRIVACY_SYSTEM_GUIDANCE) == 1
         if len(self.calls) == 1:
             rendered = " ".join(str(getattr(message, "content", "")) for message in messages)
             self.alias = re.search(r"HOST_[A-F0-9]{24}", rendered).group(0)

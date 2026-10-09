@@ -8,16 +8,15 @@ import httpx
 import pytest
 from app.llm.contract import LLMContractViolation, make_safe_chat_model, safe_ainvoke, safe_astream, safe_chat_completions_request
 from app.privacy.context import PrivacyConfigurationError, privacy_context
-from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE
+from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE, PrivacyGateway
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 KEY = "abcdef0123456789abcdef0123456789"
 
 
 @pytest.fixture
-def privacy(monkeypatch):
-    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
-    monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", KEY)
+def privacy(privacy_enabled):
+    return privacy_enabled
 
 
 class SpyLLM:
@@ -68,6 +67,48 @@ async def test_privacy_guidance_is_not_added_when_privacy_is_disabled(monkeypatc
     assert llm.calls[0][0].content == "plain request"
 
 
+async def test_privacy_guidance_is_injected_exactly_once_per_provider_call(privacy) -> None:
+    llm = SpyLLM()
+    original = [HumanMessage(content="Investigate host=dc01.example.local")]
+    with privacy_context("tenant-a"):
+        await safe_ainvoke(llm, original, temperature=0)
+        await safe_ainvoke(llm, original, temperature=0)
+
+    assert len(llm.calls) == 2
+    for call in llm.calls:
+        assert [message.content for message in call].count(PRIVACY_SYSTEM_GUIDANCE) == 1
+        assert call[0].content == PRIVACY_SYSTEM_GUIDANCE
+    assert len(original) == 1
+    assert original[0].content == "Investigate host=dc01.example.local"
+
+
+def test_whole_turn_identity_discovery_is_message_order_independent() -> None:
+    host = "endpoint01.corp.synthetic.test"
+    first = PrivacyGateway(tenant_id="tenant-a", token_key=KEY)
+    first_projected = first.project_messages(
+        [
+            HumanMessage(content=f"Registry modification on {host}"),
+            HumanMessage(content=f"hostname={host}"),
+        ]
+    )
+    second = PrivacyGateway(tenant_id="tenant-a", token_key=KEY)
+    second_projected = second.project_messages(
+        [
+            HumanMessage(content=f"hostname={host}"),
+            HumanMessage(content=f"Registry modification on {host}"),
+        ]
+    )
+
+    first_text = "\n".join(message.content for message in first_projected)
+    second_text = "\n".join(message.content for message in second_projected)
+    assert host not in first_text and host not in second_text
+    first_alias = next(iter(first.codec.mapping))
+    second_alias = next(iter(second.codec.mapping))
+    assert first_alias == second_alias
+    assert first_text.count(first_alias) == 2
+    assert second_text.count(second_alias) == 2
+
+
 async def test_safe_stream_buffers_split_alias_then_rehydrates_once(privacy) -> None:
     llm = SpyLLM()
     with privacy_context("tenant-a"):
@@ -114,9 +155,25 @@ async def test_missing_key_or_tenant_context_fails_before_network(monkeypatch) -
     assert llm.calls == []
 
 
-async def test_privacy_projection_does_not_weaken_raw_ocsf_contract(privacy) -> None:
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_privacy_projection_does_not_weaken_raw_ocsf_contract(
+    enabled: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1" if enabled else "0")
+    if enabled:
+        monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", KEY)
+    else:
+        monkeypatch.delenv("AISOC_PRIVACY_TOKEN_KEY", raising=False)
     llm = SpyLLM()
-    with privacy_context("tenant-a"):
+    if enabled:
+        with privacy_context("tenant-a"):
+            with pytest.raises(LLMContractViolation, match="raw-log signature|OCSF"):
+                await safe_ainvoke(
+                    llm,
+                    [HumanMessage(content='{"class_uid": 2001, "activity_id": 1, "raw_data": "vendor payload"}')],
+                )
+    else:
         with pytest.raises(LLMContractViolation, match="raw-log signature|OCSF"):
             await safe_ainvoke(
                 llm,
@@ -136,3 +193,12 @@ async def test_cache_is_tenant_isolated_and_provider_safe(privacy) -> None:
     assert len(llm.calls) == 2
     assert "dc01.example.local" in first.content == second.content
     assert "dc01.example.local" in third.content
+    assert all("dc01.example.local" not in str(call) for call in llm.calls)
+
+
+def test_cache_namespace_includes_policy_version_and_tenant_scope() -> None:
+    tenant_a = PrivacyGateway(tenant_id="tenant-a", token_key=KEY)
+    tenant_b = PrivacyGateway(tenant_id="tenant-b", token_key=KEY)
+    assert tenant_a.cache_namespace.startswith("privacy:v1.1:")
+    assert tenant_a.policy_version == "v1.1"
+    assert tenant_a.cache_namespace != tenant_b.cache_namespace

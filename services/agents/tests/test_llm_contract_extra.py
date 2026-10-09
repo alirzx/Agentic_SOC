@@ -30,6 +30,8 @@ from app.llm.contract import (
     validate_messages,
 )
 
+pytestmark = pytest.mark.usefixtures("privacy_disabled")
+
 
 @pytest.fixture
 def contract_enforced():

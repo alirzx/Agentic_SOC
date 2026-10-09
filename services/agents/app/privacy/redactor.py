@@ -203,7 +203,10 @@ _PLACEHOLDERS = frozenset({"unknown", "n/a", "na", "none", "null", "not availabl
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
 _WIN_PATH_RE = re.compile(r"[A-Za-z]:\\[^\s\"']+")
 _UNC_PATH_RE = re.compile(r"\\\\[^\s\"']+")
-_UNIX_PATH_RE = re.compile(r"(?:/[A-Za-z0-9._\-]+){2,}/?")
+# Require an absolute-path boundary. Without it, the ``/host/path`` portion of
+# ``https://host/path`` is mistaken for a local Unix path and destroys a public
+# IOC URL that the model needs for threat analysis.
+_UNIX_PATH_RE = re.compile(r"(?<![A-Za-z0-9./])(?:/[A-Za-z0-9._\-]+){2,}/?")
 _DOMAIN_USER_RE = re.compile(r"\b[A-Za-z0-9.\-]+\\[A-Za-z0-9._\-]+")
 _IP_RE = re.compile(r"(?<![A-Za-z0-9_:])(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f:]{2,})(?![A-Za-z0-9_:])")
 _FQDN_RE = re.compile(r"\b(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}\.?\b")

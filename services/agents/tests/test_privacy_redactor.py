@@ -205,6 +205,36 @@ def test_contextual_text_and_final_sweep_protect_earlier_repeats() -> None:
     assert p.rehydrate(safe) == text
 
 
+def test_structured_discovery_is_independent_of_dictionary_order() -> None:
+    host = "endpoint01.corp.synthetic.test"
+    title = f"Registry modification on {host}"
+    title_first = codec().redact_value({"title": title, "hostname": host})
+    hostname_first = codec().redact_value({"hostname": host, "title": title})
+
+    assert host not in title_first["title"]
+    assert host not in hostname_first["title"]
+    assert title_first["hostname"] == hostname_first["hostname"]
+    assert title_first["hostname"] in title_first["title"]
+    assert hostname_first["hostname"] in hostname_first["title"]
+
+
+def test_public_ioc_and_provenance_fields_are_not_over_redacted() -> None:
+    original = {
+        "source": "splunk",
+        "domain": "evil.example",
+        "url": "https://evil.example/payload",
+        "file_hash": "a" * 64,
+        "rule_name": "Synthetic Registry Detection",
+        "mitre_technique": "T1110.003",
+        "device_type": "workstation",
+    }
+    assert codec().redact_value(original) == original
+    projected = codec().redact("Review https://evil.example/a/b and local path=/var/log/auth.log")
+    assert "https://evil.example/a/b" in projected
+    assert "/var/log/auth.log" not in projected
+    assert "PATH_" in projected
+
+
 def test_common_placeholders_and_explicit_non_identity_ids_are_preserved() -> None:
     values = ["unknown", "n/a", "NA", "none", "null", "not available", "-"]
     p = codec()

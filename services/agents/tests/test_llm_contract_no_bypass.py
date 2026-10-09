@@ -19,7 +19,10 @@ itself implements the wrapper), append to ``_ALLOWED_FILES``.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
+
+import pytest
 
 _AGENTS_APP = Path(__file__).resolve().parent.parent / "app"
 
@@ -48,6 +51,28 @@ _ALLOWED_FILES: frozenset[Path] = frozenset(
 )
 
 _METHODS = {"ainvoke", "astream"}
+_PROVIDER_CLIENTS = frozenset(
+    {
+        "ChatOpenAI",
+        "AzureChatOpenAI",
+        "OpenAI",
+        "AsyncOpenAI",
+        "AzureOpenAI",
+        "AsyncAzureOpenAI",
+        "Anthropic",
+        "AsyncAnthropic",
+    }
+)
+_PROVIDER_CONSTRUCTOR_ALLOWLIST: dict[Path, frozenset[str]] = {
+    # The only sanctioned chat-model constructor. Callers receive the model
+    # here, then must invoke it through the safe contract functions.
+    _AGENTS_APP / "llm" / "factory.py": frozenset({"ChatOpenAI"}),
+    # Embedding-only SDK client. The active startup path sends the public
+    # ATT&CK corpus, not tenant chat content; embedding privacy is Phase 2.
+    _AGENTS_APP / "tools" / "mitre_full.py": frozenset({"AsyncOpenAI"}),
+}
+_RAW_CHAT_HTTP_ALLOWED_FILES = frozenset({_AGENTS_APP / "llm" / "contract.py"})
+_RAW_CHAT_URL_RE = re.compile(r"https?://[^\s\"']+/chat/completions(?:\b|$)", re.IGNORECASE)
 
 
 def _receiver_name(node: ast.Attribute) -> str:
@@ -135,6 +160,54 @@ def _find_bypasses(path: Path) -> list[tuple[int, str, str]]:
     return findings
 
 
+def _dotted_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _dotted_name(node.value)
+        return f"{prefix}.{node.attr}" if prefix else node.attr
+    return ""
+
+
+def _find_provider_bypasses(path: Path) -> list[tuple[int, str, str]]:
+    """Find direct provider clients, SDK chat calls, and raw chat HTTP URLs."""
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    aliases: dict[str, str] = {}
+    findings: list[tuple[int, str, str]] = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module in {
+            "langchain_openai",
+            "openai",
+            "anthropic",
+        }:
+            for imported in node.names:
+                if imported.name in _PROVIDER_CLIENTS:
+                    aliases[imported.asname or imported.name] = imported.name
+
+    allowed_clients = _PROVIDER_CONSTRUCTOR_ALLOWLIST.get(path, frozenset())
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        dotted = _dotted_name(node.func)
+        short = dotted.rsplit(".", 1)[-1]
+        provider_name = aliases.get(short, short)
+        if provider_name in _PROVIDER_CLIENTS and provider_name not in allowed_clients:
+            findings.append((node.lineno, provider_name, "provider_constructor"))
+
+        if dotted.endswith(".chat.completions.create") or dotted.endswith(".messages.create"):
+            findings.append((node.lineno, dotted, "direct_provider_chat"))
+
+        if path not in _RAW_CHAT_HTTP_ALLOWED_FILES and dotted.rsplit(".", 1)[-1] in {"post", "request"}:
+            for child in ast.walk(node):
+                if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                    if _RAW_CHAT_URL_RE.search(child.value):
+                        findings.append((child.lineno, child.value, "raw_chat_http"))
+                        break
+    return findings
+
+
 def _python_sources() -> list[Path]:
     return [p for p in _AGENTS_APP.rglob("*.py") if "__pycache__" not in p.parts and p not in _ALLOWED_FILES]
 
@@ -156,6 +229,21 @@ def test_no_direct_ainvoke_or_astream_bypass() -> None:
     )
 
 
+def test_no_direct_provider_client_or_raw_chat_http_bypass() -> None:
+    """Only central infrastructure may construct clients or issue chat HTTP."""
+    violations: list[str] = []
+    for path in _python_sources():
+        for lineno, symbol, category in _find_provider_bypasses(path):
+            rel = path.relative_to(_AGENTS_APP.parent)
+            violations.append(f"{rel}:{lineno}  {category}: {symbol}")
+
+    assert not violations, (
+        "Direct external LLM provider access detected — construct chat models in "
+        "app.llm.factory and send provider traffic through app.llm.contract.\n  "
+        + "\n  ".join(violations)
+    )
+
+
 def test_gate_detects_synthetic_bypass(tmp_path: Path) -> None:
     """Sanity-check the AST walker: a fake bypass file must trip the detector."""
     fake = tmp_path / "fake_agent.py"
@@ -167,6 +255,43 @@ def test_gate_detects_synthetic_bypass(tmp_path: Path) -> None:
     assert findings, "AST walker failed to flag a synthetic llm.ainvoke bypass"
     assert findings[0][1] == "llm"
     assert findings[0][2] == "ainvoke"
+
+
+def test_gate_detects_synthetic_astream_bypass(tmp_path: Path) -> None:
+    fake = tmp_path / "fake_streaming_agent.py"
+    fake.write_text(
+        "async def run(llm, messages):\n    return [chunk async for chunk in llm.astream(messages)]\n",
+        encoding="utf-8",
+    )
+    assert any(method == "astream" for _, _, method in _find_bypasses(fake))
+
+
+@pytest.mark.parametrize(
+    ("source", "category"),
+    [
+        (
+            "from langchain_openai import ChatOpenAI\nllm = ChatOpenAI(model='x')\n",
+            "provider_constructor",
+        ),
+        (
+            "from openai import AsyncOpenAI as Client\nclient = Client(api_key='synthetic')\n",
+            "provider_constructor",
+        ),
+        (
+            "import httpx\nhttpx.post('https://provider.synthetic.test/v1/chat/completions', json={})\n",
+            "raw_chat_http",
+        ),
+        (
+            "async def call(client):\n    return await client.chat.completions.create(model='x', messages=[])\n",
+            "direct_provider_chat",
+        ),
+    ],
+)
+def test_provider_gate_detects_synthetic_bypasses(tmp_path: Path, source: str, category: str) -> None:
+    fake = tmp_path / "fake_provider.py"
+    fake.write_text(source, encoding="utf-8")
+    findings = _find_provider_bypasses(fake)
+    assert any(found_category == category for _, _, found_category in findings), findings
 
 
 def test_gate_respects_receiver_allowlist(tmp_path: Path) -> None:
