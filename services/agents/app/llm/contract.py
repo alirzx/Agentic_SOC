@@ -38,6 +38,13 @@ import structlog
 from langchain_core.messages import AIMessage
 
 from app.core.cost_telemetry import record_llm_call
+from app.llm.human_trace import (
+    INTERNAL_INPUT,
+    LOCAL_RESPONSE,
+    PROVIDER_INPUT,
+    PROVIDER_RESPONSE,
+    emit_human_trace,
+)
 from app.llm.response_cache import ResponseCache
 from app.privacy.context import PrivacyConfigurationError, current_privacy_gateway
 
@@ -53,6 +60,31 @@ _RESPONSE_CACHE_ENABLED = os.getenv("AISOC_LLM_RESPONSE_CACHE", "1").lower() not
 
 def _model_name(llm: Any) -> str:
     return str(getattr(llm, "model", None) or getattr(llm, "model_name", None) or "")
+
+
+def _trace(
+    stage: str,
+    payload: Any,
+    *,
+    gateway: Any,
+    model: str,
+    path: str,
+    provider_called: bool | None = None,
+    cache_hit: bool = False,
+    chunk_index: int | None = None,
+) -> None:
+    emit_human_trace(
+        stage,
+        payload,
+        model=model,
+        privacy_enabled=gateway is not None,
+        tenant_id=getattr(gateway, "tenant_id", None),
+        path=path,
+        projection_applied=gateway is not None and stage in {PROVIDER_INPUT, PROVIDER_RESPONSE},
+        provider_called=provider_called,
+        cache_hit=cache_hit,
+        chunk_index=chunk_index,
+    )
 
 
 def _cache_parts(messages: list[Any]) -> tuple[str, str]:
@@ -348,10 +380,12 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
     """
     materialised = list(messages)
     gateway = current_privacy_gateway()
+    model = _model_name(llm)
+    _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="ainvoke")
     provider_messages = gateway.project_messages(materialised) if gateway else materialised
+    _trace(PROVIDER_INPUT, provider_messages, gateway=gateway, model=model, path="ainvoke")
     LLMInputContract.validate(provider_messages)
 
-    model = _model_name(llm)
     prompt, user_input = _cache_parts(provider_messages)
     cache_namespace = gateway.cache_namespace if gateway else ""
     # Only cache plain calls (no per-call kwargs like temperature overrides).
@@ -360,11 +394,31 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
         cached = _RESPONSE_CACHE.lookup(model=model, prompt=prompt, user_input=user_input, namespace=cache_namespace)
         if cached is not None:
             cached_message = AIMessage(content=cached)
-            return gateway.process_response(cached_message) if gateway else cached_message
+            _trace(
+                PROVIDER_RESPONSE,
+                cached_message,
+                gateway=gateway,
+                model=model,
+                path="cache",
+                provider_called=False,
+                cache_hit=True,
+            )
+            local_result = gateway.process_response(cached_message) if gateway else cached_message
+            _trace(
+                LOCAL_RESPONSE,
+                local_result,
+                gateway=gateway,
+                model=model,
+                path="cache",
+                provider_called=False,
+                cache_hit=True,
+            )
+            return local_result
 
     t0 = time.monotonic()
     result = await llm.ainvoke(provider_messages, **kwargs)
     latency_ms = (time.monotonic() - t0) * 1000.0
+    _trace(PROVIDER_RESPONSE, result, gateway=gateway, model=model, path="ainvoke", provider_called=True)
     # Record token/cost against the active CostTracker (no-op if none bound), so
     # the high-volume auto-triage path is finally visible in the cost dashboard.
     try:
@@ -382,7 +436,9 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
                 response=content,
                 namespace=cache_namespace,
             )
-    return gateway.process_response(result) if gateway else result
+    local_result = gateway.process_response(result) if gateway else result
+    _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="ainvoke", provider_called=True)
+    return local_result
 
 
 async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
@@ -393,11 +449,34 @@ async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
     """
     materialised = list(messages)
     gateway = current_privacy_gateway()
+    model = _model_name(llm)
+    _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="astream")
     provider_messages = gateway.project_messages(materialised) if gateway else materialised
+    _trace(PROVIDER_INPUT, provider_messages, gateway=gateway, model=model, path="astream")
     LLMInputContract.validate(provider_messages)
     if gateway is None:
+        chunk_index = 0
         async for chunk in llm.astream(provider_messages, **kwargs):
+            _trace(
+                PROVIDER_RESPONSE,
+                chunk,
+                gateway=gateway,
+                model=model,
+                path="astream",
+                provider_called=True,
+                chunk_index=chunk_index,
+            )
+            _trace(
+                LOCAL_RESPONSE,
+                chunk,
+                gateway=gateway,
+                model=model,
+                path="astream",
+                provider_called=True,
+                chunk_index=chunk_index,
+            )
             yield chunk
+            chunk_index += 1
         return
 
     combined: Any | None = None
@@ -416,7 +495,10 @@ async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
             except (TypeError, ValueError) as exc:
                 raise PrivacyConfigurationError("protected LLM stream returned unsupported chunk types") from exc
     if combined is not None:
-        yield gateway.process_response(combined)
+        _trace(PROVIDER_RESPONSE, combined, gateway=gateway, model=model, path="astream", provider_called=True)
+        local_result = gateway.process_response(combined)
+        _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="astream", provider_called=True)
+        yield local_result
 
 
 def make_safe_chat_model(llm: Any) -> Any:
@@ -480,7 +562,11 @@ async def safe_chat_completions_request(
 
     materialised = list(messages)
     gateway = current_privacy_gateway()
+    _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="http")
     provider_messages = gateway.project_messages(materialised) if gateway else materialised
+    body: dict[str, Any] = {"model": model, "messages": provider_messages}
+    body.update(extra_body)
+    _trace(PROVIDER_INPUT, body, gateway=gateway, model=model, path="http")
     LLMInputContract.validate(provider_messages)
 
     try:
@@ -495,11 +581,11 @@ async def safe_chat_completions_request(
     if extra_headers:
         headers.update(extra_headers)
 
-    body: dict[str, Any] = {"model": model, "messages": provider_messages}
-    body.update(extra_body)
-
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(url, headers=headers, json=body)
         resp.raise_for_status()
         payload = resp.json()
-        return gateway.process_response(payload) if gateway else payload
+        _trace(PROVIDER_RESPONSE, payload, gateway=gateway, model=model, path="http", provider_called=True)
+        local_result = gateway.process_response(payload) if gateway else payload
+        _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="http", provider_called=True)
+        return local_result

@@ -135,6 +135,35 @@ version, preventing cross-tenant and cross-policy reuse. The stable identity
 HMAC namespace remains `aisoc-privacy-v1`; the current projection/cache policy
 is `v1.1`.
 
+### Human trace diagnostics
+
+Human Trace is an explicit, default-off debugging mode at the centralized LLM
+boundary. Enable it only for a controlled investigation:
+
+```bash
+AISOC_LLM_HUMAN_TRACE_ENABLED=1
+AISOC_LLM_HUMAN_TRACE_MAX_CHARS=50000
+```
+
+It emits `llm.human_trace.internal_input`,
+`llm.human_trace.provider_input`, `llm.human_trace.provider_response`, and
+`llm.human_trace.local_response`. Together these show the exact application
+messages, the provider-visible projection, the raw provider response, and the
+locally restored result. Cache hits are marked with `path=cache`,
+`cache_hit=true`, and `provider_called=false`. Protected streams are traced as
+one buffered response; unprotected streams record each chunk.
+
+:::warning Sensitive diagnostic output
+`INTERNAL_INPUT` intentionally contains tenant-sensitive canonical input, and
+`LOCAL_RESPONSE` may contain restored identities. Use Human Trace only
+deliberately, for the shortest practical period, in access-controlled logs.
+The maximum applies only to rendered log payloads and never truncates the real
+request or response. Credential fields, Authorization values, configured
+provider/privacy/signing keys, credential-bearing URL components, and cache
+key material are scrubbed. Logging failures are ignored so tracing cannot
+change provider or contract behavior.
+:::
+
 Keep the key consistent across agents replicas and restarts. Changing it
 changes every alias; V1 intentionally has no persistent alias catalog or key
 rotation migration. If privacy is enabled but the key or tenant context is
