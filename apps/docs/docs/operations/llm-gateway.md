@@ -57,6 +57,13 @@ IPv4/IPv6 scope prefix. A non-placeholder malformed value in an IP-semantic
 field, such as `src_ip="B_309"`, becomes a reversible `IP_OPAQUE_*` alias
 instead of falling through in plaintext.
 
+Privacy-enabled workflows resolve a trusted tenant UUID, slug, name, or the
+`default` placeholder to the platform tenant row's canonical UUID before the
+gateway is opened. `default` selects the canonical seed tenant when present,
+then a sole tenant only in a true single-tenant installation. Unknown or
+ambiguous references fail before provider construction or network egress; the
+gateway never invents a tenant namespace.
+
 The provider-bound pipeline is:
 
 ```text
@@ -178,7 +185,8 @@ must either set `request.state.authenticated_tenant_id` or add
 `X-AiSOC-Tenant-Signature`, the HMAC of the tenant identifier using
 `AISOC_AGENTS_TENANT_SIGNING_KEY`. For explicit local development only,
 `AISOC_AGENTS_ALLOW_UNSIGNED_TENANT_HEADER=1` accepts the unsigned header; the
-agents service refuses that escape hatch when `AISOC_ENV=production`. With
+agents service refuses that escape hatch when `AISOC_ENV`, `ENV`, or
+`ENVIRONMENT` indicates `prod`/`production`. With
 privacy enabled, an unavailable trusted tenant causes deterministic fallback or
 failure before provider egress.
 

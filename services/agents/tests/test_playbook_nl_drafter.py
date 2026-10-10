@@ -445,7 +445,7 @@ class TestLLMPrivacyAndRole:
             draft_from_nl(
                 "Notify the SOC about hostname=endpoint01.corp.synthetic.test",
                 allow_llm=True,
-                tenant_id="tenant-a",
+                tenant_id="66666666-6666-6666-6666-666666666666",
             )
         )
         assert result.used_llm is True

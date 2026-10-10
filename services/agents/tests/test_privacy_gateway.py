@@ -12,6 +12,8 @@ from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE, PrivacyGateway
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 KEY = "abcdef0123456789abcdef0123456789"
+TENANT_A = "11111111-1111-1111-1111-111111111111"
+TENANT_B = "22222222-2222-2222-2222-222222222222"
 
 
 @pytest.fixture
@@ -40,7 +42,7 @@ class SpyLLM:
 
 async def test_safe_ainvoke_projects_provider_and_rehydrates_caller(privacy) -> None:
     llm = SpyLLM()
-    with privacy_context("tenant-a"):
+    with privacy_context(TENANT_A):
         result = await safe_ainvoke(llm, [HumanMessage(content="Investigate 10.20.3.7 on dc01.example.local user=alice")])
     assert llm.calls[0][0].content == PRIVACY_SYSTEM_GUIDANCE
     assert "Do not decode" in llm.calls[0][0].content
@@ -54,7 +56,7 @@ async def test_safe_ainvoke_projects_provider_and_rehydrates_caller(privacy) -> 
 async def test_make_safe_chat_model_inherits_privacy_boundary(privacy) -> None:
     llm = SpyLLM()
     guarded = make_safe_chat_model(llm)
-    with privacy_context("tenant-a"):
+    with privacy_context(TENANT_A):
         await guarded.ainvoke([HumanMessage(content="host dc01.example.local")])
     assert "dc01.example.local" not in llm.calls[0][-1].content
 
@@ -70,7 +72,7 @@ async def test_privacy_guidance_is_not_added_when_privacy_is_disabled(monkeypatc
 async def test_privacy_guidance_is_injected_exactly_once_per_provider_call(privacy) -> None:
     llm = SpyLLM()
     original = [HumanMessage(content="Investigate host=dc01.example.local")]
-    with privacy_context("tenant-a"):
+    with privacy_context(TENANT_A):
         await safe_ainvoke(llm, original, temperature=0)
         await safe_ainvoke(llm, original, temperature=0)
 
@@ -111,7 +113,7 @@ def test_whole_turn_identity_discovery_is_message_order_independent() -> None:
 
 async def test_safe_stream_buffers_split_alias_then_rehydrates_once(privacy) -> None:
     llm = SpyLLM()
-    with privacy_context("tenant-a"):
+    with privacy_context(TENANT_A):
         chunks = [chunk async for chunk in safe_astream(llm, [HumanMessage(content="host dc01.example.local")])]
     assert len(chunks) == 1
     assert "dc01.example.local" in chunks[0].content
@@ -133,7 +135,7 @@ async def test_raw_http_projects_and_rehydrates(privacy) -> None:
 
     client.post = AsyncMock(side_effect=post)
     with patch("httpx.AsyncClient", return_value=client):
-        with privacy_context("tenant-a"):
+        with privacy_context(TENANT_A):
             body = await safe_chat_completions_request(
                 api_key="synthetic-test-key",
                 model="test-model",
@@ -167,7 +169,7 @@ async def test_privacy_projection_does_not_weaken_raw_ocsf_contract(
         monkeypatch.delenv("AISOC_PRIVACY_TOKEN_KEY", raising=False)
     llm = SpyLLM()
     if enabled:
-        with privacy_context("tenant-a"):
+        with privacy_context(TENANT_A):
             with pytest.raises(LLMContractViolation, match="raw-log signature|OCSF"):
                 await safe_ainvoke(
                     llm,
@@ -185,10 +187,10 @@ async def test_privacy_projection_does_not_weaken_raw_ocsf_contract(
 async def test_cache_is_tenant_isolated_and_provider_safe(privacy) -> None:
     llm = SpyLLM()
     message = HumanMessage(content="unique-cache-private host dc01.example.local")
-    with privacy_context("tenant-a"):
+    with privacy_context(TENANT_A):
         first = await safe_ainvoke(llm, [message])
         second = await safe_ainvoke(llm, [message])
-    with privacy_context("tenant-b"):
+    with privacy_context(TENANT_B):
         third = await safe_ainvoke(llm, [message])
     assert len(llm.calls) == 2
     assert "dc01.example.local" in first.content == second.content

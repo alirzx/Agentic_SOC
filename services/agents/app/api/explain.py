@@ -119,7 +119,7 @@ from pydantic import BaseModel, Field
 
 from app.core.rate_limit import RateLimitDecision, TokenBucketLimiter
 from app.privacy.context import PrivacyConfigurationError, privacy_context, privacy_enabled
-from app.privacy.tenant import resolve_request_tenant
+from app.privacy.tenant import resolve_request_tenant, resolve_tenant_for_llm
 from app.security.llm_resolver import LlmConfig, resolve_llm_config
 
 logger = structlog.get_logger()
@@ -750,9 +750,17 @@ async def explain(req: ExplainRequest, request: Request) -> StreamingResponse:
     # operators can see — via response headers — which knob took
     # effect (env / tenant / fallback). The resolver is async-safe and
     # already falls back to env-only if the database or vault is down.
-    resolver_tenant = trusted_tenant or (None if privacy_enabled() else req.tenant_id)
+    privacy_tenant: str | None = None
+    if privacy_enabled():
+        try:
+            privacy_tenant = await resolve_tenant_for_llm(trusted_tenant)
+        except PrivacyConfigurationError:
+            privacy_tenant = None
+        resolver_tenant = privacy_tenant
+    else:
+        resolver_tenant = trusted_tenant or req.tenant_id
     llm_config = await resolve_llm_config(resolver_tenant)
-    if privacy_enabled() and not trusted_tenant and llm_config.allowed:
+    if privacy_enabled() and privacy_tenant is None and llm_config.allowed:
         llm_config = replace(
             llm_config,
             allowed=False,
@@ -767,7 +775,7 @@ async def explain(req: ExplainRequest, request: Request) -> StreamingResponse:
     response_headers["X-LLM-Allowed"] = "1" if llm_config.allowed else "0"
 
     return StreamingResponse(
-        _stream_explanation(req, llm_config, trusted_tenant),
+        _stream_explanation(req, llm_config, privacy_tenant),
         media_type="application/x-ndjson",
         headers=response_headers,
     )

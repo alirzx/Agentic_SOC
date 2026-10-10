@@ -21,7 +21,7 @@ from app.runtime.runtime import AgentRuntime
 from app.runtime.tools import CallableSOCTool, SocToolRegistry
 from langchain_core.messages import AIMessage
 
-TENANT = "tenant-runtime-privacy"
+TENANT = "44444444-4444-4444-4444-444444444444"
 HOST = "endpoint01.corp.synthetic.test"
 _HOST_TOKEN = re.compile(r"HOST_[A-F0-9]{24}")
 
@@ -71,6 +71,42 @@ async def test_runtime_orchestrator_binds_tenant_privacy_context(privacy_enabled
     assert seen == ["triage", "correlation", "decision", "report"]
     with pytest.raises(PrivacyConfigurationError, match="tenant privacy context"):
         current_privacy_gateway()
+
+
+@pytest.mark.asyncio
+async def test_runtime_unresolved_tenant_keeps_deterministic_pipeline_offline(
+    privacy_enabled,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _unresolved(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.privacy.tenant.resolve_canonical_tenant", _unresolved)
+    seen: list[str] = []
+
+    class DeterministicAgent(Agent):
+        version = "test"
+
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def execute(self, context: AgentContext) -> AgentResult:
+            with pytest.raises(PrivacyConfigurationError, match="tenant privacy context"):
+                current_privacy_gateway()
+            seen.append(self.name)
+            return AgentResult(status="success", reasoning=self.name)
+
+    registry = AgentRegistry()
+    for name in ("triage", "correlation", "decision", "report"):
+        registry.register(DeterministicAgent(name))
+    orchestrator = SocOrchestrator(AgentRuntime(registry, audit=InMemoryAuditSink()), registry)
+    context = _context(skip_investigation=True)
+    context.tenant_id = "unknown-tenant"
+
+    await orchestrator.run(context)
+
+    assert seen == ["triage", "correlation", "decision", "report"]
+    assert context.tenant_id == "unknown-tenant"
 
 
 class _ToolCallingLLM:

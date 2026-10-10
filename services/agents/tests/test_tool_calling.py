@@ -126,7 +126,7 @@ async def test_tool_loop_decodes_arguments_and_reprojects_results(monkeypatch):
         ]
     )
     llm = _PrivacyToolLLM()
-    with privacy_context("tenant-a"):
+    with privacy_context("55555555-5555-5555-5555-555555555555"):
         result = await run_with_tools(
             llm,
             system="You are an analyst.",

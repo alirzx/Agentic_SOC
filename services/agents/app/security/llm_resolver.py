@@ -82,6 +82,7 @@ from urllib.parse import urlparse
 import asyncpg
 import structlog
 
+from app.privacy.tenant import resolve_canonical_tenant
 from app.security.credential_vault import CredentialVaultError, get_vault
 
 # NOTE: ``app.investigator.ledger`` is imported lazily inside
@@ -210,28 +211,9 @@ def _airgap_blocks(base_url: str) -> tuple[bool, str]:
 
 
 async def _resolve_tenant_uuid(conn: asyncpg.Connection, tenant_ref: str) -> uuid.UUID | None:
-    """Resolve a tenant reference (UUID, slug, or name) to a UUID.
-
-    Inlined rather than imported from
-    :mod:`app.investigator.ledger` so the resolver does not depend on
-    that module's private helpers. Logic must stay in lockstep with
-    :func:`app.investigator.ledger._resolve_tenant_id` — change one,
-    change both.
-    """
-    try:
-        return uuid.UUID(tenant_ref)
-    except (ValueError, TypeError):
-        pass
-
-    row = await conn.fetchrow(
-        """
-        SELECT id FROM tenants
-        WHERE slug = $1 OR name = $1
-        LIMIT 1
-        """,
-        tenant_ref,
-    )
-    return row["id"] if row else None
+    """Compatibility wrapper around the shared canonical tenant resolver."""
+    canonical = await resolve_canonical_tenant(tenant_ref, connection=conn)
+    return uuid.UUID(canonical) if canonical is not None else None
 
 
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
@@ -296,9 +278,9 @@ async def resolve_llm_config(tenant_ref: str | None) -> LlmConfig:
 
     Args:
         tenant_ref: The tenant identifier carried on the explain request
-            (UUID, slug, or name). When ``None`` or ``"default"`` we
-            skip the database lookup and return the env-only baseline,
-            matching the behaviour of the rest of the agents service.
+            (UUID, slug, name, or ``"default"``). ``None``/empty skips the
+            database lookup. ``"default"`` uses the shared canonical seed or
+            sole-tenant semantics when the database is available.
 
     Returns:
         An :class:`LlmConfig` describing whether a live LLM call is
@@ -321,7 +303,7 @@ async def resolve_llm_config(tenant_ref: str | None) -> LlmConfig:
     tenant_contributed_model = False
     tenant_contributed_key = False
 
-    skip_db_lookup = tenant_ref is None or not tenant_ref.strip() or tenant_ref == "default"
+    skip_db_lookup = tenant_ref is None or not tenant_ref.strip()
     if not skip_db_lookup:
         # Lazy import: see module-level NOTE. We only reach this branch
         # when the request carries a real tenant ref. Importing the

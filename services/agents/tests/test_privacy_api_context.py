@@ -16,7 +16,7 @@ from starlette.requests import Request
 
 PRIVACY_KEY = "privacy-key-0123456789abcdef012345"
 SIGNING_KEY = "tenant-signing-0123456789abcdef01234"
-TENANT = "tenant-synthetic-a"
+TENANT = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 HOST = "endpoint01.corp.synthetic.test"
 
 
@@ -68,6 +68,23 @@ def test_request_tenant_requires_authenticated_state_or_valid_signature(privacy_
     monkeypatch.setenv("AISOC_ENV", "development")
     assert resolve_request_tenant(_request(signed=False)) == TENANT
     monkeypatch.setenv("AISOC_ENV", "production")
+    with pytest.raises(PrivacyConfigurationError, match="cannot be enabled in production"):
+        resolve_request_tenant(_request(signed=False))
+
+
+@pytest.mark.parametrize("environment_var", ["AISOC_ENV", "ENV", "ENVIRONMENT"])
+@pytest.mark.parametrize("environment_value", ["prod", "production"])
+def test_unsigned_tenant_header_is_refused_for_every_production_env(
+    privacy_api,
+    monkeypatch: pytest.MonkeyPatch,
+    environment_var: str,
+    environment_value: str,
+) -> None:
+    for name in ("AISOC_ENV", "ENV", "ENVIRONMENT"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AISOC_AGENTS_ALLOW_UNSIGNED_TENANT_HEADER", "1")
+    monkeypatch.setenv(environment_var, environment_value)
+
     with pytest.raises(PrivacyConfigurationError, match="cannot be enabled in production"):
         resolve_request_tenant(_request(signed=False))
 

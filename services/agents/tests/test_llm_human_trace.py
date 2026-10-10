@@ -22,6 +22,9 @@ from app.privacy.context import privacy_context
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 HOST = "endpoint01.corp.synthetic.test"
+TRACE_TENANT = "77777777-7777-7777-7777-777777777777"
+STREAM_TENANT = "88888888-8888-8888-8888-888888888888"
+CACHE_TENANT = "99999999-9999-9999-9999-999999999999"
 
 
 @pytest.fixture
@@ -94,7 +97,7 @@ async def test_privacy_trace_shows_projection_provider_response_and_exact_local_
     ]
     llm = _InvokeLLM()
 
-    with privacy_context("tenant-human-trace"):
+    with privacy_context(TRACE_TENANT):
         result = await safe_ainvoke(llm, messages, temperature=0)
 
     internal = _event(trace_events, INTERNAL_INPUT)
@@ -110,7 +113,7 @@ async def test_privacy_trace_shows_projection_provider_response_and_exact_local_
     assert "tool_calls" in provider_response["payload"]
     assert HOST in local_response["payload"]
     assert result.content == f"Reviewed Investigate host={HOST}"
-    assert internal["tenant_id"] == "tenant-human-trace"
+    assert internal["tenant_id"] == TRACE_TENANT
     assert internal["privacy_enabled"] is True
     assert internal["projection_applied"] is False
     assert provider_input["projection_applied"] is True
@@ -140,7 +143,7 @@ async def test_privacy_stream_trace_captures_raw_then_rehydrated_response(
     privacy_enabled,
     trace_events: list[tuple[str, dict[str, Any]]],
 ) -> None:
-    with privacy_context("tenant-stream-trace"):
+    with privacy_context(STREAM_TENANT):
         chunks = [chunk async for chunk in safe_astream(_StreamLLM(), [HumanMessage(content=f"host={HOST}")])]
 
     assert len(chunks) == 1
@@ -231,7 +234,7 @@ async def test_cache_trace_marks_provider_not_called(
     contract._RESPONSE_CACHE.clear()
     llm = _InvokeLLM()
     message = HumanMessage(content=f"unique human trace cache host={HOST}")
-    with privacy_context("tenant-cache-trace"):
+    with privacy_context(CACHE_TENANT):
         first = await safe_ainvoke(llm, [message])
         second = await safe_ainvoke(llm, [message])
 

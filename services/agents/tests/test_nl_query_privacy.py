@@ -11,7 +11,7 @@ from app.nl_query.translator import NLQuery, enhance_with_llm, translate
 from app.privacy.context import privacy_context
 from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE
 
-TENANT = "tenant-nl-query-privacy"
+TENANT = "33333333-3333-3333-3333-333333333333"
 HOST = "endpoint01.corp.synthetic.test"
 
 

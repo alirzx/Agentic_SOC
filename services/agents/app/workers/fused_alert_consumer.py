@@ -53,7 +53,8 @@ from app.llm.factory import llm_override
 from app.memory.outcomes import AI, HUMAN, lookup_prior, record_outcome, should_auto_suppress
 from app.memory.override_priors import lookup_human_override, should_suppress_from_override
 from app.models.state import AgentStatus, InvestigationState
-from app.privacy.context import privacy_context
+from app.privacy.context import PrivacyConfigurationError, privacy_context
+from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
 from app.workers import case_promoter
@@ -131,14 +132,21 @@ def _rationale_of(state: InvestigationState) -> str:
     return f"Auto-triage verdict={state.verdict} confidence={state.confidence:.2f}"
 
 
-def build_state(message: dict[str, Any]) -> InvestigationState | None:
+def build_state(
+    message: dict[str, Any],
+    *,
+    canonical_tenant_id: str | uuid.UUID | None = None,
+) -> InvestigationState | None:
     """Map an ``aisoc.alerts.fused`` message to a seeded InvestigationState."""
     if not isinstance(message, dict):
         return None
     alert = message.get("alert")
     if not isinstance(alert, dict):
         return None
-    tenant = _coerce_uuid(message.get("tenant_id") or alert.get("tenant_id"), fallback="default")
+    if canonical_tenant_id is not None:
+        tenant = uuid.UUID(str(canonical_tenant_id))
+    else:
+        tenant = _coerce_uuid(message.get("tenant_id") or alert.get("tenant_id"), fallback="default")
     incident = _coerce_uuid(message.get("incident_id") or message.get("id") or alert.get("id"), fallback=str(tenant))
     # Canonical alert row id (issue #568): the fused envelope now carries the
     # durable alerts.id as `alert_row_id`, falling back to the (also canonical)
@@ -345,7 +353,21 @@ class FusedAlertTriageWorker:
                 _METRICS["bc_mutated"] += 1
                 message = {**message, "alert": bc.alert}
 
-        state = build_state(message)
+        alert = message.get("alert") if isinstance(message, dict) else None
+        tenant_resolution_error: PrivacyConfigurationError | None = None
+        if isinstance(alert, dict):
+            tenant_ref = message.get("tenant_id") or alert.get("tenant_id") or "default"
+            try:
+                resolved_tenant = await resolve_tenant_for_llm(tenant_ref, allow_default=True)
+                canonical_tenant = normalize_tenant_uuid(resolved_tenant)
+            except PrivacyConfigurationError as exc:
+                # Deterministic triage remains available, but no protected LLM
+                # or graph escalation may use the legacy UUID5 state tenant.
+                tenant_resolution_error = exc
+                canonical_tenant = None
+            state = build_state(message, canonical_tenant_id=canonical_tenant)
+        else:
+            state = build_state(message)
         if state is None:
             logger.warning("auto_triage_worker.unprocessable", keys=sorted(message.keys()) if isinstance(message, dict) else None)
             return None
@@ -378,7 +400,7 @@ class FusedAlertTriageWorker:
             confidence = float(decision.cached_verdict.get("confidence", 0.0))
             tier = "cached"
         else:
-            cfg = await self._resolve_tenant_llm(state.tenant_id)
+            cfg = None if tenant_resolution_error is not None else await self._resolve_tenant_llm(state.tenant_id)
             use_llm = decision.use_llm and not is_deterministic_mode() and cfg is not None
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
@@ -461,7 +483,14 @@ class FusedAlertTriageWorker:
                 confidence=float(confidence or 0.0),
             ):
                 await self._set_funnel_stage(state, INVESTIGATING)
-                await self._maybe_escalate(state)
+                if tenant_resolution_error is None:
+                    await self._maybe_escalate(state)
+                else:
+                    logger.warning(
+                        "auto_triage_worker.escalation_skipped",
+                        reason="canonical_tenant_unresolved",
+                        error=str(tenant_resolution_error),
+                    )
                 case_id = await self._maybe_promote_case(state, message)
             else:
                 case_id = None

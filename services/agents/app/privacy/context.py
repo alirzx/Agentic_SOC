@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import os
+import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -47,6 +48,12 @@ def privacy_context(tenant_id: str, *, token_key: str | bytes | None = None) -> 
     tenant = str(tenant_id).strip()
     if not tenant:
         raise PrivacyConfigurationError("tenant_id is required when LLM privacy is enabled")
+    try:
+        tenant = str(uuid.UUID(tenant))
+    except (ValueError, TypeError) as exc:
+        raise PrivacyConfigurationError(
+            "privacy_context requires a canonical tenant UUID; resolve slug/name/default at the async boundary"
+        ) from exc
     current = _session.get()
     if current is not None and current.tenant_id == tenant and token_key is None:
         yield current

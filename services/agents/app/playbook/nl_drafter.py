@@ -712,9 +712,11 @@ async def draft_from_nl(
     used_llm = False
     if allow_llm:
         from app.privacy.context import PrivacyConfigurationError, privacy_context
+        from app.privacy.tenant import resolve_tenant_for_llm
 
         try:
-            with privacy_context(tenant_id or ""):
+            canonical_tenant = await resolve_tenant_for_llm(tenant_id)
+            with privacy_context(canonical_tenant):
                 pb = await _llm_draft(prompt)
         except PrivacyConfigurationError as exc:
             logger.info("nl_drafter: privacy context unavailable; using substrate (%s)", exc)

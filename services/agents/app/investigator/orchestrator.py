@@ -11,6 +11,7 @@ and short-circuits to END.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -21,7 +22,8 @@ from langgraph.graph import END, START, StateGraph
 from opentelemetry import trace
 
 from app.core.cost_telemetry import CostTracker
-from app.privacy.context import privacy_context
+from app.privacy.context import PrivacyConfigurationError, privacy_context
+from app.privacy.tenant import resolve_tenant_for_llm
 
 from . import ledger
 from .bundle_prompt import prefetch_context_bundle_dict
@@ -149,6 +151,16 @@ class InvestigatorOrchestrator:
         WebSocket emitter that already has the id), otherwise a new one is
         generated here.
         """
+        privacy_tenant: str | None
+        try:
+            tenant_id = await resolve_tenant_for_llm(tenant_id, allow_default=True)
+            privacy_tenant = tenant_id
+        except PrivacyConfigurationError as exc:
+            # The agent nodes retain their deterministic fallbacks. Running
+            # without a bound session makes every safe LLM wrapper fail before
+            # provider egress while allowing those fallbacks to complete.
+            privacy_tenant = None
+            logger.warning("investigation.tenant_unresolved", error=str(exc))
         with _tracer.start_as_current_span("investigator.run") as span:
             span.set_attribute("case.id", case_id)
             span.set_attribute("tenant.id", tenant_id)
@@ -176,7 +188,8 @@ class InvestigatorOrchestrator:
             )
 
             logger.info("investigation.start", case_id=case_id, run_id=str(run_uuid))
-            with privacy_context(tenant_id):
+            scope = privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
+            with scope:
                 async with CostTracker(run_id=str(run_uuid), tenant_id=tenant_id) as tracker:
                     result = await self._graph.ainvoke(initial.to_dict())
                     final = InvestigatorState.from_dict(result)
@@ -259,6 +272,13 @@ class InvestigatorOrchestrator:
         and only forward new entries. This same monotonic seq becomes the
         primary sort key in the persisted ledger.
         """
+        privacy_tenant: str | None
+        try:
+            tenant_id = await resolve_tenant_for_llm(tenant_id, allow_default=True)
+            privacy_tenant = tenant_id
+        except PrivacyConfigurationError as exc:
+            privacy_tenant = None
+            logger.warning("investigation.stream.tenant_unresolved", error=str(exc))
         bundle = await prefetch_context_bundle_dict(
             case_id=case_id,
             tenant_id=tenant_id,
@@ -288,7 +308,8 @@ class InvestigatorOrchestrator:
         tracker = CostTracker(run_id=str(run_uuid), tenant_id=tenant_id)
         try:
             await tracker.__aenter__()
-            with privacy_context(tenant_id):
+            scope = privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
+            with scope:
                 async for event in self._graph.astream(initial.to_dict()):
                     # event is {node_name: state_dict}
                     for node_name, state_dict in event.items():

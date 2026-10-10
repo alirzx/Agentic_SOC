@@ -33,6 +33,8 @@ from typing import Any
 import asyncpg
 import structlog
 
+from app.privacy.tenant import CANONICAL_SEED_TENANT_ID, resolve_canonical_tenant
+
 logger = structlog.get_logger()
 
 
@@ -87,8 +89,7 @@ async def close_pool() -> None:
 # The canonical seed tenant (migration 001). Its slug/name can be renamed by the
 # demo seed (slug 'default' → 'demo'), but this UUID is stable — so the 'default'
 # placeholder ref resolves here regardless of the current slug. See issue #601.
-_CANONICAL_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-_PLACEHOLDER_TENANT_REFS = frozenset({"", "default"})
+_CANONICAL_TENANT_ID = CANONICAL_SEED_TENANT_ID
 
 
 async def _resolve_tenant_id(conn: asyncpg.Connection, tenant_ref: str) -> uuid.UUID | None:
@@ -104,30 +105,8 @@ async def _resolve_tenant_id(conn: asyncpg.Connection, tenant_ref: str) -> uuid.
     ``"default"`` with several tenants and no canonical one). Callers skip the
     write rather than violate the FK — but should log loudly, not at debug.
     """
-    ref = (tenant_ref or "").strip()
-
-    # 1. An explicit UUID is trusted as-is.
-    try:
-        return uuid.UUID(ref)
-    except (ValueError, TypeError):
-        pass
-
-    # 2. Exact slug / name match.
-    row = await conn.fetchrow("SELECT id FROM tenants WHERE slug = $1 OR name = $1 LIMIT 1", ref)
-    if row:
-        return row["id"]
-
-    # 3. Placeholder ref → the canonical seed tenant (stable UUID, ignoring its
-    #    current slug/name), else the sole tenant in a single-tenant install.
-    if ref.lower() in _PLACEHOLDER_TENANT_REFS:
-        canonical = await conn.fetchrow("SELECT id FROM tenants WHERE id = $1", _CANONICAL_TENANT_ID)
-        if canonical:
-            return canonical["id"]
-        only = await conn.fetch("SELECT id FROM tenants LIMIT 2")
-        if len(only) == 1:
-            return only[0]["id"]
-
-    return None
+    canonical = await resolve_canonical_tenant(tenant_ref, connection=conn)
+    return uuid.UUID(canonical) if canonical is not None else None
 
 
 async def resolve_tenant(tenant_ref: str) -> uuid.UUID | None:
@@ -135,15 +114,8 @@ async def resolve_tenant(tenant_ref: str) -> uuid.UUID | None:
 
     Best-effort (no DB configured or lookup failure ⇒ None). Used by the shared
     graph runner to attribute per-node ledger events (issue #569)."""
-    pool = await get_pool()
-    if pool is None:
-        return None
-    try:
-        async with pool.acquire() as conn:
-            return await _resolve_tenant_id(conn, tenant_ref)
-    except Exception as exc:  # noqa: BLE001 — best-effort
-        logger.debug("ledger.resolve_tenant_failed", tenant_ref=tenant_ref, error=str(exc))
-        return None
+    canonical = await resolve_canonical_tenant(tenant_ref)
+    return uuid.UUID(canonical) if canonical is not None else None
 
 
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:

@@ -336,13 +336,11 @@ class TestResolveNoTenant:
         assert cfg.reason == ""
 
     @pytest.mark.asyncio
-    async def test_default_tenant_ref_skips_db(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_default_tenant_ref_uses_env_when_db_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
         monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm.internal:4000")
+        _stub_ledger(monkeypatch, pool=None)
 
-        # If we reached the DB lookup, importing app.investigator.ledger
-        # would explode in this slim test env. The fact that we don't
-        # patch it and the test still passes proves the early-exit.
         resolver = _import_resolver()
         cfg = await resolver.resolve_llm_config("default")
         assert cfg.allowed is True
