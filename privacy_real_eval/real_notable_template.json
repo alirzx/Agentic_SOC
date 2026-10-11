@@ -1,0 +1,30 @@
+{
+  "case_id": "replace-or-leave-and-let-runner-override",
+  "alert_summary": "Replace with the real Splunk notable title/summary",
+  "raw_alert": {
+    "id": "replace-with-real-alert-id",
+    "title": "Replace with real notable title",
+    "severity": "high",
+    "risk_score": 80,
+    "src_ip": "replace-with-real-value",
+    "dst_ip": "replace-with-real-value-if-present",
+    "hostname": "replace-with-real-value-if-present",
+    "username": "replace-with-real-value-if-present",
+    "domain": "replace-with-real-value-if-present",
+    "url": "replace-with-real-value-if-present",
+    "file_hash": "replace-with-real-value-if-present",
+    "mitre_techniques": [
+      "T1110.003"
+    ],
+    "connector_type": "splunk",
+    "connector_id": "replace-with-real-connector-id-if-present",
+    "source_event_ids": [
+      "replace-with-real-source-event-id-if-present"
+    ],
+    "splunk_notable": {
+      "orig_rule_title": "Replace with real Splunk rule/notable metadata",
+      "risk_object": "replace-with-real-risk-object-if-present",
+      "risk_object_type": "system"
+    }
+  }
+}
