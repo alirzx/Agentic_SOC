@@ -1,30 +1,28 @@
 {
-  "case_id": "replace-or-leave-and-let-runner-override",
-  "alert_summary": "Replace with the real Splunk notable title/summary",
+  "case_id": "optional-test-case-id",
+  "alert_summary": "Optional summary. If omitted, the harness derives one from the alert.",
   "raw_alert": {
-    "id": "replace-with-real-alert-id",
-    "title": "Replace with real notable title",
-    "severity": "high",
-    "risk_score": 80,
-    "src_ip": "replace-with-real-value",
-    "dst_ip": "replace-with-real-value-if-present",
-    "hostname": "replace-with-real-value-if-present",
-    "username": "replace-with-real-value-if-present",
-    "domain": "replace-with-real-value-if-present",
-    "url": "replace-with-real-value-if-present",
-    "file_hash": "replace-with-real-value-if-present",
+    "id": "11111111-1111-1111-1111-111111111111",
+    "title": "Splunk notable title",
+    "severity": "medium",
+    "risk_score": 50,
+    "src_ip": "10.20.30.40",
+    "dst_ip": "10.20.30.50",
+    "hostname": "endpoint01.corp.example",
+    "username": "CORP\\\\example.user",
     "mitre_techniques": [
       "T1110.003"
     ],
     "connector_type": "splunk",
-    "connector_id": "replace-with-real-connector-id-if-present",
     "source_event_ids": [
-      "replace-with-real-source-event-id-if-present"
+      "sanitized-source-event-id"
     ],
     "splunk_notable": {
-      "orig_rule_title": "Replace with real Splunk rule/notable metadata",
-      "risk_object": "replace-with-real-risk-object-if-present",
-      "risk_object_type": "system"
+      "search_name": "ESCU - Example Rule",
+      "orig_rule_title": "Sanitized notable description",
+      "risk_object": "endpoint01.corp.example",
+      "risk_object_type": "system",
+      "risk_score": "50.0"
     }
   }
 }

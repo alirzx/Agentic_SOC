@@ -30,6 +30,19 @@ fi
 
 PROBE="$SCRIPT_DIR/privacy_real_workflow_probe.py"
 TEMPLATE="$SCRIPT_DIR/real_notable_template.json"
+MOCK_DIR="$SCRIPT_DIR/mock_data"
+
+# Reproducible local/default tenant. Full deployments may override this without
+# editing the harness: AISOC_TEST_TENANT_UUID=<canonical UUID> ./run_real_dlp_eval.sh
+DEFAULT_TENANT_ID="${AISOC_TEST_TENANT_UUID:-00000000-0000-0000-0000-000000000001}"
+
+# The default keeps the real agent graph/prompts/LLM boundary while avoiding
+# calls to internal services that are normally only reachable in the full stack.
+INTERNAL_SERVICES_MODE="${AISOC_DLP_EVAL_INTERNAL_SERVICES:-isolated}"
+case "$INTERNAL_SERVICES_MODE" in
+  isolated|live) ;;
+  *) echo "ERROR: AISOC_DLP_EVAL_INTERNAL_SERVICES must be isolated or live." >&2; exit 2 ;;
+esac
 
 if [[ ! -f "$PROBE" ]]; then
   echo "ERROR: missing $PROBE" >&2
@@ -136,16 +149,35 @@ esac
 # ---------------------------------------------------------------------------
 echo
 echo "Input source:"
-echo "  1) Existing real JSON/JSONL notable file"
-echo "  2) Read one real notable from Splunk REST using an SPL search"
-read -r -p "Select [1/2] (default 1): " SOURCE_CHOICE
+echo "  1) Bundled sanitized Splunk scenario [recommended]"
+echo "  2) Existing JSON/JSONL notable file"
+echo "  3) Read one real notable from Splunk REST using an SPL search"
+read -r -p "Select [1/2/3] (default 1): " SOURCE_CHOICE
 SOURCE_CHOICE="${SOURCE_CHOICE:-1}"
 
 if [[ "$SOURCE_CHOICE" == "1" ]]; then
+  mapfile -t SCENARIOS < <(find "$MOCK_DIR" -maxdepth 1 -type f -name '*.json' -print | sort)
+  if (( ${#SCENARIOS[@]} == 0 )); then
+    echo "ERROR: no bundled scenarios found under $MOCK_DIR" >&2
+    exit 2
+  fi
+  echo
+  echo "Bundled scenarios:"
+  for idx in "${!SCENARIOS[@]}"; do
+    printf '  %d) %s\n' "$((idx + 1))" "$(basename "${SCENARIOS[$idx]}")"
+  done
+  read -r -p "Scenario number (default 1): " SCENARIO_CHOICE
+  SCENARIO_CHOICE="${SCENARIO_CHOICE:-1}"
+  if ! [[ "$SCENARIO_CHOICE" =~ ^[0-9]+$ ]] || (( SCENARIO_CHOICE < 1 || SCENARIO_CHOICE > ${#SCENARIOS[@]} )); then
+    echo "ERROR: invalid scenario selection." >&2
+    exit 2
+  fi
+  INPUT_FILE="${SCENARIOS[$((SCENARIO_CHOICE - 1))]}"
+elif [[ "$SOURCE_CHOICE" == "2" ]]; then
   if [[ -f "$TEMPLATE" ]]; then
     echo "Template available at: $TEMPLATE"
   fi
-  prompt_required INPUT_FILE "Path to real notable JSON/JSONL: "
+  prompt_required INPUT_FILE "Path to notable JSON/JSONL: "
   if [[ "$INPUT_FILE" != /* ]]; then
     if [[ -f "$SCRIPT_DIR/${INPUT_FILE#./}" ]]; then
       INPUT_FILE="$SCRIPT_DIR/${INPUT_FILE#./}"
@@ -159,7 +191,7 @@ if [[ "$SOURCE_CHOICE" == "1" ]]; then
     echo "ERROR: input file does not exist: $INPUT_FILE" >&2
     exit 2
   fi
-elif [[ "$SOURCE_CHOICE" == "2" ]]; then
+elif [[ "$SOURCE_CHOICE" == "3" ]]; then
   if ! command -v curl >/dev/null 2>&1; then
     echo "ERROR: curl is required for Splunk REST mode." >&2
     exit 2
@@ -198,18 +230,36 @@ else
   exit 2
 fi
 
+# Validate input before any provider call.
+"$PYTHON_BIN" - "$INPUT_FILE" <<'PY'
+import json, pathlib, sys
+p=pathlib.Path(sys.argv[1])
+text=p.read_text(encoding="utf-8", errors="replace").strip()
+try:
+    json.loads(text)
+except json.JSONDecodeError:
+    rows=[line for line in text.splitlines() if line.strip()]
+    if not rows:
+        raise SystemExit(f"ERROR: empty JSON/JSONL input: {p}")
+    for n,line in enumerate(rows,1):
+        try:
+            json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"ERROR: invalid JSON/JSONL input at line {n}: {exc}")
+print(f"Input validation: PASS ({p.name})")
+PY
+
 # ---------------------------------------------------------------------------
 # Tenant + test identity
 # ---------------------------------------------------------------------------
+TENANT_ID="$DEFAULT_TENANT_ID"
+if ! validate_uuid "$TENANT_ID" 2>/dev/null; then
+  echo "ERROR: AISOC_TEST_TENANT_UUID/default tenant is not a valid UUID: $TENANT_ID" >&2
+  exit 2
+fi
 echo
-while true; do
-  prompt_required TENANT_ID "Canonical tenant UUID: "
-  if validate_uuid "$TENANT_ID" 2>/dev/null; then
-    break
-  fi
-  echo "Invalid UUID. Use the platform canonical tenant UUID, not a slug/UUID5 placeholder."
-  TENANT_ID=""
-done
+echo "Tenant UUID: $TENANT_ID (automatic default)"
+echo "Override only when needed with AISOC_TEST_TENANT_UUID=<canonical UUID>."
 
 read -r -p "Case/test ID (blank = derive from notable): " CASE_ID
 
@@ -255,6 +305,7 @@ export AISOC_LLM_RESPONSE_CACHE=0
 export AISOC_AGENTS_LLM_CONTRACT_ENFORCED=1
 export AISOC_DETERMINISTIC=0
 export AISOC_SKIP_EMBEDDINGS=1
+export AISOC_DLP_EVAL_INTERNAL_SERVICES="$INTERNAL_SERVICES_MODE"
 
 # Real provider I/O is allowed, but internal mutation paths are suppressed.
 export AISOC_AGENT_KAFKA_DISABLE=1
@@ -288,6 +339,7 @@ kafka=OFF
 memory_suppression=OFF
 memory_writeback=OFF
 worker_auto_escalation=OFF
+internal_services_mode=$INTERNAL_SERVICES_MODE
 EOF2
 chmod 600 "$RUN_DIR/test_profile.txt"
 
@@ -305,6 +357,7 @@ echo "Privacy:         ON"
 echo "Human Trace:     ON (contains real SOC data locally)"
 echo "Cache:           OFF (forces real provider call)"
 echo "Internal writes: OFF"
+echo "Internal services: $INTERNAL_SERVICES_MODE"
 echo
 
 # ---------------------------------------------------------------------------
@@ -353,6 +406,7 @@ CMD=(
   --tenant-id "$TENANT_ID"
   --workflow "$WORKFLOW"
   --output-dir "$RUN_DIR"
+  --internal-services "$INTERNAL_SERVICES_MODE"
 )
 if [[ -n "$CASE_ID" ]]; then
   CMD+=(--case-id "$CASE_ID")

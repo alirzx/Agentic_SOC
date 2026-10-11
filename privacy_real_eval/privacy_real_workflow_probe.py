@@ -29,6 +29,7 @@ TRACE_STAGE_NAMES = {
 }
 
 _TEST_NAMESPACE = uuid.UUID("5f9d20d7-69db-4ba0-9f9f-05a6ff879d64")
+_DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 
 
 def _json_default(value: Any) -> Any:
@@ -329,7 +330,32 @@ async def _run_auto_triage(normalised: dict[str, Any], output_dir: Path) -> dict
     }
 
 
-async def _run_investigator(normalised: dict[str, Any], output_dir: Path) -> dict[str, Any]:
+async def _run_investigator(
+    normalised: dict[str, Any],
+    output_dir: Path,
+    *,
+    internal_services_mode: str,
+) -> dict[str, Any]:
+    if internal_services_mode == "isolated":
+        # Keep the production graph, prompts and LLM/privacy boundary, but avoid
+        # unrelated failures from services that only exist in the deployed stack.
+        import app.investigator.orchestrator as orchestrator_module
+        import app.investigator.recon_agent as recon_module
+
+        async def _empty_context_bundle(**_kwargs: Any) -> dict[str, Any]:
+            return {}
+
+        async def _isolated_enrich(ioc_value: str, ioc_type: str) -> dict[str, Any]:
+            return {
+                "mode": "dlp-eval-isolated",
+                "ioc": ioc_value,
+                "type": ioc_type,
+                "note": "External enrichment service intentionally disabled by evaluation harness.",
+            }
+
+        orchestrator_module.prefetch_context_bundle_dict = _empty_context_bundle
+        recon_module.enrich_ioc = _isolated_enrich
+
     from app.investigator.orchestrator import InvestigatorOrchestrator
 
     trace_path = output_dir / "trace_investigator.jsonl"
@@ -384,10 +410,20 @@ def _validate_environment() -> None:
 def _args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run real Agentic_SOC workflows through the real provider with DLP traces.")
     parser.add_argument("--input", required=True, type=Path, help="real alert/notable JSON or Splunk JSONL export")
-    parser.add_argument("--tenant-id", required=True, help="canonical tenant UUID used for privacy isolation")
+    parser.add_argument(
+        "--tenant-id",
+        default=os.getenv("AISOC_TEST_TENANT_UUID", _DEFAULT_TENANT_ID),
+        help="canonical tenant UUID; defaults to the repository seed tenant",
+    )
     parser.add_argument("--case-id", default=None, help="optional case/test id override")
     parser.add_argument("--workflow", choices=("auto-triage", "investigator", "both"), default="both")
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument(
+        "--internal-services",
+        choices=("isolated", "live"),
+        default=os.getenv("AISOC_DLP_EVAL_INTERNAL_SERVICES", "isolated"),
+        help="isolated keeps real agents/prompts/provider but stubs unavailable internal services",
+    )
     return parser.parse_args()
 
 
@@ -426,6 +462,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         "case_id": normalised["case_id"],
         "workflow": args.workflow,
         "input_file": str(args.input.resolve()),
+        "internal_services_mode": args.internal_services,
         "note": "Artifacts contain real SOC data. Provider/API/privacy secrets are intentionally not recorded.",
     }
     _write_json(args.output_dir / "run_meta.json", meta)
@@ -435,6 +472,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         "tenant_id": tenant_id,
         "case_id": normalised["case_id"],
         "workflow": args.workflow,
+        "internal_services_mode": args.internal_services,
         "runs": [],
     }
 
@@ -444,7 +482,7 @@ async def _async_main(args: argparse.Namespace) -> int:
 
     if args.workflow in {"investigator", "both"}:
         print("\n=== REAL INVESTIGATOR / DLP TEST ===", flush=True)
-        summary["runs"].append(await _run_investigator(normalised, args.output_dir))
+        summary["runs"].append(await _run_investigator(normalised, args.output_dir, internal_services_mode=args.internal_services))
 
     _write_json(args.output_dir / "summary.json", summary)
 
