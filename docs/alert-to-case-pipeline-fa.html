@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مسیر تولید Alert تا Case — AiSOC</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "neutral",
+      flowchart: { curve: "basis", htmlLabels: true, padding: 12 },
+      securityLevel: "loose",
+    });
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f5;
+      --ink: #1a1a1a;
+      --muted: #555;
+      --line: #ddd;
+      --card: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    button.primary {
+      background: #1a1a1a;
+      color: #fff;
+      border-color: #1a1a1a;
+    }
+    main { padding: 20px; }
+    .note {
+      max-width: 960px;
+      margin: 0 auto 16px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .diagram-wrap {
+      overflow: auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+    }
+    .mermaid { min-width: 1100px; text-align: center; }
+    table {
+      width: 100%;
+      max-width: 960px;
+      margin: 24px auto 0;
+      border-collapse: collapse;
+      background: var(--card);
+      font-size: 0.92rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: right;
+    }
+    th { background: #f0f0ee; font-weight: 600; }
+    @media print {
+      header .actions { display: none; }
+      body { background: #fff; }
+      .diagram-wrap { border: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>مسیر کامل تولید Alert → جداسازی → Auto-triage → Case</h1>
+    <div class="actions">
+      <button type="button" class="primary" onclick="window.print()">چاپ / ذخیره PDF</button>
+      <button type="button" id="download-mmd">دانلود فایل Mermaid (.mmd)</button>
+    </div>
+  </header>
+  <main>
+    <p class="note">
+      برای دانلود تصویری: دکمه «چاپ / ذخیره PDF» را بزن و Destination را Save as PDF بگذار.
+      برای ویرایش در Mermaid Live هم می‌توانی فایل .mmd را دانلود کنی.
+    </p>
+    <div class="diagram-wrap">
+      <pre class="mermaid" id="diagram">
+flowchart TB
+  subgraph S1["۱) ورود داده از منبع"]
+    A1["Connector<br/>مثلاً Splunk / EDR / Cloud"]
+    A2["رمزگشایی auth از Vault<br/>poll هر N دقیقه"]
+    A3["normalize به مدل داخلی<br/>severity: info→critical"]
+    A4["IngestClient<br/>POST /v1/ingest/batch<br/>هدر X-Tenant-ID"]
+    A1 --> A2 --> A3 --> A4
+  end
+
+  subgraph S2["۲) Ingest و نرمال‌سازی"]
+    B1["services/ingest<br/>دریافت batch"]
+    B2["تبدیل به OCSF<br/>+ استخراج entity"]
+    B3["نوشتن Graph اختیاری<br/>Neo4j: User/Asset/IP/..."]
+    B4["Kafka topic:<br/>raw_events"]
+    B1 --> B2 --> B3 --> B4
+  end
+
+  subgraph S3["۳) Fusion — جداسازی و ارتقا به Alert"]
+    C1["خواندن raw_events"]
+    C2{"آیا باید promote شود؟<br/>severity / rule / correlation"}
+    C3["رد / فقط telemetry<br/>بدون Alert"]
+    C4["محاسبه fingerprint<br/>برای dedupe"]
+    C5{"تصمیم Fusion"}
+    C6["NEW_ALERT<br/>Alert جدید"]
+    C7["DUPLICATE<br/>ادغام با Alert موجود"]
+    C8["به‌روزرسانی شمارنده / IOC"]
+    C9["narrative همبستگی<br/>+ confidence score"]
+    C10["Persist در Postgres<br/>جدول alerts"]
+    C11["Kafka topic:<br/>aisoc.alerts.fused"]
+    C12["Realtime WS<br/>نمایش در /alerts"]
+
+    C1 --> C2
+    C2 -->|خیر| C3
+    C2 -->|بله| C4 --> C5
+    C5 -->|جدید| C6 --> C9
+    C5 -->|تکراری| C7 --> C8 --> C9
+    C9 --> C10 --> C11
+    C10 --> C12
+  end
+
+  subgraph S4["۴) Auto-triage روی هر Alert fused"]
+    D0["FusedAlertTriageWorker<br/>مصرف aisoc.alerts.fused"]
+    D1{"Business Context<br/>suppress؟"}
+    D2["حذف از triage<br/>بدون هزینه LLM"]
+    D3{"Memory / Override<br/>قبلاً FP معتبر؟"}
+    D4["Auto-suppress<br/>بدون triage دوباره"]
+    D5{"Cost Governor<br/>fingerprint تکراری؟"}
+    D6["Reuse verdict کش"]
+    D7{"LLM در دسترس؟"}
+    D8["run_auto_triage<br/>LLM: TP/FP/BTP/benign/needs_review"]
+    D9["run_triage<br/>deterministic heuristic"]
+    D10["persist_auto_triage<br/>disposition + rationale + ledger"]
+    D11["نوشتن outcome memory<br/>برای دفعات بعد"]
+    D12{"Auto-close؟<br/>FP/benign/BTP و conf ≥ 0.85"}
+
+    D0 --> D1
+    D1 -->|بله| D2
+    D1 -->|خیر| D3
+    D3 -->|بله| D4
+    D3 -->|خیر| D5
+    D5 -->|بله| D6 --> D10
+    D5 -->|خیر| D7
+    D7 -->|بله| D8 --> D10
+    D7 -->|خیر / خطای LLM| D9 --> D10
+    D4 --> D10
+    D10 --> D11 --> D12
+  end
+
+  subgraph S5["۵) مسیر نویز"]
+    E1["tag: false_positive"]
+    E2["funnel_stage = suppressed"]
+    E3["در صف SOC Funnel<br/>ستون Suppressed"]
+    D12 -->|بله بسته شد| E1 --> E2 --> E3
+  end
+
+  subgraph S6["۶) مسیر تحقیق و Case"]
+    F1{"گیت Investigation<br/>TP/escalate<br/>یا needs_review+high<br/>یا needs_review+medium@≥0.70"}
+    F2["فقط funnel_stage=triaged<br/>صف انسان، بدون Case"]
+    F3["funnel_stage = investigating"]
+    F4["اختیاری: run_escalation<br/>گراف enrichment / hunt"]
+    F5{"should_promote؟"}
+    F6["بدون Case"]
+    F7["promote_to_case"]
+
+    D12 -->|خیر escalate| F1
+    F1 -->|رد| F2
+    F1 -->|قبول| F3 --> F4 --> F5
+    F5 -->|خیر| F6
+    F5 -->|بله| F7
+  end
+
+  subgraph S7["۷) ساخت / اتصال Case"]
+    G1{"Alert قبلاً case_id دارد؟"}
+    G2["برگرداندن همان Case"]
+    G3["جستجوی siblings<br/>host/IP مشترک در ۴۸h<br/>یا title مشابه"]
+    G4{"Case باز با همان title<br/>از agentic-funnel؟"}
+    G5["Reuse Case موجود<br/>افزودن alert_ids"]
+    G6["INSERT aisoc_cases<br/>created_by=agentic-funnel"]
+    G7["ساخت Tasks + SPL pivots<br/>+ comments سیستمی"]
+    G8["Tag روی Alertها:<br/>agentic-promoted<br/>reportable"]
+    G9["status Alert → in_progress"]
+
+    F7 --> G1
+    G1 -->|بله| G2
+    G1 -->|خیر| G3 --> G4
+    G4 -->|بله| G5
+    G4 -->|خیر| G6 --> G7
+    G5 --> G8
+    G7 --> G8 --> G9
+  end
+
+  subgraph S8["۸) مرحله Funnel بعد از Case"]
+    H1{"گیت Ready for Jira<br/>TP + high/critical<br/>یا finding≥۸۰ کاراکتر<br/>یا medium@≥0.70 + MITRE"}
+    H2["funnel_stage = cased"]
+    H3["funnel_stage = ready_for_jira"]
+    H4["انسان / دکمه Push<br/>→ Jira / ITSM"]
+    H5["funnel_stage = jira_pushed"]
+
+    G9 --> H1
+    H1 -->|رد| H2
+    H1 -->|قبول| H3 --> H4 --> H5
+  end
+
+  subgraph S9["۹) مسیر موازی — جدا از Funnel"]
+    I1["Deep Explain / Investigation Rail<br/>توضیح روایی LLM"]
+    I2["ممکن است بگوید Likely FP<br/>بدون تغییر disposition رسمی"]
+    I3["تغییر دستی analyst<br/>disposition = false_positive"]
+    I4["برگشت به suppressed<br/>و خروج از Ready for Jira"]
+
+    C10 -.-> I1 --> I2
+    H3 -.-> I3 --> I4
+  end
+
+  A4 --> B1
+  B4 --> C1
+  C11 --> D0
+      </pre>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Stage</th><th>معنی</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>ingested</code></td><td>تازه از fusion آمده</td></tr>
+        <tr><td><code>triaged</code></td><td>Auto-triage شد، هنوز Case نیست</td></tr>
+        <tr><td><code>suppressed</code></td><td>FP/benign بسته شد</td></tr>
+        <tr><td><code>investigating</code></td><td>وارد تحقیق عمیق شده</td></tr>
+        <tr><td><code>cased</code></td><td>Case ساخته/لینک شده</td></tr>
+        <tr><td><code>ready_for_jira</code></td><td>Case + شواهد کافی برای گزارش</td></tr>
+        <tr><td><code>jira_pushed</code></td><td>به ITSM فرستاده شده</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <script>
+    const MMD = document.getElementById("diagram").textContent.trim();
+    document.getElementById("download-mmd").addEventListener("click", () => {
+      const blob = new Blob([MMD + "\n"], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "alert-to-case-pipeline-fa.mmd";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
