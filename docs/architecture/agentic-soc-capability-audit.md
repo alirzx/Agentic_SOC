@@ -53,4 +53,17 @@ Upgrade-in-place (no scaffold rebuild):
 | Correlation last_seen | `services/fusion/app/services/correlator.py` |
 | Tests | `test_deduplicator.py`, `test_correlator.py`, `test_case_promoter.py`, `test_auto_triage_schema.py`, BC/hotpath, fused worker playbook assert |
 
-Verified locally: agents critical suite **65 passed**; fusion dedup/correlator/model **23 passed**.
+Verified locally (wave 1): agents critical suite **65 passed**; fusion dedup/correlator/model **23 passed**.
+
+## Phase 2 wave (2026-10-14)
+
+| Gap | Status after Phase 2 | Notes |
+|---|---|---|
+| Durable Fusion incident ↔ Case | Implemented (unit-tested; needs migration 058 on deploy) | Redis hot + Postgres `fusion_incidents` |
+| Shadow Mode controlled | Upgraded comparison + side-effect contract; still default OFF | `AGENTIC_SOC_ENABLED=false` |
+| Asset enrich on triage | Implemented fail-soft lookup of `assets` | Timeout/cache/circuit |
+| Unified risk | Implemented provisional `assess_unified_risk` | Does not authorize Case |
+| Investigation budgets | Enforced in `graph/runner.py` | nodes/tools/tokens/time |
+| Near-dup similarity | Shadow-only helper; default OFF | Fingerprint remains authoritative |
+
+Verified locally (Phase 2 suites): fusion **12 passed**; agents Phase-2 related **40 passed**.

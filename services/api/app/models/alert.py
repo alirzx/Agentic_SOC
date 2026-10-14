@@ -75,6 +75,9 @@ class Alert(Base):
     entities: Mapped[list] = mapped_column(JSONB, default=list)
     dedup_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     occurrence_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    fusion_incident_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     anomaly_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Entities (denormalized for fast querying)

@@ -376,6 +376,9 @@ class FusedAlertTriageWorker:
             logger.warning("auto_triage_worker.unprocessable", keys=sorted(message.keys()) if isinstance(message, dict) else None)
             return None
 
+        # Phase 2 — Asset/CMDB enrichment (fail-soft; never overwrites raw evidence).
+        await self._enrich_asset_context(state)
+
         governor = get_governor()
         fingerprint = governor.evidence_fingerprint(str(state.tenant_id), state.raw_alert)
 
@@ -445,6 +448,9 @@ class FusedAlertTriageWorker:
                 )
             except Exception as exc:  # noqa: BLE001 — governance accounting is best-effort
                 logger.debug("auto_triage_worker.governor_record_failed", error=str(exc))
+
+        # Phase 2 — unified provisional risk (does not authorize Case/response).
+        self._attach_unified_risk(state, message=message, confidence=float(confidence or 0.0))
 
         _METRICS["triaged"] += 1
         await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost_usd=cost_usd)
@@ -699,6 +705,69 @@ class FusedAlertTriageWorker:
         except Exception as exc:  # noqa: BLE001
             logger.warning("auto_triage_worker.case_promote_failed", run_id=str(state.run_id), error=str(exc))
             return None
+
+    async def _enrich_asset_context(self, state: InvestigationState) -> None:
+        raw = state.raw_alert or {}
+        try:
+            from app.enrichment.asset_context import enrich_alert_assets  # noqa: PLC0415
+
+            result = await enrich_alert_assets(
+                tenant_id=state.tenant_id,
+                hostname=str(raw.get("hostname") or "") or None,
+                ip=str(raw.get("src_ip") or "") or None,
+            )
+            # Store under a dedicated key — never mutate authoritative raw_event.
+            enriched = dict(raw)
+            enriched["asset_context"] = {
+                "found": result.found,
+                "stale": result.stale,
+                "unavailable": result.unavailable,
+                "reason": result.reason,
+                **(result.context if result.found else {}),
+            }
+            state.raw_alert = enriched
+            if result.found:
+                state.add_finding(
+                    f"Asset enrichment: {result.context.get('name')} "
+                    f"criticality={result.context.get('criticality')} "
+                    f"stale={result.stale} (source={result.context.get('source')})"
+                )
+            elif result.unavailable:
+                state.add_finding(f"Asset enrichment unavailable ({result.reason}) — continuing without CMDB.")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("auto_triage_worker.asset_enrich_failed", error=str(exc))
+
+    @staticmethod
+    def _attach_unified_risk(
+        state: InvestigationState,
+        *,
+        message: dict[str, Any],
+        confidence: float,
+    ) -> None:
+        try:
+            from app.risk.unified import assess_unified_risk  # noqa: PLC0415
+
+            raw = state.raw_alert or {}
+            asset_ctx = raw.get("asset_context") if isinstance(raw.get("asset_context"), dict) else {}
+            alert_blob = message.get("alert") if isinstance(message.get("alert"), dict) else {}
+            corr_count = 1
+            if isinstance(message.get("incident_alert_count"), int):
+                corr_count = max(1, int(message["incident_alert_count"]))
+            risk = assess_unified_risk(
+                alert_severity=str(alert_blob.get("severity") or raw.get("severity") or "medium"),
+                detection_confidence=confidence,
+                correlated_alert_count=corr_count,
+                asset_criticality_points=int(asset_ctx.get("criticality_points") or 0),
+            )
+            enriched = dict(raw)
+            enriched["unified_risk"] = risk.model_dump()
+            state.raw_alert = enriched
+            state.add_finding(
+                f"Unified risk (provisional): score={risk.risk_score} band={risk.risk_band} "
+                f"priority={risk.investigation_priority} urgency={risk.response_urgency}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("auto_triage_worker.unified_risk_failed", error=str(exc))
 
     async def _resolve_tenant_llm(self, tenant_id: uuid.UUID) -> Any:
         """Resolve the tenant's LLM config, or None to force deterministic triage."""

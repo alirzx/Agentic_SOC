@@ -321,6 +321,83 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                 if existing:
                     return str(existing)
 
+                # Durable Fusion incident → reuse its linked Case when present.
+                fusion_incident_id = None
+                if isinstance(message, dict) and message.get("incident_id"):
+                    try:
+                        fusion_incident_id = uuid.UUID(str(message["incident_id"]))
+                    except (ValueError, TypeError):
+                        fusion_incident_id = None
+                if fusion_incident_id is not None:
+                    has_fusion_table = await conn.fetchval(
+                        "SELECT to_regclass('public.fusion_incidents') IS NOT NULL"
+                    )
+                    linked_case = None
+                    if has_fusion_table:
+                        linked_case = await conn.fetchval(
+                            """
+                            SELECT case_id FROM fusion_incidents
+                             WHERE id = $1 AND tenant_id = $2 AND case_id IS NOT NULL
+                             LIMIT 1
+                            """,
+                            fusion_incident_id,
+                            state.tenant_id,
+                        )
+                    if linked_case:
+                        await conn.execute(
+                            """
+                            UPDATE alerts
+                               SET case_id = $1,
+                                   fusion_incident_id = COALESCE(fusion_incident_id, $3),
+                                   tags = (
+                                     SELECT COALESCE(jsonb_agg(DISTINCT v), '[]'::jsonb)
+                                       FROM jsonb_array_elements_text(
+                                         COALESCE(tags, '[]'::jsonb) || $4::jsonb
+                                       ) AS t(v)
+                                   ),
+                                   status = CASE WHEN status IN ('new', 'triaging') THEN 'in_progress' ELSE status END,
+                                   funnel_stage = CASE
+                                       WHEN funnel_stage IN ('jira_pushed', 'ready_for_jira') THEN funnel_stage
+                                       ELSE 'cased'
+                                   END,
+                                   updated_at = now()
+                             WHERE id = $2 AND tenant_id = $5
+                            """,
+                            linked_case,
+                            alert_uuid,
+                            fusion_incident_id,
+                            json.dumps([_TAG_PROMOTED, _TAG_REPORTABLE]),
+                            state.tenant_id,
+                        )
+                        await conn.execute(
+                            """
+                            UPDATE fusion_incidents
+                               SET alert_ids = (
+                                     SELECT ARRAY(
+                                       SELECT DISTINCT x
+                                         FROM unnest(COALESCE(alert_ids, ARRAY[]::uuid[]) || ARRAY[$2::uuid]) AS t(x)
+                                     )
+                                   ),
+                                   alert_count = COALESCE(array_length(
+                                     (SELECT ARRAY(
+                                       SELECT DISTINCT x
+                                         FROM unnest(COALESCE(alert_ids, ARRAY[]::uuid[]) || ARRAY[$2::uuid]) AS t(x)
+                                     )), 1), alert_count),
+                                   updated_at = now()
+                             WHERE id = $1 AND tenant_id = $3
+                            """,
+                            fusion_incident_id,
+                            alert_uuid,
+                            state.tenant_id,
+                        )
+                        logger.info(
+                            "case_promoter.reused_fusion_case",
+                            case_id=str(linked_case),
+                            fusion_incident_id=str(fusion_incident_id),
+                            alert_id=alert_id,
+                        )
+                        return str(linked_case)
+
                 # Related alerts: shared host or IP in lookback, not auto-closed FP.
                 host = alert.get("hostname") or raw.get("hostname")
                 src = alert.get("src_ip") or raw.get("src_ip")
@@ -463,6 +540,40 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     json.dumps([_TAG_PROMOTED, _TAG_REPORTABLE]),
                     next_stage,
                 )
+                # Persist Case ↔ Fusion incident linkage when migration 058 is present.
+                if fusion_incident_id is not None:
+                    has_table = await conn.fetchval(
+                        "SELECT to_regclass('public.fusion_incidents') IS NOT NULL"
+                    )
+                    if has_table:
+                        await conn.execute(
+                            """
+                            UPDATE fusion_incidents
+                               SET case_id = $1,
+                                   alert_ids = (
+                                     SELECT ARRAY(
+                                       SELECT DISTINCT x
+                                         FROM unnest(COALESCE(alert_ids, ARRAY[]::uuid[]) || $3::uuid[]) AS t(x)
+                                     )
+                                   ),
+                                   updated_at = now()
+                             WHERE id = $2 AND tenant_id = $4
+                            """,
+                            case_id,
+                            fusion_incident_id,
+                            linked_ids,
+                            state.tenant_id,
+                        )
+                        await conn.execute(
+                            """
+                            UPDATE alerts
+                               SET fusion_incident_id = $1, updated_at = now()
+                             WHERE tenant_id = $2 AND id = ANY($3::uuid[])
+                            """,
+                            fusion_incident_id,
+                            state.tenant_id,
+                            linked_ids,
+                        )
                 if created_new:
                     for task in tasks:
                         await conn.execute(
