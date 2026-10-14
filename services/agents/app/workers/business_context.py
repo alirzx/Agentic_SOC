@@ -29,6 +29,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from dataclasses import field as dc_field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,21 @@ class BusinessContextRule:
     then: RuleAction
     enabled: bool = True
     priority: int = 100
+    owner: str | None = None
+    reason: str | None = None
+    expires_at: datetime | None = None
+
+    def is_active(self, *, now: datetime | None = None) -> bool:
+        """Enabled and not past ``expires_at`` (UTC)."""
+        if not self.enabled:
+            return False
+        if self.expires_at is None:
+            return True
+        clock = now or datetime.now(UTC)
+        exp = self.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=UTC)
+        return clock < exp
 
 
 def _dotted(alert: dict[str, Any], path: str) -> Any:
@@ -165,6 +181,13 @@ def load_rules_from_yaml(source: str) -> list[BusinessContextRule]:
         sev = action.get("set_severity")
         if sev is not None and sev not in _ALLOWED_SEVERITIES:
             sev = None
+        expires_raw = entry.get("expires_at")
+        expires_at: datetime | None = None
+        if expires_raw:
+            try:
+                expires_at = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+            except ValueError:
+                expires_at = None
         rules.append(
             BusinessContextRule(
                 id=rid,
@@ -177,6 +200,9 @@ def load_rules_from_yaml(source: str) -> list[BusinessContextRule]:
                 ),
                 enabled=bool(entry.get("enabled", True)),
                 priority=int(entry.get("priority", 100)),
+                owner=str(entry["owner"]) if entry.get("owner") else None,
+                reason=str(entry["reason"]) if entry.get("reason") else None,
+                expires_at=expires_at,
             )
         )
     return rules
@@ -189,22 +215,34 @@ class BusinessContextResult:
     suppressed: bool
     severity_before: Any
     severity_after: Any
+    suppress_policy_id: str | None = None
+    suppress_reason: str | None = None
+    suppress_owner: str | None = None
 
     @property
     def changed(self) -> bool:
         return self.suppressed or bool(self.matched_rule_ids)
 
 
-def apply_rules(alert: dict[str, Any], rules: list[BusinessContextRule]) -> BusinessContextResult:
-    """Apply enabled rules (priority order) to a copy of ``alert``.
+def apply_rules(
+    alert: dict[str, Any],
+    rules: list[BusinessContextRule],
+    *,
+    now: datetime | None = None,
+) -> BusinessContextResult:
+    """Apply active rules (priority order) to a copy of ``alert``.
 
     Suppress short-circuits (once suppressed, downstream rules can't un-suppress),
-    matching the API engine's deterministic contract.
+    matching the API engine's deterministic contract. Expired / disabled rules
+    are skipped so temporary maintenance windows do not become permanent
+    allowlists.
     """
     out = dict(alert)
     severity_before = out.get("severity")
     matched: list[str] = []
-    for rule in sorted((r for r in rules if r.enabled), key=lambda r: (r.priority, r.id)):
+    clock = now or datetime.now(UTC)
+    active = [r for r in rules if r.is_active(now=clock)]
+    for rule in sorted(active, key=lambda r: (r.priority, r.id)):
         if not evaluate_condition(rule.when, out):
             continue
         matched.append(rule.id)
@@ -220,7 +258,22 @@ def apply_rules(alert: dict[str, Any], rules: list[BusinessContextRule]) -> Busi
             out["tags"] = tags
         if act.suppress:
             out["__suppressed__"] = True
-            return BusinessContextResult(out, matched, True, severity_before, out.get("severity"))
+            reason = rule.reason or f"business_context policy {rule.id}"
+            out["__suppress_meta__"] = {
+                "policy_id": rule.id,
+                "reason": reason,
+                "owner": rule.owner,
+            }
+            return BusinessContextResult(
+                out,
+                matched,
+                True,
+                severity_before,
+                out.get("severity"),
+                suppress_policy_id=rule.id,
+                suppress_reason=reason,
+                suppress_owner=rule.owner,
+            )
     return BusinessContextResult(out, matched, False, severity_before, out.get("severity"))
 
 

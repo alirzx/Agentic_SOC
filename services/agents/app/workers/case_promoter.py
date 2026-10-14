@@ -204,6 +204,70 @@ async def tag_false_positive(alert_id: str | None, tenant_id: uuid.UUID) -> bool
         return False
 
 
+async def record_business_context_suppression(
+    alert_id: str | None,
+    tenant_id: uuid.UUID | str,
+    *,
+    policy_id: str,
+    reason: str,
+    owner: str | None = None,
+) -> bool:
+    """Persist an explainable BC suppress onto the alert without deleting evidence.
+
+    Sets disposition to ``benign`` (authorized/expected path), funnel_stage to
+    ``suppressed``, and stores policy metadata in ``enrichment_data``.
+    """
+    pool = await ledger_module.get_pool()
+    if pool is None or not alert_id:
+        return False
+    try:
+        alert_uuid = uuid.UUID(str(alert_id))
+        tid = tenant_id if isinstance(tenant_id, uuid.UUID) else uuid.UUID(str(tenant_id))
+    except (ValueError, TypeError):
+        return False
+    meta = {
+        "suppression": {
+            "source": "business_context",
+            "policy_id": policy_id,
+            "reason": reason,
+            "owner": owner,
+            "suppressed_at": datetime.now(UTC).isoformat(),
+        }
+    }
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE alerts
+                   SET disposition = COALESCE(NULLIF(disposition, ''), 'benign'),
+                       funnel_stage = $4,
+                       tags = (
+                         SELECT COALESCE(jsonb_agg(DISTINCT v), '[]'::jsonb)
+                           FROM jsonb_array_elements_text(
+                             COALESCE(tags, '[]'::jsonb) || $5::jsonb
+                           ) AS t(v)
+                       ),
+                       enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || $3::jsonb,
+                       updated_at = now()
+                 WHERE id = $1 AND tenant_id = $2
+                """,
+                alert_uuid,
+                tid,
+                json.dumps(meta),
+                SUPPRESSED,
+                json.dumps(["business_context_suppressed", "suppressed"]),
+            )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "case_promoter.bc_suppress_failed",
+            alert_id=str(alert_id),
+            policy_id=policy_id,
+            error=str(exc),
+        )
+        return False
+
+
 async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] | None = None) -> str | None:
     """Create/link an ``aisoc_cases`` row for an escalated alert. Returns case id."""
     if not auto_case_enabled():

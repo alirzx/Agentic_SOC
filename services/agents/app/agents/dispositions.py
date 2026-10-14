@@ -44,6 +44,7 @@ from FP metrics and kept separate on dashboards, filters, and exports.
 from __future__ import annotations
 
 TRUE_POSITIVE = "true_positive"
+LIKELY_TP = "likely_tp"
 BENIGN_TRUE_POSITIVE = "benign_true_positive"
 FALSE_POSITIVE = "false_positive"
 BENIGN = "benign"
@@ -54,6 +55,7 @@ ESCALATE = "escalate"
 CANONICAL_DISPOSITIONS: frozenset[str] = frozenset(
     {
         TRUE_POSITIVE,
+        LIKELY_TP,
         BENIGN_TRUE_POSITIVE,
         FALSE_POSITIVE,
         BENIGN,
@@ -78,7 +80,11 @@ AUTO_CLOSEABLE_DISPOSITIONS: frozenset[str] = frozenset({FALSE_POSITIVE, BENIGN,
 # lower-casing and collapsing separators to ``_``.
 _ALIASES: dict[str, str] = {
     # deterministic triage scorer (confidence/scoring.py: score_triage)
+    # Deterministic scorer historically emitted likely_true_positive → TP.
+    # Keep that mapping; the explicit likely_tp token stays first-class for
+    # funnel gates that check the literal string after normalization.
     "likely_true_positive": TRUE_POSITIVE,
+    "likely_tp": LIKELY_TP,
     "likely_benign": BENIGN,
     # deterministic investigation scorer (confidence/scoring.py: score_investigation)
     "confirmed_incident": TRUE_POSITIVE,

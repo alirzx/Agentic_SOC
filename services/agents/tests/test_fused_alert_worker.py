@@ -108,6 +108,16 @@ async def test_triage_is_read_only_no_response_dispatched(monkeypatch):
     assert any(a["action_type"] == "isolate_host" and a["requires_approval"] for a in result["proposed_actions"])
 
 
+async def test_auto_triage_does_not_invoke_playbook_engine():
+    """Feature 10: triage worker must stay separate from Playbook execution."""
+    import inspect
+
+    source = inspect.getsource(worker_mod)
+    assert "PlaybookEngine" not in source
+    assert "playbook.engine" not in source
+    assert "run_playbook" not in source
+
+
 async def test_deterministic_mode_forces_deterministic_even_with_key(monkeypatch):
     monkeypatch.setenv("AISOC_DETERMINISTIC", "1")
     monkeypatch.setattr(worker_mod, "resolve_llm_config", _fake_llm_config(allowed=True))

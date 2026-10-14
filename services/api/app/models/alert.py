@@ -74,6 +74,7 @@ class Alert(Base):
     iocs: Mapped[list] = mapped_column(JSONB, default=list)
     entities: Mapped[list] = mapped_column(JSONB, default=list)
     dedup_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     anomaly_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Entities (denormalized for fast querying)

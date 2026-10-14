@@ -80,6 +80,7 @@ class Correlator:
         return False, incident
 
     def _create_incident(self, alert: RawAlert) -> IncidentSummary:
+        seen_at = alert.event_time or alert.created_at
         incident = IncidentSummary(
             id=uuid4(),
             tenant_id=alert.tenant_id,
@@ -93,8 +94,8 @@ class Correlator:
             mitre_tactics=list(set(alert.mitre_tactics)),
             mitre_techniques=list(set(alert.mitre_techniques)),
             correlation_keys=[alert.correlation_key()],
-            first_seen=alert.created_at,
-            last_seen=alert.created_at,
+            first_seen=seen_at,
+            last_seen=seen_at,
         )
         return incident
 
@@ -102,7 +103,10 @@ class Correlator:
         incident.alert_count += 1
         incident.alert_ids.append(str(alert.id))
         incident.severity = _max_severity(incident.severity, alert.severity)
-        incident.last_seen = datetime.utcnow()
+        # Prefer event_time so late-arriving telemetry doesn't invent "now".
+        observed = alert.event_time or alert.created_at or datetime.utcnow()
+        if incident.last_seen is None or observed > incident.last_seen:
+            incident.last_seen = observed
 
         if alert.src_ip and alert.src_ip not in incident.src_ips:
             incident.src_ips.append(alert.src_ip)

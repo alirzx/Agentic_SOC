@@ -172,8 +172,24 @@ class FusionEngine:
                 alert=alert,
             )
 
-        # Register fingerprint to dedup future duplicates
-        await self._dedup.register(alert)
+        # SET NX race: if another worker registered first, treat as duplicate.
+        won = await self._dedup.register(alert)
+        if not won:
+            is_dup, original_id = await self._dedup.is_duplicate(alert)
+            if is_dup and original_id:
+                logger.info(
+                    "Alert suppressed as duplicate after NX race",
+                    alert_id=str(alert.id),
+                    original_id=original_id,
+                )
+                return FusedAlert(
+                    id=alert.id,
+                    tenant_id=alert.tenant_id,
+                    incident_id=None,
+                    fusion_decision=FusionDecision.DUPLICATE,
+                    duplicate_of=UUID(original_id),
+                    alert=alert,
+                )
 
         # --- Step 2: Correlation ---
         correlated, incident = await self._correlator.correlate(alert)

@@ -263,3 +263,49 @@ class AlertSink:
             fingerprint,
         )
         return str(row["id"]) if row else None
+
+    async def touch_duplicate(
+        self,
+        tenant_id,
+        fingerprint: str,
+        *,
+        event_time=None,
+        original_id: str | None = None,
+    ) -> bool:
+        """Bump ``last_seen`` and ``occurrence_count`` on an existing alert group.
+
+        Preserves the original row and evidence; does not insert a new alert.
+        Fail-soft when the column is missing (pre-migration) or DB is down.
+        """
+        if not fingerprint:
+            return False
+        pool = await self._ensure_pool()
+        if pool is None:
+            return False
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    UPDATE alerts
+                       SET last_seen = GREATEST(
+                               COALESCE(last_seen, event_time, created_at),
+                               COALESCE($3::timestamptz, NOW())
+                           ),
+                           occurrence_count = COALESCE(occurrence_count, 1) + 1,
+                           updated_at = NOW()
+                     WHERE tenant_id = $1
+                       AND (
+                             dedup_hash = $2::text
+                          OR ($4::uuid IS NOT NULL AND id = $4::uuid)
+                       )
+                    RETURNING id
+                    """,
+                    tenant_id,
+                    fingerprint,
+                    event_time,
+                    UUID(original_id) if original_id else None,
+                )
+            return row is not None
+        except Exception as exc:  # noqa: BLE001 — pre-migration or transient
+            logger.debug("alert_sink.touch_duplicate_failed", error=str(exc))
+            return False

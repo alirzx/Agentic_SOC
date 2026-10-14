@@ -74,6 +74,56 @@ async def test_suppress_short_circuits():
     res = apply_rules({"severity": "low", "source": "scanner", "maintenance": True}, rules)
     assert res.suppressed is True
     assert "maint-suppress" in res.matched_rule_ids
+    assert res.suppress_policy_id == "maint-suppress"
+
+
+async def test_expired_rule_does_not_suppress():
+    from datetime import UTC, datetime
+
+    yaml_src = """
+rules:
+  - id: expired-maint
+    enabled: true
+    expires_at: "2020-01-01T00:00:00+00:00"
+    owner: secops
+    reason: old maintenance window
+    when:
+      field: source
+      op: eq
+      value: scanner
+    then:
+      suppress: true
+"""
+    rules = load_rules_from_yaml(yaml_src)
+    res = apply_rules(
+        {"severity": "low", "source": "scanner"},
+        rules,
+        now=datetime.now(UTC),
+    )
+    assert res.suppressed is False
+    assert rules[0].is_active(now=datetime(2019, 12, 1, tzinfo=UTC)) is True
+    assert rules[0].is_active(now=datetime(2020, 1, 2, tzinfo=UTC)) is False
+
+
+async def test_active_rule_exposes_owner_reason():
+    yaml_src = """
+rules:
+  - id: scan-ok
+    owner: vuln-team
+    reason: Authorized weekly Qualys scan
+    expires_at: "2099-01-01T00:00:00+00:00"
+    when:
+      field: source
+      op: eq
+      value: scanner
+    then:
+      suppress: true
+"""
+    rules = load_rules_from_yaml(yaml_src)
+    res = apply_rules({"source": "scanner"}, rules)
+    assert res.suppressed is True
+    assert res.suppress_owner == "vuln-team"
+    assert "Qualys" in (res.suppress_reason or "")
 
 
 async def test_route_rule():

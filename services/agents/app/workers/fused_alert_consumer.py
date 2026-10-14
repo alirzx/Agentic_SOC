@@ -333,11 +333,38 @@ class FusedAlertTriageWorker:
             bc_matched = bc.matched_rule_ids
             if bc.suppressed:
                 _METRICS["bc_suppressed"] += 1
-                logger.info("auto_triage_worker.bc_suppressed", matched=bc_matched)
+                alert_id = str(
+                    message.get("alert_row_id")
+                    or message.get("id")
+                    or message["alert"].get("id")
+                    or ""
+                )
+                tenant_raw = message.get("tenant_id") or message["alert"].get("tenant_id")
+                policy_id = bc.suppress_policy_id or (bc_matched[-1] if bc_matched else "unknown")
+                reason = bc.suppress_reason or f"business_context policy {policy_id}"
+                try:
+                    tid = uuid.UUID(str(tenant_raw)) if tenant_raw else uuid.uuid5(_NAMESPACE, "default")
+                    await case_promoter.record_business_context_suppression(
+                        alert_id,
+                        tid,
+                        policy_id=policy_id,
+                        reason=reason,
+                        owner=bc.suppress_owner,
+                    )
+                except Exception as exc:  # noqa: BLE001 — never wedge triage on audit write
+                    logger.warning("auto_triage_worker.bc_suppress_persist_failed", error=str(exc))
+                logger.info(
+                    "auto_triage_worker.bc_suppressed",
+                    matched=bc_matched,
+                    policy_id=policy_id,
+                    reason=reason,
+                )
                 return {
                     "incident_id": str(message.get("incident_id") or message.get("id") or ""),
                     "suppressed": True,
                     "business_context_rules": bc_matched,
+                    "suppress_policy_id": policy_id,
+                    "suppress_reason": reason,
                     "response_dispatched": False,
                 }
             if bc.changed:
