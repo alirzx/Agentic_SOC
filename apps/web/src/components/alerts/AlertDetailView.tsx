@@ -216,9 +216,19 @@ function IOCBadge({ type, value, malicious }: { type: string; value: string; mal
 
 // ─── Detection Confidence ─────────────────────────────────────────────────────
 
+/**
+ * Fusion wire `confidence` is an integer 0–100. Some paths still emit a
+ * 0–1 fraction (`ai_score`). Never multiply a 0–100 value by 100 again
+ * (that produced badges like "High Confidence · 7000%").
+ */
+function confidencePercent(score: number): number {
+  const raw = score <= 1 ? score * 100 : score;
+  return Math.max(0, Math.min(100, Math.round(raw)));
+}
+
 function ConfidenceChip({ label, score }: { label: ConfidenceLabel; score?: number }) {
   const cfg = CONFIDENCE_CONFIG[label];
-  const pct = typeof score === 'number' ? Math.round(score * 100) : null;
+  const pct = typeof score === 'number' ? confidencePercent(score) : null;
   return (
     <span
       className={clsx(
@@ -283,7 +293,7 @@ function ConfidenceExplainability({
               <span className="text-sm font-semibold text-gray-100">{cfg.label}</span>
               {typeof score === 'number' && (
                 <span className="text-xs font-mono text-gray-500">
-                  score {score.toFixed(2)} ({Math.round(score * 100)}%)
+                  {confidencePercent(score)}%
                 </span>
               )}
             </div>

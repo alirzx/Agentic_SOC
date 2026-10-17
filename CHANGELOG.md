@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Alert confidence badge showed e.g. `7000%`.** Fusion `confidence` is
+  already 0–100; the alert detail chip multiplied by 100 again. Display and
+  API normaliser now treat values `> 1` as percent and `≤ 1` as fractions.
 - **Auto-triage ledger persist (`total_tokens` NOT NULL).** Kafka auto-triage
   dead-lettered every fused alert at `stage=persist` when `investigation_runs`
   lacked a Postgres DEFAULT for `total_tokens` / `total_cost_usd` / `iterations`.

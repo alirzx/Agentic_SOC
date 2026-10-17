@@ -860,9 +860,15 @@ function normalizeAlert(raw: unknown): Alert {
     confidenceLabel: (r.confidence_label ?? r.confidenceLabel) as
       | ConfidenceLabel
       | undefined,
-    confidenceScore:
-      pickNum('confidence_score', 'confidenceScore') ??
-      pickNum('confidence', 'confidence'),
+    // Fusion `confidence` is 0–100. Normalize any legacy 0–1 fraction so UI
+    // never does score*100 on an already-percent value (e.g. 70 → 7000%).
+    confidenceScore: (() => {
+      const raw =
+        pickNum('confidence_score', 'confidenceScore') ??
+        pickNum('confidence', 'confidence');
+      if (raw == null || Number.isNaN(raw)) return undefined;
+      return raw <= 1 ? raw * 100 : raw;
+    })(),
     confidenceRationale,
     ledgerRunId: pickStr('ledger_run_id', 'ledgerRunId'),
     disposition: (r.disposition ?? null) as Alert['disposition'],
