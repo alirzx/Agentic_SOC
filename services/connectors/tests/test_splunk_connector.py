@@ -149,7 +149,7 @@ def test_normalize_deterministic_external_id():
 
 def test_order_and_checkpoint_filters_seen_and_advances():
     c = _conn()
-    c.set_checkpoint({"time": "2026-08-01T00:00:10Z", "id": "E10"})
+    c.set_checkpoint({"time": "2026-08-01T00:00:10Z", "id": "E10", "seen": ["E10"]})
     rows = [
         {"event_id": "E09", "_time": "2026-08-01T00:00:09Z"},  # before checkpoint -> dropped
         {"event_id": "E10", "_time": "2026-08-01T00:00:10Z"},  # == checkpoint -> dropped
@@ -158,12 +158,16 @@ def test_order_and_checkpoint_filters_seen_and_advances():
     ]
     fresh = c._order_and_checkpoint(rows)
     assert [r["event_id"] for r in fresh] == ["E11", "E12"]  # stable order restored
-    assert c.get_checkpoint() == {"time": "2026-08-01T00:00:12Z", "id": "E12"}
+    cp = c.get_checkpoint()
+    assert cp is not None
+    assert cp["time"] == "2026-08-01T00:00:12Z"
+    assert cp["id"] == "E12"
+    assert "E11" in cp["seen"] and "E12" in cp["seen"] and "E10" in cp["seen"]
 
 
 def test_checkpoint_not_advanced_when_nothing_new():
     c = _conn()
-    c.set_checkpoint({"time": "2026-08-01T00:00:99Z", "id": "Z"})
+    c.set_checkpoint({"time": "2026-08-01T00:00:99Z", "id": "Z", "seen": ["Z"]})
     assert c._order_and_checkpoint([{"event_id": "E1", "_time": "2026-08-01T00:00:01Z"}]) == []
     assert c.get_checkpoint() is None
 
@@ -175,6 +179,26 @@ def test_same_timestamp_distinct_ids_both_kept():
         {"event_id": "B", "_time": "2026-08-01T00:00:10Z"},
     ]
     assert {r["event_id"] for r in c._order_and_checkpoint(rows)} == {"A", "B"}
+
+
+def test_overlap_poll_skips_ids_already_in_seen_ring():
+    """Inclusive earliest_time re-reads watermark rows — seen ids must suppress them."""
+    c = _conn()
+    c.set_checkpoint(
+        {
+            "time": "2026-08-01T00:00:10.000+00:00",
+            "id": "E10",
+            "seen": ["E09", "E10"],
+        }
+    )
+    # Same events again, plus one new — Z vs +00:00 must not defeat the watermark.
+    rows = [
+        {"event_id": "E09", "_time": "2026-08-01T00:00:09Z"},
+        {"event_id": "E10", "_time": "2026-08-01T00:00:10Z"},
+        {"event_id": "E11", "_time": "2026-08-01T00:00:11Z"},
+    ]
+    fresh = c._order_and_checkpoint(rows)
+    assert [r["event_id"] for r in fresh] == ["E11"]
 
 
 # --------------------------------------------------------------------------
@@ -491,16 +515,24 @@ async def test_lookup_notable_filters_search_name_and_host():
     assert "earliest_time=-30d" in body
 
 
-def test_timeless_catalog_skips_checkpoint_filter():
+def test_timeless_catalog_dedupes_via_seen_ids():
+    """Catalog SPL rows have no _time — still must not re-emit on every Sync."""
     c = _conn()
-    c.set_checkpoint({"time": "", "id": "Zzz"})
     rows = [
         {"Notable Name": "AAA Rule", "Severity": "3"},
         {"Notable Name": "MMM Rule", "Severity": "4"},
     ]
-    fresh = c._order_and_checkpoint(rows)
-    assert len(fresh) == 2
-    assert c.get_checkpoint() is None
+    first = c._order_and_checkpoint(rows)
+    assert len(first) == 2
+    cp = c.get_checkpoint()
+    assert cp is not None
+    assert "AAA Rule" in cp["seen"] and "MMM Rule" in cp["seen"]
+
+    c2 = _conn()
+    c2.set_checkpoint(cp)
+    second = c2._order_and_checkpoint(rows)
+    assert second == []
+    assert c2.get_checkpoint() is None
 
 
 def test_normalize_es_catalog_row():

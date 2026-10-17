@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Splunk Sync re-counted overlapping events.** Inclusive `earliest_time`
+  plus string `_time` mismatches re-pushed already-ingested notables, so
+  Events Ingested grew on every poll. Checkpoint now keeps a rolling `seen`
+  id ring, compares timestamps as epochs, and dedupes timeless catalog rows.
 - **Cases page stuck at “50 All Cases”.** `GET /cases` defaulted to
   `limit=50` and the UI counted `cases.length` instead of a real total, so
   growth past 50 looked frozen. List now returns a paginated envelope with

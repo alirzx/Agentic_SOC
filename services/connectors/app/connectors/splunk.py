@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -30,6 +31,9 @@ _DEFAULT_PAGE_SIZE = 500
 _MAX_PAGES = 200
 _JOB_POLL_ATTEMPTS = 30
 _JOB_POLL_INTERVAL_S = 2.0
+# Inclusive Splunk earliest_time re-returns the watermark row; keep a rolling
+# set of accepted external ids so overlapping polls never re-count as ingested.
+_CHECKPOINT_SEEN_CAP = 5_000
 _SEVERITY_BY_URGENCY = {
     "critical": "critical",
     "high": "high",
@@ -248,6 +252,8 @@ def _stable_external_id(row: dict[str, Any]) -> str:
         "detection_id",
         "orig_sid",
         "event_id",
+        "Notable Name",
+        "notable_name",
     ):
         value = row.get(key)
         if value not in (None, ""):
@@ -265,6 +271,25 @@ def _stable_external_id(row: dict[str, Any]) -> str:
     ]
     digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return digest[:32]
+
+
+def _time_sort_key(raw: str | None) -> float | None:
+    """Normalize Splunk ``_time`` for watermark compares (ISO / epoch / Z vs offset)."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    normalized = text.replace("Z", "+00:00") if text.endswith("Z") else text
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
 
 
 class SplunkConnector(BaseConnector):
@@ -403,17 +428,28 @@ class SplunkConnector(BaseConnector):
             self._page_size = max(1, int(page_size))
         except (TypeError, ValueError):
             self._page_size = _DEFAULT_PAGE_SIZE
-        self._checkpoint: dict[str, str] | None = None
-        self._next_checkpoint: dict[str, str] | None = None
+        self._checkpoint: dict[str, Any] | None = None
+        self._next_checkpoint: dict[str, Any] | None = None
 
     def set_checkpoint(self, checkpoint: dict[str, Any] | None) -> None:
         """Seed the poll with the last-accepted checkpoint (scheduler-owned)."""
-        if isinstance(checkpoint, dict) and (checkpoint.get("time") or checkpoint.get("id")):
-            self._checkpoint = {"time": str(checkpoint.get("time") or ""), "id": str(checkpoint.get("id") or "")}
+        if not isinstance(checkpoint, dict):
+            self._checkpoint = None
+            return
+        seen_raw = checkpoint.get("seen")
+        seen: list[str] = []
+        if isinstance(seen_raw, list):
+            seen = [str(item) for item in seen_raw if item not in (None, "")][-_CHECKPOINT_SEEN_CAP:]
+        if checkpoint.get("time") or checkpoint.get("id") or seen:
+            self._checkpoint = {
+                "time": str(checkpoint.get("time") or ""),
+                "id": str(checkpoint.get("id") or ""),
+                "seen": seen,
+            }
         else:
             self._checkpoint = None
 
-    def get_checkpoint(self) -> dict[str, str] | None:
+    def get_checkpoint(self) -> dict[str, Any] | None:
         """Return the advanced checkpoint after a fetch, or None if unchanged."""
         return self._next_checkpoint
 
@@ -625,26 +661,60 @@ class SplunkConnector(BaseConnector):
         return _stable_external_id(row)
 
     def _order_and_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return only events newer than the watermark / not already seen.
+
+        Splunk ``earliest_time`` is inclusive, so every poll re-reads the
+        watermark second. Without an id set, those overlaps were pushed again
+        and ``events_ingested`` grew even when nothing new arrived. Timeless
+        catalog rows (no ``_time``) use the same ``seen`` ring so Sync does
+        not re-count the full snapshot.
+        """
         enriched = [_enrich_notable_row(r) if isinstance(r, dict) else r for r in rows]
-        ordered = sorted(enriched, key=lambda r: (self._event_time(r), self._event_tiebreak(r)))
-        # ES correlation catalog rows have no _time — emit the full snapshot every
-        # poll and skip checkpoint filtering (otherwise only names after the last
-        # alphabetically-sorted title would survive subsequent polls).
-        if not any(self._event_time(r) for r in ordered):
-            self._next_checkpoint = None
-            return ordered
+        ordered = sorted(
+            enriched,
+            key=lambda r: (
+                _time_sort_key(self._event_time(r)) is None,
+                _time_sort_key(self._event_time(r)) or 0.0,
+                self._event_tiebreak(r),
+            ),
+        )
         cp = self._checkpoint or {}
-        cp_key = (str(cp.get("time") or ""), str(cp.get("id") or ""))
+        seen: set[str] = {str(item) for item in (cp.get("seen") or []) if item}
+        cp_time_key = _time_sort_key(str(cp.get("time") or ""))
+        cp_id = str(cp.get("id") or "")
+        has_timed_rows = any(self._event_time(r) for r in ordered)
         fresh: list[dict[str, Any]] = []
         for row in ordered:
-            if cp_key[0] and (self._event_time(row), self._event_tiebreak(row)) <= cp_key:
+            eid = self._event_tiebreak(row)
+            if eid and eid in seen:
                 continue
+            row_time_raw = self._event_time(row)
+            row_time_key = _time_sort_key(row_time_raw)
+            if has_timed_rows and str(cp.get("time") or "") and row_time_raw:
+                if cp_time_key is not None and row_time_key is not None:
+                    if (row_time_key, eid) <= (cp_time_key, cp_id):
+                        continue
+                elif (row_time_raw, eid) <= (str(cp.get("time") or ""), cp_id):
+                    # Unparseable timestamps (legacy fixtures) — string compare.
+                    continue
             fresh.append(row)
-        if fresh:
-            last = fresh[-1]
-            self._next_checkpoint = {"time": self._event_time(last), "id": self._event_tiebreak(last)}
-        else:
+        if not fresh:
             self._next_checkpoint = None
+            return []
+        merged_seen: list[str] = []
+        for item in list(cp.get("seen") or []) + [self._event_tiebreak(r) for r in fresh]:
+            text = str(item or "")
+            if not text or text in merged_seen:
+                continue
+            merged_seen.append(text)
+        merged_seen = merged_seen[-_CHECKPOINT_SEEN_CAP:]
+        last = fresh[-1]
+        last_time = self._event_time(last) if has_timed_rows else str(cp.get("time") or "")
+        self._next_checkpoint = {
+            "time": last_time,
+            "id": self._event_tiebreak(last),
+            "seen": merged_seen,
+        }
         return fresh
 
     async def lookup_notable(
