@@ -198,10 +198,17 @@ class AisocApiClient(_BaseClient):
 
         response = await self._request("GET", "/api/v1/cases", context="list cases", params=params)
         try:
-            rows = response.json()
+            payload = response.json()
         except ValueError as exc:
             raise AisocClientError("list cases failed: invalid JSON") from exc
-        if not isinstance(rows, list):
+        # Accept legacy bare arrays and the paginated envelope ({cases, total}).
+        if isinstance(payload, list):
+            rows = payload
+        elif isinstance(payload, dict) and isinstance(payload.get("cases"), list):
+            rows = payload["cases"]
+        elif isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            rows = payload["items"]
+        else:
             raise AisocClientError("list cases failed: unexpected response shape")
         active = [r for r in rows if isinstance(r, dict) and r.get("status") != "closed"]
         return active[:limit]

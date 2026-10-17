@@ -1687,6 +1687,8 @@ export interface CasesResponse {
   total: number;
   page: number;
   pageSize: number;
+  /** Backend status → count (tenant-scoped). Optional for mock/legacy. */
+  statusTotals?: Record<string, number>;
 }
 
 // ─── WS-D2 — Per-case auto-summary artifact ─────────────────────────────────
@@ -1924,17 +1926,33 @@ export function normalizeCasesResponse(raw: unknown, filters: CaseFilters = {}):
   const r = (raw ?? {}) as Record<string, unknown>;
   const list = Array.isArray(r.cases)
     ? (r.cases as unknown[]).map(normalizeCase)
-    : [];
-  return {
-    cases: list,
-    total: typeof r.total === 'number' ? (r.total as number) : list.length,
-    page: typeof r.page === 'number' ? (r.page as number) : (filters.page ?? 1),
-    pageSize:
-      typeof r.pageSize === 'number'
+    : Array.isArray(r.items)
+      ? (r.items as unknown[]).map(normalizeCase)
+      : [];
+  const limit =
+    typeof r.limit === 'number'
+      ? (r.limit as number)
+      : typeof r.pageSize === 'number'
         ? (r.pageSize as number)
         : typeof r.page_size === 'number'
           ? (r.page_size as number)
-          : (filters.pageSize ?? list.length),
+          : (filters.pageSize ?? list.length);
+  const offset = typeof r.offset === 'number' ? (r.offset as number) : 0;
+  const page =
+    typeof r.page === 'number'
+      ? (r.page as number)
+      : limit > 0
+        ? Math.floor(offset / limit) + 1
+        : (filters.page ?? 1);
+  const statusRaw =
+    (r.status_totals as Record<string, number> | undefined) ??
+    (r.statusTotals as Record<string, number> | undefined);
+  return {
+    cases: list,
+    total: typeof r.total === 'number' ? (r.total as number) : list.length,
+    page,
+    pageSize: limit,
+    statusTotals: statusRaw && typeof statusRaw === 'object' ? statusRaw : undefined,
   };
 }
 
@@ -1944,8 +1962,11 @@ export const casesApi = {
     // querying "In Progress" in the console actually returns rows where the
     // backend stored "investigating".
     const params: Record<string, string> = {};
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 100;
     for (const [key, value] of Object.entries(filters)) {
       if (value === undefined || value === null || value === '') continue;
+      if (key === 'page' || key === 'pageSize' || key === 'search') continue;
       if (key === 'status' && typeof value === 'string' && value !== 'all') {
         params.status =
           UI_TO_BACKEND_STATUS[value as CaseStatus] ?? value;
@@ -1953,8 +1974,10 @@ export const casesApi = {
       }
       params[key] = String(value);
     }
+    params.limit = String(Math.min(Math.max(pageSize, 1), 500));
+    params.offset = String(Math.max(0, (page - 1) * pageSize));
     const raw = await request<unknown>('/api/v1/cases', { params });
-    return normalizeCasesResponse(raw, filters);
+    return normalizeCasesResponse(raw, { ...filters, page, pageSize });
   },
 
   get: async (id: string) => {

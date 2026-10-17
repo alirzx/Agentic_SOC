@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cases page stuck at “50 All Cases”.** `GET /cases` defaulted to
+  `limit=50` and the UI counted `cases.length` instead of a real total, so
+  growth past 50 looked frozen. List now returns a paginated envelope with
+  `total` + `status_totals`; the console chips use those counts.
 - **Alert detail Notable panel overflow.** Long Splunk notable fields blew
   past the card (10k+ px height, text outside the box). Field values now
   wrap/truncate with Show more, noisy/extra keys are capped, and the panel
