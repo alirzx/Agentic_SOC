@@ -747,17 +747,22 @@ class SplunkConnector(BaseConnector):
 
         row = _enrich_notable_row(raw)
         external_id = _stable_external_id(row)
-        title = (
+        # Splunk multivalue fields (e.g. duplicated search_name) must be
+        # unwrapped — otherwise title becomes a JSON/list string in Postgres
+        # and the Cases/Alerts UI shows ``['Rule', 'Rule']``.
+        title = _first_scalar(
             row.get("search_name")
             or row.get("orig_rule_title")
             or row.get("source")
             or "Splunk Notable Event"
         )
         description = str(
-            row.get("orig_rule_description")
-            or row.get("description")
-            or row.get("_raw")
-            or ""
+            _first_scalar(
+                row.get("orig_rule_description")
+                or row.get("description")
+                or row.get("_raw")
+                or ""
+            )
         )
         hostname = _first_scalar(
             row.get("dvc") or row.get("dest") or row.get("host") or row.get("asset")
@@ -777,7 +782,7 @@ class SplunkConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": external_id,
             "event_id": external_id,
-            "title": str(title),
+            "title": str(title) if title is not None else "Splunk Notable Event",
             "description": description[:4000],
             "severity": _map_severity(row.get("urgency") or row.get("severity")),
             "src_ip": src_ip,

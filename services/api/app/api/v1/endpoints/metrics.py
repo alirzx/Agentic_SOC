@@ -244,8 +244,21 @@ async def get_dashboard_metrics(
     )
 
     # ── Case counts ───────────────────────────────────────────────────────────
-    open_cases_q = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status == "open")))
-    in_progress_q = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status == "in_progress")))
+    # Backend lifecycle uses ``new | triaged | investigating | …`` while the
+    # dashboard tiles speak UI vocabulary (open / inProgress). Count both.
+    open_cases_q = await db.scalar(
+        select(func.count()).where(
+            and_(Case.tenant_id == tenant_id, Case.status.in_(("open", "new")))
+        )
+    )
+    in_progress_q = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Case.tenant_id == tenant_id,
+                Case.status.in_(("in_progress", "investigating", "contained", "triaged")),
+            )
+        )
+    )
     resolved_week_q = await db.scalar(
         select(func.count()).where(
             and_(
@@ -276,17 +289,23 @@ async def get_dashboard_metrics(
     source_count_map: dict[str, int] = {row.connector_type: row.cnt for row in source_counts_rows if row.connector_type}
 
     sources: list[SourceStat] = []
-    seen: set[str] = set()
+    # One row per connector instance (not per type) so two Splunk SIEMs both
+    # appear. Map health_status → UI active/error so Connected Sources counts.
+    _HEALTH_TO_UI = {
+        "healthy": "active",
+        "ok": "active",
+        "active": "active",
+        "unhealthy": "error",
+        "error": "error",
+        "degraded": "error",
+    }
     for row in connectors_rows:
-        key = row.connector_type or row.name
-        if key in seen:
-            continue
-        seen.add(key)
+        health = (row.health_status or "active").strip().lower()
         sources.append(
             SourceStat(
                 name=row.name,
                 count=source_count_map.get(row.connector_type or "", 0),
-                status=row.health_status or "active",
+                status=_HEALTH_TO_UI.get(health, health or "active"),
             )
         )
 

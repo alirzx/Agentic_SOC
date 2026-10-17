@@ -102,6 +102,26 @@ def test_normalize_is_idempotent():
     assert once["raw_event"] == row
 
 
+def test_normalize_unwraps_multivalue_search_name():
+    """Splunk often returns search_name as a duplicated list; keep a scalar title."""
+    c = _conn()
+    row = {
+        "event_id": "E-mv",
+        "search_name": [
+            "ESCU - Windows UAC Bypass Suspicious Child Process - Rule",
+            "ESCU - Windows UAC Bypass Suspicious Child Process - Rule",
+        ],
+        "urgency": "medium",
+        "_time": "2026-10-14T17:23:00Z",
+        "host": ["host-a", "host-a"],
+        "src": ["10.0.0.1", "10.0.0.1"],
+    }
+    out = c.normalize(row)
+    assert out["title"] == "ESCU - Windows UAC Bypass Suspicious Child Process - Rule"
+    assert out["hostname"] == "host-a"
+    assert out["src_ip"] == "10.0.0.1"
+
+
 def test_normalize_stable_when_vendor_ids_missing():
     c = _conn()
     row = {
