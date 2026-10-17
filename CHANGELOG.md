@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auto-triage ledger persist (`total_tokens` NOT NULL).** Kafka auto-triage
+  dead-lettered every fused alert at `stage=persist` when `investigation_runs`
+  lacked a Postgres DEFAULT for `total_tokens` / `total_cost_usd` / `iterations`.
+  Agents ledger INSERT now writes `0` explicitly; migration
+  `059_investigation_runs_token_defaults.sql` restores column DEFAULTs.
+
 ### Changed
 
 - **Marketplace nav hidden.** The `/marketplace` console module is kept (page +
