@@ -164,30 +164,16 @@ def mission_control_spl(filters: str = "", *, limit: int | None = None) -> str:
 
 
 def _is_replaceable_notable_search(spl: str) -> bool:
-    """True when stored custom SPL should be superseded by the current default.
+    """True only when *no* operator SPL is configured (empty / whitespace).
 
-    Covers empty config, legacy ``index=notable`` stock polls (with or without
-    extract), bare ``index=agentic*`` table polls without extract, and older
-    Mission Control pipelines that omit MITRE annotation columns — so existing
-    connector rows pick up the current wide field table.
+    Historically this helper also superseded legacy ``index=notable`` and
+    narrow ``index=agentic*`` stock polls with the current Mission Control
+    default. That silently ignored Custom SPL edits in the connector UI
+    (operators set ``search index=notable | …`` and polls still ran
+    ``index=agentic*``). Non-empty ``custom_search`` is now always honored;
+    only a blank field falls through to saved-search / platform default.
     """
-    stripped = (spl or "").strip()
-    if not stripped:
-        return True
-    lower = stripped.lower()
-    if lower == _DEFAULT_NOTABLE_SPL.lower():
-        return False
-    if lower.startswith("| rest") or "/services/" in lower:
-        return False
-    if lower.startswith("search index=notable"):
-        return True
-    if lower.startswith(f"search index={_DEFAULT_INDEX.lower()}"):
-        if "| extract" not in lower:
-            return True
-        # Prior defaults that already used extract but dropped MITRE / wide fields.
-        if "annotations_mitre_attack" not in lower:
-            return True
-    return False
+    return not (spl or "").strip()
 
 
 def _mitre_techniques_from_row(row: dict[str, Any]) -> list[str]:
@@ -341,10 +327,10 @@ class SplunkConnector(BaseConnector):
                     required=False,
                     default=_DEFAULT_NOTABLE_SPL,
                     help_text=(
-                        "Ad-hoc SPL posted to /services/search/jobs. "
-                        "Default tables Mission Control stash fields from "
-                        "index=agentic* including annotations_mitre_attack, "
-                        "orig_rule_*, dest/src, endpoint/identity context. "
+                        "Ad-hoc SPL posted to /services/search/jobs on every poll. "
+                        "Whatever you save here is what runs — no silent rewrite. "
+                        "Leave blank to use a Saved Search Name or the platform default "
+                        "(index=agentic* Mission Control table). "
                         "Use | rest … only for the ES rule catalog (definitions, not incidents)."
                     ),
                 ),
@@ -509,7 +495,12 @@ class SplunkConnector(BaseConnector):
         return [self.normalize(r) for r in ordered]
 
     async def _fetch_rows(self, client: httpx.AsyncClient, earliest: str) -> list[dict[str, Any]]:
-        """Run the configured search and return result rows."""
+        """Run the configured search and return result rows.
+
+        Precedence: non-empty ``custom_search`` (operator UI) → named saved
+        search → platform Mission Control default. Never rewrite a
+        non-empty custom SPL.
+        """
         custom = self._custom_search
         if custom and not _is_replaceable_notable_search(custom):
             search = _normalize_custom_spl(custom)

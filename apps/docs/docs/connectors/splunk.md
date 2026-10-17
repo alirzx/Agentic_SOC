@@ -20,10 +20,14 @@ pnpm aisoc:purge-demo
 |-------|--------|
 | Splunk URL | `https://192.168.0.10:8089` |
 | Username / Password | admin (Token empty) |
-| Custom SPL | see below |
+| Custom SPL | see below — **whatever you save here is what every poll runs** |
 | Earliest time | `-90d@d` (first backfill) |
 | Poll interval | `1800` (30 minutes) |
 | Verify SSL | **off** |
+
+After save, use **Configure** on the connector card to edit Custom SPL (or other
+settings) without deleting the instance. Leave password blank to keep the
+vaulted secret.
 
 ```spl
 search index=agentic*

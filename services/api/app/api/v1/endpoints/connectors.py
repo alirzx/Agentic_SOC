@@ -779,11 +779,32 @@ async def update_connector(
         val = getattr(request, field, None)
         if val is None:
             continue
+        if field == "connector_config":
+            # Deep-merge so Configure edits (custom_search, poll interval, …)
+            # never wipe scheduler checkpoints or other runtime keys.
+            existing_cfg = connector.connector_config if isinstance(connector.connector_config, dict) else {}
+            incoming = val if isinstance(val, dict) else {}
+            val = {**existing_cfg, **incoming}
         if field == "auth_config":
-            # Re-encrypt on every write so a partial PATCH still leaves
-            # all secret leaves under the current primary key.
+            # Partial credential update: empty/omitted secret leaves keep the
+            # vaulted values so operators can edit Custom SPL without
+            # re-typing the password.
             try:
-                val = get_vault().encrypt_dict(val)
+                current_auth = get_vault().decrypt_dict(connector.auth_config or {})
+            except CredentialVaultError:
+                current_auth = {}
+            if not isinstance(current_auth, dict):
+                current_auth = {}
+            incoming_auth = val if isinstance(val, dict) else {}
+            merged_auth = dict(current_auth)
+            for key, leaf in incoming_auth.items():
+                if leaf is None:
+                    continue
+                if isinstance(leaf, str) and not leaf.strip():
+                    continue
+                merged_auth[key] = leaf
+            try:
+                val = get_vault().encrypt_dict(merged_auth)
             except CredentialVaultError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

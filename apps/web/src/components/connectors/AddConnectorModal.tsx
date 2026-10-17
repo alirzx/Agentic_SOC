@@ -118,9 +118,11 @@ interface FieldInputProps {
   field: ConnectorSchemaField;
   value: string | number | boolean;
   onChange: (next: string | number | boolean) => void;
+  /** When editing an existing connector, secret blanks mean "keep vaulted". */
+  keepSecretsHint?: boolean;
 }
 
-function FieldInput({ field, value, onChange }: FieldInputProps) {
+function FieldInput({ field, value, onChange, keepSecretsHint = false }: FieldInputProps) {
   const baseClass =
     'w-full bg-dark-80/60 border border-[#374151] rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/30 transition-colors';
 
@@ -132,9 +134,13 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
           autoComplete="new-password"
           value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder ?? '••••••••'}
+          placeholder={
+            keepSecretsHint
+              ? 'Leave blank to keep existing'
+              : (field.placeholder ?? '••••••••')
+          }
           className={clsx(baseClass, 'font-mono')}
-          required={field.required}
+          required={field.required && !keepSecretsHint}
         />
       );
     case 'textarea':
@@ -928,6 +934,8 @@ interface ConfigStepProps {
   setInstanceName: (next: string) => void;
   /** Last test result, so we can render the AI troubleshooter inline. */
   testResult: ConnectorTestResult | null;
+  /** Edit mode: secret fields stay optional and show a keep-existing hint. */
+  isEditMode?: boolean;
 }
 
 function ConfigStep({
@@ -937,6 +945,7 @@ function ConfigStep({
   instanceName,
   setInstanceName,
   testResult,
+  isEditMode = false,
 }: ConfigStepProps) {
   const updateField = (name: string, next: string | number | boolean) => {
     setValues({ ...values, [name]: next });
@@ -1004,6 +1013,7 @@ function ConfigStep({
                   field={f}
                   value={values[f.name]}
                   onChange={(v) => updateField(f.name, v)}
+                  keepSecretsHint={isEditMode}
                 />
                 {f.help_text && (
                   <p className="mt-1 text-xs text-gray-500 leading-relaxed">{f.help_text}</p>
@@ -1017,9 +1027,16 @@ function ConfigStep({
           <div key={f.name}>
             <label className="block text-xs font-semibold text-gray-300 mb-1">
               {f.label}
-              {f.required && <span className="text-red-400 ml-0.5">*</span>}
+              {f.required && !(isEditMode && f.type === 'secret') && (
+                <span className="text-red-400 ml-0.5">*</span>
+              )}
             </label>
-            <FieldInput field={f} value={values[f.name]} onChange={(v) => updateField(f.name, v)} />
+            <FieldInput
+              field={f}
+              value={values[f.name]}
+              onChange={(v) => updateField(f.name, v)}
+              keepSecretsHint={isEditMode}
+            />
             {f.help_text && (
               <p className="mt-1 text-xs text-gray-500 leading-relaxed">{f.help_text}</p>
             )}
@@ -1240,6 +1257,13 @@ interface AddConnectorModalProps {
   onClose: () => void;
   /** Called after a connector is created so the parent can refresh its list. */
   onCreated?: (connector: Connector) => void;
+  /** Called after an existing connector is updated via Configure. */
+  onUpdated?: (connector: Connector) => void;
+  /**
+   * When set, open directly on the configure form for this saved instance
+   * (edit mode). Secrets start blank — leave blank to keep vaulted values.
+   */
+  editingConnector?: Connector | null;
   /**
    * If set, the picker will auto-advance to the configure step for this
    * connector class once the catalog finishes loading. The /onboarding
@@ -1255,12 +1279,58 @@ interface AddConnectorModalProps {
   activeCategory?: string | null;
 }
 
+/**
+ * Prefill non-secret fields from a saved connector's ``connector_config``.
+ * Secrets always start empty so Configure never echoes vaulted values.
+ */
+function buildEditValues(
+  fields: ConnectorSchemaField[],
+  connector: Connector,
+): Record<string, string | number | boolean> {
+  const values = buildInitialValues(fields);
+  const cfg = connector.config ?? {};
+  for (const field of fields) {
+    if (field.type === 'secret') {
+      values[field.name] = '';
+      continue;
+    }
+    const raw = cfg[field.name];
+    if (raw === undefined || raw === null) continue;
+    if (field.type === 'boolean') {
+      values[field.name] = Boolean(raw);
+      continue;
+    }
+    if (field.type === 'number') {
+      const parsed = typeof raw === 'number' ? raw : Number(raw);
+      values[field.name] = Number.isNaN(parsed) ? 0 : parsed;
+      continue;
+    }
+    values[field.name] = String(raw);
+  }
+  return values;
+}
+
+/** Drop blank secrets / empty strings so PATCH can keep vaulted credentials. */
+function omitBlankAuthLeaves(
+  authConfig: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(authConfig)) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === 'string' && !value.trim()) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 type WizardStep = 'pick' | 'configure' | 'verify';
 
 export function AddConnectorModal({
   open,
   onClose,
   onCreated,
+  onUpdated,
+  editingConnector = null,
   primedConnectorId,
   activeCategory,
 }: AddConnectorModalProps) {
@@ -1283,6 +1353,8 @@ export function AddConnectorModal({
   // Connector instance returned by the create call — used by the verify
   // step to poll for the first event.
   const [createdConnector, setCreatedConnector] = useState<Connector | null>(null);
+
+  const isEditMode = Boolean(editingConnector?.id);
 
   // Load catalog whenever the modal opens. We don't keep stale data around
   // between opens because the operator may have added a new connector class
@@ -1308,6 +1380,24 @@ export function AddConnectorModal({
       .then((res) => {
         if (cancelled) return;
         setCatalog(res.connectors);
+
+        // Edit mode: jump straight to configure with saved values.
+        if (editingConnector) {
+          const entry = res.connectors.find(
+            (e) => e.connector_id === editingConnector.type,
+          );
+          if (entry) {
+            setSelected(entry);
+            setValues(buildEditValues(entry.fields, editingConnector));
+            setInstanceName(editingConnector.name || entry.connector_name);
+            setStep('configure');
+            return;
+          }
+          setCatalogError(
+            `Connector type "${editingConnector.type}" is not in this build's catalog.`,
+          );
+          return;
+        }
 
         // Auto-advance to configure for the primed connector, if any. We
         // do this here (after catalog loads) rather than in render so that
@@ -1364,6 +1454,10 @@ export function AddConnectorModal({
   };
 
   const handleBack = () => {
+    if (isEditMode) {
+      onClose();
+      return;
+    }
     setStep('pick');
     setSelected(null);
     setTestResult(null);
@@ -1375,11 +1469,18 @@ export function AddConnectorModal({
     setTestResult(null);
     try {
       const { auth_config, connector_config } = partitionFormValues(selected.fields, values);
-      const result = await connectorsApi.testInline({
-        connector_type: selected.connector_id,
-        auth_config,
-        connector_config,
-      });
+      const authPatch = omitBlankAuthLeaves(auth_config);
+      // Edit + blank secrets → test the saved vaulted credentials so the
+      // operator can validate Custom SPL / URL changes without retyping
+      // the password. New secrets or create-mode → inline test.
+      const result =
+        isEditMode && editingConnector && Object.keys(authPatch).length === 0
+          ? await connectorsApi.test(editingConnector.id)
+          : await connectorsApi.testInline({
+              connector_type: selected.connector_id,
+              auth_config: isEditMode ? authPatch : auth_config,
+              connector_config,
+            });
       setTestResult(result);
       if (result.success) {
         toast.success('Connection test passed');
@@ -1404,6 +1505,18 @@ export function AddConnectorModal({
     setSaving(true);
     try {
       const { auth_config, connector_config } = partitionFormValues(selected.fields, values);
+      if (isEditMode && editingConnector) {
+        const authPatch = omitBlankAuthLeaves(auth_config);
+        const updated = await connectorsApi.update(editingConnector.id, {
+          name: instanceName.trim(),
+          connector_config,
+          ...(Object.keys(authPatch).length > 0 ? { auth_config: authPatch } : {}),
+        });
+        toast.success(`Updated ${updated.name}`);
+        onUpdated?.(updated);
+        onClose();
+        return;
+      }
       const created = await connectorsApi.create({
         name: instanceName.trim(),
         connector_type: selected.connector_id,
@@ -1475,14 +1588,18 @@ export function AddConnectorModal({
                     {step === 'pick'
                       ? 'Add connector'
                       : step === 'configure'
-                        ? `Configure ${selected?.connector_name ?? ''}`
+                        ? isEditMode
+                          ? `Edit ${instanceName || selected?.connector_name || 'connector'}`
+                          : `Configure ${selected?.connector_name ?? ''}`
                         : `Verifying ${createdConnector?.name ?? ''}`}
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {step === 'pick'
                       ? 'Pick a security tool to connect. Credentials are encrypted with the AiSOC vault.'
                       : step === 'configure'
-                        ? 'Credentials are tested against the upstream API and only saved on success.'
+                        ? isEditMode
+                          ? 'Update Custom SPL and settings. Leave password/token blank to keep the saved secret.'
+                          : 'Credentials are tested against the upstream API and only saved on success.'
                         : 'Watching for the first event to land. This is normally seconds for high-volume sources.'}
                   </p>
                 </div>
@@ -1589,6 +1706,7 @@ export function AddConnectorModal({
                     instanceName={instanceName}
                     setInstanceName={setInstanceName}
                     testResult={testResult}
+                    isEditMode={isEditMode}
                   />
                 )}
 
@@ -1622,7 +1740,7 @@ export function AddConnectorModal({
                         disabled={saving}
                         className="text-sm text-gray-400 hover:text-gray-200 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        ← Back
+                        {isEditMode ? 'Cancel' : '← Back'}
                       </button>
                       {testResult && (
                         <span
@@ -1661,7 +1779,7 @@ export function AddConnectorModal({
                         {saving && (
                           <span className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" />
                         )}
-                        Save connector
+                        {isEditMode ? 'Save changes' : 'Save connector'}
                       </button>
                     </div>
                   </>

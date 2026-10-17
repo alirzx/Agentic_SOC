@@ -31,6 +31,7 @@ const UUID_RE =
 
 export function ConnectorsView() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingConnector, setEditingConnector] = useState<Connector | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [pollingId, setPollingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, boolean | undefined>>({});
@@ -148,14 +149,26 @@ export function ConnectorsView() {
     }
   };
 
-  const handleConfigure = (_connector: Connector) => {
-    toast('Connector editing UI is coming soon. Delete + re-add for now.', {
-      icon: '🔧',
-    });
+  const handleConfigure = (connector: Connector) => {
+    if (!UUID_RE.test(connector.id)) {
+      toast.error('This is not a saved connector.');
+      return;
+    }
+    setEditingConnector(connector);
+    setModalOpen(true);
   };
 
   const handleCreated = () => {
     mutate();
+  };
+
+  const handleUpdated = () => {
+    mutate();
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setEditingConnector(null);
   };
 
   const authError = error instanceof Error && /401|Unauthorized/i.test(error.message);
@@ -171,7 +184,10 @@ export function ConnectorsView() {
         </div>
         <button
           type="button"
-          onClick={() => setModalOpen(true)}
+          onClick={() => {
+            setEditingConnector(null);
+            setModalOpen(true);
+          }}
           className="bg-brand-600 hover:bg-brand-500 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -259,7 +275,10 @@ export function ConnectorsView() {
         testResults={testResults}
         onTest={handleTest}
         onPoll={handlePoll}
-        onAdd={() => setModalOpen(true)}
+        onAdd={() => {
+          setEditingConnector(null);
+          setModalOpen(true);
+        }}
         onConfigure={handleConfigure}
         onDelete={handleDelete}
       />
@@ -268,8 +287,10 @@ export function ConnectorsView() {
 
       <AddConnectorModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={handleCloseModal}
         onCreated={handleCreated}
+        onUpdated={handleUpdated}
+        editingConnector={editingConnector}
       />
     </div>
   );

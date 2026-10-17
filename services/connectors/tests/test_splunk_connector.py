@@ -39,25 +39,23 @@ def test_mission_control_spl_tables_extracted_fields():
     assert "| head 5" in lookup
 
 
-def test_old_notable_table_is_replaced_catalog_rest_is_not():
-    old = (
+def test_custom_search_is_never_silently_replaced():
+    """Operator Custom SPL (including index=notable) must not be treated as blank."""
+    notable = (
         "search index=notable "
         "| table _time source search_name severity urgency host dvc dest "
         "dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
     )
-    assert _is_replaceable_notable_search(old)
     assert _is_replaceable_notable_search("")
-    assert _is_replaceable_notable_search(
+    assert _is_replaceable_notable_search("   ")
+    assert not _is_replaceable_notable_search(notable)
+    assert not _is_replaceable_notable_search(
         "search index=notable | extract | eval notable_id=coalesce(source_event_id, source_guid, detection_id) | table _time"
     )
-    # Older agentic* MC pipeline without MITRE columns must be upgraded.
-    assert _is_replaceable_notable_search(
+    assert not _is_replaceable_notable_search(
         "search index=agentic* | extract "
         "| eval notable_id=coalesce(source_event_id, source_guid, detection_id) "
-        "| table _time notable_id search_name detection_id dvc dest dest_port "
-        "src src_ip src_port severity security_domain status owner disposition "
-        "orig_rule_title orig_rule_description source_event_id source_guid "
-        "transport is_prohibited | sort 0 - _time"
+        "| table _time notable_id search_name | sort 0 - _time"
     )
     assert not _is_replaceable_notable_search("| rest /services/saved/searches | table title")
     assert not _is_replaceable_notable_search(_DEFAULT_NOTABLE_SPL)
@@ -324,6 +322,39 @@ async def test_fetch_alerts_custom_search_uses_basic_auth_and_earliest():
     assert out[0]["title"] == "Brute Force Detected"
     assert out[0]["severity"] == "high"
     assert out[0]["external_id"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_alerts_honors_index_notable_custom_search():
+    """Custom SPL starting with index=notable must run as saved — not agentic* default."""
+    custom = (
+        "search index=notable | table _time source search_name severity host "
+        "dvc dest_port source_guid source_event_id _cd _raw"
+    )
+    c = SplunkConnector(
+        base_url=BASE,
+        username="admin",
+        password="secret",
+        custom_search=custom,
+        earliest_time="-90d@d",
+        ssl_verify=False,
+    )
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "SID-NOTABLE"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-NOTABLE/results").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-NOTABLE(\?.*)?$").mock(
+        return_value=_done_status()
+    )
+
+    await c.fetch_alerts()
+    assert jobs.called
+    body = jobs.calls[0].request.content.decode()
+    assert "index%3Dnotable" in body or "index=notable" in body
+    assert "index%3Dagentic" not in body and "index=agentic" not in body
 
 
 @respx.mock
