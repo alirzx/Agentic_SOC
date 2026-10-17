@@ -75,6 +75,10 @@ function formatAlertTime(raw: string | undefined, pattern: string): string {
   }
 }
 
+const NOTABLE_VALUE_MAX_CHARS = 480;
+const NOTABLE_EXTRA_FIELD_CAP = 24;
+const NOTABLE_BLOB_MAX_CHARS = 2_000;
+
 function formatRawValue(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
@@ -86,7 +90,16 @@ function formatRawValue(value: unknown): string {
     return String(value);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => formatRawValue(item)).filter(Boolean).join(', ');
+    // Splunk multivalue fields often repeat the same token — keep unique order.
+    const parts: string[] = [];
+    const seen = new Set<string>();
+    for (const item of value) {
+      const text = formatRawValue(item);
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      parts.push(text);
+    }
+    return parts.join(', ');
   }
   if (typeof value === 'object') {
     try {
@@ -152,17 +165,44 @@ const NOTABLE_SKIP_KEYS = new Set([
   'timestartpos',
   'index',
   'sourcetype',
+  'source',
+  'host',
+  'search',
+  'orig_search',
+  'orig_sid',
+  'sid',
+  'savedsearch_name',
+  'extractor',
+  'extract',
+  'annotations',
+  'action',
+  'app',
+  'owner_realname',
+  'mod_time',
+  'rule_name',
+  'rule_title',
+  'orig_time',
+  'orig_action',
 ]);
+
+function shouldSkipNotableKey(key: string): boolean {
+  if (NOTABLE_SKIP_KEYS.has(key)) return true;
+  if (key.startsWith('date_') || key.startsWith('tag::') || key.startsWith('info_')) return true;
+  if (key.startsWith('drilldown_') || (key.startsWith('orig_') && key !== 'orig_rule_title')) {
+    return true;
+  }
+  return false;
+}
 
 function extraNotableFields(alert: Alert): ReadonlyArray<{ key: string; label: string; value: string }> {
   const raw = alert.rawEvent ?? {};
   const rows: Array<{ key: string; label: string; value: string }> = [];
   for (const [key, value] of Object.entries(raw)) {
-    if (NOTABLE_SKIP_KEYS.has(key) || key.startsWith('date_') || key.startsWith('tag::')) {
+    if (shouldSkipNotableKey(key)) {
       continue;
     }
     const text = formatRawValue(value);
-    if (!text) {
+    if (!text || text.length > NOTABLE_BLOB_MAX_CHARS) {
       continue;
     }
     rows.push({
@@ -171,25 +211,54 @@ function extraNotableFields(alert: Alert): ReadonlyArray<{ key: string; label: s
       value: text,
     });
   }
-  return rows.sort((left, right) => left.key.localeCompare(right.key));
+  return rows
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .slice(0, NOTABLE_EXTRA_FIELD_CAP);
 }
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
+    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 min-w-0 overflow-hidden">
       <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">{title}</h3>
       {children}
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
+function TruncatedText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsTruncate = text.length > NOTABLE_VALUE_MAX_CHARS;
+  const shown =
+    !needsTruncate || expanded ? text : `${text.slice(0, NOTABLE_VALUE_MAX_CHARS).trimEnd()}…`;
   return (
-    <div className="flex items-start gap-4">
-      <span className="text-xs text-gray-500 w-40 shrink-0 pt-0.5">{label}</span>
-      <span className="text-sm text-gray-200">{value}</span>
+    <span className="text-sm text-gray-200 break-words [overflow-wrap:anywhere] whitespace-pre-wrap min-w-0">
+      {shown}
+      {needsTruncate && (
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="ml-2 text-xs text-brand-400 hover:text-brand-300 whitespace-nowrap"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </span>
+  );
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  const body =
+    typeof value === 'string' ? <TruncatedText text={value} /> : (
+      <span className="text-sm text-gray-200 break-words [overflow-wrap:anywhere] min-w-0">
+        {value}
+      </span>
+    );
+  return (
+    <div className="flex items-start gap-4 min-w-0">
+      <span className="text-xs text-gray-500 w-28 sm:w-36 shrink-0 pt-0.5">{label}</span>
+      <div className="min-w-0 flex-1">{body}</div>
     </div>
   );
 }
@@ -1031,9 +1100,9 @@ export function AlertDetailView({
 
       {/* Content */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 min-w-0">
           {/* Left column - 2/3 */}
-          <div className="col-span-2 space-y-4">
+          <div className="col-span-2 space-y-4 min-w-0">
             {/*
               Ambient Copilot — quick contextual AI buttons. Backed by the
               `services/agents` `/api/v1/contextual` endpoints. We pass a
@@ -1060,13 +1129,13 @@ export function AlertDetailView({
             />
 
             <Section title="Description">
-              <p className="text-sm text-gray-300 leading-relaxed">
+              <p className="text-sm text-gray-300 leading-relaxed break-words [overflow-wrap:anywhere]">
                 {rawField(alert, 'orig_rule_description') || alert.description}
               </p>
             </Section>
 
             <Section title="Notable">
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-[32rem] overflow-y-auto overflow-x-hidden pr-1 min-w-0">
                 {NOTABLE_DETAIL_FIELDS.map((field) => {
                   const value = rawField(alert, field.key);
                   if (!value) {

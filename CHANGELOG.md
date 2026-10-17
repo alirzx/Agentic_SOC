@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Alert detail Notable panel overflow.** Long Splunk notable fields blew
+  past the card (10k+ px height, text outside the box). Field values now
+  wrap/truncate with Show more, noisy/extra keys are capped, and the panel
+  scrolls inside a max height.
 - **Alert confidence badge showed e.g. `7000%`.** Fusion `confidence` is
   already 0–100; the alert detail chip multiplied by 100 again. Display and
   API normaliser now treat values `> 1` as percent and `≤ 1` as fractions.
