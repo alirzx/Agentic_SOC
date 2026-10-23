@@ -127,6 +127,7 @@ class ConnectorResponse(BaseModel):
     events_ingested: int = 0
     events_dropped: int = 0
     error_count: int = 0
+    fusion_persist_failed: int = 0
     # Schema-drift sentinel state surfaced to the wizard so the
     # connector card can show "schema changed at <ts>" without a
     # second round-trip. Both fields are nullable for connectors
@@ -224,6 +225,7 @@ def _build_connector_response(connector: Connector) -> ConnectorResponse:
         "events_ingested": int(connector.events_ingested or 0),
         "events_dropped": int(connector.events_dropped or 0),
         "error_count": int(connector.error_count or 0),
+        "fusion_persist_failed": int(getattr(connector, "fusion_persist_failed", 0) or 0),
         "schema_fingerprint": connector.schema_fingerprint,
         "last_schema_drift_at": connector.last_schema_drift_at,
         "last_drift_details": drift if isinstance(drift, dict) else None,
@@ -315,6 +317,8 @@ class ConnectorHealthSummary(BaseModel):
     last_drift_at: datetime | None
     total_events_ingested: int
     total_events_dropped: int
+    total_error_count: int
+    total_fusion_persist_failed: int
 
 
 class CreateConnectorRequest(BaseModel):
@@ -605,6 +609,8 @@ async def connector_health_summary(
     last_drift_at: datetime | None = None
     total_events_ingested = 0
     total_events_dropped = 0
+    total_error_count = 0
+    total_fusion_persist_failed = 0
 
     for c in connectors:
         if c.health_status == "healthy":
@@ -616,6 +622,8 @@ async def connector_health_summary(
 
         total_events_ingested += int(c.events_ingested or 0)
         total_events_dropped += int(getattr(c, "events_dropped", 0) or 0)
+        total_error_count += int(c.error_count or 0)
+        total_fusion_persist_failed += int(getattr(c, "fusion_persist_failed", 0) or 0)
 
         drift_at = getattr(c, "last_schema_drift_at", None)
         if drift_at is not None:
@@ -637,6 +645,8 @@ async def connector_health_summary(
         last_drift_at=last_drift_at,
         total_events_ingested=total_events_ingested,
         total_events_dropped=total_events_dropped,
+        total_error_count=total_error_count,
+        total_fusion_persist_failed=total_fusion_persist_failed,
     )
 
 

@@ -60,6 +60,7 @@ connectors_table = Table(
     Column("events_ingested", Integer, nullable=False),
     Column("events_dropped", Integer, nullable=False),
     Column("error_count", Integer, nullable=False),
+    Column("fusion_persist_failed", Integer, nullable=False),
     # Schema-drift sentinel columns (migration 026). Nullable: a brand-new
     # connector hasn't established a fingerprint baseline yet.
     Column("schema_fingerprint", Text),
@@ -107,10 +108,12 @@ class ConnectorInstance:
     error_count: int
     # Drift-sentinel state. ``schema_fingerprint`` is the SHA-256 of the
     # sorted, deduped top-level field names from the previous successful
-    # poll. NULL on first poll.
-    schema_fingerprint: str | None
-    last_schema_drift_at: datetime | None
-    last_drift_details: dict[str, Any] | None
+    # poll. NULL on first poll. Keep all defaulted fields after the required
+    # ones so dataclasses do not reject the generated __init__.
+    schema_fingerprint: str | None = None
+    last_schema_drift_at: datetime | None = None
+    last_drift_details: dict[str, Any] | None = None
+    fusion_persist_failed: int = 0
     # Workstream 5 — backfill-on-outage state. ``last_outage_at`` is set
     # by the scheduler on the first failed poll after a healthy run and
     # cleared on recovery. ``last_backfill_at`` is the last time the
@@ -170,6 +173,7 @@ async def fetch_enabled_connectors(connection: Any) -> list[ConnectorInstance]:
         connectors_table.c.events_ingested,
         connectors_table.c.events_dropped,
         connectors_table.c.error_count,
+        connectors_table.c.fusion_persist_failed,
         connectors_table.c.schema_fingerprint,
         connectors_table.c.last_schema_drift_at,
         connectors_table.c.last_drift_details,
@@ -193,6 +197,7 @@ async def fetch_enabled_connectors(connection: Any) -> list[ConnectorInstance]:
             events_ingested=row.events_ingested,
             events_dropped=row.events_dropped,
             error_count=row.error_count,
+            fusion_persist_failed=getattr(row, 'fusion_persist_failed', 0) or 0,
             schema_fingerprint=row.schema_fingerprint,
             last_schema_drift_at=row.last_schema_drift_at,
             last_drift_details=row.last_drift_details,

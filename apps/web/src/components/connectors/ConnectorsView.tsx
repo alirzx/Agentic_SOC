@@ -71,7 +71,15 @@ export function ConnectorsView() {
       (sum, c) => sum + (c.eventsDropped ?? 0),
       0,
     );
-    return { active, errored, totalEvents, driftedRecently, totalDropped };
+    const totalErrorCount = connectors.reduce(
+      (sum, c) => sum + (c.errorCount ?? 0),
+      0,
+    );
+    const totalFusionPersistFailed = connectors.reduce(
+      (sum, c) => sum + (c.fusionPersistFailed ?? 0),
+      0,
+    );
+    return { active, errored, totalEvents, driftedRecently, totalDropped, totalErrorCount, totalFusionPersistFailed };
   }, [connectors]);
 
   const stats = useMemo(() => {
@@ -82,6 +90,8 @@ export function ConnectorsView() {
         totalEvents: healthSummary.totalEventsIngested,
         driftedRecently: healthSummary.driftedRecently,
         totalDropped: healthSummary.totalEventsDropped,
+        totalErrorCount: healthSummary.totalErrorCount,
+        totalFusionPersistFailed: healthSummary.totalFusionPersistFailed,
       };
     }
     return localStats;
@@ -200,7 +210,7 @@ export function ConnectorsView() {
       <div
         className={clsx(
           'grid grid-cols-2 gap-3',
-          stats.driftedRecently > 0 || stats.totalDropped > 0
+          stats.driftedRecently > 0 || stats.totalDropped > 0 || stats.totalErrorCount > 0 || stats.totalFusionPersistFailed > 0
             ? 'md:grid-cols-6'
             : 'md:grid-cols-4',
         )}
@@ -235,6 +245,20 @@ export function ConnectorsView() {
             color: 'text-cyan-400',
             show: stats.totalDropped > 0,
             tooltip: 'Filtered out by pre-ingest pipeline rules',
+          },
+          {
+            label: 'Poll Errors',
+            value: stats.totalErrorCount.toLocaleString(),
+            color: 'text-red-400',
+            show: stats.totalErrorCount > 0,
+            tooltip: 'Cumulative connector-side poll failures (network, auth, etc.)',
+          },
+          {
+            label: 'Persist Failed',
+            value: stats.totalFusionPersistFailed.toLocaleString(),
+            color: 'text-orange-400',
+            show: stats.totalFusionPersistFailed > 0,
+            tooltip: 'Fused alerts the fusion sink could not write to Postgres',
           },
         ]
           .filter((stat) => stat.show)
