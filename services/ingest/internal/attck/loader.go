@@ -120,7 +120,9 @@ func readBundle(path string) ([]byte, error) {
 }
 
 func downloadBundle(url string) ([]byte, error) {
-	client := &http.Client{Timeout: 120 * time.Second}
+	// Keep this short: air-gapped / firewalled demos otherwise block HTTP
+	// listen for up to two minutes and look "Connection refused" to Sync.
+	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
