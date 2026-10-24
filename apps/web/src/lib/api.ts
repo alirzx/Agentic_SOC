@@ -2678,6 +2678,10 @@ export interface Connector {
   };
   /** Cumulative count of events the pre-ingest filter dropped. */
   eventsDropped?: number;
+  /** Cumulative count of connector-side poll errors (network, auth, etc.). */
+  errorCount?: number;
+  /** Cumulative count of fused alerts the fusion sink failed to persist. */
+  fusionPersistFailed?: number;
   /**
    * Timestamp of the most recently *ingested* normalized event.
    *
@@ -2772,6 +2776,7 @@ interface BackendConnectorResponse {
   last_sync: string | null;
   events_ingested: number;
   error_count: number;
+  fusion_persist_failed?: number | null;
   tags: string[];
   created_at: string;
   updated_at: string;
@@ -2817,6 +2822,10 @@ export interface ConnectorHealthSummary {
   totalEventsIngested: number;
   /** Cumulative events dropped by pre-ingest filter rules. */
   totalEventsDropped: number;
+  /** Cumulative connector-side poll errors across all connectors. */
+  totalErrorCount: number;
+  /** Cumulative fusion-side persist failures across all connectors. */
+  totalFusionPersistFailed: number;
 }
 
 /**
@@ -2861,6 +2870,8 @@ function mapBackendConnector(row: BackendConnectorResponse): Connector {
     lastSchemaDriftAt: row.last_schema_drift_at ?? undefined,
     lastDriftDetails: row.last_drift_details ?? undefined,
     eventsDropped: row.events_dropped ?? 0,
+    errorCount: row.error_count,
+    fusionPersistFailed: row.fusion_persist_failed ?? 0,
     lastEventAt: row.last_event_at ?? undefined,
     lastEventKind: row.last_event_kind ?? undefined,
     freshness: row.freshness ?? undefined,
@@ -3066,6 +3077,8 @@ export const connectorsApi = {
       last_drift_at: string | null;
       total_events_ingested: number;
       total_events_dropped: number;
+      total_error_count: number;
+      total_fusion_persist_failed: number;
     }>('/api/v1/connectors/health');
     return {
       total: raw.total,
@@ -3077,6 +3090,8 @@ export const connectorsApi = {
       lastDriftAt: raw.last_drift_at ?? undefined,
       totalEventsIngested: raw.total_events_ingested,
       totalEventsDropped: raw.total_events_dropped,
+      totalErrorCount: raw.total_error_count,
+      totalFusionPersistFailed: raw.total_fusion_persist_failed,
     };
   },
 };
