@@ -454,10 +454,24 @@ class ConnectorScheduler:
 
         # Seed the connector's ingest checkpoint (#529) if it supports one, so a
         # restart resumes from the last-accepted event instead of re-scanning.
+        # If ``checkpoint`` was wiped but ``last_sync`` remains (common after
+        # Configure saves that drop the key), synthesize a time watermark so
+        # Splunk does not reopen the full ``earliest_time`` (e.g. -90d) window.
         setter = getattr(connector, "set_checkpoint", None)
         if callable(setter):
             try:
-                setter((target.connector_config or {}).get("checkpoint"))
+                cfg_cp = (target.connector_config or {}).get("checkpoint")
+                if not isinstance(cfg_cp, dict) or not (
+                    cfg_cp.get("time") or cfg_cp.get("id") or cfg_cp.get("seen")
+                ):
+                    ls = getattr(target, "last_sync", None)
+                    if ls is not None:
+                        cfg_cp = {
+                            "time": ls.isoformat() if hasattr(ls, "isoformat") else str(ls),
+                            "id": "",
+                            "seen": [],
+                        }
+                setter(cfg_cp)
             except Exception:  # never let checkpoint seeding break a poll
                 logger.debug("connector.scheduler.checkpoint_seed_failed id=%s", connector_id)
 

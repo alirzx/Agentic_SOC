@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out and reported failure even after `Batch published to Kafka`. Forced
   poll is now fire-and-forget (`status: started`); the UI refreshes
   counters when the background poll finishes.
+- **Splunk poll reopened a 90-day window after checkpoint wipe.** Configure
+  saves that dropped `connector_config.checkpoint` left `last_sync` intact
+  but every poll fell back to `earliest_time` (often `-90d@d`), timing out
+  and marking the connector Error. Scheduler now reseeds the watermark from
+  `last_sync` when checkpoint is missing.
 - **Splunk connector stuck Error after long outage.** Resuming from an old
   checkpoint opened a multi-day Splunk search that timed out every poll
   (`Poll errors` climbed, Last sync went stale). Catch-up is capped per poll,
