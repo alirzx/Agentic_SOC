@@ -19,7 +19,17 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.campaign_case import (
+    campaign_case_title,
+    campaign_entities,
+    campaign_tags,
+    infer_attack_theme,
+    primary_campaign_key,
+)
+
 logger = structlog.get_logger()
+
+_SIBLING_CAP = 100
 
 _ATTACK_HINTS = re.compile(
     r"password\s*spray|brute\s*force|credential|lateral|ransomware|"
@@ -450,60 +460,140 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             skipped += 1
             continue
 
-        # Link siblings by title prefix / host
+        # Attack-campaign siblings: shared host / IP / user — not same title.
+        entities = campaign_entities(alert, raw if isinstance(raw, dict) else {})
+        theme = infer_attack_theme(
+            title=str(alert.get("title") or ""),
+            mitre_tactics=alert.get("mitre_tactics") if isinstance(alert.get("mitre_tactics"), list) else None,
+            mitre_techniques=alert.get("mitre_techniques")
+            if isinstance(alert.get("mitre_techniques"), list)
+            else None,
+            raw_alert=raw if isinstance(raw, dict) else {},
+        )
+        camp_key = primary_campaign_key(theme, entities)
+        camp_host = next((v for k, v in entities if k == "host"), host)
+        camp_ip = next((v for k, v in entities if k == "ip"), src)
+        camp_user = next((v for k, v in entities if k == "user"), None)
+
         sibling_ids: list[uuid.UUID] = [alert_id]
-        sibs = (
-            await db.execute(
-                text(
-                    """
-                    SELECT id FROM alerts
-                     WHERE tenant_id = :tid
-                       AND created_at >= :since
-                       AND id <> :id
-                       AND case_id IS NULL
-                       AND COALESCE(disposition, '') NOT IN ('false_positive','benign','benign_true_positive')
-                       AND left(title, 40) = left(:title, 40)
-                     ORDER BY created_at DESC
-                     LIMIT 20
-                    """
-                ).bindparams(
-                    tid=tenant_id,
-                    since=since,
-                    id=alert_id,
-                    title=str(alert.get("title") or ""),
+        if camp_host or camp_ip or camp_user:
+            sibs = (
+                await db.execute(
+                    text(
+                        """
+                        SELECT id FROM alerts
+                         WHERE tenant_id = :tid
+                           AND created_at >= :since
+                           AND id <> :id
+                           AND case_id IS NULL
+                           AND COALESCE(disposition, '') NOT IN ('false_positive','benign','benign_true_positive')
+                           AND (
+                                 (:host::text IS NOT NULL AND (
+                                     COALESCE(affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[:host::text])
+                                  OR COALESCE(raw_event->>'hostname', '') = :host
+                                  OR COALESCE(raw_event->>'dvc', '') = :host
+                                 ))
+                              OR (:ip::text IS NOT NULL AND (
+                                     COALESCE(affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[:ip::text])
+                                  OR COALESCE(raw_event->>'src_ip', '') = :ip
+                                  OR COALESCE(raw_event->>'src', '') = :ip
+                                 ))
+                              OR (:usr::text IS NOT NULL AND (
+                                     COALESCE(affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[:usr::text])
+                                  OR COALESCE(raw_event->>'username', '') = :usr
+                                 ))
+                           )
+                         ORDER BY created_at DESC
+                         LIMIT :lim
+                        """
+                    ).bindparams(
+                        tid=tenant_id,
+                        since=since,
+                        id=alert_id,
+                        host=str(camp_host) if camp_host else None,
+                        ip=str(camp_ip) if camp_ip else None,
+                        usr=str(camp_user) if camp_user else None,
+                        lim=_SIBLING_CAP,
+                    )
                 )
-            )
-        ).fetchall()
-        sibling_ids.extend(r[0] for r in sibs)
+            ).fetchall()
+            sibling_ids.extend(r[0] for r in sibs)
 
         now = datetime.now(UTC)
-        title = str(alert.get("title") or "Agentic SOC case")[:500]
+        title = campaign_case_title(theme, entities)
         severity = str(alert.get("severity") or "medium")
         if severity not in {"info", "low", "medium", "high", "critical"}:
             severity = "medium"
+        entity_bits = ", ".join(f"{k}:{v}" for k, v in entities[:6]) or "(no strong entity)"
         description = (
-            f"Auto-created by Agentic SOC 24h funnel backfill.\n"
+            f"Auto-created by Agentic SOC funnel backfill as an attack-campaign case.\n"
+            f"Theme: {theme}\n"
+            f"Entities: {entity_bits}\n"
             f"Disposition: {disposition}\n"
-            f"Primary alert: {alert_id}\n"
+            f"Seed alert: {alert.get('title')}\n"
             f"Linked alerts: {len(sibling_ids)}\n"
         )
-        # Attach to an existing open agentic case with the same title instead
-        # of creating one near-identical case per uncased alert.
-        existing = (
-            await db.execute(
-                text(
-                    """
-                    SELECT id, alert_ids FROM aisoc_cases
-                     WHERE tenant_id = :tid
-                       AND title = :title
-                       AND status NOT IN ('resolved', 'closed')
-                       AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
-                     ORDER BY opened_at ASC
-                     LIMIT 1
-                    """
-                ).bindparams(tid=tenant_id, title=title)
-            )
-        ).fetchone()
+        tags = campaign_tags(theme=theme, campaign_key=camp_key, source="backfill")
+        existing = None
+        if camp_key:
+            existing = (
+                await db.execute(
+                    text(
+                        """
+                        SELECT id, alert_ids FROM aisoc_cases
+                         WHERE tenant_id = :tid
+                           AND status NOT IN ('resolved', 'closed')
+                           AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                           AND opened_at >= :since
+                           AND tags->>'campaign_key' = :ckey
+                         ORDER BY opened_at ASC
+                         LIMIT 1
+                        """
+                    ).bindparams(tid=tenant_id, since=since, ckey=camp_key)
+                )
+            ).fetchone()
+        if existing is None and (camp_host or camp_ip or camp_user):
+            existing = (
+                await db.execute(
+                    text(
+                        """
+                        SELECT c.id, c.alert_ids FROM aisoc_cases c
+                         WHERE c.tenant_id = :tid
+                           AND c.status NOT IN ('resolved', 'closed')
+                           AND c.created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                           AND c.opened_at >= :since
+                           AND c.tags->>'case_model' = 'attack_campaign'
+                           AND EXISTS (
+                                 SELECT 1 FROM alerts a
+                                  WHERE a.case_id = c.id AND a.tenant_id = :tid
+                                    AND (
+                                          (:host::text IS NOT NULL AND (
+                                              COALESCE(a.affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[:host::text])
+                                           OR COALESCE(a.raw_event->>'hostname', '') = :host
+                                           OR COALESCE(a.raw_event->>'dvc', '') = :host
+                                          ))
+                                       OR (:ip::text IS NOT NULL AND (
+                                              COALESCE(a.affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[:ip::text])
+                                           OR COALESCE(a.raw_event->>'src_ip', '') = :ip
+                                          ))
+                                       OR (:usr::text IS NOT NULL AND (
+                                              COALESCE(a.affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[:usr::text])
+                                           OR COALESCE(a.raw_event->>'username', '') = :usr
+                                          ))
+                                    )
+                           )
+                         ORDER BY c.opened_at ASC
+                         LIMIT 1
+                        """
+                    ).bindparams(
+                        tid=tenant_id,
+                        since=since,
+                        host=str(camp_host) if camp_host else None,
+                        ip=str(camp_ip) if camp_ip else None,
+                        usr=str(camp_user) if camp_user else None,
+                    )
+                )
+            ).fetchone()
         created_new = existing is None
         if existing is not None:
             case_id = existing[0]
@@ -545,7 +635,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     description=description,
                     severity=severity,
                     alert_ids=[str(x) for x in sibling_ids],
-                    tags=json.dumps({"agentic-promoted": True, "reportable": True, "source": "backfill"}),
+                    tags=json.dumps(tags),
                     now=now,
                 )
             )

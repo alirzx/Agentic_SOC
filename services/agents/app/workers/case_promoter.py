@@ -1,7 +1,9 @@
 """Promote escalated alerts into ``aisoc_cases`` with linked siblings + tasks.
 
 Closes the agentic funnel gap after auto-triage: true_positive / high-severity
-needs_review alerts become Cases, related alerts (shared host/IP) are linked,
+needs_review alerts become Cases. Cases are **attack campaigns** (shared
+host/IP/user + kill-chain theme such as C2), not buckets of identical rule
+titles. Related alerts on those entities are linked (up to the sibling cap),
 false-positive tags are applied on auto-close, and Case tasks carry concrete
 investigation steps (including Splunk SPL pivots when src/dst IPs exist).
 
@@ -34,6 +36,13 @@ from app.funnel.stages import (
 )
 from app.investigator import ledger as ledger_module
 from app.models.state import InvestigationState
+from app.workers.campaign_case import (
+    campaign_case_title,
+    campaign_entities,
+    campaign_tags,
+    infer_attack_theme,
+    primary_campaign_key,
+)
 
 logger = structlog.get_logger()
 
@@ -41,6 +50,7 @@ _TAG_FP = "false_positive"
 _TAG_PROMOTED = "agentic-promoted"
 _TAG_REPORTABLE = "reportable"
 _LOOKBACK_HOURS = int(os.getenv("AISOC_AGENT_CASE_LINK_LOOKBACK_HOURS", "48"))
+_SIBLING_CAP = int(os.getenv("AISOC_AGENT_CASE_SIBLING_CAP", "100"))
 _SEVERITY_FLOOR = {
     s.strip().lower()
     for s in os.getenv("AISOC_AGENT_CASE_SEVERITIES", "medium,high,critical").split(",")
@@ -293,20 +303,36 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
     if pool is None:
         return None
 
-    title = str(alert.get("title") or state.alert_summary or "Agentic SOC case")[:500]
+    alert_title = str(alert.get("title") or state.alert_summary or "alert")[:500]
     mitre = alert.get("mitre_techniques") or raw.get("mitre_techniques") or []
     if not isinstance(mitre, list):
         mitre = []
+    mitre_tactics = alert.get("mitre_tactics") or raw.get("mitre_tactics") or []
+    if not isinstance(mitre_tactics, list):
+        mitre_tactics = []
+    entities = campaign_entities(alert, raw)
+    theme = infer_attack_theme(
+        title=alert_title,
+        mitre_tactics=mitre_tactics,
+        mitre_techniques=mitre,
+        raw_alert=raw,
+    )
+    camp_key = primary_campaign_key(theme, entities)
+    title = campaign_case_title(theme, entities)
     findings_blob = "\n".join(f"- {f}" for f in (state.findings or [])[:12])
+    entity_bits = ", ".join(f"{k}:{v}" for k, v in entities[:6]) or "(no strong entity)"
     description = (
-        f"Auto-created by Agentic SOC funnel.\n"
+        f"Auto-created by Agentic SOC funnel as an attack-campaign case.\n"
+        f"Theme: {theme}\n"
+        f"Entities: {entity_bits}\n"
         f"Disposition: {verdict} (confidence={float(state.confidence or 0.0):.2f})\n"
-        f"Severity: {severity}\n\n"
-        f"Summary: {state.alert_summary or title}\n\n"
+        f"Severity: {severity}\n"
+        f"Seed alert: {alert_title}\n\n"
+        f"Summary: {state.alert_summary or alert_title}\n\n"
         f"Investigation notes:\n{findings_blob or '- (pending enrichment)'}\n"
     )[:8000]
 
-    tasks = _build_tasks(state, alert={**raw, **alert, "title": title})
+    tasks = _build_tasks(state, alert={**raw, **alert, "title": alert_title})
     now = datetime.now(UTC)
     since = now - timedelta(hours=_LOOKBACK_HOURS)
 
@@ -398,9 +424,11 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                         )
                         return str(linked_case)
 
-                # Related alerts: shared host or IP in lookback, not auto-closed FP.
-                host = alert.get("hostname") or raw.get("hostname")
-                src = alert.get("src_ip") or raw.get("src_ip")
+                # Related alerts: shared campaign entities (host / IP / user) —
+                # never group solely by identical rule title.
+                host = next((v for k, v in entities if k == "host"), None)
+                src = next((v for k, v in entities if k == "ip"), None)
+                user = next((v for k, v in entities if k == "user"), None)
                 related_rows = await conn.fetch(
                     """
                     SELECT id FROM alerts
@@ -413,60 +441,97 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                              ($4::text IS NOT NULL AND (
                                  COALESCE(affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[$4::text])
                               OR COALESCE(entities, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type','host','value',$4::text))
+                              OR COALESCE(raw_event->>'hostname', '') = $4
+                              OR COALESCE(raw_event->>'host', '') = $4
+                              OR COALESCE(raw_event->>'dvc', '') = $4
                              ))
                           OR ($5::text IS NOT NULL AND (
                                  COALESCE(affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[$5::text])
                               OR COALESCE(iocs, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type','ip','value',$5::text))
+                              OR COALESCE(raw_event->>'src_ip', '') = $5
+                              OR COALESCE(raw_event->>'src', '') = $5
+                             ))
+                          OR ($6::text IS NOT NULL AND (
+                                 COALESCE(affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[$6::text])
+                              OR COALESCE(entities, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type','user','value',$6::text))
+                              OR COALESCE(raw_event->>'username', '') = $6
+                              OR COALESCE(raw_event->>'user', '') = $6
                              ))
                        )
                      ORDER BY created_at DESC
-                     LIMIT 25
+                     LIMIT $7
                     """,
                     state.tenant_id,
                     since,
                     alert_uuid,
                     str(host) if host else None,
                     str(src) if src else None,
+                    str(user) if user else None,
+                    max(1, _SIBLING_CAP),
                 )
-                # Fallback if hostname/src columns differ — match title prefix rules
-                if not related_rows and title:
-                    related_rows = await conn.fetch(
+
+                linked_ids = [alert_uuid] + [r["id"] for r in related_rows]
+                # Reuse an open campaign case (theme + entity key), not same title.
+                existing_case = None
+                if camp_key:
+                    existing_case = await conn.fetchval(
                         """
-                        SELECT id FROM alerts
+                        SELECT id FROM aisoc_cases
                          WHERE tenant_id = $1
-                           AND created_at >= $2
-                           AND id <> $3
-                           AND case_id IS NULL
-                           AND COALESCE(disposition, '') NOT IN ('false_positive', 'benign', 'benign_true_positive')
-                           AND left(title, 40) = left($4, 40)
-                         ORDER BY created_at DESC
-                         LIMIT 15
+                           AND status NOT IN ('resolved', 'closed')
+                           AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                           AND opened_at >= $2
+                           AND tags->>'campaign_key' = $3
+                         ORDER BY opened_at ASC
+                         LIMIT 1
                         """,
                         state.tenant_id,
                         since,
-                        alert_uuid,
-                        title,
+                        camp_key,
                     )
-
-                linked_ids = [alert_uuid] + [r["id"] for r in related_rows]
-                # Reuse an open agentic case with the same title instead of
-                # minting near-identical duplicates for every ESCU firing.
-                existing_case = await conn.fetchval(
-                    """
-                    SELECT id FROM aisoc_cases
-                     WHERE tenant_id = $1
-                       AND title = $2
-                       AND status NOT IN ('resolved', 'closed')
-                       AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
-                     ORDER BY opened_at ASC
-                     LIMIT 1
-                    """,
-                    state.tenant_id,
-                    title,
-                )
+                if existing_case is None and (host or src or user):
+                    # Same entities already cased under any open agentic campaign.
+                    existing_case = await conn.fetchval(
+                        """
+                        SELECT c.id FROM aisoc_cases c
+                         WHERE c.tenant_id = $1
+                           AND c.status NOT IN ('resolved', 'closed')
+                           AND c.created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                           AND c.opened_at >= $2
+                           AND c.tags->>'case_model' = 'attack_campaign'
+                           AND EXISTS (
+                                 SELECT 1 FROM alerts a
+                                  WHERE a.case_id = c.id
+                                    AND a.tenant_id = $1
+                                    AND (
+                                          ($3::text IS NOT NULL AND (
+                                              COALESCE(a.affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[$3::text])
+                                           OR COALESCE(a.raw_event->>'hostname', '') = $3
+                                           OR COALESCE(a.raw_event->>'dvc', '') = $3
+                                          ))
+                                       OR ($4::text IS NOT NULL AND (
+                                              COALESCE(a.affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[$4::text])
+                                           OR COALESCE(a.raw_event->>'src_ip', '') = $4
+                                           OR COALESCE(a.raw_event->>'src', '') = $4
+                                          ))
+                                       OR ($5::text IS NOT NULL AND (
+                                              COALESCE(a.affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[$5::text])
+                                           OR COALESCE(a.raw_event->>'username', '') = $5
+                                          ))
+                                    )
+                           )
+                         ORDER BY c.opened_at ASC
+                         LIMIT 1
+                        """,
+                        state.tenant_id,
+                        since,
+                        str(host) if host else None,
+                        str(src) if src else None,
+                        str(user) if user else None,
+                    )
                 created_new = existing_case is None
                 case_id = existing_case or uuid.uuid4()
-                tags = {_TAG_PROMOTED: True, _TAG_REPORTABLE: True, "source": "agentic_funnel"}
+                tags = campaign_tags(theme=theme, campaign_key=camp_key, source="agentic_funnel")
                 if created_new:
                     await conn.execute(
                         """

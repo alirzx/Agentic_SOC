@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cases group attack campaigns, not identical rule titles.** Auto-case and
+  funnel backfill now open/reuse cases by shared host/IP/user + kill-chain
+  theme (e.g. C2, lateral movement) with titles like “Suspected C2 campaign
+  involving HOST”, linking up to 100 related alerts — not `left(title,40)`
+  same-rule buckets.
 - **Splunk Sync re-counted overlapping events.** Inclusive `earliest_time`
   plus string `_time` mismatches re-pushed already-ingested notables, so
   Events Ingested grew on every poll. Checkpoint now keeps a rolling `seen`
