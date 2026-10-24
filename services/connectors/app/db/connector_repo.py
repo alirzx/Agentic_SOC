@@ -235,6 +235,9 @@ async def record_poll_success(
         "last_sync": now,
         "last_health_check": now,
         "health_status": "healthy",
+        # A successful poll clears the cumulative error badge so Sync / UI
+        # stop showing stale "Error · Poll errors N" after recovery.
+        "error_count": 0,
         "events_ingested": connectors_table.c.events_ingested + events_added,
         "events_dropped": connectors_table.c.events_dropped + events_dropped,
         "updated_at": now,

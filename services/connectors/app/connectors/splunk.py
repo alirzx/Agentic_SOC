@@ -10,7 +10,8 @@ import asyncio
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -34,6 +35,10 @@ _JOB_POLL_INTERVAL_S = 2.0
 # Inclusive Splunk earliest_time re-returns the watermark row; keep a rolling
 # set of accepted external ids so overlapping polls never re-count as ingested.
 _CHECKPOINT_SEEN_CAP = 5_000
+# After a long outage, resuming from the raw checkpoint timestamp can ask
+# Splunk for days of notables in one job → timeout → unhealthy forever.
+# Cap each poll's catch-up window; ``seen`` still dedupes overlap.
+_MAX_CATCHUP_SECONDS = int(os.getenv("AISOC_SPLUNK_MAX_CATCHUP_SECONDS", str(6 * 3600)))
 _SEVERITY_BY_URGENCY = {
     "critical": "critical",
     "high": "high",
@@ -505,19 +510,22 @@ class SplunkConnector(BaseConnector):
         """SPL earliest_time for this poll.
 
         * No checkpoint → configured ``earliest_time`` (default ``-90d@d``).
-        * With checkpoint → resume from the stored event timestamp so a long
-          outage or a historical notable dump is not clipped to one poll
-          cadence (the old ``-{poll_interval+120}s`` window dropped anything
-          older than ~32 minutes once a checkpoint existed).
+        * With checkpoint → resume from the stored event timestamp, but never
+          open a window larger than ``_MAX_CATCHUP_SECONDS`` in one poll
+          (avoids Splunk job timeouts that leave the connector unhealthy).
         * Checkpoint without a parseable time → cadence lookback as fallback.
         """
         if not self._checkpoint:
             return self._earliest_time
         cp_time = str(self._checkpoint.get("time") or "").strip()
-        if cp_time:
-            return cp_time
-        lookback = max(int(since_seconds), 60) + 120
-        return f"-{lookback}s"
+        if not cp_time:
+            lookback = max(int(since_seconds), 60) + 120
+            return f"-{lookback}s"
+        cp_ts = _time_sort_key(cp_time)
+        floor = datetime.now(timezone.utc) - timedelta(seconds=max(300, _MAX_CATCHUP_SECONDS))
+        if cp_ts is not None and cp_ts < floor.timestamp():
+            return floor.strftime("%Y-%m-%dT%H:%M:%S.000+00:00")
+        return cp_time
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         # First poll / no checkpoint → connector earliest_time (default 90d).
@@ -630,7 +638,9 @@ class SplunkConnector(BaseConnector):
             if state in ("DONE", "FAILED", "PAUSED"):
                 return state
             await asyncio.sleep(_JOB_POLL_INTERVAL_S)
-        return "TIMED_OUT"
+        # Surface timeout to the scheduler so the poll is recorded as a failure
+        # instead of shipping a silent empty/partial result and looking "synced".
+        raise TimeoutError(f"splunk search job {sid} did not finish within poll budget")
 
     async def _collect_results(self, client: httpx.AsyncClient, sid: str) -> list[dict[str, Any]]:
         """Page through every result (#529) — no more silent ``head 100`` cap."""

@@ -67,10 +67,31 @@ def test_custom_search_is_never_silently_replaced():
 def test_poll_earliest_uses_checkpoint_time_when_present():
     c = _conn(earliest_time="-90d@d")
     assert c._poll_earliest(1800) == "-90d@d"
-    c.set_checkpoint({"time": "2026-07-01T12:48:35.000+03:30", "id": "abc"})
-    assert c._poll_earliest(1800) == "2026-07-01T12:48:35.000+03:30"
+    # Recent checkpoint → exact resume time.
+    from datetime import datetime, timedelta, timezone
+
+    recent = (datetime.now(timezone.utc) - timedelta(minutes=10)).strftime(
+        "%Y-%m-%dT%H:%M:%S.000+00:00"
+    )
+    c.set_checkpoint({"time": recent, "id": "abc"})
+    assert c._poll_earliest(1800) == recent
     c.set_checkpoint({"time": "", "id": "abc"})
     assert c._poll_earliest(1800) == "-1920s"
+
+
+def test_poll_earliest_caps_stale_checkpoint_catchup():
+    """Ancient checkpoint must not open a multi-day Splunk window (timeout → Error)."""
+    from datetime import datetime, timedelta, timezone
+
+    c = _conn(earliest_time="-90d@d")
+    ancient = (datetime.now(timezone.utc) - timedelta(days=3)).strftime(
+        "%Y-%m-%dT%H:%M:%S.000+00:00"
+    )
+    c.set_checkpoint({"time": ancient, "id": "old"})
+    earliest = c._poll_earliest(1800)
+    assert earliest != ancient
+    # Relative form is not used — absolute floor near "now - max catchup".
+    assert earliest.endswith("+00:00") or earliest.endswith("Z")
 
 
 # --------------------------------------------------------------------------
@@ -274,8 +295,15 @@ async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
 @respx.mock
 @pytest.mark.asyncio
 async def test_fetch_alerts_with_checkpoint_resumes_from_checkpoint_time():
+    from datetime import datetime, timedelta, timezone
+    from urllib.parse import unquote_plus
+
     c = _conn(saved_search="")
-    c.set_checkpoint({"time": "2026-07-01T12:48:35.000+03:30", "id": "old"})
+    # Within catch-up cap so earliest_time stays the checkpoint (not floor).
+    cp_time = (datetime.now(timezone.utc) - timedelta(minutes=15)).strftime(
+        "%Y-%m-%dT%H:%M:%S.000+00:00"
+    )
+    c.set_checkpoint({"time": cp_time, "id": "old"})
     jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
         return_value=httpx.Response(201, json={"sid": "SID-CP"})
     )
@@ -285,7 +313,9 @@ async def test_fetch_alerts_with_checkpoint_resumes_from_checkpoint_time():
             json={
                 "results": [
                     {
-                        "_time": "2026-09-28T10:00:00.000+00:00",
+                        "_time": (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime(
+                            "%Y-%m-%dT%H:%M:%S.000+00:00"
+                        ),
                         "notable_id": "new-1",
                         "search_name": "Fresh Notable",
                         "severity": "high",
@@ -298,8 +328,8 @@ async def test_fetch_alerts_with_checkpoint_resumes_from_checkpoint_time():
         return_value=_done_status()
     )
     out = await c.fetch_alerts(since_seconds=1800)
-    body = jobs.calls[0].request.content.decode()
-    assert "2026-07-01T12%3A48%3A35.000%2B03%3A30" in body or "2026-07-01T12:48:35" in body
+    body = unquote_plus(jobs.calls[0].request.content.decode())
+    assert cp_time in body
     assert "-1920s" not in body
     assert "exec_mode=oneshot" not in body
     assert len(out) == 1

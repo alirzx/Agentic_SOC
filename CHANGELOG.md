@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Splunk connector stuck Error after long outage.** Resuming from an old
+  checkpoint opened a multi-day Splunk search that timed out every poll
+  (`Poll errors` climbed, Last sync went stale). Catch-up is capped per poll,
+  timed-out jobs fail loudly, and successful polls reset `error_count`.
 - **Cases group attack campaigns, not identical rule titles.** Auto-case and
   funnel backfill now open/reuse cases by shared host/IP/user + kill-chain
   theme (e.g. C2, lateral movement) with titles like “Suspected C2 campaign
