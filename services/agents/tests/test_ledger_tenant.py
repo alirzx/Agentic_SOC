@@ -17,13 +17,14 @@ from app.investigator.ledger import _CANONICAL_TENANT_ID, _resolve_tenant_id
 class _FakeConn:
     """Minimal asyncpg-connection stub for the resolver's three queries."""
 
-    def __init__(self, *, by_slug=None, canonical_exists=False, all_ids=None):
+    def __init__(self, *, by_slug=None, by_name=None, canonical_exists=False, all_ids=None):
         self._by_slug = by_slug or {}
+        self._by_name = by_name or {}
         self._canonical_exists = canonical_exists
         self._all_ids = all_ids or []
 
     async def fetchrow(self, sql: str, *args):
-        if "slug = $1 OR name = $1" in sql:
+        if "slug = $1" in sql:
             tid = self._by_slug.get(args[0])
             return {"id": tid} if tid is not None else None
         if "WHERE id = $1" in sql:
@@ -31,6 +32,8 @@ class _FakeConn:
         return None
 
     async def fetch(self, sql: str, *args):
+        if "name = $1" in sql:
+            return [{"id": i} for i in self._by_name.get(args[0], [])[:2]]
         if "LIMIT 2" in sql:
             return [{"id": i} for i in self._all_ids[:2]]
         return []

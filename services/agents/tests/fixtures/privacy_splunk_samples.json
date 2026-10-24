@@ -1,0 +1,83 @@
+{
+  "password_spray": {
+    "src": "B_309",
+    "host": "collector-01.synthetic.test",
+    "src_endpoint": {
+      "ip": "B_309"
+    },
+    "message": "Synthetic password spray analytic",
+    "severity": "medium",
+    "class_uid": 2001,
+    "category_uid": 2,
+    "activity_id": 1,
+    "splunk_notable": {
+      "src": "B_309",
+      "orig_rule_title": "The source [B_309] attempted to access many distinct users.",
+      "annotations_mitre_attack": "T1110.003"
+    },
+    "src_ip": "B_309",
+    "event_id": "evt-synthetic-001",
+    "notable_id": "notable-synthetic-001",
+    "source_event_id": "source-event-synthetic-001",
+    "connector_id": "connector-synthetic-001",
+    "source_connector_id": "source-connector-synthetic-001",
+    "finding": {
+      "uid": "finding-synthetic-001"
+    }
+  },
+  "registry_host": {
+    "dest": "endpoint01.corp.synthetic.test",
+    "host": "collector-01.synthetic.test",
+    "hostname": "endpoint01.corp.synthetic.test",
+    "user": "soc_analyst",
+    "device": {
+      "name": "endpoint01.corp.synthetic.test"
+    },
+    "splunk_notable": {
+      "dest": "endpoint01.corp.synthetic.test",
+      "user": "soc_analyst",
+      "entity": "endpoint01.corp.synthetic.test",
+      "entity_type": "system",
+      "risk_object": "endpoint01.corp.synthetic.test",
+      "normalized_risk_object": "endpoint01.corp.synthetic.test",
+      "orig_rule_title": "Registry modification detected on endpoint01.corp.synthetic.test",
+      "contributing_events_search": "| savedsearch \"Synthetic Registry Rule\" | search dest=\"endpoint01.corp.synthetic.test\" user=\"soc_analyst\""
+    },
+    "title": "Registry modification on endpoint01.corp.synthetic.test",
+    "event_id": "evt-synthetic-002",
+    "notable_id": "notable-synthetic-002",
+    "source_event_id": "source-event-synthetic-002",
+    "connector_id": "connector-synthetic-002",
+    "source_connector_id": "source-connector-synthetic-002",
+    "finding": {
+      "uid": "finding-synthetic-002"
+    },
+    "session_token": "synthetic-secret-never-send"
+  },
+  "firewall_placeholder": {
+    "dest": "noc-pc.corp.synthetic.test",
+    "host": "collector-02.synthetic.test",
+    "user": "unknown",
+    "device": {
+      "name": "noc-pc.corp.synthetic.test"
+    },
+    "splunk_notable": {
+      "dest": "noc-pc.corp.synthetic.test",
+      "user": "unknown",
+      "entity": "unknown",
+      "entity_type": "user",
+      "risk_object": "unknown",
+      "normalized_risk_object": "unknown",
+      "orig_rule_title": "Suspicious firewall modification on endpoint noc-pc.corp.synthetic.test by user unknown.",
+      "contributing_events_search": "| savedsearch \"Synthetic Firewall Rule\" | search user=\"unknown\""
+    },
+    "event_id": "evt-synthetic-003",
+    "notable_id": "notable-synthetic-003",
+    "source_event_id": "source-event-synthetic-003",
+    "connector_id": "connector-synthetic-003",
+    "source_connector_id": "source-connector-synthetic-003",
+    "finding": {
+      "uid": "finding-synthetic-003"
+    }
+  }
+}

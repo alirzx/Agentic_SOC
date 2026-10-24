@@ -38,7 +38,15 @@ import structlog
 from langchain_core.messages import AIMessage
 
 from app.core.cost_telemetry import record_llm_call
+from app.llm.human_trace import (
+    INTERNAL_INPUT,
+    LOCAL_RESPONSE,
+    PROVIDER_INPUT,
+    PROVIDER_RESPONSE,
+    emit_human_trace,
+)
 from app.llm.response_cache import ResponseCache
+from app.privacy.context import PrivacyConfigurationError, current_privacy_gateway
 
 logger = structlog.get_logger()
 
@@ -54,6 +62,31 @@ def _model_name(llm: Any) -> str:
     return str(getattr(llm, "model", None) or getattr(llm, "model_name", None) or "")
 
 
+def _trace(
+    stage: str,
+    payload: Any,
+    *,
+    gateway: Any,
+    model: str,
+    path: str,
+    provider_called: bool | None = None,
+    cache_hit: bool = False,
+    chunk_index: int | None = None,
+) -> None:
+    emit_human_trace(
+        stage,
+        payload,
+        model=model,
+        privacy_enabled=gateway is not None,
+        tenant_id=getattr(gateway, "tenant_id", None),
+        path=path,
+        projection_applied=gateway is not None and stage in {PROVIDER_INPUT, PROVIDER_RESPONSE},
+        provider_called=provider_called,
+        cache_hit=cache_hit,
+        chunk_index=chunk_index,
+    )
+
+
 def _cache_parts(messages: list[Any]) -> tuple[str, str]:
     """Split messages into (system prompt, user input) for the cache key."""
     prompt_parts: list[str] = []
@@ -65,6 +98,17 @@ def _cache_parts(messages: list[Any]) -> tuple[str, str]:
         mtype = (getattr(m, "type", "") or m.__class__.__name__).lower()
         (prompt_parts if "system" in mtype else input_parts).append(content)
     return "\n".join(prompt_parts), "\n".join(input_parts)
+
+
+def _cache_safe(messages: list[Any]) -> bool:
+    """Tool turns need their full structured shape and are never content-cached."""
+    for message in messages:
+        if getattr(message, "tool_calls", None):
+            return False
+        role = str(getattr(message, "type", "") or (message.get("role") if isinstance(message, dict) else ""))
+        if role.lower() == "tool":
+            return False
+    return True
 
 
 AGENTS_LLM_CONTRACT_ENFORCED_ENV = "AISOC_AGENTS_LLM_CONTRACT_ENFORCED"
@@ -335,20 +379,46 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
     enforced. Raises :class:`LLMContractViolation` on contract breach.
     """
     materialised = list(messages)
-    LLMInputContract.validate(materialised)
-
+    gateway = current_privacy_gateway()
     model = _model_name(llm)
-    prompt, user_input = _cache_parts(materialised)
+    _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="ainvoke")
+    provider_messages = gateway.project_messages(materialised) if gateway else materialised
+    _trace(PROVIDER_INPUT, provider_messages, gateway=gateway, model=model, path="ainvoke")
+    LLMInputContract.validate(provider_messages)
+
+    prompt, user_input = _cache_parts(provider_messages)
+    cache_namespace = gateway.cache_namespace if gateway else ""
     # Only cache plain calls (no per-call kwargs like temperature overrides).
-    use_cache = _RESPONSE_CACHE_ENABLED and bool(model) and bool(user_input) and not kwargs
+    use_cache = _RESPONSE_CACHE_ENABLED and bool(model) and bool(user_input) and not kwargs and _cache_safe(provider_messages)
     if use_cache:
-        cached = _RESPONSE_CACHE.lookup(model=model, prompt=prompt, user_input=user_input)
+        cached = _RESPONSE_CACHE.lookup(model=model, prompt=prompt, user_input=user_input, namespace=cache_namespace)
         if cached is not None:
-            return AIMessage(content=cached)
+            cached_message = AIMessage(content=cached)
+            _trace(
+                PROVIDER_RESPONSE,
+                cached_message,
+                gateway=gateway,
+                model=model,
+                path="cache",
+                provider_called=False,
+                cache_hit=True,
+            )
+            local_result = gateway.process_response(cached_message) if gateway else cached_message
+            _trace(
+                LOCAL_RESPONSE,
+                local_result,
+                gateway=gateway,
+                model=model,
+                path="cache",
+                provider_called=False,
+                cache_hit=True,
+            )
+            return local_result
 
     t0 = time.monotonic()
-    result = await llm.ainvoke(materialised, **kwargs)
+    result = await llm.ainvoke(provider_messages, **kwargs)
     latency_ms = (time.monotonic() - t0) * 1000.0
+    _trace(PROVIDER_RESPONSE, result, gateway=gateway, model=model, path="ainvoke", provider_called=True)
     # Record token/cost against the active CostTracker (no-op if none bound), so
     # the high-volume auto-triage path is finally visible in the cost dashboard.
     try:
@@ -359,16 +429,76 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
     if use_cache:
         content = getattr(result, "content", None)
         if isinstance(content, str) and content:
-            _RESPONSE_CACHE.store(model=model, prompt=prompt, user_input=user_input, response=content)
-    return result
+            _RESPONSE_CACHE.store(
+                model=model,
+                prompt=prompt,
+                user_input=user_input,
+                response=content,
+                namespace=cache_namespace,
+            )
+    local_result = gateway.process_response(result) if gateway else result
+    _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="ainvoke", provider_called=True)
+    return local_result
 
 
 async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
-    """Streaming variant of :func:`safe_ainvoke` that yields chunks."""
+    """Streaming variant with bounded whole-response restoration.
+
+    Protected streams are buffered and emitted as one combined chunk so an
+    alias split across provider chunks can never be partially restored.
+    """
     materialised = list(messages)
-    LLMInputContract.validate(materialised)
-    async for chunk in llm.astream(materialised, **kwargs):
-        yield chunk
+    gateway = current_privacy_gateway()
+    model = _model_name(llm)
+    _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="astream")
+    provider_messages = gateway.project_messages(materialised) if gateway else materialised
+    _trace(PROVIDER_INPUT, provider_messages, gateway=gateway, model=model, path="astream")
+    LLMInputContract.validate(provider_messages)
+    if gateway is None:
+        chunk_index = 0
+        async for chunk in llm.astream(provider_messages, **kwargs):
+            _trace(
+                PROVIDER_RESPONSE,
+                chunk,
+                gateway=gateway,
+                model=model,
+                path="astream",
+                provider_called=True,
+                chunk_index=chunk_index,
+            )
+            _trace(
+                LOCAL_RESPONSE,
+                chunk,
+                gateway=gateway,
+                model=model,
+                path="astream",
+                provider_called=True,
+                chunk_index=chunk_index,
+            )
+            yield chunk
+            chunk_index += 1
+        return
+
+    combined: Any | None = None
+    size = 0
+    max_chars = int(os.getenv("AISOC_LLM_PRIVACY_STREAM_MAX_CHARS", "1000000"))
+    async for chunk in llm.astream(provider_messages, **kwargs):
+        content = getattr(chunk, "content", chunk)
+        size += len(content) if isinstance(content, str) else len(str(content))
+        if size > max_chars:
+            raise PrivacyConfigurationError("protected LLM stream exceeded the bounded buffer limit")
+        if combined is None:
+            combined = chunk
+        else:
+            try:
+                combined = combined + chunk
+            except (TypeError, ValueError) as exc:
+                raise PrivacyConfigurationError("protected LLM stream returned unsupported chunk types") from exc
+    if combined is not None:
+        _trace(PROVIDER_RESPONSE, combined, gateway=gateway, model=model, path="astream", provider_called=True)
+        local_result = gateway.process_response(combined)
+        _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="astream", provider_called=True)
+        yield local_result
 
 
 def make_safe_chat_model(llm: Any) -> Any:
@@ -431,7 +561,13 @@ async def safe_chat_completions_request(
         raise ValueError("api_key is required for safe_chat_completions_request")
 
     materialised = list(messages)
-    LLMInputContract.validate(materialised)
+    gateway = current_privacy_gateway()
+    _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="http")
+    provider_messages = gateway.project_messages(materialised) if gateway else materialised
+    body: dict[str, Any] = {"model": model, "messages": provider_messages}
+    body.update(extra_body)
+    _trace(PROVIDER_INPUT, body, gateway=gateway, model=model, path="http")
+    LLMInputContract.validate(provider_messages)
 
     try:
         import httpx
@@ -445,10 +581,11 @@ async def safe_chat_completions_request(
     if extra_headers:
         headers.update(extra_headers)
 
-    body: dict[str, Any] = {"model": model, "messages": materialised}
-    body.update(extra_body)
-
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(url, headers=headers, json=body)
         resp.raise_for_status()
-        return resp.json()
+        payload = resp.json()
+        _trace(PROVIDER_RESPONSE, payload, gateway=gateway, model=model, path="http", provider_called=True)
+        local_result = gateway.process_response(payload) if gateway else payload
+        _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="http", provider_called=True)
+        return local_result

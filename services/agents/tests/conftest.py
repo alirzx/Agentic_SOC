@@ -11,6 +11,23 @@ from __future__ import annotations
 
 import pytest
 
+SYNTHETIC_PRIVACY_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+
+@pytest.fixture
+def privacy_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make a privacy-off test independent from the invoking shell."""
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "0")
+    monkeypatch.delenv("AISOC_PRIVACY_TOKEN_KEY", raising=False)
+
+
+@pytest.fixture
+def privacy_enabled(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Enable privacy with a synthetic key for a single test."""
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", SYNTHETIC_PRIVACY_KEY)
+    return SYNTHETIC_PRIVACY_KEY
+
 
 @pytest.fixture(autouse=True)
 def _reset_agent_singletons():

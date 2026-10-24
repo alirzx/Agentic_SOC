@@ -24,6 +24,8 @@ from app.llm.provider_errors import (
     TimeoutError,
 )
 
+pytestmark = pytest.mark.usefixtures("privacy_disabled")
+
 
 def test_normalize_openai_base_url_strips_chat_completions_suffix() -> None:
     assert normalize_openai_base_url("http://gw:4000/v1/chat/completions") == "http://gw:4000/v1"

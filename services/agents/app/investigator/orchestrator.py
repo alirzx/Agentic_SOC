@@ -11,6 +11,7 @@ and short-circuits to END.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -21,6 +22,8 @@ from langgraph.graph import END, START, StateGraph
 from opentelemetry import trace
 
 from app.core.cost_telemetry import CostTracker
+from app.privacy.context import PrivacyConfigurationError, privacy_context
+from app.privacy.tenant import resolve_tenant_for_llm
 
 from . import ledger
 from .bundle_prompt import prefetch_context_bundle_dict
@@ -148,6 +151,16 @@ class InvestigatorOrchestrator:
         WebSocket emitter that already has the id), otherwise a new one is
         generated here.
         """
+        privacy_tenant: str | None
+        try:
+            tenant_id = await resolve_tenant_for_llm(tenant_id, allow_default=True)
+            privacy_tenant = tenant_id
+        except PrivacyConfigurationError as exc:
+            # The agent nodes retain their deterministic fallbacks. Running
+            # without a bound session makes every safe LLM wrapper fail before
+            # provider egress while allowing those fallbacks to complete.
+            privacy_tenant = None
+            logger.warning("investigation.tenant_unresolved", error=str(exc))
         with _tracer.start_as_current_span("investigator.run") as span:
             span.set_attribute("case.id", case_id)
             span.set_attribute("tenant.id", tenant_id)
@@ -175,11 +188,13 @@ class InvestigatorOrchestrator:
             )
 
             logger.info("investigation.start", case_id=case_id, run_id=str(run_uuid))
-            async with CostTracker(run_id=str(run_uuid), tenant_id=tenant_id) as tracker:
-                result = await self._graph.ainvoke(initial.to_dict())
-                final = InvestigatorState.from_dict(result)
-                # Stash cost summary so the API/UI can surface it.
-                final.cost_summary = tracker.summary()
+            scope = privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
+            with scope:
+                async with CostTracker(run_id=str(run_uuid), tenant_id=tenant_id) as tracker:
+                    result = await self._graph.ainvoke(initial.to_dict())
+                    final = InvestigatorState.from_dict(result)
+                    # Stash cost summary so the API/UI can surface it.
+                    final.cost_summary = tracker.summary()
 
             # Persist the full audit log post-hoc (one shot, no streaming)
             if tenant_uuid is not None:
@@ -257,6 +272,13 @@ class InvestigatorOrchestrator:
         and only forward new entries. This same monotonic seq becomes the
         primary sort key in the persisted ledger.
         """
+        privacy_tenant: str | None
+        try:
+            tenant_id = await resolve_tenant_for_llm(tenant_id, allow_default=True)
+            privacy_tenant = tenant_id
+        except PrivacyConfigurationError as exc:
+            privacy_tenant = None
+            logger.warning("investigation.stream.tenant_unresolved", error=str(exc))
         bundle = await prefetch_context_bundle_dict(
             case_id=case_id,
             tenant_id=tenant_id,
@@ -286,44 +308,46 @@ class InvestigatorOrchestrator:
         tracker = CostTracker(run_id=str(run_uuid), tenant_id=tenant_id)
         try:
             await tracker.__aenter__()
-            async for event in self._graph.astream(initial.to_dict()):
-                # event is {node_name: state_dict}
-                for node_name, state_dict in event.items():
-                    state = InvestigatorState.from_dict(state_dict)
-                    last_state = state
-                    # Only emit audit-log entries we haven't seen yet
-                    new_entries = state.audit_log[emitted_count:]
-                    for offset, entry in enumerate(new_entries):
-                        seq = emitted_count + offset
-                        kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
-                        ts_str = entry.timestamp.isoformat() if hasattr(entry.timestamp, "isoformat") else str(entry.timestamp)
-                        # Persist before emitting so subscribers can deep-link
-                        if tenant_uuid is not None:
-                            await ledger.record_event(
-                                run_id=run_uuid,
-                                tenant_id=tenant_uuid,
-                                seq=seq,
-                                kind=kind_val,
-                                agent=entry.agent,
-                                summary=entry.summary,
-                                payload=entry.metadata,
-                                input_hash=entry.input_hash,
-                                output_hash=entry.output_hash,
-                                duration_ms=int(entry.duration_ms),
-                                timestamp=entry.timestamp,
-                            )
-                        yield {
-                            "type": "step",
-                            "kind": kind_val,
-                            "agent": entry.agent,
-                            "summary": entry.summary,
-                            "node": node_name,
-                            "case_id": case_id,
-                            "run_id": str(run_uuid),
-                            "seq": seq,
-                            "ts": ts_str,
-                        }
-                    emitted_count = len(state.audit_log)
+            scope = privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
+            with scope:
+                async for event in self._graph.astream(initial.to_dict()):
+                    # event is {node_name: state_dict}
+                    for node_name, state_dict in event.items():
+                        state = InvestigatorState.from_dict(state_dict)
+                        last_state = state
+                        # Only emit audit-log entries we haven't seen yet
+                        new_entries = state.audit_log[emitted_count:]
+                        for offset, entry in enumerate(new_entries):
+                            seq = emitted_count + offset
+                            kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
+                            ts_str = entry.timestamp.isoformat() if hasattr(entry.timestamp, "isoformat") else str(entry.timestamp)
+                            # Persist before emitting so subscribers can deep-link
+                            if tenant_uuid is not None:
+                                await ledger.record_event(
+                                    run_id=run_uuid,
+                                    tenant_id=tenant_uuid,
+                                    seq=seq,
+                                    kind=kind_val,
+                                    agent=entry.agent,
+                                    summary=entry.summary,
+                                    payload=entry.metadata,
+                                    input_hash=entry.input_hash,
+                                    output_hash=entry.output_hash,
+                                    duration_ms=int(entry.duration_ms),
+                                    timestamp=entry.timestamp,
+                                )
+                            yield {
+                                "type": "step",
+                                "kind": kind_val,
+                                "agent": entry.agent,
+                                "summary": entry.summary,
+                                "node": node_name,
+                                "case_id": case_id,
+                                "run_id": str(run_uuid),
+                                "seq": seq,
+                                "ts": ts_str,
+                            }
+                        emitted_count = len(state.audit_log)
 
             # Capture cost summary before emitting done so the UI sees it.
             cost_summary = tracker.summary()

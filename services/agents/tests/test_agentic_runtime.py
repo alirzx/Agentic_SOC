@@ -75,7 +75,8 @@ async def test_registry_rejects_unknown_agent() -> None:
     registry = build_agent_registry()
     with pytest.raises(UnknownAgentError):
         registry.get("swarm")
-    assert "triage:v1.0" in registry.names()
+    assert "triage:v2.0" in registry.names()
+    assert "investigation:v2.0" in registry.names()
     assert "decision:v1.0" in registry.names()
 
 
@@ -230,8 +231,10 @@ async def test_hypothesis_can_be_rejected() -> None:
 @pytest.mark.asyncio
 async def test_triage_adapter_wraps_existing_heuristic() -> None:
     pytest.importorskip("langchain_core")
-    agent = TriageRuntimeAgent()
-    result = await agent.execute(_context())
+    from app.runtime.catalog import build_tool_registry
+
+    agent = TriageRuntimeAgent(build_tool_registry())
+    result = await agent.execute(_context(metadata={"force_heuristic": True}))
     assert result.status == "success"
     assert result.next_tasks[0].agent == "investigation"
     assert result.evidence[0].provenance is not None

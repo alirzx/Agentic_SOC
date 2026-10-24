@@ -30,6 +30,7 @@ from app.agents.dispositions import NEEDS_REVIEW
 from app.core.cost_telemetry import current_cost_tracker
 from app.investigator import ledger as ledger_module
 from app.models.state import AgentStatus, InvestigationState
+from app.privacy.context import privacy_context
 
 logger = structlog.get_logger()
 
@@ -139,44 +140,24 @@ async def _run(
     budget_stopped = False
     try:
         async with asyncio.timeout(budget.max_seconds):
-            async for step in graph.astream(state_dict):
-                budget.sync_tokens_from_tracker()
-                if budget.stop_reason or not budget.can_step():
-                    budget_stopped = True
-                    break
-                if not isinstance(step, dict):
-                    continue
-                for node, out in step.items():
-                    budget.record_node_step()
-                    # Graph nodes that perform tool-like work count toward tool budget.
-                    if str(node) in {"enrichment", "investigation", "attack_path", "forensic"}:
-                        budget.record_tool_call()
-                    seq += 1
-                    if isinstance(out, dict):
-                        merged.update(out)
-                    if tenant_uuid is not None:
-                        await ledger_module.record_event(
-                            run_id=state.run_id,
-                            tenant_id=tenant_uuid,
-                            seq=seq,
-                            kind="graph_step",
-                            agent=str(node),
-                            summary=f"graph node '{node}' completed",
-                            payload={
-                                "node": str(node),
-                                "budget": {
-                                    "node_steps": budget.node_steps_used,
-                                    "tool_calls": budget.tool_calls_used,
-                                    "tokens": budget.tokens_used,
-                                },
-                            },
-                        )
-                    budget.sync_tokens_from_tracker()
-                    if budget.stop_reason:
-                        budget_stopped = True
-                        break
-                if budget_stopped:
-                    break
+            with privacy_context(tenant_ref):
+                async for step in graph.astream(state_dict):
+                    if not isinstance(step, dict):
+                        continue
+                    for node, out in step.items():
+                        seq += 1
+                        if isinstance(out, dict):
+                            merged.update(out)
+                        if tenant_uuid is not None:
+                            await ledger_module.record_event(
+                                run_id=state.run_id,
+                                tenant_id=tenant_uuid,
+                                seq=seq,
+                                kind="graph_step",
+                                agent=str(node),
+                                summary=f"graph node '{node}' completed",
+                                payload={"node": str(node)},
+                            )
     except TimeoutError:
         timed_out = True
         budget.stop_reason = budget.stop_reason or "wall_clock_timeout"

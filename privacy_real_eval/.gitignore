@@ -1,0 +1,10 @@
+runs/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.trace.jsonl
+*.tmp
+.env
+.env.*
+*.secrets

@@ -25,6 +25,8 @@ from app.llm.contract import (
     set_contract_enforcement,
 )
 
+pytestmark = pytest.mark.usefixtures("privacy_disabled")
+
 
 @pytest.fixture
 def contract_enforced():

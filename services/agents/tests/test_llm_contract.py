@@ -19,6 +19,8 @@ from app.llm.contract import (
 )
 from app.prompt_serialization import summarize_structure_for_llm
 
+pytestmark = pytest.mark.usefixtures("privacy_disabled")
+
 
 @pytest.fixture
 def contract_enforced():

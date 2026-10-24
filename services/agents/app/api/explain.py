@@ -109,6 +109,7 @@ import json
 import os
 import re
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from typing import Any
 
 import structlog
@@ -117,6 +118,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.rate_limit import RateLimitDecision, TokenBucketLimiter
+from app.privacy.context import PrivacyConfigurationError, privacy_context, privacy_enabled
+from app.privacy.tenant import resolve_request_tenant, resolve_tenant_for_llm
 from app.security.llm_resolver import LlmConfig, resolve_llm_config
 
 logger = structlog.get_logger()
@@ -170,17 +173,17 @@ def _reset_explain_limiter() -> None:
     _explain_limiter = None
 
 
-def _rate_limit_key(req: ExplainRequest, request: Request | None) -> str:
+def _rate_limit_key(req: ExplainRequest, request: Request | None, trusted_tenant: str | None = None) -> str:
     """Compose the bucket key for a request.
 
-    Prefer the body-supplied tenant_id (fairness across analysts on
-    the same tenant), fall back to client IP (hygiene against
+    Prefer the authenticated tenant, then the body-supplied tenant_id for
+    legacy privacy-off rate-limit fairness, and finally client IP (hygiene against
     unauthenticated abuse). The agents service runs behind a reverse
     proxy in production, but ``request.client.host`` is good enough
     for in-process throttling — proxy spoofing only changes which
     bucket gets drained, never lets a caller bypass the bucket.
     """
-    tenant = (req.tenant_id or "").strip()
+    tenant = (trusted_tenant or req.tenant_id or "").strip()
     if tenant and tenant != "default":
         return f"tenant:{tenant}"
     ip = "unknown"
@@ -574,7 +577,7 @@ async def _llm_summary(
         return fallback
 
     try:
-        import httpx
+        from app.llm.contract import safe_chat_completions_request
 
         base = llm_config.base_url.rstrip("/")
         url = f"{base}/v1/chat/completions"
@@ -613,14 +616,15 @@ async def _llm_summary(
             },
         ]
 
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
-                url,
-                headers={"Authorization": f"Bearer {llm_config.api_key}"},
-                json={"model": model, "messages": messages, "max_tokens": 320},
-            )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
+        payload = await safe_chat_completions_request(
+            api_key=llm_config.api_key,
+            model=model,
+            messages=messages,
+            url=url,
+            timeout=20,
+            max_tokens=320,
+        )
+        return payload["choices"][0]["message"]["content"].strip()
 
     except Exception as exc:
         logger.warning("explain.llm_error", error=str(exc))
@@ -636,7 +640,11 @@ def _frame(obj: dict[str, Any]) -> bytes:
     return (json.dumps(obj) + "\n").encode()
 
 
-async def _stream_explanation(req: ExplainRequest, llm_config: LlmConfig) -> AsyncIterator[bytes]:
+async def _stream_explanation(
+    req: ExplainRequest,
+    llm_config: LlmConfig,
+    privacy_tenant_id: str | None = None,
+) -> AsyncIterator[bytes]:
     alert = req.alert or {}
     alert_id = req.alert_id or alert.get("id") or "unknown"
 
@@ -648,8 +656,14 @@ async def _stream_explanation(req: ExplainRequest, llm_config: LlmConfig) -> Asy
         fallback_summary = _build_summary(alert, mitre_ids)
         # Run the LLM call concurrently with the deterministic emissions
         # so the drawer paints fast even on a cold network.
-        summary_task = asyncio.create_task(_llm_summary(alert, mitre_cards, fallback_summary, llm_config))
+        async def _protected_summary() -> str:
+            try:
+                with privacy_context(privacy_tenant_id or ""):
+                    return await _llm_summary(alert, mitre_cards, fallback_summary, llm_config)
+            except PrivacyConfigurationError:
+                return fallback_summary
 
+        summary_task = asyncio.create_task(_protected_summary())
         yield _frame({"kind": "section", "id": "summary", "title": "What happened"})
         # Stream the summary word-by-word once it resolves.
         summary_text = await summary_task
@@ -701,10 +715,11 @@ async def explain(req: ExplainRequest, request: Request) -> StreamingResponse:
     throttle. The body is still NDJSON so an SSE/EventSource client
     that ignores status codes still gets a structured failure.
     """
+    trusted_tenant = resolve_request_tenant(request)
     limiter = _get_explain_limiter()
     decision: RateLimitDecision | None = None
     if limiter is not None:
-        key = _rate_limit_key(req, request)
+        key = _rate_limit_key(req, request, trusted_tenant)
         decision = await limiter.acquire(key)
         if not decision.allowed:
             logger.info(
@@ -735,7 +750,23 @@ async def explain(req: ExplainRequest, request: Request) -> StreamingResponse:
     # operators can see — via response headers — which knob took
     # effect (env / tenant / fallback). The resolver is async-safe and
     # already falls back to env-only if the database or vault is down.
-    llm_config = await resolve_llm_config(req.tenant_id)
+    privacy_tenant: str | None = None
+    if privacy_enabled():
+        try:
+            privacy_tenant = await resolve_tenant_for_llm(trusted_tenant)
+        except PrivacyConfigurationError:
+            privacy_tenant = None
+        resolver_tenant = privacy_tenant
+    else:
+        resolver_tenant = trusted_tenant or req.tenant_id
+    llm_config = await resolve_llm_config(resolver_tenant)
+    if privacy_enabled() and privacy_tenant is None and llm_config.allowed:
+        llm_config = replace(
+            llm_config,
+            allowed=False,
+            api_key=None,
+            reason="trusted tenant unavailable while LLM privacy is enabled",
+        )
 
     response_headers: dict[str, str] = {}
     if decision is not None:
@@ -744,7 +775,7 @@ async def explain(req: ExplainRequest, request: Request) -> StreamingResponse:
     response_headers["X-LLM-Allowed"] = "1" if llm_config.allowed else "0"
 
     return StreamingResponse(
-        _stream_explanation(req, llm_config),
+        _stream_explanation(req, llm_config, privacy_tenant),
         media_type="application/x-ndjson",
         headers=response_headers,
     )

@@ -61,6 +61,8 @@ from typing import Any
 import structlog
 
 from app.models.state import AgentStatus, InvestigationState
+from app.privacy.context import privacy_context
+from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm
 
 logger = structlog.get_logger()
 
@@ -635,6 +637,16 @@ class RouterOrchestrator:
         *,
         topology: str | None = None,
     ) -> tuple[InvestigationState, dict[str, Any]]:
+        """Execute the selected topology inside the state's tenant session."""
+        with privacy_context(str(state.tenant_id)):
+            return await self._run_bound(state, topology=topology)
+
+    async def _run_bound(
+        self,
+        state: InvestigationState,
+        *,
+        topology: str | None = None,
+    ) -> tuple[InvestigationState, dict[str, Any]]:
         """Execute the topology against ``state``.
 
         Args:
@@ -718,6 +730,17 @@ class RouterOrchestrator:
         return state, info
 
     async def stream(
+        self,
+        state: InvestigationState,
+        *,
+        topology: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Keep tenant privacy bound for the full async-generator lifetime."""
+        with privacy_context(str(state.tenant_id)):
+            async for event in self._stream_bound(state, topology=topology):
+                yield event
+
+    async def _stream_bound(
         self,
         state: InvestigationState,
         *,
@@ -1141,8 +1164,8 @@ class RouterOrchestrator:
         signature so the API endpoint can flip between the two orchestrators
         behind a feature flag without changing its call site. The adapter:
 
-        1. Coerces caller-supplied strings (``case_id``, ``tenant_id``) to
-           :class:`uuid.UUID` via :func:`_coerce_uuid` so the internal
+        1. Resolves ``tenant_id`` to the platform's canonical UUID and coerces
+           ``case_id`` via :func:`_coerce_uuid` so the internal
            :class:`InvestigationState` validates, then surfaces the
            **original** string identifiers back on every yielded event for the
            realtime stream consumers.
@@ -1162,7 +1185,9 @@ class RouterOrchestrator:
         # Original strings are preserved on every yielded event so /investigate
         # consumers can correlate against ledger rows and WebSocket sessions.
         incident_uuid = _coerce_uuid(case_id)
-        tenant_uuid = _coerce_uuid(tenant_id)
+        resolved_tenant = await resolve_tenant_for_llm(tenant_id, allow_default=True)
+        canonical_tenant = normalize_tenant_uuid(resolved_tenant)
+        tenant_uuid = uuid.UUID(canonical_tenant) if canonical_tenant is not None else _coerce_uuid(resolved_tenant)
         run_uuid = run_id if isinstance(run_id, uuid.UUID) else uuid.uuid4()
 
         state = InvestigationState(

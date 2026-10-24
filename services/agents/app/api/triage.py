@@ -41,6 +41,7 @@ from pydantic import BaseModel, Field
 
 from app.models.state import AgentStatus, InvestigationState
 from app.orchestrator import PARALLEL_TOPOLOGY_FLAG, RouterOrchestrator
+from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["triage"])
@@ -74,10 +75,10 @@ _router_orch = RouterOrchestrator()
 class TriageRequest(BaseModel):
     """Request body for ``POST /api/v1/cases/{case_id}/triage``.
 
-    ``tenant_id`` and ``incident_id`` may be supplied as raw UUID strings
-    or as arbitrary identifiers (e.g. ``"acme"``); non-UUID values are
-    coerced via UUID5 against the project namespace so callers don't
-    have to mint UUIDs upstream.
+    ``tenant_id`` and ``incident_id`` may be supplied as raw UUID strings or
+    as logical identifiers. With privacy enabled, tenant identifiers resolve
+    through the platform tenant table; UUID5 coercion remains only for the
+    privacy-off compatibility path and non-tenant incident identifiers.
     """
 
     alert_summary: str = ""
@@ -271,7 +272,12 @@ async def launch_triage(
     topology = _resolve_topology(body.topology)
 
     run_id = str(uuid4())
-    tenant_uuid = _coerce_uuid(body.tenant_id, fallback=body.tenant_id or "default")
+    resolved_tenant = await resolve_tenant_for_llm(body.tenant_id, allow_default=True)
+    canonical_tenant = normalize_tenant_uuid(resolved_tenant)
+    tenant_uuid = UUID(canonical_tenant) if canonical_tenant is not None else _coerce_uuid(
+        resolved_tenant,
+        fallback=resolved_tenant,
+    )
     incident_uuid = _coerce_uuid(body.incident_id, fallback=case_id)
 
     state = InvestigationState(
