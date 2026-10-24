@@ -27,6 +27,9 @@ class Connector(Base):
     events_ingested: Mapped[int] = mapped_column(default=0)
     events_dropped: Mapped[int] = mapped_column(default=0)
     error_count: Mapped[int] = mapped_column(default=0)
+    # Cumulative count of fused alerts the fusion sink failed to persist
+    # (network, schema mismatch, constraint violation, etc.).
+    fusion_persist_failed: Mapped[int] = mapped_column(default=0, nullable=False)
     # Schema-drift sentinel state (migration 026). NULL until the first
     # non-empty poll has populated a fingerprint baseline.
     schema_fingerprint: Mapped[str | None] = mapped_column(Text, nullable=True)

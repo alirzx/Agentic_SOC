@@ -19,10 +19,11 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.agents.dispositions import (
     AUTO_CLOSEABLE_DISPOSITIONS,
@@ -43,6 +44,36 @@ from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
 logger = structlog.get_logger()
 
 AUTO_CLOSE_THRESHOLD: float = float(os.getenv("AISOC_AUTO_CLOSE_THRESHOLD", "0.85"))
+
+_LLMVerdictLiteral = Literal[
+    "true_positive",
+    "benign_true_positive",
+    "false_positive",
+    "benign",
+    "needs_review",
+]
+
+
+class TriageVerdictSchema(BaseModel):
+    """Structured, validated auto-triage LLM output (no free-form prose as verdict)."""
+
+    verdict: _LLMVerdictLiteral
+    confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+    rationale: str = Field(default="No rationale provided by LLM.", max_length=4000)
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def _normalize_verdict(cls, value: object) -> str:
+        normalized = normalize_disposition(value, default=TRUE_POSITIVE)
+        if normalized not in LLM_VERDICTS:
+            return TRUE_POSITIVE
+        return normalized
+
+    @field_validator("rationale", mode="before")
+    @classmethod
+    def _coerce_rationale(cls, value: object) -> str:
+        text = str(value or "").strip()
+        return text or "No rationale provided by LLM."
 
 
 class AutoTriageError(RuntimeError):
@@ -175,7 +206,11 @@ def _build_alert_context(state: InvestigationState) -> str:
 
 
 def _parse_llm_response(text: str) -> dict[str, Any]:
-    """Extract the JSON verdict from the LLM response, tolerating markdown fences."""
+    """Extract and schema-validate the JSON verdict from the LLM response.
+
+    Malformed JSON or schema failures raise ``AutoTriageError`` so the worker
+    falls back to deterministic triage instead of inventing certainty.
+    """
     cleaned = text.strip()
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
@@ -188,26 +223,22 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
         start = cleaned.find("{")
         end = cleaned.rfind("}") + 1
         if start >= 0 and end > start:
-            data = json.loads(cleaned[start:end])
+            try:
+                data = json.loads(cleaned[start:end])
+            except json.JSONDecodeError as exc:
+                raise AutoTriageError(f"LLM verdict JSON invalid: {exc}") from exc
         else:
-            raise
+            raise AutoTriageError("LLM verdict contained no JSON object") from None
 
-    # Normalize to the canonical taxonomy (shared with the deterministic
-    # fallback). ``benign_true_positive`` is a first-class outcome; an
-    # unrecognised verdict fails safe to ``true_positive`` (never auto-closed).
-    verdict = normalize_disposition(data.get("verdict"), default=TRUE_POSITIVE)
-    if verdict not in LLM_VERDICTS:
-        verdict = TRUE_POSITIVE
-
-    confidence = float(data.get("confidence", 0.5))
-    confidence = max(0.0, min(1.0, confidence))
-
-    rationale = data.get("rationale", "No rationale provided by LLM.")
+    try:
+        parsed = TriageVerdictSchema.model_validate(data)
+    except ValidationError as exc:
+        raise AutoTriageError(f"LLM verdict schema invalid: {exc}") from exc
 
     return {
-        "verdict": verdict,
-        "confidence": confidence,
-        "rationale": str(rationale),
+        "verdict": parsed.verdict,
+        "confidence": parsed.confidence,
+        "rationale": parsed.rationale,
     }
 
 

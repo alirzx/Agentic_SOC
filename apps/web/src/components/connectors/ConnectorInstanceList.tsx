@@ -148,6 +148,8 @@ function ConnectorCard({
   const statusCfg = STATUS_CONFIG[connector.status] ?? STATUS_CONFIG.configuring;
   const alertCount = connector.alertCount ?? connector.alertsIngested ?? 0;
   const eventsDropped = connector.eventsDropped ?? 0;
+  const errorCount = connector.errorCount ?? 0;
+  const fusionPersistFailed = connector.fusionPersistFailed ?? 0;
   const driftAt = connector.lastSchemaDriftAt;
   const drift = connector.lastDriftDetails;
   const driftAdded = drift?.added?.length ?? 0;
@@ -293,8 +295,8 @@ function ConnectorCard({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <div className="bg-dark-20/60 rounded-lg p-2">
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="bg-dark-20/60 rounded-lg p-2 col-span-2">
           <p className="text-xs text-gray-500">Events ingested</p>
           <p className="text-sm font-medium text-gray-300">
             {alertCount.toLocaleString()}
@@ -304,6 +306,24 @@ function ConnectorCard({
           <p className="text-xs text-gray-500">Last sync</p>
           <p className="text-sm font-medium text-gray-300">
             {formatLastSync(connector.lastSync)}
+          </p>
+        </div>
+        <div className={`bg-dark-20/60 rounded-lg p-2${errorCount > 0 ? ' border border-red-500/20' : ''}`}>
+          <p className="text-xs text-gray-500">Poll errors</p>
+          <p className={`text-sm font-medium ${errorCount > 0 ? 'text-red-400' : 'text-gray-300'}`}>
+            {errorCount.toLocaleString()}
+          </p>
+        </div>
+        <div className={`bg-dark-20/60 rounded-lg p-2${fusionPersistFailed > 0 ? ' border border-orange-500/20' : ''}`}>
+          <p className="text-xs text-gray-500">Persist failed</p>
+          <p className={`text-sm font-medium ${fusionPersistFailed > 0 ? 'text-orange-400' : 'text-gray-300'}`}>
+            {fusionPersistFailed.toLocaleString()}
+          </p>
+        </div>
+        <div className={`bg-dark-20/60 rounded-lg p-2${eventsDropped > 0 ? ' border border-brand-500/20' : ''}`}>
+          <p className="text-xs text-gray-500">Dropped</p>
+          <p className={`text-sm font-medium ${eventsDropped > 0 ? 'text-brand-300' : 'text-gray-300'}`}>
+            {eventsDropped.toLocaleString()}
           </p>
         </div>
       </div>
@@ -336,12 +356,12 @@ function ConnectorCard({
         )}
         <button
           type="button"
-          disabled
-          title="Connector editing UI is planned for v1.1"
-          className="flex-1 text-xs bg-dark-20/40 text-gray-500 px-3 py-2 rounded-lg border border-[#333A47]/40 cursor-not-allowed select-none"
+          onClick={() => onConfigure?.(connector)}
+          disabled={testing || polling || !onConfigure}
+          title="Edit name, Custom SPL, and connection settings"
+          className="flex-1 text-xs bg-dark-20 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg transition-colors disabled:opacity-60"
         >
           Configure
-          <span className="ml-1.5 text-[10px] font-medium text-amber-400">v1.1</span>
         </button>
         {onDelete && (
           <button

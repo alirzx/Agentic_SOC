@@ -80,6 +80,41 @@ async def test_runner_budget_timeout_fails_safe_to_needs_review():
     assert any("budget" in f.lower() for f in result.findings)
 
 
+async def test_runner_node_step_budget_stops_early():
+    state = _state()
+    graph = _FakeGraph(
+        [
+            {"triage": {"verdict": "true_positive"}},
+            {"enrichment": {"findings": ["should-not-run"]}},
+            {"attack_path": {}},
+        ]
+    )
+    result = await _run(
+        graph,
+        state,
+        budget=InvestigationBudget(max_seconds=5, max_node_steps=1, max_tool_calls=8),
+        persist=False,
+        seq_start=0,
+    )
+    # TP verdict is preserved; later nodes must not run after step budget.
+    assert result.verdict == "true_positive"
+    assert "should-not-run" not in result.findings
+    assert any("budget limit" in f.lower() for f in result.findings)
+
+
+async def test_runner_does_not_keep_benign_after_budget_exhaustion():
+    state = _state()
+    graph = _FakeGraph([{"triage": {"verdict": "false_positive"}}, {"enrichment": {}}])
+    result = await _run(
+        graph,
+        state,
+        budget=InvestigationBudget(max_seconds=5, max_node_steps=1),
+        persist=False,
+        seq_start=0,
+    )
+    assert result.verdict == "needs_review"
+
+
 async def test_runner_merges_node_outputs_into_final_state(monkeypatch):
     async def _resolve(_ref):  # noqa: ANN001
         return None  # persist path disabled (no tenant) — pure merge test

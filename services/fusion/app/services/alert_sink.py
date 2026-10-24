@@ -80,8 +80,8 @@ INSERT INTO alerts (
     rule_id, rule_name, affected_hosts
 )
 SELECT
-    $1, $2, $3, $4, $5, 'new',
-    CASE $5
+    $1, $2, $3, $4, $5::text, 'new',
+    CASE $5::text
         WHEN 'critical' THEN 95
         WHEN 'high' THEN 75
         WHEN 'medium' THEN 50
@@ -245,10 +245,29 @@ class AlertSink:
                     from_tenant=str(alert.tenant_id),
                 )
                 return await self.persist(retried, retry_demo=False)
+            await self._bump_persist_failed(alert.connector_id)
             return PersistResult(PersistOutcome.FAILED, None)
         except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
             logger.error("alert_sink.persist_failed", error=str(exc))
+            await self._bump_persist_failed(alert.connector_id)
             return PersistResult(PersistOutcome.FAILED, None)
+
+    async def _bump_persist_failed(self, connector_id) -> None:
+        """Increment fusion_persist_failed on the connector row — fail-soft."""
+        if connector_id is None:
+            return
+        pool = await self._ensure_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE connectors SET fusion_persist_failed = fusion_persist_failed + 1,"
+                    " updated_at = NOW() WHERE id = $1",
+                    connector_id,
+                )
+        except Exception:  # noqa: BLE001 — counter update must never wedge the sink
+            pass
 
     async def lookup_dedup(self, tenant_id, fingerprint: str) -> str | None:
         """Return the existing alert id for this tenant+fingerprint, if any."""
@@ -263,3 +282,49 @@ class AlertSink:
             fingerprint,
         )
         return str(row["id"]) if row else None
+
+    async def touch_duplicate(
+        self,
+        tenant_id,
+        fingerprint: str,
+        *,
+        event_time=None,
+        original_id: str | None = None,
+    ) -> bool:
+        """Bump ``last_seen`` and ``occurrence_count`` on an existing alert group.
+
+        Preserves the original row and evidence; does not insert a new alert.
+        Fail-soft when the column is missing (pre-migration) or DB is down.
+        """
+        if not fingerprint:
+            return False
+        pool = await self._ensure_pool()
+        if pool is None:
+            return False
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    UPDATE alerts
+                       SET last_seen = GREATEST(
+                               COALESCE(last_seen, event_time, created_at),
+                               COALESCE($3::timestamptz, NOW())
+                           ),
+                           occurrence_count = COALESCE(occurrence_count, 1) + 1,
+                           updated_at = NOW()
+                     WHERE tenant_id = $1
+                       AND (
+                             dedup_hash = $2::text
+                          OR ($4::uuid IS NOT NULL AND id = $4::uuid)
+                       )
+                    RETURNING id
+                    """,
+                    tenant_id,
+                    fingerprint,
+                    event_time,
+                    UUID(original_id) if original_id else None,
+                )
+            return row is not None
+        except Exception as exc:  # noqa: BLE001 — pre-migration or transient
+            logger.debug("alert_sink.touch_duplicate_failed", error=str(exc))
+            return False

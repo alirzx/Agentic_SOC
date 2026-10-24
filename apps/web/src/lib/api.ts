@@ -860,9 +860,15 @@ function normalizeAlert(raw: unknown): Alert {
     confidenceLabel: (r.confidence_label ?? r.confidenceLabel) as
       | ConfidenceLabel
       | undefined,
-    confidenceScore:
-      pickNum('confidence_score', 'confidenceScore') ??
-      pickNum('confidence', 'confidence'),
+    // Fusion `confidence` is 0–100. Normalize any legacy 0–1 fraction so UI
+    // never does score*100 on an already-percent value (e.g. 70 → 7000%).
+    confidenceScore: (() => {
+      const raw =
+        pickNum('confidence_score', 'confidenceScore') ??
+        pickNum('confidence', 'confidence');
+      if (raw == null || Number.isNaN(raw)) return undefined;
+      return raw <= 1 ? raw * 100 : raw;
+    })(),
     confidenceRationale,
     ledgerRunId: pickStr('ledger_run_id', 'ledgerRunId'),
     disposition: (r.disposition ?? null) as Alert['disposition'],
@@ -1681,6 +1687,8 @@ export interface CasesResponse {
   total: number;
   page: number;
   pageSize: number;
+  /** Backend status → count (tenant-scoped). Optional for mock/legacy. */
+  statusTotals?: Record<string, number>;
 }
 
 // ─── WS-D2 — Per-case auto-summary artifact ─────────────────────────────────
@@ -1918,17 +1926,33 @@ export function normalizeCasesResponse(raw: unknown, filters: CaseFilters = {}):
   const r = (raw ?? {}) as Record<string, unknown>;
   const list = Array.isArray(r.cases)
     ? (r.cases as unknown[]).map(normalizeCase)
-    : [];
-  return {
-    cases: list,
-    total: typeof r.total === 'number' ? (r.total as number) : list.length,
-    page: typeof r.page === 'number' ? (r.page as number) : (filters.page ?? 1),
-    pageSize:
-      typeof r.pageSize === 'number'
+    : Array.isArray(r.items)
+      ? (r.items as unknown[]).map(normalizeCase)
+      : [];
+  const limit =
+    typeof r.limit === 'number'
+      ? (r.limit as number)
+      : typeof r.pageSize === 'number'
         ? (r.pageSize as number)
         : typeof r.page_size === 'number'
           ? (r.page_size as number)
-          : (filters.pageSize ?? list.length),
+          : (filters.pageSize ?? list.length);
+  const offset = typeof r.offset === 'number' ? (r.offset as number) : 0;
+  const page =
+    typeof r.page === 'number'
+      ? (r.page as number)
+      : limit > 0
+        ? Math.floor(offset / limit) + 1
+        : (filters.page ?? 1);
+  const statusRaw =
+    (r.status_totals as Record<string, number> | undefined) ??
+    (r.statusTotals as Record<string, number> | undefined);
+  return {
+    cases: list,
+    total: typeof r.total === 'number' ? (r.total as number) : list.length,
+    page,
+    pageSize: limit,
+    statusTotals: statusRaw && typeof statusRaw === 'object' ? statusRaw : undefined,
   };
 }
 
@@ -1938,8 +1962,11 @@ export const casesApi = {
     // querying "In Progress" in the console actually returns rows where the
     // backend stored "investigating".
     const params: Record<string, string> = {};
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 100;
     for (const [key, value] of Object.entries(filters)) {
       if (value === undefined || value === null || value === '') continue;
+      if (key === 'page' || key === 'pageSize' || key === 'search') continue;
       if (key === 'status' && typeof value === 'string' && value !== 'all') {
         params.status =
           UI_TO_BACKEND_STATUS[value as CaseStatus] ?? value;
@@ -1947,8 +1974,10 @@ export const casesApi = {
       }
       params[key] = String(value);
     }
+    params.limit = String(Math.min(Math.max(pageSize, 1), 500));
+    params.offset = String(Math.max(0, (page - 1) * pageSize));
     const raw = await request<unknown>('/api/v1/cases', { params });
-    return normalizeCasesResponse(raw, filters);
+    return normalizeCasesResponse(raw, { ...filters, page, pageSize });
   },
 
   get: async (id: string) => {
@@ -2649,6 +2678,10 @@ export interface Connector {
   };
   /** Cumulative count of events the pre-ingest filter dropped. */
   eventsDropped?: number;
+  /** Cumulative count of connector-side poll errors (network, auth, etc.). */
+  errorCount?: number;
+  /** Cumulative count of fused alerts the fusion sink failed to persist. */
+  fusionPersistFailed?: number;
   /**
    * Timestamp of the most recently *ingested* normalized event.
    *
@@ -2743,6 +2776,7 @@ interface BackendConnectorResponse {
   last_sync: string | null;
   events_ingested: number;
   error_count: number;
+  fusion_persist_failed?: number | null;
   tags: string[];
   created_at: string;
   updated_at: string;
@@ -2788,6 +2822,10 @@ export interface ConnectorHealthSummary {
   totalEventsIngested: number;
   /** Cumulative events dropped by pre-ingest filter rules. */
   totalEventsDropped: number;
+  /** Cumulative connector-side poll errors across all connectors. */
+  totalErrorCount: number;
+  /** Cumulative fusion-side persist failures across all connectors. */
+  totalFusionPersistFailed: number;
 }
 
 /**
@@ -2832,6 +2870,8 @@ function mapBackendConnector(row: BackendConnectorResponse): Connector {
     lastSchemaDriftAt: row.last_schema_drift_at ?? undefined,
     lastDriftDetails: row.last_drift_details ?? undefined,
     eventsDropped: row.events_dropped ?? 0,
+    errorCount: row.error_count,
+    fusionPersistFailed: row.fusion_persist_failed ?? 0,
     lastEventAt: row.last_event_at ?? undefined,
     lastEventKind: row.last_event_kind ?? undefined,
     freshness: row.freshness ?? undefined,
@@ -3037,6 +3077,8 @@ export const connectorsApi = {
       last_drift_at: string | null;
       total_events_ingested: number;
       total_events_dropped: number;
+      total_error_count: number;
+      total_fusion_persist_failed: number;
     }>('/api/v1/connectors/health');
     return {
       total: raw.total,
@@ -3048,6 +3090,8 @@ export const connectorsApi = {
       lastDriftAt: raw.last_drift_at ?? undefined,
       totalEventsIngested: raw.total_events_ingested,
       totalEventsDropped: raw.total_events_dropped,
+      totalErrorCount: raw.total_error_count,
+      totalFusionPersistFailed: raw.total_fusion_persist_failed,
     };
   },
 };

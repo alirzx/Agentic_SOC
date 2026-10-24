@@ -39,13 +39,16 @@ class Deduplicator:
 
         existing = await self._redis.get(key)
         if existing:
+            original_id = existing.decode() if isinstance(existing, bytes) else str(existing)
             logger.debug(
                 "Duplicate alert detected",
                 fingerprint=fingerprint,
-                original_id=existing.decode(),
+                original_id=original_id,
                 alert_id=str(alert.id),
             )
-            return True, existing.decode()
+            if self._sink is not None:
+                await self._safe_touch(alert, original_id)
+            return True, original_id
 
         if self._sink is not None:
             try:
@@ -55,18 +58,42 @@ class Deduplicator:
                 found = None
             if found:
                 await self._redis.set(key, found, ex=self._window)
+                await self._safe_touch(alert, found)
                 return True, found
 
         return False, None
 
-    async def register(self, alert: RawAlert) -> None:
-        """Register an alert fingerprint to suppress future duplicates."""
+    async def _safe_touch(self, alert: RawAlert, original_id: str) -> None:
+        """Best-effort last_seen / occurrence bump on the canonical row."""
+        if self._sink is None or not hasattr(self._sink, "touch_duplicate"):
+            return
+        try:
+            await self._sink.touch_duplicate(
+                alert.tenant_id,
+                alert.fingerprint(),
+                event_time=getattr(alert, "event_time", None),
+                original_id=original_id,
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the fuse path on metrics
+            logger.debug("dedup.touch_failed", error=str(exc), original_id=original_id)
+
+    async def register(self, alert: RawAlert) -> bool:
+        """Register an alert fingerprint. Returns True if this caller won the race.
+
+        Uses Redis ``SET NX`` so concurrent workers cannot both believe they
+        own a new fingerprint. The loser should treat the alert as a duplicate
+        of the winner's id (caller re-checks via ``is_duplicate``).
+        """
         fingerprint = alert.fingerprint()
         key = f"{_DEDUP_PREFIX}{fingerprint}"
-        await self._redis.set(key, str(alert.id), ex=self._window)
+        # aiokafka redis: set(..., nx=True) → True if set, None/False if exists
+        created = await self._redis.set(key, str(alert.id), ex=self._window, nx=True)
+        won = bool(created)
         logger.debug(
             "Alert fingerprint registered",
             fingerprint=fingerprint,
             alert_id=str(alert.id),
             ttl_seconds=self._window,
+            won_race=won,
         )
+        return won

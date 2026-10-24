@@ -200,6 +200,26 @@ class CaseResponse(BaseModel):
     fanout_results: list[FanoutResult] | None = None
 
 
+class CaseListResponse(BaseModel):
+    """Paginated cases list with accurate totals (not page-length).
+
+    Older clients expected a bare JSON array. The envelope exposes both
+    ``cases`` (web console) and ``items`` (SDK / MCP ``Page`` shape) plus
+    ``total`` / ``status_totals`` so the Cases page never shows a fake
+    ceiling of 50 when more cases exist.
+    """
+
+    cases: list[CaseResponse]
+    items: list[CaseResponse]
+    total: int
+    limit: int
+    offset: int
+    page: int
+    page_size: int
+    pages: int
+    status_totals: dict[str, int] = Field(default_factory=dict)
+
+
 class CommentResponse(BaseModel):
     id: uuid.UUID
     case_id: uuid.UUID
@@ -395,7 +415,7 @@ async def _resolve_case_id(case_id: str, db: Any, tenant_id: uuid.UUID) -> uuid.
 # ────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("", response_model=list[CaseResponse], summary="List cases")
+@router.get("", response_model=CaseListResponse, summary="List cases")
 async def list_cases(
     db: DBSession,
     user: AuthUser,
@@ -404,7 +424,7 @@ async def list_cases(
     assignee: str | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-) -> list[CaseResponse]:
+) -> CaseListResponse:
     # Tenant scoping is non-optional. The aisoc_cases table has carried a
     # tenant_id column since migration 012; until P2-W1 the API simply
     # ignored it, exposing every tenant's caseload to every authenticated
@@ -426,18 +446,80 @@ async def list_cases(
         where_clauses.append("assignee = :assignee")
         params["assignee"] = assignee
 
+    where_sql = " AND ".join(where_clauses)
+    # Status chip totals ignore the status filter (so "All / Open / …" stay
+    # meaningful while browsing a filtered page) but keep severity/assignee.
+    totals_clauses = ["tenant_id = :tenant_id"]
+    totals_params: dict[str, Any] = {"tenant_id": user.tenant_id}
+    if severity:
+        totals_clauses.append("severity = :severity")
+        totals_params["severity"] = severity
+    if assignee:
+        totals_clauses.append("assignee = :assignee")
+        totals_params["assignee"] = assignee
+    totals_where = " AND ".join(totals_clauses)
+
     q = f"""
         SELECT * FROM aisoc_cases
-        WHERE {" AND ".join(where_clauses)}
+        WHERE {where_sql}
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     """
+    count_q = f"SELECT COUNT(*) AS n FROM aisoc_cases WHERE {where_sql}"
+    status_q = f"""
+        SELECT status, COUNT(*) AS n
+          FROM aisoc_cases
+         WHERE {totals_where}
+         GROUP BY status
+    """
     try:
         rows = await db.execute(text(q).bindparams(**params))
-        return [_row_to_case(r) for r in rows.fetchall()]
+        cases = [_row_to_case(r) for r in rows.fetchall()]
+        count_params = {k: v for k, v in params.items() if k not in ("limit", "offset")}
+        total_row = (await db.execute(text(count_q).bindparams(**count_params))).fetchone()
+        total = _row_count(total_row)
+        status_rows = (await db.execute(text(status_q).bindparams(**totals_params))).fetchall()
+        status_totals: dict[str, int] = {}
+        for row in status_rows:
+            status_key = _row_field(row, "status", 0)
+            if status_key is None:
+                continue
+            status_totals[str(status_key)] = _row_count(row, count_attr="n", count_index=1)
+        page = (offset // limit) + 1 if limit else 1
+        pages = max(1, (total + limit - 1) // limit) if limit else 1
+        return CaseListResponse(
+            cases=cases,
+            items=cases,
+            total=total,
+            limit=limit,
+            offset=offset,
+            page=page,
+            page_size=limit,
+            pages=pages,
+            status_totals=status_totals,
+        )
     except Exception as exc:
         logger.exception("Database error in cases endpoint")
         raise HTTPException(status_code=503, detail="Database error") from exc
+
+
+def _row_field(row: Any, attr: str, index: int) -> Any:
+    if row is None:
+        return None
+    if hasattr(row, attr):
+        return getattr(row, attr)
+    try:
+        return row[index]
+    except Exception:  # noqa: BLE001 — tuple/mapping fallbacks
+        return None
+
+
+def _row_count(row: Any, *, count_attr: str = "n", count_index: int = 0) -> int:
+    raw = _row_field(row, count_attr, count_index)
+    try:
+        return int(raw or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 @router.post("", response_model=CaseResponse, status_code=status.HTTP_201_CREATED, summary="Create case")

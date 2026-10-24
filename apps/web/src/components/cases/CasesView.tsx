@@ -162,7 +162,13 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
 
   const { data: casesData, isLoading } = useSWR(
     ['cases', statusFilter, severityFilter],
-    () => casesApi.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
+    () =>
+      casesApi.list({
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        severity: severityFilter !== 'all' ? severityFilter : undefined,
+        pageSize: 100,
+        page: 1,
+      }),
     {
       fallbackData: fallback,
     }
@@ -174,14 +180,25 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
     return true;
   });
 
-  const allCases = casesData?.cases ?? MOCK_CASES;
-  const statCounts = {
-    all: allCases.length,
-    open: allCases.filter(c => c.status === 'open').length,
-    in_progress: allCases.filter(c => c.status === 'in_progress').length,
-    resolved: allCases.filter(c => c.status === 'resolved').length,
-    closed: allCases.filter(c => c.status === 'closed').length,
-  };
+  // Prefer API totals — page length used to hard-cap the chips at 50.
+  const statusTotals = casesData?.statusTotals;
+  const mapBackendTotals = (keys: string[]): number =>
+    keys.reduce((sum, key) => sum + (statusTotals?.[key] ?? 0), 0);
+  const statCounts = statusTotals
+    ? {
+        all: Object.values(statusTotals).reduce((sum, n) => sum + n, 0),
+        open: mapBackendTotals(['new', 'open']),
+        in_progress: mapBackendTotals(['investigating', 'in_progress', 'contained']),
+        resolved: mapBackendTotals(['resolved']),
+        closed: mapBackendTotals(['closed']),
+      }
+    : {
+        all: casesData?.total ?? (casesData?.cases ?? MOCK_CASES).length,
+        open: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'open').length,
+        in_progress: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'in_progress').length,
+        resolved: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'resolved').length,
+        closed: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'closed').length,
+      };
 
   return (
     <div className="space-y-5">
@@ -276,7 +293,13 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
           <option value="low">Low</option>
         </select>
 
-        <span className="text-xs text-gray-500">{cases.length} cases</span>
+        <span className="text-xs text-gray-500">
+          {cases.length}
+          {casesData?.total != null && casesData.total > cases.length
+            ? ` of ${casesData.total}`
+            : ''}{' '}
+          cases
+        </span>
       </div>
 
       {/* Cases List */}

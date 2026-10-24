@@ -51,6 +51,14 @@ def _make_instance(
     )
 
 
+def test_connector_instance_defaults_are_valid():
+    inst = _make_instance()
+    assert inst.schema_fingerprint is None
+    assert inst.fusion_persist_failed == 0
+    assert inst.last_outage_at is None
+    assert inst.last_backfill_at is None
+
+
 # ---------------------------------------------------------------------------
 # poll_interval coercion
 # ---------------------------------------------------------------------------

@@ -39,25 +39,23 @@ def test_mission_control_spl_tables_extracted_fields():
     assert "| head 5" in lookup
 
 
-def test_old_notable_table_is_replaced_catalog_rest_is_not():
-    old = (
+def test_custom_search_is_never_silently_replaced():
+    """Operator Custom SPL (including index=notable) must not be treated as blank."""
+    notable = (
         "search index=notable "
         "| table _time source search_name severity urgency host dvc dest "
         "dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
     )
-    assert _is_replaceable_notable_search(old)
     assert _is_replaceable_notable_search("")
-    assert _is_replaceable_notable_search(
+    assert _is_replaceable_notable_search("   ")
+    assert not _is_replaceable_notable_search(notable)
+    assert not _is_replaceable_notable_search(
         "search index=notable | extract | eval notable_id=coalesce(source_event_id, source_guid, detection_id) | table _time"
     )
-    # Older agentic* MC pipeline without MITRE columns must be upgraded.
-    assert _is_replaceable_notable_search(
+    assert not _is_replaceable_notable_search(
         "search index=agentic* | extract "
         "| eval notable_id=coalesce(source_event_id, source_guid, detection_id) "
-        "| table _time notable_id search_name detection_id dvc dest dest_port "
-        "src src_ip src_port severity security_domain status owner disposition "
-        "orig_rule_title orig_rule_description source_event_id source_guid "
-        "transport is_prohibited | sort 0 - _time"
+        "| table _time notable_id search_name | sort 0 - _time"
     )
     assert not _is_replaceable_notable_search("| rest /services/saved/searches | table title")
     assert not _is_replaceable_notable_search(_DEFAULT_NOTABLE_SPL)
@@ -102,6 +100,26 @@ def test_normalize_is_idempotent():
     assert once["raw_event"] == row
 
 
+def test_normalize_unwraps_multivalue_search_name():
+    """Splunk often returns search_name as a duplicated list; keep a scalar title."""
+    c = _conn()
+    row = {
+        "event_id": "E-mv",
+        "search_name": [
+            "ESCU - Windows UAC Bypass Suspicious Child Process - Rule",
+            "ESCU - Windows UAC Bypass Suspicious Child Process - Rule",
+        ],
+        "urgency": "medium",
+        "_time": "2026-10-14T17:23:00Z",
+        "host": ["host-a", "host-a"],
+        "src": ["10.0.0.1", "10.0.0.1"],
+    }
+    out = c.normalize(row)
+    assert out["title"] == "ESCU - Windows UAC Bypass Suspicious Child Process - Rule"
+    assert out["hostname"] == "host-a"
+    assert out["src_ip"] == "10.0.0.1"
+
+
 def test_normalize_stable_when_vendor_ids_missing():
     c = _conn()
     row = {
@@ -131,7 +149,7 @@ def test_normalize_deterministic_external_id():
 
 def test_order_and_checkpoint_filters_seen_and_advances():
     c = _conn()
-    c.set_checkpoint({"time": "2026-08-01T00:00:10Z", "id": "E10"})
+    c.set_checkpoint({"time": "2026-08-01T00:00:10Z", "id": "E10", "seen": ["E10"]})
     rows = [
         {"event_id": "E09", "_time": "2026-08-01T00:00:09Z"},  # before checkpoint -> dropped
         {"event_id": "E10", "_time": "2026-08-01T00:00:10Z"},  # == checkpoint -> dropped
@@ -140,12 +158,16 @@ def test_order_and_checkpoint_filters_seen_and_advances():
     ]
     fresh = c._order_and_checkpoint(rows)
     assert [r["event_id"] for r in fresh] == ["E11", "E12"]  # stable order restored
-    assert c.get_checkpoint() == {"time": "2026-08-01T00:00:12Z", "id": "E12"}
+    cp = c.get_checkpoint()
+    assert cp is not None
+    assert cp["time"] == "2026-08-01T00:00:12Z"
+    assert cp["id"] == "E12"
+    assert "E11" in cp["seen"] and "E12" in cp["seen"] and "E10" in cp["seen"]
 
 
 def test_checkpoint_not_advanced_when_nothing_new():
     c = _conn()
-    c.set_checkpoint({"time": "2026-08-01T00:00:99Z", "id": "Z"})
+    c.set_checkpoint({"time": "2026-08-01T00:00:99Z", "id": "Z", "seen": ["Z"]})
     assert c._order_and_checkpoint([{"event_id": "E1", "_time": "2026-08-01T00:00:01Z"}]) == []
     assert c.get_checkpoint() is None
 
@@ -157,6 +179,26 @@ def test_same_timestamp_distinct_ids_both_kept():
         {"event_id": "B", "_time": "2026-08-01T00:00:10Z"},
     ]
     assert {r["event_id"] for r in c._order_and_checkpoint(rows)} == {"A", "B"}
+
+
+def test_overlap_poll_skips_ids_already_in_seen_ring():
+    """Inclusive earliest_time re-reads watermark rows — seen ids must suppress them."""
+    c = _conn()
+    c.set_checkpoint(
+        {
+            "time": "2026-08-01T00:00:10.000+00:00",
+            "id": "E10",
+            "seen": ["E09", "E10"],
+        }
+    )
+    # Same events again, plus one new — Z vs +00:00 must not defeat the watermark.
+    rows = [
+        {"event_id": "E09", "_time": "2026-08-01T00:00:09Z"},
+        {"event_id": "E10", "_time": "2026-08-01T00:00:10Z"},
+        {"event_id": "E11", "_time": "2026-08-01T00:00:11Z"},
+    ]
+    fresh = c._order_and_checkpoint(rows)
+    assert [r["event_id"] for r in fresh] == ["E11"]
 
 
 # --------------------------------------------------------------------------
@@ -308,6 +350,39 @@ async def test_fetch_alerts_custom_search_uses_basic_auth_and_earliest():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_fetch_alerts_honors_index_notable_custom_search():
+    """Custom SPL starting with index=notable must run as saved — not agentic* default."""
+    custom = (
+        "search index=notable | table _time source search_name severity host "
+        "dvc dest_port source_guid source_event_id _cd _raw"
+    )
+    c = SplunkConnector(
+        base_url=BASE,
+        username="admin",
+        password="secret",
+        custom_search=custom,
+        earliest_time="-90d@d",
+        ssl_verify=False,
+    )
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
+        return_value=httpx.Response(201, json={"sid": "SID-NOTABLE"})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-NOTABLE/results").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    respx.get(url__regex=r".+/services/search/jobs/SID-NOTABLE(\?.*)?$").mock(
+        return_value=_done_status()
+    )
+
+    await c.fetch_alerts()
+    assert jobs.called
+    body = jobs.calls[0].request.content.decode()
+    assert "index%3Dnotable" in body or "index=notable" in body
+    assert "index%3Dagentic" not in body and "index=agentic" not in body
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_fetch_alerts_pipe_rest_is_not_prefixed_with_search():
     c = SplunkConnector(
         base_url=BASE,
@@ -440,16 +515,24 @@ async def test_lookup_notable_filters_search_name_and_host():
     assert "earliest_time=-30d" in body
 
 
-def test_timeless_catalog_skips_checkpoint_filter():
+def test_timeless_catalog_dedupes_via_seen_ids():
+    """Catalog SPL rows have no _time — still must not re-emit on every Sync."""
     c = _conn()
-    c.set_checkpoint({"time": "", "id": "Zzz"})
     rows = [
         {"Notable Name": "AAA Rule", "Severity": "3"},
         {"Notable Name": "MMM Rule", "Severity": "4"},
     ]
-    fresh = c._order_and_checkpoint(rows)
-    assert len(fresh) == 2
-    assert c.get_checkpoint() is None
+    first = c._order_and_checkpoint(rows)
+    assert len(first) == 2
+    cp = c.get_checkpoint()
+    assert cp is not None
+    assert "AAA Rule" in cp["seen"] and "MMM Rule" in cp["seen"]
+
+    c2 = _conn()
+    c2.set_checkpoint(cp)
+    second = c2._order_and_checkpoint(rows)
+    assert second == []
+    assert c2.get_checkpoint() is None
 
 
 def test_normalize_es_catalog_row():

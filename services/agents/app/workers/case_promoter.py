@@ -1,7 +1,9 @@
 """Promote escalated alerts into ``aisoc_cases`` with linked siblings + tasks.
 
 Closes the agentic funnel gap after auto-triage: true_positive / high-severity
-needs_review alerts become Cases, related alerts (shared host/IP) are linked,
+needs_review alerts become Cases. Cases are **attack campaigns** (shared
+host/IP/user + kill-chain theme such as C2), not buckets of identical rule
+titles. Related alerts on those entities are linked (up to the sibling cap),
 false-positive tags are applied on auto-close, and Case tasks carry concrete
 investigation steps (including Splunk SPL pivots when src/dst IPs exist).
 
@@ -34,6 +36,13 @@ from app.funnel.stages import (
 )
 from app.investigator import ledger as ledger_module
 from app.models.state import InvestigationState
+from app.workers.campaign_case import (
+    campaign_case_title,
+    campaign_entities,
+    campaign_tags,
+    infer_attack_theme,
+    primary_campaign_key,
+)
 
 logger = structlog.get_logger()
 
@@ -41,6 +50,7 @@ _TAG_FP = "false_positive"
 _TAG_PROMOTED = "agentic-promoted"
 _TAG_REPORTABLE = "reportable"
 _LOOKBACK_HOURS = int(os.getenv("AISOC_AGENT_CASE_LINK_LOOKBACK_HOURS", "48"))
+_SIBLING_CAP = int(os.getenv("AISOC_AGENT_CASE_SIBLING_CAP", "100"))
 _SEVERITY_FLOOR = {
     s.strip().lower()
     for s in os.getenv("AISOC_AGENT_CASE_SEVERITIES", "medium,high,critical").split(",")
@@ -204,6 +214,70 @@ async def tag_false_positive(alert_id: str | None, tenant_id: uuid.UUID) -> bool
         return False
 
 
+async def record_business_context_suppression(
+    alert_id: str | None,
+    tenant_id: uuid.UUID | str,
+    *,
+    policy_id: str,
+    reason: str,
+    owner: str | None = None,
+) -> bool:
+    """Persist an explainable BC suppress onto the alert without deleting evidence.
+
+    Sets disposition to ``benign`` (authorized/expected path), funnel_stage to
+    ``suppressed``, and stores policy metadata in ``enrichment_data``.
+    """
+    pool = await ledger_module.get_pool()
+    if pool is None or not alert_id:
+        return False
+    try:
+        alert_uuid = uuid.UUID(str(alert_id))
+        tid = tenant_id if isinstance(tenant_id, uuid.UUID) else uuid.UUID(str(tenant_id))
+    except (ValueError, TypeError):
+        return False
+    meta = {
+        "suppression": {
+            "source": "business_context",
+            "policy_id": policy_id,
+            "reason": reason,
+            "owner": owner,
+            "suppressed_at": datetime.now(UTC).isoformat(),
+        }
+    }
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE alerts
+                   SET disposition = COALESCE(NULLIF(disposition, ''), 'benign'),
+                       funnel_stage = $4,
+                       tags = (
+                         SELECT COALESCE(jsonb_agg(DISTINCT v), '[]'::jsonb)
+                           FROM jsonb_array_elements_text(
+                             COALESCE(tags, '[]'::jsonb) || $5::jsonb
+                           ) AS t(v)
+                       ),
+                       enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || $3::jsonb,
+                       updated_at = now()
+                 WHERE id = $1 AND tenant_id = $2
+                """,
+                alert_uuid,
+                tid,
+                json.dumps(meta),
+                SUPPRESSED,
+                json.dumps(["business_context_suppressed", "suppressed"]),
+            )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "case_promoter.bc_suppress_failed",
+            alert_id=str(alert_id),
+            policy_id=policy_id,
+            error=str(exc),
+        )
+        return False
+
+
 async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] | None = None) -> str | None:
     """Create/link an ``aisoc_cases`` row for an escalated alert. Returns case id."""
     if not auto_case_enabled():
@@ -229,20 +303,36 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
     if pool is None:
         return None
 
-    title = str(alert.get("title") or state.alert_summary or "Agentic SOC case")[:500]
+    alert_title = str(alert.get("title") or state.alert_summary or "alert")[:500]
     mitre = alert.get("mitre_techniques") or raw.get("mitre_techniques") or []
     if not isinstance(mitre, list):
         mitre = []
+    mitre_tactics = alert.get("mitre_tactics") or raw.get("mitre_tactics") or []
+    if not isinstance(mitre_tactics, list):
+        mitre_tactics = []
+    entities = campaign_entities(alert, raw)
+    theme = infer_attack_theme(
+        title=alert_title,
+        mitre_tactics=mitre_tactics,
+        mitre_techniques=mitre,
+        raw_alert=raw,
+    )
+    camp_key = primary_campaign_key(theme, entities)
+    title = campaign_case_title(theme, entities)
     findings_blob = "\n".join(f"- {f}" for f in (state.findings or [])[:12])
+    entity_bits = ", ".join(f"{k}:{v}" for k, v in entities[:6]) or "(no strong entity)"
     description = (
-        f"Auto-created by Agentic SOC funnel.\n"
+        f"Auto-created by Agentic SOC funnel as an attack-campaign case.\n"
+        f"Theme: {theme}\n"
+        f"Entities: {entity_bits}\n"
         f"Disposition: {verdict} (confidence={float(state.confidence or 0.0):.2f})\n"
-        f"Severity: {severity}\n\n"
-        f"Summary: {state.alert_summary or title}\n\n"
+        f"Severity: {severity}\n"
+        f"Seed alert: {alert_title}\n\n"
+        f"Summary: {state.alert_summary or alert_title}\n\n"
         f"Investigation notes:\n{findings_blob or '- (pending enrichment)'}\n"
     )[:8000]
 
-    tasks = _build_tasks(state, alert={**raw, **alert, "title": title})
+    tasks = _build_tasks(state, alert={**raw, **alert, "title": alert_title})
     now = datetime.now(UTC)
     since = now - timedelta(hours=_LOOKBACK_HOURS)
 
@@ -257,9 +347,88 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                 if existing:
                     return str(existing)
 
-                # Related alerts: shared host or IP in lookback, not auto-closed FP.
-                host = alert.get("hostname") or raw.get("hostname")
-                src = alert.get("src_ip") or raw.get("src_ip")
+                # Durable Fusion incident → reuse its linked Case when present.
+                fusion_incident_id = None
+                if isinstance(message, dict) and message.get("incident_id"):
+                    try:
+                        fusion_incident_id = uuid.UUID(str(message["incident_id"]))
+                    except (ValueError, TypeError):
+                        fusion_incident_id = None
+                if fusion_incident_id is not None:
+                    has_fusion_table = await conn.fetchval(
+                        "SELECT to_regclass('public.fusion_incidents') IS NOT NULL"
+                    )
+                    linked_case = None
+                    if has_fusion_table:
+                        linked_case = await conn.fetchval(
+                            """
+                            SELECT case_id FROM fusion_incidents
+                             WHERE id = $1 AND tenant_id = $2 AND case_id IS NOT NULL
+                             LIMIT 1
+                            """,
+                            fusion_incident_id,
+                            state.tenant_id,
+                        )
+                    if linked_case:
+                        await conn.execute(
+                            """
+                            UPDATE alerts
+                               SET case_id = $1,
+                                   fusion_incident_id = COALESCE(fusion_incident_id, $3),
+                                   tags = (
+                                     SELECT COALESCE(jsonb_agg(DISTINCT v), '[]'::jsonb)
+                                       FROM jsonb_array_elements_text(
+                                         COALESCE(tags, '[]'::jsonb) || $4::jsonb
+                                       ) AS t(v)
+                                   ),
+                                   status = CASE WHEN status IN ('new', 'triaging') THEN 'in_progress' ELSE status END,
+                                   funnel_stage = CASE
+                                       WHEN funnel_stage IN ('jira_pushed', 'ready_for_jira') THEN funnel_stage
+                                       ELSE 'cased'
+                                   END,
+                                   updated_at = now()
+                             WHERE id = $2 AND tenant_id = $5
+                            """,
+                            linked_case,
+                            alert_uuid,
+                            fusion_incident_id,
+                            json.dumps([_TAG_PROMOTED, _TAG_REPORTABLE]),
+                            state.tenant_id,
+                        )
+                        await conn.execute(
+                            """
+                            UPDATE fusion_incidents
+                               SET alert_ids = (
+                                     SELECT ARRAY(
+                                       SELECT DISTINCT x
+                                         FROM unnest(COALESCE(alert_ids, ARRAY[]::uuid[]) || ARRAY[$2::uuid]) AS t(x)
+                                     )
+                                   ),
+                                   alert_count = COALESCE(array_length(
+                                     (SELECT ARRAY(
+                                       SELECT DISTINCT x
+                                         FROM unnest(COALESCE(alert_ids, ARRAY[]::uuid[]) || ARRAY[$2::uuid]) AS t(x)
+                                     )), 1), alert_count),
+                                   updated_at = now()
+                             WHERE id = $1 AND tenant_id = $3
+                            """,
+                            fusion_incident_id,
+                            alert_uuid,
+                            state.tenant_id,
+                        )
+                        logger.info(
+                            "case_promoter.reused_fusion_case",
+                            case_id=str(linked_case),
+                            fusion_incident_id=str(fusion_incident_id),
+                            alert_id=alert_id,
+                        )
+                        return str(linked_case)
+
+                # Related alerts: shared campaign entities (host / IP / user) —
+                # never group solely by identical rule title.
+                host = next((v for k, v in entities if k == "host"), None)
+                src = next((v for k, v in entities if k == "ip"), None)
+                user = next((v for k, v in entities if k == "user"), None)
                 related_rows = await conn.fetch(
                     """
                     SELECT id FROM alerts
@@ -272,60 +441,97 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                              ($4::text IS NOT NULL AND (
                                  COALESCE(affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[$4::text])
                               OR COALESCE(entities, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type','host','value',$4::text))
+                              OR COALESCE(raw_event->>'hostname', '') = $4
+                              OR COALESCE(raw_event->>'host', '') = $4
+                              OR COALESCE(raw_event->>'dvc', '') = $4
                              ))
                           OR ($5::text IS NOT NULL AND (
                                  COALESCE(affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[$5::text])
                               OR COALESCE(iocs, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type','ip','value',$5::text))
+                              OR COALESCE(raw_event->>'src_ip', '') = $5
+                              OR COALESCE(raw_event->>'src', '') = $5
+                             ))
+                          OR ($6::text IS NOT NULL AND (
+                                 COALESCE(affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[$6::text])
+                              OR COALESCE(entities, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type','user','value',$6::text))
+                              OR COALESCE(raw_event->>'username', '') = $6
+                              OR COALESCE(raw_event->>'user', '') = $6
                              ))
                        )
                      ORDER BY created_at DESC
-                     LIMIT 25
+                     LIMIT $7
                     """,
                     state.tenant_id,
                     since,
                     alert_uuid,
                     str(host) if host else None,
                     str(src) if src else None,
+                    str(user) if user else None,
+                    max(1, _SIBLING_CAP),
                 )
-                # Fallback if hostname/src columns differ — match title prefix rules
-                if not related_rows and title:
-                    related_rows = await conn.fetch(
+
+                linked_ids = [alert_uuid] + [r["id"] for r in related_rows]
+                # Reuse an open campaign case (theme + entity key), not same title.
+                existing_case = None
+                if camp_key:
+                    existing_case = await conn.fetchval(
                         """
-                        SELECT id FROM alerts
+                        SELECT id FROM aisoc_cases
                          WHERE tenant_id = $1
-                           AND created_at >= $2
-                           AND id <> $3
-                           AND case_id IS NULL
-                           AND COALESCE(disposition, '') NOT IN ('false_positive', 'benign', 'benign_true_positive')
-                           AND left(title, 40) = left($4, 40)
-                         ORDER BY created_at DESC
-                         LIMIT 15
+                           AND status NOT IN ('resolved', 'closed')
+                           AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                           AND opened_at >= $2
+                           AND tags->>'campaign_key' = $3
+                         ORDER BY opened_at ASC
+                         LIMIT 1
                         """,
                         state.tenant_id,
                         since,
-                        alert_uuid,
-                        title,
+                        camp_key,
                     )
-
-                linked_ids = [alert_uuid] + [r["id"] for r in related_rows]
-                # Reuse an open agentic case with the same title instead of
-                # minting near-identical duplicates for every ESCU firing.
-                existing_case = await conn.fetchval(
-                    """
-                    SELECT id FROM aisoc_cases
-                     WHERE tenant_id = $1
-                       AND title = $2
-                       AND status NOT IN ('resolved', 'closed')
-                       AND created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
-                     ORDER BY opened_at ASC
-                     LIMIT 1
-                    """,
-                    state.tenant_id,
-                    title,
-                )
+                if existing_case is None and (host or src or user):
+                    # Same entities already cased under any open agentic campaign.
+                    existing_case = await conn.fetchval(
+                        """
+                        SELECT c.id FROM aisoc_cases c
+                         WHERE c.tenant_id = $1
+                           AND c.status NOT IN ('resolved', 'closed')
+                           AND c.created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
+                           AND c.opened_at >= $2
+                           AND c.tags->>'case_model' = 'attack_campaign'
+                           AND EXISTS (
+                                 SELECT 1 FROM alerts a
+                                  WHERE a.case_id = c.id
+                                    AND a.tenant_id = $1
+                                    AND (
+                                          ($3::text IS NOT NULL AND (
+                                              COALESCE(a.affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[$3::text])
+                                           OR COALESCE(a.raw_event->>'hostname', '') = $3
+                                           OR COALESCE(a.raw_event->>'dvc', '') = $3
+                                          ))
+                                       OR ($4::text IS NOT NULL AND (
+                                              COALESCE(a.affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[$4::text])
+                                           OR COALESCE(a.raw_event->>'src_ip', '') = $4
+                                           OR COALESCE(a.raw_event->>'src', '') = $4
+                                          ))
+                                       OR ($5::text IS NOT NULL AND (
+                                              COALESCE(a.affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[$5::text])
+                                           OR COALESCE(a.raw_event->>'username', '') = $5
+                                          ))
+                                    )
+                           )
+                         ORDER BY c.opened_at ASC
+                         LIMIT 1
+                        """,
+                        state.tenant_id,
+                        since,
+                        str(host) if host else None,
+                        str(src) if src else None,
+                        str(user) if user else None,
+                    )
                 created_new = existing_case is None
                 case_id = existing_case or uuid.uuid4()
-                tags = {_TAG_PROMOTED: True, _TAG_REPORTABLE: True, "source": "agentic_funnel"}
+                tags = campaign_tags(theme=theme, campaign_key=camp_key, source="agentic_funnel")
                 if created_new:
                     await conn.execute(
                         """
@@ -399,6 +605,40 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     json.dumps([_TAG_PROMOTED, _TAG_REPORTABLE]),
                     next_stage,
                 )
+                # Persist Case ↔ Fusion incident linkage when migration 058 is present.
+                if fusion_incident_id is not None:
+                    has_table = await conn.fetchval(
+                        "SELECT to_regclass('public.fusion_incidents') IS NOT NULL"
+                    )
+                    if has_table:
+                        await conn.execute(
+                            """
+                            UPDATE fusion_incidents
+                               SET case_id = $1,
+                                   alert_ids = (
+                                     SELECT ARRAY(
+                                       SELECT DISTINCT x
+                                         FROM unnest(COALESCE(alert_ids, ARRAY[]::uuid[]) || $3::uuid[]) AS t(x)
+                                     )
+                                   ),
+                                   updated_at = now()
+                             WHERE id = $2 AND tenant_id = $4
+                            """,
+                            case_id,
+                            fusion_incident_id,
+                            linked_ids,
+                            state.tenant_id,
+                        )
+                        await conn.execute(
+                            """
+                            UPDATE alerts
+                               SET fusion_incident_id = $1, updated_at = now()
+                             WHERE tenant_id = $2 AND id = ANY($3::uuid[])
+                            """,
+                            fusion_incident_id,
+                            state.tenant_id,
+                            linked_ids,
+                        )
                 if created_new:
                     for task in tasks:
                         await conn.execute(

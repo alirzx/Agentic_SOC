@@ -19,6 +19,7 @@ from app.services.deduplicator import Deduplicator
 from app.services.detection_engine import DetectionEngine
 from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
+from app.services.incident_store import IncidentStore
 from app.services.lake_writer import LakeWriter
 from app.services.ueba_signal import UebaSignalCache
 from app.services.windowed_detection import WindowedDetectionEngine
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI):
 
     dedup = Deduplicator(redis_client)
     correlator = Correlator(redis_client)
+    incident_store: IncidentStore | None = None
     entity_risk = EntityRiskEngine(redis_client)
     confidence_scorer = ConfidenceScorer(enabled=settings.confidence_enabled)
     # Phase A4 — behavioral-model fusion: one cache shared by the engine
@@ -76,6 +78,11 @@ async def lifespan(app: FastAPI):
     sink = AlertSink(settings.database_url) if settings.alert_sink_enabled else None
     if sink is not None:
         dedup.set_sink(sink)
+        # Phase 2 — durable fusion incidents (same DB as alert sink).
+        incident_store = IncidentStore(settings.database_url)
+        correlator.set_store(incident_store)
+        await incident_store.start()
+        app.state.incident_store = incident_store
     # Phase A1 — populate the ClickHouse event lake from the raw-events stream.
     # Skip when no host is configured (slim demo stack) so we never open a
     # Client against localhost/empty and burn the worker start budget.
@@ -145,6 +152,9 @@ async def lifespan(app: FastAPI):
     worker_task.cancel()
     if memory_task is not None:
         memory_task.cancel()
+    store = getattr(app.state, "incident_store", None)
+    if store is not None:
+        await store.stop()
     await redis_client.aclose()
     logger.info("Alert Fusion Service stopped")
 

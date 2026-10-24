@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -30,6 +31,9 @@ _DEFAULT_PAGE_SIZE = 500
 _MAX_PAGES = 200
 _JOB_POLL_ATTEMPTS = 30
 _JOB_POLL_INTERVAL_S = 2.0
+# Inclusive Splunk earliest_time re-returns the watermark row; keep a rolling
+# set of accepted external ids so overlapping polls never re-count as ingested.
+_CHECKPOINT_SEEN_CAP = 5_000
 _SEVERITY_BY_URGENCY = {
     "critical": "critical",
     "high": "high",
@@ -164,30 +168,16 @@ def mission_control_spl(filters: str = "", *, limit: int | None = None) -> str:
 
 
 def _is_replaceable_notable_search(spl: str) -> bool:
-    """True when stored custom SPL should be superseded by the current default.
+    """True only when *no* operator SPL is configured (empty / whitespace).
 
-    Covers empty config, legacy ``index=notable`` stock polls (with or without
-    extract), bare ``index=agentic*`` table polls without extract, and older
-    Mission Control pipelines that omit MITRE annotation columns — so existing
-    connector rows pick up the current wide field table.
+    Historically this helper also superseded legacy ``index=notable`` and
+    narrow ``index=agentic*`` stock polls with the current Mission Control
+    default. That silently ignored Custom SPL edits in the connector UI
+    (operators set ``search index=notable | …`` and polls still ran
+    ``index=agentic*``). Non-empty ``custom_search`` is now always honored;
+    only a blank field falls through to saved-search / platform default.
     """
-    stripped = (spl or "").strip()
-    if not stripped:
-        return True
-    lower = stripped.lower()
-    if lower == _DEFAULT_NOTABLE_SPL.lower():
-        return False
-    if lower.startswith("| rest") or "/services/" in lower:
-        return False
-    if lower.startswith("search index=notable"):
-        return True
-    if lower.startswith(f"search index={_DEFAULT_INDEX.lower()}"):
-        if "| extract" not in lower:
-            return True
-        # Prior defaults that already used extract but dropped MITRE / wide fields.
-        if "annotations_mitre_attack" not in lower:
-            return True
-    return False
+    return not (spl or "").strip()
 
 
 def _mitre_techniques_from_row(row: dict[str, Any]) -> list[str]:
@@ -262,6 +252,8 @@ def _stable_external_id(row: dict[str, Any]) -> str:
         "detection_id",
         "orig_sid",
         "event_id",
+        "Notable Name",
+        "notable_name",
     ):
         value = row.get(key)
         if value not in (None, ""):
@@ -279,6 +271,25 @@ def _stable_external_id(row: dict[str, Any]) -> str:
     ]
     digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return digest[:32]
+
+
+def _time_sort_key(raw: str | None) -> float | None:
+    """Normalize Splunk ``_time`` for watermark compares (ISO / epoch / Z vs offset)."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    normalized = text.replace("Z", "+00:00") if text.endswith("Z") else text
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
 
 
 class SplunkConnector(BaseConnector):
@@ -341,10 +352,10 @@ class SplunkConnector(BaseConnector):
                     required=False,
                     default=_DEFAULT_NOTABLE_SPL,
                     help_text=(
-                        "Ad-hoc SPL posted to /services/search/jobs. "
-                        "Default tables Mission Control stash fields from "
-                        "index=agentic* including annotations_mitre_attack, "
-                        "orig_rule_*, dest/src, endpoint/identity context. "
+                        "Ad-hoc SPL posted to /services/search/jobs on every poll. "
+                        "Whatever you save here is what runs — no silent rewrite. "
+                        "Leave blank to use a Saved Search Name or the platform default "
+                        "(index=agentic* Mission Control table). "
                         "Use | rest … only for the ES rule catalog (definitions, not incidents)."
                     ),
                 ),
@@ -417,17 +428,28 @@ class SplunkConnector(BaseConnector):
             self._page_size = max(1, int(page_size))
         except (TypeError, ValueError):
             self._page_size = _DEFAULT_PAGE_SIZE
-        self._checkpoint: dict[str, str] | None = None
-        self._next_checkpoint: dict[str, str] | None = None
+        self._checkpoint: dict[str, Any] | None = None
+        self._next_checkpoint: dict[str, Any] | None = None
 
     def set_checkpoint(self, checkpoint: dict[str, Any] | None) -> None:
         """Seed the poll with the last-accepted checkpoint (scheduler-owned)."""
-        if isinstance(checkpoint, dict) and (checkpoint.get("time") or checkpoint.get("id")):
-            self._checkpoint = {"time": str(checkpoint.get("time") or ""), "id": str(checkpoint.get("id") or "")}
+        if not isinstance(checkpoint, dict):
+            self._checkpoint = None
+            return
+        seen_raw = checkpoint.get("seen")
+        seen: list[str] = []
+        if isinstance(seen_raw, list):
+            seen = [str(item) for item in seen_raw if item not in (None, "")][-_CHECKPOINT_SEEN_CAP:]
+        if checkpoint.get("time") or checkpoint.get("id") or seen:
+            self._checkpoint = {
+                "time": str(checkpoint.get("time") or ""),
+                "id": str(checkpoint.get("id") or ""),
+                "seen": seen,
+            }
         else:
             self._checkpoint = None
 
-    def get_checkpoint(self) -> dict[str, str] | None:
+    def get_checkpoint(self) -> dict[str, Any] | None:
         """Return the advanced checkpoint after a fetch, or None if unchanged."""
         return self._next_checkpoint
 
@@ -509,7 +531,12 @@ class SplunkConnector(BaseConnector):
         return [self.normalize(r) for r in ordered]
 
     async def _fetch_rows(self, client: httpx.AsyncClient, earliest: str) -> list[dict[str, Any]]:
-        """Run the configured search and return result rows."""
+        """Run the configured search and return result rows.
+
+        Precedence: non-empty ``custom_search`` (operator UI) → named saved
+        search → platform Mission Control default. Never rewrite a
+        non-empty custom SPL.
+        """
         custom = self._custom_search
         if custom and not _is_replaceable_notable_search(custom):
             search = _normalize_custom_spl(custom)
@@ -634,26 +661,60 @@ class SplunkConnector(BaseConnector):
         return _stable_external_id(row)
 
     def _order_and_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return only events newer than the watermark / not already seen.
+
+        Splunk ``earliest_time`` is inclusive, so every poll re-reads the
+        watermark second. Without an id set, those overlaps were pushed again
+        and ``events_ingested`` grew even when nothing new arrived. Timeless
+        catalog rows (no ``_time``) use the same ``seen`` ring so Sync does
+        not re-count the full snapshot.
+        """
         enriched = [_enrich_notable_row(r) if isinstance(r, dict) else r for r in rows]
-        ordered = sorted(enriched, key=lambda r: (self._event_time(r), self._event_tiebreak(r)))
-        # ES correlation catalog rows have no _time — emit the full snapshot every
-        # poll and skip checkpoint filtering (otherwise only names after the last
-        # alphabetically-sorted title would survive subsequent polls).
-        if not any(self._event_time(r) for r in ordered):
-            self._next_checkpoint = None
-            return ordered
+        ordered = sorted(
+            enriched,
+            key=lambda r: (
+                _time_sort_key(self._event_time(r)) is None,
+                _time_sort_key(self._event_time(r)) or 0.0,
+                self._event_tiebreak(r),
+            ),
+        )
         cp = self._checkpoint or {}
-        cp_key = (str(cp.get("time") or ""), str(cp.get("id") or ""))
+        seen: set[str] = {str(item) for item in (cp.get("seen") or []) if item}
+        cp_time_key = _time_sort_key(str(cp.get("time") or ""))
+        cp_id = str(cp.get("id") or "")
+        has_timed_rows = any(self._event_time(r) for r in ordered)
         fresh: list[dict[str, Any]] = []
         for row in ordered:
-            if cp_key[0] and (self._event_time(row), self._event_tiebreak(row)) <= cp_key:
+            eid = self._event_tiebreak(row)
+            if eid and eid in seen:
                 continue
+            row_time_raw = self._event_time(row)
+            row_time_key = _time_sort_key(row_time_raw)
+            if has_timed_rows and str(cp.get("time") or "") and row_time_raw:
+                if cp_time_key is not None and row_time_key is not None:
+                    if (row_time_key, eid) <= (cp_time_key, cp_id):
+                        continue
+                elif (row_time_raw, eid) <= (str(cp.get("time") or ""), cp_id):
+                    # Unparseable timestamps (legacy fixtures) — string compare.
+                    continue
             fresh.append(row)
-        if fresh:
-            last = fresh[-1]
-            self._next_checkpoint = {"time": self._event_time(last), "id": self._event_tiebreak(last)}
-        else:
+        if not fresh:
             self._next_checkpoint = None
+            return []
+        merged_seen: list[str] = []
+        for item in list(cp.get("seen") or []) + [self._event_tiebreak(r) for r in fresh]:
+            text = str(item or "")
+            if not text or text in merged_seen:
+                continue
+            merged_seen.append(text)
+        merged_seen = merged_seen[-_CHECKPOINT_SEEN_CAP:]
+        last = fresh[-1]
+        last_time = self._event_time(last) if has_timed_rows else str(cp.get("time") or "")
+        self._next_checkpoint = {
+            "time": last_time,
+            "id": self._event_tiebreak(last),
+            "seen": merged_seen,
+        }
         return fresh
 
     async def lookup_notable(
@@ -747,17 +808,22 @@ class SplunkConnector(BaseConnector):
 
         row = _enrich_notable_row(raw)
         external_id = _stable_external_id(row)
-        title = (
+        # Splunk multivalue fields (e.g. duplicated search_name) must be
+        # unwrapped — otherwise title becomes a JSON/list string in Postgres
+        # and the Cases/Alerts UI shows ``['Rule', 'Rule']``.
+        title = _first_scalar(
             row.get("search_name")
             or row.get("orig_rule_title")
             or row.get("source")
             or "Splunk Notable Event"
         )
         description = str(
-            row.get("orig_rule_description")
-            or row.get("description")
-            or row.get("_raw")
-            or ""
+            _first_scalar(
+                row.get("orig_rule_description")
+                or row.get("description")
+                or row.get("_raw")
+                or ""
+            )
         )
         hostname = _first_scalar(
             row.get("dvc") or row.get("dest") or row.get("host") or row.get("asset")
@@ -777,7 +843,7 @@ class SplunkConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": external_id,
             "event_id": external_id,
-            "title": str(title),
+            "title": str(title) if title is not None else "Splunk Notable Event",
             "description": description[:4000],
             "severity": _map_severity(row.get("urgency") or row.get("severity")),
             "src_ip": src_ip,

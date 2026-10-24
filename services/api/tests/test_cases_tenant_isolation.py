@@ -225,16 +225,29 @@ async def test_resolve_case_id_cross_tenant_returns_404() -> None:
 @pytest.mark.asyncio
 async def test_list_cases_scopes_by_tenant() -> None:
     user = _user()
-    db = _mk_db([[_case_row(title="A"), _case_row(title="B")]])
+    count_row = MagicMock()
+    count_row.n = 2
+    status_row = MagicMock()
+    status_row.status = "new"
+    status_row.n = 2
+    db = _mk_db([
+        [_case_row(title="A"), _case_row(title="B")],
+        count_row,
+        [status_row],
+    ])
     result = await list_cases(db=db, user=user)
-    assert len(result) == 2
+    assert len(result.cases) == 2
+    assert result.total == 2
+    assert result.status_totals.get("new") == 2
     _assert_tenant_scoped(db.executed, user.tenant_id)
 
 
 @pytest.mark.asyncio
 async def test_list_cases_with_filters_keeps_tenant_scope() -> None:
     user = _user()
-    db = _mk_db([[]])
+    count_row = MagicMock()
+    count_row.n = 0
+    db = _mk_db([[], count_row, []])
     await list_cases(
         db=db,
         user=user,

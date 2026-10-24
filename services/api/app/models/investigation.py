@@ -53,9 +53,13 @@ class InvestigationRun(Base):
     model_used: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
     error: Mapped[str | None] = mapped_column(Text)
-    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    total_cost_usd: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False, default=0)
-    iterations: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # server_default matters for raw-SQL writers (agents ledger) that omit
+    # these columns — ORM ``default=`` alone does not create a Postgres DEFAULT.
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    total_cost_usd: Mapped[float] = mapped_column(
+        Numeric(10, 4), nullable=False, default=0, server_default="0"
+    )
+    iterations: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cases group attack campaigns, not identical rule titles.** Auto-case and
+  funnel backfill now open/reuse cases by shared host/IP/user + kill-chain
+  theme (e.g. C2, lateral movement) with titles like “Suspected C2 campaign
+  involving HOST”, linking up to 100 related alerts — not `left(title,40)`
+  same-rule buckets.
+- **Splunk Sync re-counted overlapping events.** Inclusive `earliest_time`
+  plus string `_time` mismatches re-pushed already-ingested notables, so
+  Events Ingested grew on every poll. Checkpoint now keeps a rolling `seen`
+  id ring, compares timestamps as epochs, and dedupes timeless catalog rows.
+- **Cases page stuck at “50 All Cases”.** `GET /cases` defaulted to
+  `limit=50` and the UI counted `cases.length` instead of a real total, so
+  growth past 50 looked frozen. List now returns a paginated envelope with
+  `total` + `status_totals`; the console chips use those counts.
+- **Alert detail Notable panel overflow.** Long Splunk notable fields blew
+  past the card (10k+ px height, text outside the box). Field values now
+  wrap/truncate with Show more, noisy/extra keys are capped, and the panel
+  scrolls inside a max height.
+- **Alert confidence badge showed e.g. `7000%`.** Fusion `confidence` is
+  already 0–100; the alert detail chip multiplied by 100 again. Display and
+  API normaliser now treat values `> 1` as percent and `≤ 1` as fractions.
+- **Auto-triage ledger persist (`total_tokens` NOT NULL).** Kafka auto-triage
+  dead-lettered every fused alert at `stage=persist` when `investigation_runs`
+  lacked a Postgres DEFAULT for `total_tokens` / `total_cost_usd` / `iterations`.
+  Agents ledger INSERT now writes `0` explicitly; migration
+  `059_investigation_runs_token_defaults.sql` restores column DEFAULTs.
+
 ### Changed
 
 - **Marketplace nav hidden.** The `/marketplace` console module is kept (page +
