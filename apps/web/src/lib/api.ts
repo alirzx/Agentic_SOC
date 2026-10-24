@@ -3001,10 +3001,11 @@ export const connectorsApi = {
       method: 'POST',
     }),
 
-  /** Force one scheduler poll now (Splunk → ingest → fusion). */
+  /** Kick one scheduler poll (runs in background; refresh list for counters). */
   pollNow: (id: string) =>
     request<{
       ok: boolean;
+      status?: string;
       connector_id: string;
       events_ingested: number;
       last_sync: string | null;

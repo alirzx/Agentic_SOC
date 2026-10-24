@@ -537,8 +537,24 @@ async def scheduler_status(request: Request) -> dict[str, Any]:
 
 @router.post("/scheduler/poll/{connector_id}")
 async def scheduler_poll_now(connector_id: uuid.UUID, request: Request) -> dict[str, Any]:
-    """Force one poll cycle for a saved connector instance (UUID from Postgres)."""
+    """Force one poll cycle for a saved connector instance (UUID from Postgres).
+
+    Splunk searches + ingest of hundreds of events routinely exceed the Next.js
+    / browser proxy budget when awaited inline, which surfaced as a false
+    ``500`` on Sync even after Kafka accepted the batch. Run the poll in the
+    background and return ``started`` immediately; the UI refreshes connector
+    health / ``events_ingested`` from Postgres.
+    """
+    import asyncio
+
     scheduler = getattr(request.app.state, "scheduler", None)
+
+    async def _run(poller: Any) -> None:
+        try:
+            await poller._poll_one(connector_id=connector_id)
+        except Exception:
+            logger.exception("scheduler.poll_now.failed", connector_id=str(connector_id))
+
     if scheduler is None:
         # Scheduler failed to start (e.g. transient DB / vault). Still allow a
         # one-shot Sync from the UI so operators aren't blocked.
@@ -558,15 +574,21 @@ async def scheduler_poll_now(connector_id: uuid.UUID, request: Request) -> dict[
                 from app.security.credential_vault import get_vault
 
                 oneshot._vault = get_vault()
-            await oneshot._poll_one(connector_id=connector_id)
-            return {"ok": True, "connector_id": str(connector_id), "mode": "oneshot"}
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"connector scheduler is not running: {exc}",
             ) from exc
-    await scheduler._poll_one(connector_id=connector_id)
-    return {"ok": True, "connector_id": str(connector_id)}
+        asyncio.create_task(_run(oneshot))
+        return {
+            "ok": True,
+            "connector_id": str(connector_id),
+            "mode": "oneshot",
+            "status": "started",
+        }
+
+    asyncio.create_task(_run(scheduler))
+    return {"ok": True, "connector_id": str(connector_id), "status": "started"}
 
 
 @router.get("/health")

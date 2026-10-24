@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Connector Sync showed 500 while ingest succeeded.** Manual Sync awaited
+  the full Splunk search + Kafka publish; Next.js / browser proxies timed
+  out and reported failure even after `Batch published to Kafka`. Forced
+  poll is now fire-and-forget (`status: started`); the UI refreshes
+  counters when the background poll finishes.
 - **Splunk connector stuck Error after long outage.** Resuming from an old
   checkpoint opened a multi-day Splunk search that timed out every poll
   (`Poll errors` climbed, Last sync went stale). Catch-up is capped per poll,

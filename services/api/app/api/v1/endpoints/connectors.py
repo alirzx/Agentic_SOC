@@ -1009,7 +1009,7 @@ async def poll_connector_now(
     current_user: Annotated[AuthUser, Depends(require_permission("connectors:write"))],
     db: DBSession,
 ) -> dict[str, Any]:
-    """Force one scheduler poll for this connector instance (does not wait for cadence)."""
+    """Kick a scheduler poll; connectors returns immediately (poll runs in background)."""
     result = await db.execute(
         select(Connector).where(
             Connector.id == connector_id,
@@ -1026,9 +1026,9 @@ async def poll_connector_now(
         )
 
     url = _connectors_service_url(f"/scheduler/poll/{connector_id}")
-    # Splunk jobs can take well over the catalog timeout (15s); give the
-    # forced poll a full search budget.
-    poll_timeout = httpx.Timeout(180.0, connect=10.0)
+    # Poll is fire-and-forget on the connectors side; keep this proxy snappy
+    # so Next.js / browser clients do not hit a false 500 on long Splunk jobs.
+    poll_timeout = httpx.Timeout(30.0, connect=10.0)
     try:
         async with httpx.AsyncClient(timeout=poll_timeout) as client:
             resp = await client.post(url)
@@ -1045,19 +1045,13 @@ async def poll_connector_now(
             detail = resp.text
         raise HTTPException(status_code=resp.status_code, detail=detail)
     body = resp.json() if resp.content else {"ok": True}
-    refreshed = await db.execute(
-        select(Connector).where(
-            Connector.id == connector_id,
-            Connector.tenant_id == current_user.tenant_id,
-        )
-    )
-    row = refreshed.scalar_one()
     return {
         "ok": True,
+        "status": body.get("status", "started"),
         "connector_id": str(connector_id),
         "scheduler": body,
-        "events_ingested": row.events_ingested,
-        "last_sync": row.last_sync.isoformat() if row.last_sync else None,
+        "events_ingested": connector.events_ingested,
+        "last_sync": connector.last_sync.isoformat() if connector.last_sync else None,
     }
 
 

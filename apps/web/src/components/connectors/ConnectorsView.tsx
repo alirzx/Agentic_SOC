@@ -130,11 +130,12 @@ export function ConnectorsView() {
     }
     setPollingId(id);
     try {
-      const result = await connectorsApi.pollNow(id);
-      toast.success(
-        `Poll done — ${result.events_ingested} events ingested total`,
-      );
+      await connectorsApi.pollNow(id);
+      toast.success('Sync started — counters refresh when the poll finishes');
       mutate();
+      window.setTimeout(() => {
+        void mutate();
+      }, 8_000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Poll failed';
       toast.error(msg);
