@@ -923,7 +923,7 @@ export function AlertDetailView({
   title?: string;
   host?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'raw'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'raw' | 'llm'>('overview');
   // Side drawer for the "Explain this alert" structured walkthrough
   // (`POST /api/v1/explain`). Kept local to the detail view because it
   // only makes sense while a single alert is on screen.
@@ -1096,6 +1096,19 @@ export function AlertDetailView({
             {tab}
           </button>
         ))}
+        {alert.llmPayload && (
+          <button
+            onClick={() => setActiveTab('llm')}
+            className={clsx(
+              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              activeTab === 'llm'
+                ? 'text-brand-400 border-blue-400'
+                : 'text-gray-500 border-transparent hover:text-gray-300'
+            )}
+          >
+            LLM Payload
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -1260,6 +1273,14 @@ export function AlertDetailView({
         <Section title="Raw Event Data">
           <pre className="text-xs text-gray-400 font-mono bg-dark-80/60 rounded-lg p-4 overflow-x-auto">
             {JSON.stringify(alert.rawEvent || { message: 'Raw event data not available for this alert.' }, null, 2)}
+          </pre>
+        </Section>
+      )}
+
+      {activeTab === 'llm' && alert.llmPayload && (
+        <Section title="LLM Payload">
+          <pre className="text-xs text-gray-400 font-mono bg-dark-80/60 rounded-lg p-4 overflow-x-auto">
+            {JSON.stringify(alert.llmPayload, null, 2)}
           </pre>
         </Section>
       )}

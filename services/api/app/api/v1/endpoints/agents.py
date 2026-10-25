@@ -190,6 +190,10 @@ def _build_raw_alert(alert: Alert) -> dict[str, Any]:
         "affected_hosts": alert.affected_hosts or [],
         "affected_users": alert.affected_users or [],
         "raw_event": alert.raw_event or {},
+        # Curated LLM evidence payload (migration 061). Top-level so the agents'
+        # ``extract_llm_payload`` finds it on its first check instead of walking
+        # raw_event -> raw_data -> raw_event.
+        "llm_payload": alert.llm_payload or None,
     }
 
 

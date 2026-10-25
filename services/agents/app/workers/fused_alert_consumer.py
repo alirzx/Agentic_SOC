@@ -168,6 +168,10 @@ def build_state(
         "mitre_techniques": alert.get("mitre_techniques", []),
         "risk_score": alert.get("risk_score", 0.0),
         "raw_event": alert.get("raw_event", {}),
+        # Curated LLM evidence payload (fusion RawAlert.llm_payload → column).
+        # Passed through so triage reads it directly instead of walking the
+        # OCSF envelope (raw_event → raw_data → raw_event) on every alert.
+        "llm_payload": alert.get("llm_payload"),
         "confidence": message.get("confidence_score"),
         "fusion_decision": message.get("fusion_decision"),
         # Connector provenance (issue #568) carried through the graph so the

@@ -102,6 +102,11 @@ class Alert(Base):
 
     # Raw data
     raw_event: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Curated LLM evidence payload emitted by the connector query (the Splunk
+    # notable pipeline builds it). First-class so the agents read it without
+    # unwrapping raw_event -> raw_data -> raw_event. NULL for connectors that
+    # do not produce one (migration 061).
+    llm_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     enrichment_data: Mapped[dict] = mapped_column(JSONB, default=dict)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
 

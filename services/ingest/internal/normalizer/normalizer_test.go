@@ -25,6 +25,7 @@ func TestSplunkProfileNormalizesNotableAsFinding(t *testing.T) {
 			"external_id": "NOTABLE-42",
 			"event_id":    "NOTABLE-42",
 			"title":       "Brute Force Access Behavior Detected",
+			"description": "The device connected to a prohibited port.",
 			"severity":    "medium",
 			"src_ip":      "10.0.0.9",
 			"hostname":    "web-01",
@@ -58,6 +59,11 @@ func TestSplunkProfileNormalizesNotableAsFinding(t *testing.T) {
 	// external_id must not become empty (the double-normalize regression, #528)
 	if finding, ok := ocsf["finding"].(map[string]interface{}); !ok || finding["uid"] != "NOTABLE-42" {
 		t.Errorf("finding.uid not preserved: %v", ocsf["finding"])
+	}
+	// description -> finding.desc so fusion persists real rule text instead of
+	// the truncated envelope JSON (alerts.description).
+	if finding, ok := ocsf["finding"].(map[string]interface{}); !ok || finding["desc"] != "The device connected to a prohibited port." {
+		t.Errorf("finding.desc not preserved: %v", ocsf["finding"])
 	}
 }
 

@@ -73,6 +73,11 @@ class RawAlert(BaseModel):
 
     # Raw event
     raw_event: dict[str, Any] = Field(default_factory=dict)
+    # Curated LLM evidence payload emitted by the connector query (Splunk's
+    # notable pipeline builds it, see PLAN-20261024-1352). Lifted out of the
+    # OCSF envelope at promote time so the alert row carries it first-class and
+    # the agents' prompt evidence never depends on unwrapping raw_event.
+    llm_payload: dict[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)
     risk_score: float = 0.0
 

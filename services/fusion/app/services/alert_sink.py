@@ -77,7 +77,7 @@ INSERT INTO alerts (
     created_at, updated_at, ai_recommendations, tags, enrichment_data,
     affected_ips, affected_users, affected_assets, child_alert_ids, is_merged,
     connector_id, connector_type, source_event_ids, ocsf_class_uid,
-    rule_id, rule_name, affected_hosts
+    rule_id, rule_name, affected_hosts, llm_payload
 )
 SELECT
     $1, $2, $3, $4, $5::text, 'new',
@@ -94,7 +94,7 @@ SELECT
     NOW(), NOW(), '[]'::jsonb, '[]'::jsonb, '{}'::jsonb,
     '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, FALSE,
     $18, $19, $20::jsonb, $21,
-    $22, $23, $24::jsonb
+    $22, $23, $24::jsonb, $25::jsonb
 WHERE NOT EXISTS (
     SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
 )
@@ -110,6 +110,8 @@ RETURNING id
 # `dedup_hash` is VARCHAR(64); a varchar/text mismatch makes asyncpg's prepare
 # fail to unify parameter $11 ("inconsistent types deduced"), silently dropping
 # every write. Pinning both uses to ::text makes the deduction unambiguous.
+# $25 (llm_payload) is the curated LLM evidence payload from the connector
+# query (migration 061); it stays NULL for connectors that emit none.
 
 
 def _asyncpg_dsn(url: str) -> str:
@@ -221,6 +223,12 @@ class AlertSink:
                     alert.rule_id,
                     alert.rule_name,
                     json.dumps(hosts),
+                    # Curated LLM evidence payload (migration 061). NULL for
+                    # connectors that do not emit one — never an empty JSON
+                    # object, which would lie about "payload present".
+                    json.dumps(alert.llm_payload, default=str)
+                    if alert.llm_payload
+                    else None,
                 )
             if row is None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())

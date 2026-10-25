@@ -27,7 +27,10 @@ we log it rather than crash the consumer).
 
 from __future__ import annotations
 
+import json
 import uuid
+from collections import deque
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
@@ -74,6 +77,98 @@ def _first_file_hash(ocsf: dict[str, Any]) -> str | None:
             if isinstance(value, str) and value:
                 return value
     return None
+
+
+#: Key the connectors place on the alert / raw vendor row.
+LLM_PAYLOAD_KEY = "llm_payload"
+
+# Envelope keys that can wrap the vendor row on the way from connector → ingest
+# → fusion. A Splunk notable arrives as ``raw_event`` (OCSF) -> ``raw_data``
+# (canonical-envelope JSON) -> ``raw_event`` (the Splunk row).
+_PAYLOAD_WALK_KEYS = ("raw_event", "rawEvent", "raw_data", "data")
+_MAX_PAYLOAD_WALK = 8
+
+
+def _as_mapping(value: Any) -> Mapping[str, Any] | None:
+    """Coerce a dict or a JSON-object string into a non-empty mapping.
+
+    ``None``, ``""``, ``"null"`` and ``"{}"`` all collapse to ``None``: a
+    payload with no keys means the query did not produce one (older saved
+    search, operator SPL, non-Splunk connector) and must be stored as NULL, not
+    as an empty JSON object that claims evidence exists.
+    """
+    parsed: Any = value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text.startswith("{"):
+            return None
+        try:
+            parsed = json.loads(text)
+        except (TypeError, ValueError):
+            return None
+    if isinstance(parsed, Mapping) and parsed:
+        return parsed
+    return None
+
+
+def _llm_payload(ocsf: dict[str, Any]) -> dict[str, Any] | None:
+    """Lift the query-provided ``llm_payload`` out of the OCSF envelope.
+
+    The optimized Splunk notable pipeline emits one curated payload per notable
+    (rule text + SPL + macros, alert fields, event time and its provenance, risk
+    context, annotations). Storing it as a column means the agents' prompt
+    evidence is read directly instead of being re-derived — or found by walking
+    three levels of envelope at prompt time on every call.
+
+    The walk mirrors the agents' resolver (``app.context.llm_payload``) so both
+    sides agree on where the payload lives; it is bounded so a hostile or
+    circular envelope cannot make promotion recurse.
+    """
+    root = _as_mapping(ocsf)
+    if root is None:
+        return None
+
+    for candidate in (root, _as_mapping(root.get("finding"))):
+        if candidate is not None:
+            direct = _as_mapping(candidate.get(LLM_PAYLOAD_KEY))
+            if direct is not None:
+                return dict(direct)
+
+    queue: deque[Any] = deque(root[key] for key in _PAYLOAD_WALK_KEYS if key in root)
+    visited = 0
+    while queue and visited < _MAX_PAYLOAD_WALK:
+        visited += 1
+        node = _as_mapping(queue.popleft())
+        if node is None:
+            continue
+        found = _as_mapping(node.get(LLM_PAYLOAD_KEY))
+        if found is not None:
+            return dict(found)
+        for key in _PAYLOAD_WALK_KEYS:
+            if key in node:
+                queue.append(node[key])
+    return None
+
+
+def _description(ocsf: dict[str, Any]) -> str:
+    """Alert description: the OCSF finding description, not the raw envelope.
+
+    Ingest maps the connector's canonical ``description`` (which the Splunk
+    connector fills from the rule's ``rule_description``) to ``finding.desc``.
+    Reading it here keeps ``alerts.description`` as human-readable text; the
+    previous behaviour dumped ``raw_data`` (the whole envelope JSON) truncated
+    at 2000 chars, so the rule description never reached the column.
+    ``raw_data`` stays as the last-resort fallback for connectors that supply
+    nothing else.
+    """
+    for candidate in (
+        _get_nested(ocsf, "finding", "desc"),
+        _get_nested(ocsf, "unmapped", "description"),
+    ):
+        text = candidate.strip() if isinstance(candidate, str) else ""
+        if text:
+            return text[:4000]
+    return str(ocsf.get("raw_data") or "")[:2000]
 
 
 def _mitre(ocsf: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -240,11 +335,39 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
 
     envelope_title = message.get("title")
     title = _title(ocsf, envelope_title if isinstance(envelope_title, str) else None)
+
+    # Strip llm_payload from raw_event before storage — it lives in its own
+    # first-class column (migration 061) and must not duplicate in raw_event.
+    raw_event = dict(ocsf)
+    raw_event.pop(LLM_PAYLOAD_KEY, None)
+
+    # raw_data arrives as a JSON-encoded string from ingest; parse it, strip,
+    # then re-serialize so the stored JSONB never contains llm_payload.
+    raw_data = raw_event.get("raw_data")
+    if isinstance(raw_data, str):
+        try:
+            raw_data_obj = json.loads(raw_data)
+        except (TypeError, ValueError):
+            raw_data_obj = None
+        if isinstance(raw_data_obj, dict):
+            raw_data_obj.pop(LLM_PAYLOAD_KEY, None)
+            inner = raw_data_obj.get("raw_event")
+            if isinstance(inner, dict):
+                inner.pop(LLM_PAYLOAD_KEY, None)
+            raw_event["raw_data"] = json.dumps(raw_data_obj, ensure_ascii=False)
+    elif isinstance(raw_data, dict):
+        raw_data = dict(raw_data)
+        raw_data.pop(LLM_PAYLOAD_KEY, None)
+        inner = raw_data.get("raw_event")
+        if isinstance(inner, dict):
+            inner.pop(LLM_PAYLOAD_KEY, None)
+        raw_event["raw_data"] = raw_data
+
     return RawAlert(
         tenant_id=tenant_id,
         source=_source(ocsf),
         title=title,
-        description=str(ocsf.get("raw_data") or "")[:2000],
+        description=_description(ocsf),
         severity=severity,
         src_ip=_as_str(_get_nested(ocsf, "src_endpoint", "ip")),
         dst_ip=_as_str(_get_nested(ocsf, "dst_endpoint", "ip")),
@@ -256,7 +379,8 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         file_hash=_first_file_hash(ocsf),
         mitre_tactics=tactics,
         mitre_techniques=techniques,
-        raw_event=ocsf,
+        raw_event=raw_event,
+        llm_payload=_llm_payload(ocsf),
         event_time=_event_time(ocsf),
         connector_id=connector_id,
         connector_type=connector_type,

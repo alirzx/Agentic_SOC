@@ -659,6 +659,7 @@ export interface Alert {
   mitreAttack?: MitreAttack[];
   iocs?: AlertIOC[];
   rawEvent?: Record<string, unknown>;
+  llmPayload?: Record<string, unknown> | null;
   assignee?: string;
   caseId?: string;
   tags?: string[];
@@ -843,6 +844,9 @@ function normalizeAlert(raw: unknown): Alert {
     rawEvent:
       (r.raw_event as Record<string, unknown> | undefined) ??
       (r.rawEvent as Record<string, unknown> | undefined),
+    llmPayload:
+      (r.llm_payload as Record<string, unknown> | null | undefined) ??
+      (r.llmPayload as Record<string, unknown> | null | undefined),
     assignee: pickStr('assignee', 'assignee'),
     caseId: pickStr('case_id', 'caseId'),
     funnelStage: (pickStr('funnel_stage', 'funnelStage') as FunnelStage | undefined) ?? 'ingested',

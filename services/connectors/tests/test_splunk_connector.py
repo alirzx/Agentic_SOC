@@ -3,6 +3,7 @@ checkpointed pagination + deterministic identity (#529)."""
 
 from __future__ import annotations
 
+import json
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -25,14 +26,14 @@ def _conn(**kw) -> SplunkConnector:
 
 def test_mission_control_spl_tables_extracted_fields():
     spl = mission_control_spl()
-    assert spl.startswith("search index=agentic*")
-    assert "| extract" in spl
+    assert spl.startswith("search index=notable")
+    assert "eval rule_specific_json=json_object()" in spl
     assert "orig_rule_description" in spl
     assert "notable_id=coalesce" in spl
-    assert "dest_port" in spl
+    assert "llm_payload=json_object" in spl
+    assert "analyst_labels=json_object" in spl
     assert "annotations_mitre_attack" in spl
     assert "annotations_analytic_story" in spl
-    assert "EventID" in spl
     assert "earliest=" not in spl
     lookup = mission_control_spl('(search_name="Network - Unapproved Port Activity Detected - Rule")', limit=5)
     assert "search_name=" in lookup
@@ -272,6 +273,8 @@ async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
                         "severity": "low",
                         "orig_rule_title": "Prohibited Port Activity Detected",
                         "orig_rule_description": "The device connected to a prohibited port.",
+                        "llm_payload": '{"alert_id": "af145ac9-6b34-49b9-af4a-afe5e342e47c", "severity": "low"}',
+                        "analyst_labels": '{"status": "open", "owner": null}',
                     }
                 ],
             },
@@ -283,13 +286,15 @@ async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
     out = await c.fetch_alerts()
     body = jobs.calls[0].request.content.decode()
     assert "notable" in body
-    assert "extract" in body
+    assert "eval rule_specific_json" in body
+    assert "llm_payload" in body
     assert "orig_rule_description" in body
     assert "exec_mode=oneshot" not in body
     assert len(out) == 1
     assert out[0]["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
     assert out[0]["description"].startswith("The device connected")
     assert out[0]["raw_event"]["dest_port"] == "3389"
+    assert "llm_payload" in out[0]["raw_event"]
 
 
 @respx.mock
@@ -319,6 +324,8 @@ async def test_fetch_alerts_with_checkpoint_resumes_from_checkpoint_time():
                         "notable_id": "new-1",
                         "search_name": "Fresh Notable",
                         "severity": "high",
+                        "llm_payload": '{"alert_id": "new-1", "severity": "high"}',
+                        "analyst_labels": '{}',
                     }
                 ]
             },
@@ -334,6 +341,7 @@ async def test_fetch_alerts_with_checkpoint_resumes_from_checkpoint_time():
     assert "exec_mode=oneshot" not in body
     assert len(out) == 1
     assert out[0]["title"] == "Fresh Notable"
+    assert "llm_payload" in out[0]["raw_event"]
 
 
 @respx.mock
@@ -478,6 +486,8 @@ def test_normalize_mission_control_extract_row():
         "orig_rule_description": "The device connected to a prohibited port.",
         "transport": "tcp",
         "is_prohibited": "true",
+        "llm_payload": '{"alert_id": "af145ac9-6b34-49b9-af4a-afe5e342e47c"}',
+        "analyst_labels": '{"status": "open", "severity": "low"}',
     }
     out = c.normalize(row)
     assert out["title"] == "Network - Unapproved Port Activity Detected - Rule"
@@ -485,6 +495,8 @@ def test_normalize_mission_control_extract_row():
     assert out["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
     assert out["external_id"] == "af145ac9-6b34-49b9-af4a-afe5e342e47c"
     assert out["raw_event"]["detection_id"] == "6dd9e9ab-1111-2222-3333-444444444444"
+    assert "llm_payload" in out["raw_event"]
+    assert "analyst_labels" in out["raw_event"]
 
 
 def test_normalize_extracts_mitre_from_annotations():
@@ -525,6 +537,8 @@ async def test_lookup_notable_filters_search_name_and_host():
                         "transport": "tcp",
                         "severity": "low",
                         "orig_rule_description": "The device connected to a prohibited port.",
+                        "llm_payload": '{"alert_id": "lookup-1", "severity": "low"}',
+                        "analyst_labels": '{"status": "open"}',
                     }
                 ],
             },
@@ -537,9 +551,11 @@ async def test_lookup_notable_filters_search_name_and_host():
     assert out is not None
     assert out["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
     assert out["raw_event"]["dest_port"] == "3389"
+    assert "llm_payload" in out["raw_event"]
     body = jobs.calls[0].request.content.decode()
     assert "Unapproved" in body
-    assert "extract" in body
+    assert "eval rule_specific_json" in body
+    assert "llm_payload" in body
     assert "orig_rule_description" in body
     assert "exec_mode=oneshot" in body
     assert "earliest_time=-30d" in body
@@ -579,6 +595,42 @@ def test_normalize_es_catalog_row():
     assert out["description"] == "ES correlation"
 
 
+def test_normalize_preserves_llm_payload_and_analyst_labels():
+    """Verify that llm_payload and analyst_labels are properly preserved in raw_event."""
+    c = _conn()
+    llm_payload = {
+        "alert_id": "test-alert-1",
+        "severity": "high",
+        "rule_name": "Suspicious Login",
+        "annotations": {"mitre_attack": ["T1110.003"]},
+    }
+    analyst_labels = {
+        "status": "investigating",
+        "owner": "SOC-Team",
+        "urgency": "high",
+        "disposition": "true_positive",
+    }
+    row = {
+        "_time": "2026-10-01T15:30:00Z",
+        "notable_id": "test-alert-1",
+        "search_name": "Suspicious Login",
+        "severity": "high",
+        "src": "192.168.1.100",
+        "host": "target-host",
+        "llm_payload": json.dumps(llm_payload),
+        "analyst_labels": json.dumps(analyst_labels),
+    }
+    out = c.normalize(row)
+    assert out["external_id"] == "test-alert-1"
+    assert out["title"] == "Suspicious Login"
+    assert out["severity"] == "high"
+    # Verify both fields are preserved in raw_event
+    assert "llm_payload" in out["raw_event"]
+    assert "analyst_labels" in out["raw_event"]
+    assert out["raw_event"]["llm_payload"] == json.dumps(llm_payload)
+    assert out["raw_event"]["analyst_labels"] == json.dumps(analyst_labels)
+
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_pagination_collects_all_results_no_head_cap():
@@ -592,7 +644,12 @@ async def test_pagination_collects_all_results_no_head_cap():
         offset = int(qs.get("offset", ["0"])[0])
         count = int(qs.get("count", ["100"])[0])
         page = [
-            {"event_id": f"E{i}", "_time": f"2026-08-01T00:{(i // 60) % 60:02d}:{i % 60:02d}Z"}
+            {
+                "event_id": f"E{i}",
+                "_time": f"2026-08-01T00:{(i // 60) % 60:02d}:{i % 60:02d}Z",
+                "llm_payload": f'{{"alert_id": "E{i}", "severity": "medium"}}',
+                "analyst_labels": '{}',
+            }
             for i in range(offset, min(offset + count, total))
         ]
         return httpx.Response(200, json={"results": page})
@@ -603,3 +660,5 @@ async def test_pagination_collects_all_results_no_head_cap():
     # All 250 survive — the old `head 100` / count=100 cap silently dropped 150.
     assert len(out) == total
     assert len({e["external_id"] for e in out}) == total
+    # Verify llm_payload is preserved in raw_event
+    assert all("llm_payload" in e["raw_event"] for e in out)

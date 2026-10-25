@@ -148,6 +148,7 @@ var connectorProfiles = map[string]connectorProfile{
 		fieldMap: map[string]string{
 			"title":       "message",
 			"external_id": "finding.uid",
+			"description": "finding.desc",
 			"src_ip":      "src_endpoint.ip",
 			"hostname":    "device.name",
 		},
@@ -274,9 +275,15 @@ var _canonicalSeverityMap = map[string]int{
 	"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "informational": 1,
 }
 
+// ``description`` -> ``finding.desc`` keeps the vendor/rule description as
+// text: fusion promoted from ``raw_data`` (the whole envelope JSON, truncated)
+// so the alerts table never held the human-readable description. OCSF 2001
+// defines ``finding.desc`` for exactly this, and the fusion promoter now reads
+// it before falling back to ``raw_data``.
 var _canonicalFieldMap = map[string]string{
 	"title":       "message",
 	"external_id": "finding.uid",
+	"description": "finding.desc",
 	"src_ip":      "src_endpoint.ip",
 	"hostname":    "device.name",
 	"actor":       "actor.user.name",

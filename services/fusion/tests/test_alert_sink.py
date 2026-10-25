@@ -139,6 +139,8 @@ async def test_new_alert_is_inserted_with_canonical_id_and_provenance():
     assert args[20] == 2004  # ocsf_class_uid
     assert args[21] == "edr-cred-dump-1"  # rule_id
     assert json.loads(args[23]) == ["WIN-DC01"]  # affected_hosts
+    assert "llm_payload" in sql  # migration 061 column
+    assert args[24] is None  # no payload for a connector that emits none
 
 
 @pytest.mark.asyncio
@@ -239,3 +241,34 @@ def test_deterministic_id_is_replay_stable():
     assert a.id == b.id == a.deterministic_id()
     # And it is a proper uuid5 (not the random default_factory).
     assert a.id != uuid.uuid4()
+
+@pytest.mark.asyncio
+async def test_llm_payload_is_persisted_as_jsonb():
+    """The curated LLM evidence payload lands in its own column (migration 061)."""
+    fused = _fused()
+    fused.alert.llm_payload = {"alert_id": "a-1", "rule_name": "ESCU - 3CX", "alert_fields": {"query": "www.3cx.com"}}
+    pool = _StubPool(row={"id": fused.id})
+    sink = AlertSink("postgresql://x")
+    sink._pool = pool
+
+    result = await sink.persist(fused)
+
+    assert result.outcome is PersistOutcome.INSERTED
+    (sql, args) = pool.conn.calls[0]
+    assert "llm_payload" in sql
+    assert "$25::jsonb" in sql
+    assert json.loads(args[24]) == fused.alert.llm_payload
+
+@pytest.mark.asyncio
+async def test_empty_llm_payload_is_written_as_null():
+    """{} must not reach Postgres as an empty object ("evidence exists")."""
+    fused = _fused()
+    fused.alert.llm_payload = {}
+    pool = _StubPool(row={"id": fused.id})
+    sink = AlertSink("postgresql://x")
+    sink._pool = pool
+
+    await sink.persist(fused)
+
+    (_sql, args) = pool.conn.calls[0]
+    assert args[24] is None

@@ -128,6 +128,10 @@ class AlertDetailResponse(AlertResponse):
     mini_timeline: list[MiniTimelineEvent] = []
     recommended_actions: list[RecommendedAction] = []
     raw_event: dict = {}
+    # Curated LLM evidence payload written by fusion at promote time (migration
+    # 061). Carried on the detail shape only: it is large and only the
+    # alert workbench / agent handoff needs it.
+    llm_payload: dict | None = None
     iocs: list[dict] = []
     mitre_attack: list[dict] = []
     source_ref: str | None = None
@@ -984,6 +988,7 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
             "mini_timeline": envelope.mini_timeline,
             "recommended_actions": envelope.recommended_actions,
             "raw_event": alert.raw_event or {},
+            "llm_payload": alert.llm_payload or None,
             "iocs": extra.get("iocs") if isinstance(extra.get("iocs"), list) else iocs_from_raw(alert.raw_event or {}),
             "mitre_attack": mitre_attack or mitre_attack_rows(techniques),
             "source_ref": extra.get("splunk_source_ref")

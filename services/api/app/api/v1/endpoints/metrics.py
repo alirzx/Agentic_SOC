@@ -755,8 +755,8 @@ async def _events_of_interest(db, tenant_id, start, end) -> int:
     sql = (
         "SELECT count() AS cnt "
         "FROM aisoc.raw_events "
-        f"WHERE ingested_at >= toDateTime('{start.strftime('%Y-%m-%d %H:%M:%S')}') "
-        f"AND ingested_at < toDateTime('{end.strftime('%Y-%m-%d %H:%M:%S')}')"
+        f"WHERE ingest_time >= toDateTime('{start.strftime('%Y-%m-%d %H:%M:%S')}') "
+        f"AND ingest_time < toDateTime('{end.strftime('%Y-%m-%d %H:%M:%S')}')"
     )
 
     try:

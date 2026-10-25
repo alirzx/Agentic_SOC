@@ -8,6 +8,7 @@ and never claim to.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 from app.models.alert import AlertSeverity
@@ -200,3 +201,105 @@ class TestPromoteNormalizedEvent:
         assert alert is not None
         assert alert.hostname == "win-dc-137.attackrange.local"
         assert alert.src_ip == "10.0.0.8"
+
+    def test_description_prefers_finding_desc_over_raw_data(self):
+        # ingest maps the canonical connector ``description`` to finding.desc;
+        # the alert description must be that text, not the truncated envelope.
+        msg = _message(
+            {
+                "finding": {
+                    "desc": "The following analytic identifies DNS queries to 3CX IOC domains."
+                },
+                "raw_data": '{"description":"The following analytic identifies DNS queries to 3CX IOC domains.","raw_event":{}}',
+            }
+        )
+        alert = promote_normalized_event(msg)
+        assert alert is not None
+        assert alert.description == (
+            "The following analytic identifies DNS queries to 3CX IOC domains."
+        )
+
+    def test_description_falls_back_to_raw_data_when_finding_desc_missing(self):
+        alert = promote_normalized_event(_message())
+        assert alert is not None
+        assert alert.description == '{"event_simpleName":"CredentialDump"}'
+
+    def test_llm_payload_is_lifted_from_the_connector_envelope(self):
+        # The Splunk notable carries llm_payload on the vendor row, which ingest
+        # tucks into raw_data (canonical envelope JSON) and OCSF keeps as
+        # raw_data. Promotion lifts it to a first-class RawAlert field so agents
+        # never unwrap three levels at prompt time.
+        payload = {
+            "alert_id": "d1ef60ed-07e8-4581-ba9f-2b5de38a9daa",
+            "rule_name": "ESCU - 3CX Supply Chain Attack Network Indicators - Rule",
+            "event_time_source": "first_event",
+            "alert_fields": {"query": "www.3cx.com", "isIOC": "TRUE"},
+        }
+        envelope = {
+            "source": "splunk",
+            "external_id": "d1ef60ed-07e8-4581-ba9f-2b5de38a9daa",
+            "title": "ESCU - 3CX Supply Chain Attack Network Indicators - Rule",
+            "severity": "medium",
+            "raw_event": {
+                "_time": "2026-10-24T14:33:41Z",
+                "llm_payload": json.dumps(payload),
+            },
+        }
+        alert = promote_normalized_event(_message({"raw_data": json.dumps(envelope)}))
+        assert alert is not None
+        assert alert.llm_payload == payload
+
+    def test_llm_payload_is_none_without_one(self):
+        alert = promote_normalized_event(_message())
+        assert alert is not None
+        assert alert.llm_payload is None
+
+    def test_llm_payload_does_not_disturb_the_fingerprint(self):
+        # The payload is evidence, not identity: adding it must not mint a new
+        # alert on the next poll of the same notable.
+        envelope = {
+            "source": "splunk",
+            "raw_event": {"llm_payload": json.dumps({"alert_id": "x", "rule": {"spl": "| tstats count"}})},
+        }
+        without = promote_normalized_event(_message())
+        with_payload = promote_normalized_event(_message({"raw_data": json.dumps(envelope)}))
+        assert without is not None and with_payload is not None
+        assert without.fingerprint() == with_payload.fingerprint()
+
+    def test_empty_or_missing_llm_payload_is_none(self):
+        # A saved search / operator SPL that predates the payload must promote to
+        # NULL, never to an empty object that claims evidence exists.
+        for raw_payload in (None, "", "   ", "{}", "null", "[]"):
+            envelope = {"source": "splunk", "raw_event": {"llm_payload": raw_payload}}
+            alert = promote_normalized_event(_message({"raw_data": json.dumps(envelope)}))
+            assert alert is not None
+            assert alert.llm_payload is None, raw_payload
+
+    def test_llm_payload_stripped_from_raw_event(self):
+        # llm_payload must NOT appear inside raw_event — it lives in its own
+        # first-class column (migration 061) and must not duplicate there.
+        # raw_data arrives from ingest as a JSON-encoded string (not a dict).
+        payload = {"alert_id": "abc", "severity": "high"}
+        inner_raw_event = {
+            "_time": "2026-10-25T10:00:00Z",
+            "llm_payload": json.dumps(payload),
+            "entity": "WIN-01",
+        }
+        connector_envelope = {
+            "source": "splunk",
+            "raw_event": inner_raw_event,
+        }
+        alert = promote_normalized_event(
+            _message({"raw_data": json.dumps(connector_envelope)})
+        )
+        assert alert is not None
+        assert alert.llm_payload == payload
+        # llm_payload must be absent from every layer of raw_event
+        assert "llm_payload" not in alert.raw_event
+        raw_data_str = alert.raw_event.get("raw_data")
+        if raw_data_str:
+            raw_data_obj = json.loads(raw_data_str) if isinstance(raw_data_str, str) else raw_data_str
+            assert "llm_payload" not in raw_data_obj
+            inner = raw_data_obj.get("raw_event") if isinstance(raw_data_obj, dict) else None
+            if isinstance(inner, dict):
+                assert "llm_payload" not in inner
