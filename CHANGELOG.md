@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **SOC Funnel filled with ×N same-title ESCU rows after Splunk catch-up.**
+  Fingerprint-by-`finding.uid` correctly treats each Splunk notable as distinct,
+  but ESCU re-fires often mint a new uid for the same title+host. Funnel groups
+  by title (`same_title_count`), so the board looked flooded. `AlertSink` now
+  collapses on the Funnel display key (title+severity+rule+hosts) and bumps
+  `occurrence_count` instead of inserting another row.
 - **Connectors "Persist failed" badge stuck after sink recovery.**
   `fusion_persist_failed` was a lifetime counter that never cleared (unlike
   poll `error_count`), so historical AlertSink failures (e.g. the old

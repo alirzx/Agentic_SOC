@@ -112,6 +112,11 @@ async def test_duplicate_decision_still_attempts_idempotent_insert():
     pool = _StubPool(row={"id": fused.id})
     sink = AlertSink("postgresql://x")
     sink._pool = pool
+
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(fused)
     assert result.outcome is PersistOutcome.INSERTED
     assert sink._pool.conn.calls  # INSERT was issued
@@ -125,6 +130,10 @@ async def test_new_alert_is_inserted_with_canonical_id_and_provenance():
     sink = AlertSink("postgresql://x")
     sink._pool = pool
 
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(fused)
 
     assert result.outcome is PersistOutcome.INSERTED
@@ -182,6 +191,11 @@ async def test_unknown_tenant_retries_demo_tenant():
 
     sink = AlertSink("postgresql://x")
     sink._pool = _FkThenOkPool()
+
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(fused)
     assert result.outcome is PersistOutcome.INSERTED
     assert sink._pool.conn.calls[0][1][1] == other
@@ -194,6 +208,11 @@ async def test_dedup_hit_returns_duplicate():
     pool = _StubPool(row=None)  # WHERE NOT EXISTS / ON CONFLICT filtered it out
     sink = AlertSink("postgresql://x")
     sink._pool = pool
+
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(_fused())
     assert result.outcome is PersistOutcome.DUPLICATE
     assert result.alert_id == str(_fused().id)  # canonical id still known
@@ -206,6 +225,11 @@ async def test_dedup_hit_returns_existing_postgres_id():
     pool = _StubPool(row=None, lookup_row={"id": str(existing)})
     sink = AlertSink("postgresql://x")
     sink._pool = pool
+
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(_fused())
     assert result.outcome is PersistOutcome.DUPLICATE
     assert result.alert_id == str(existing)
@@ -234,6 +258,11 @@ async def test_persist_exception_is_failed_not_duplicate():
 
     sink = AlertSink("postgresql://x")
     sink._pool = _BoomPool(row=None)
+
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(_fused())
     assert result.outcome is PersistOutcome.FAILED
     assert result.durable is False
@@ -246,9 +275,41 @@ async def test_durable_persist_clears_fusion_persist_failed_badge():
     pool = _StubPool(row={"id": fused.id})
     sink = AlertSink("postgresql://x")
     sink._pool = pool
+
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(fused)
     assert result.outcome is PersistOutcome.INSERTED
     assert any("fusion_persist_failed = 0" in sql for sql, _ in pool.conn.executes)
+
+
+@pytest.mark.asyncio
+async def test_display_duplicate_skips_insert_and_bumps_occurrence():
+    """Same title+rule+host with a new finding.uid must not mint another row."""
+    fused = _fused()
+    existing = str(uuid.uuid4())
+    pool = _StubPool(row={"id": fused.id})
+    sink = AlertSink("postgresql://x")
+    sink._pool = pool
+
+    async def _hit(*_a, **_k):
+        return existing
+
+    touched: list[tuple] = []
+
+    async def _touch(tenant_id, fingerprint, *, event_time=None, original_id=None):
+        touched.append((str(tenant_id), fingerprint, original_id))
+        return True
+
+    sink.lookup_display_duplicate = _hit  # type: ignore[method-assign]
+    sink.touch_duplicate = _touch  # type: ignore[method-assign]
+    result = await sink.persist(fused)
+    assert result.outcome is PersistOutcome.DUPLICATE
+    assert result.alert_id == existing
+    assert pool.conn.calls == []  # no INSERT
+    assert touched and touched[0][2] == existing
 
 
 def test_deterministic_id_is_replay_stable():
@@ -268,6 +329,10 @@ async def test_llm_payload_is_persisted_as_jsonb():
     sink = AlertSink("postgresql://x")
     sink._pool = pool
 
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(fused)
 
     assert result.outcome is PersistOutcome.INSERTED
@@ -285,6 +350,10 @@ async def test_empty_llm_payload_is_written_as_null():
     sink = AlertSink("postgresql://x")
     sink._pool = pool
 
+    async def _no_display(*_a, **_k):
+        return None
+
+    sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     await sink.persist(fused)
 
     (_sql, args) = pool.conn.calls[0]

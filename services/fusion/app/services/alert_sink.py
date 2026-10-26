@@ -195,6 +195,35 @@ class AlertSink:
 
         alert = fused.alert
         hosts = [alert.hostname] if alert.hostname else []
+        # Splunk ESCU often mints a *new* finding.uid for the same title+host
+        # on every correlation cycle. Fingerprint-by-event-id correctly treats
+        # those as distinct events, but the SOC Funnel collapses by display
+        # key — without this gate the board fills with ×N copies until an
+        # operator runs Remove duplicates. Prefer bumping occurrence_count.
+        display_hit = await self.lookup_display_duplicate(
+            alert.tenant_id,
+            title=alert.title[:500],
+            severity=alert.severity.value,
+            rule_id=alert.rule_id,
+            rule_name=alert.rule_name,
+            hosts=hosts,
+        )
+        if display_hit:
+            await self.touch_duplicate(
+                alert.tenant_id,
+                alert.fingerprint(),
+                event_time=alert.event_time,
+                original_id=display_hit,
+            )
+            # touch_duplicate keys on dedup_hash OR id; fingerprint differs so
+            # pass original_id so last_seen / occurrence_count still advance.
+            await self._clear_persist_failed(alert.connector_id)
+            logger.info(
+                "alert_sink.display_dedup",
+                existing_id=display_hit,
+                title=alert.title[:120],
+            )
+            return PersistResult(PersistOutcome.DUPLICATE, display_hit)
         try:
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(
@@ -319,6 +348,53 @@ class AlertSink:
             tenant_id,
             fingerprint,
         )
+        return str(row["id"]) if row else None
+
+    async def lookup_display_duplicate(
+        self,
+        tenant_id,
+        *,
+        title: str,
+        severity: str,
+        rule_id: str | None,
+        rule_name: str | None,
+        hosts: list[str],
+    ) -> str | None:
+        """Return an existing alert id that matches the Funnel display key.
+
+        Aligns with ``exact_dedupe.alert_display_key`` (title + severity + rule
+        + affected_hosts). Ignores ``source_event_ids`` so ESCU re-fires for the
+        same host collapse into one row.
+        """
+        if not title:
+            return None
+        pool = await self._ensure_pool()
+        if pool is None:
+            return None
+        rule = (rule_id or rule_name or "").strip()
+        try:
+            row = await pool.fetchrow(
+                """
+                SELECT id::text AS id
+                  FROM alerts
+                 WHERE tenant_id = $1
+                   AND lower(title) = lower($2)
+                   AND lower(severity) = lower($3)
+                   AND lower(COALESCE(NULLIF(rule_id, ''), NULLIF(rule_name, ''), ''))
+                       = lower($4)
+                   AND COALESCE(affected_hosts, '[]'::jsonb) = $5::jsonb
+                 ORDER BY created_at ASC
+                 LIMIT 1
+                """,
+                tenant_id,
+                title.strip(),
+                severity.strip(),
+                rule,
+                json.dumps(hosts),
+            )
+        except Exception as exc:  # noqa: BLE001 — schema drift must not block insert
+            logger.debug("alert_sink.display_lookup_failed", error=str(exc))
+            return None
         return str(row["id"]) if row else None
 
     async def touch_duplicate(
