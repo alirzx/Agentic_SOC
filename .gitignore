@@ -105,6 +105,12 @@ eval_mitre_accuracy_report.json
 PROGRESS.md
 PR_TRIAGE.md
 
+# Local SSH / remote probe helpers (may contain host credentials — never commit)
+.tmp_ssh_probe.py
+.tmp_ssh_run.py
+.tmp_remote_check.sh
+.tmp_ssh*
+
 # Acceptance harness ledger (.aisoc/acceptance-history.jsonl is per-machine and
 # accumulates across runs — useful for "is this getting slower?" but not for
 # version control. Same applies to any other harness state we drop in here.)
