@@ -3017,6 +3017,13 @@ export const connectorsApi = {
       method: 'POST',
     }),
 
+  /** Zero poll-error and fusion-persist-failed badges after recovery. */
+  resetFailureCounters: (id: string) =>
+    request<BackendConnectorResponse>(
+      `/api/v1/connectors/${id}/reset-failure-counters`,
+      { method: 'POST' },
+    ).then(mapBackendConnector),
+
   /** Run "Test connection" with un-saved credentials from the wizard. */
   testInline: (payload: TestConnectorPayload) =>
     request<ConnectorTestResult>('/api/v1/connectors/test', {

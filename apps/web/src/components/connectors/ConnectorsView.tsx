@@ -144,6 +144,21 @@ export function ConnectorsView() {
     }
   };
 
+  const handleResetFailures = async (id: string) => {
+    if (!UUID_RE.test(id)) {
+      toast.error('This is not a saved connector.');
+      return;
+    }
+    try {
+      await connectorsApi.resetFailureCounters(id);
+      toast.success('Failure counters cleared');
+      mutate();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to clear counters';
+      toast.error(msg);
+    }
+  };
+
   const handleDelete = async (connector: Connector) => {
     const ok = window.confirm(
       `Delete connector "${connector.name}"? This stops polling and removes its credentials. Already-ingested alerts are preserved.`,
@@ -300,6 +315,7 @@ export function ConnectorsView() {
         testResults={testResults}
         onTest={handleTest}
         onPoll={handlePoll}
+        onResetFailures={handleResetFailures}
         onAdd={() => {
           setEditingConnector(null);
           setModalOpen(true);

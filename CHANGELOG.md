@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Connectors "Persist failed" badge stuck after sink recovery.**
+  `fusion_persist_failed` was a lifetime counter that never cleared (unlike
+  poll `error_count`), so historical AlertSink failures (e.g. the old
+  `$5::text` mismatch) left an orange badge forever even while new inserts
+  succeeded. Durable persists now zero the counter; operators can also
+  `POST /api/v1/connectors/{id}/reset-failure-counters` (UI **Clear**).
 - **Splunk re-poll flooded `/alerts` with duplicate rows.** Fusion fingerprint
   included hostname/MITRE/IPs alongside `finding.uid`, so enrichment drift on
   every poll minted new UUIDs (tens of thousands of identical ESCU titles).

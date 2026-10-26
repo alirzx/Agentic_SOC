@@ -235,10 +235,12 @@ class AlertSink:
                 existing = await self.lookup_dedup(alert.tenant_id, alert.fingerprint())
                 # Legacy rows used a random uuid4 with the same hash; RBA must
                 # link to that stored id, not the fusion-minted uuid5.
+                await self._clear_persist_failed(alert.connector_id)
                 return PersistResult(
                     PersistOutcome.DUPLICATE,
                     existing or canonical_id,
                 )
+            await self._clear_persist_failed(alert.connector_id)
             return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
         except asyncpg.ForeignKeyViolationError:
             logger.warning("alert_sink.unknown_tenant", tenant_id=str(alert.tenant_id))
@@ -256,7 +258,12 @@ class AlertSink:
             await self._bump_persist_failed(alert.connector_id)
             return PersistResult(PersistOutcome.FAILED, None)
         except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
-            logger.error("alert_sink.persist_failed", error=str(exc))
+            logger.error(
+                "alert_sink.persist_failed",
+                error=str(exc).replace("\r", " ").replace("\n", " ")[:500],
+                error_type=type(exc).__name__,
+                connector_id=str(alert.connector_id) if alert.connector_id else None,
+            )
             await self._bump_persist_failed(alert.connector_id)
             return PersistResult(PersistOutcome.FAILED, None)
 
@@ -272,6 +279,29 @@ class AlertSink:
                 await conn.execute(
                     "UPDATE connectors SET fusion_persist_failed = fusion_persist_failed + 1,"
                     " updated_at = NOW() WHERE id = $1",
+                    connector_id,
+                )
+        except Exception:  # noqa: BLE001 — counter update must never wedge the sink
+            pass
+
+    async def _clear_persist_failed(self, connector_id) -> None:
+        """Zero fusion_persist_failed after a durable write — fail-soft.
+
+        Mirrors ``error_count`` clearing on a successful connector poll so the
+        Connectors UI does not keep a stale orange badge after the sink has
+        recovered (e.g. leftover counts from the historical $5::text mismatch).
+        """
+        if connector_id is None:
+            return
+        pool = await self._ensure_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE connectors SET fusion_persist_failed = 0,"
+                    " updated_at = NOW()"
+                    " WHERE id = $1 AND fusion_persist_failed <> 0",
                     connector_id,
                 )
         except Exception:  # noqa: BLE001 — counter update must never wedge the sink

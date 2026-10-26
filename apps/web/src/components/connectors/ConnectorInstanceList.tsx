@@ -131,6 +131,7 @@ interface ConnectorCardProps {
   testResult: boolean | undefined;
   onTest: (id: string) => void;
   onPoll?: (id: string) => void;
+  onResetFailures?: (id: string) => void;
   onConfigure?: (connector: Connector) => void;
   onDelete?: (connector: Connector) => void;
 }
@@ -142,6 +143,7 @@ function ConnectorCard({
   testResult,
   onTest,
   onPoll,
+  onResetFailures,
   onConfigure,
   onDelete,
 }: ConnectorCardProps) {
@@ -316,9 +318,21 @@ function ConnectorCard({
         </div>
         <div className={`bg-dark-20/60 rounded-lg p-2${fusionPersistFailed > 0 ? ' border border-orange-500/20' : ''}`}>
           <p className="text-xs text-gray-500">Persist failed</p>
-          <p className={`text-sm font-medium ${fusionPersistFailed > 0 ? 'text-orange-400' : 'text-gray-300'}`}>
-            {fusionPersistFailed.toLocaleString()}
-          </p>
+          <div className="flex items-center justify-between gap-1">
+            <p className={`text-sm font-medium ${fusionPersistFailed > 0 ? 'text-orange-400' : 'text-gray-300'}`}>
+              {fusionPersistFailed.toLocaleString()}
+            </p>
+            {fusionPersistFailed > 0 && onResetFailures && (
+              <button
+                type="button"
+                title="Clear stale persist-failed and poll-error counters after recovery"
+                onClick={() => onResetFailures(connector.id)}
+                className="text-[10px] text-orange-300/80 hover:text-orange-200 underline-offset-2 hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
         <div className={`bg-dark-20/60 rounded-lg p-2${eventsDropped > 0 ? ' border border-brand-500/20' : ''}`}>
           <p className="text-xs text-gray-500">Dropped</p>
@@ -406,6 +420,7 @@ export interface ConnectorInstanceListProps {
   testResults?: Record<string, boolean | undefined>;
   onTest: (id: string) => void;
   onPoll?: (id: string) => void;
+  onResetFailures?: (id: string) => void;
   onAdd: () => void;
   onConfigure?: (connector: Connector) => void;
   onDelete?: (connector: Connector) => void;
@@ -419,6 +434,7 @@ export function ConnectorInstanceList({
   testResults,
   onTest,
   onPoll,
+  onResetFailures,
   onAdd,
   onConfigure,
   onDelete,
@@ -475,6 +491,7 @@ export function ConnectorInstanceList({
           testResult={testResults?.[connector.id]}
           onTest={onTest}
           onPoll={onPoll}
+          onResetFailures={onResetFailures}
           onConfigure={onConfigure}
           onDelete={onDelete}
         />

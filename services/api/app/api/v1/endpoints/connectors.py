@@ -1003,6 +1003,42 @@ async def test_existing_connector(
     return verdict
 
 
+@router.post("/{connector_id}/reset-failure-counters", response_model=ConnectorResponse)
+async def reset_connector_failure_counters(
+    connector_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("connectors:write"))],
+    db: DBSession,
+) -> ConnectorResponse:
+    """Zero ``error_count`` and ``fusion_persist_failed`` for this connector.
+
+    Lifetime counters stick after recovery (unlike a live fusion metric). Operators
+    clear stale badges once the underlying poll/persist issue is fixed — e.g. after
+    the historical AlertSink ``$5::text`` mismatch left ``Persist failed`` > 0
+    while new inserts already succeed.
+    """
+    result = await db.execute(
+        select(Connector).where(
+            Connector.id == connector_id,
+            Connector.tenant_id == current_user.tenant_id,
+        )
+    )
+    connector = result.scalar_one_or_none()
+    if connector is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
+    await db.execute(
+        update(Connector)
+        .where(Connector.id == connector_id)
+        .values(
+            error_count=0,
+            fusion_persist_failed=0,
+            updated_at=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+    await db.refresh(connector)
+    return _build_connector_response(connector)
+
+
 @router.post("/{connector_id}/poll", status_code=status.HTTP_200_OK)
 async def poll_connector_now(
     connector_id: uuid.UUID,

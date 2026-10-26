@@ -63,10 +63,15 @@ class _StubConn:
     def __init__(self, row):
         self._row = row
         self.calls: list[tuple] = []
+        self.executes: list[tuple] = []
 
     async def fetchrow(self, sql, *args):
         self.calls.append((sql, args))
         return self._row
+
+    async def execute(self, sql, *args):
+        self.executes.append((sql, args))
+        return "UPDATE 1"
 
 
 class _StubPool:
@@ -232,6 +237,18 @@ async def test_persist_exception_is_failed_not_duplicate():
     result = await sink.persist(_fused())
     assert result.outcome is PersistOutcome.FAILED
     assert result.durable is False
+
+
+@pytest.mark.asyncio
+async def test_durable_persist_clears_fusion_persist_failed_badge():
+    """Successful sink writes heal the Connectors 'Persist failed' counter."""
+    fused = _fused()
+    pool = _StubPool(row={"id": fused.id})
+    sink = AlertSink("postgresql://x")
+    sink._pool = pool
+    result = await sink.persist(fused)
+    assert result.outcome is PersistOutcome.INSERTED
+    assert any("fusion_persist_failed = 0" in sql for sql, _ in pool.conn.executes)
 
 
 def test_deterministic_id_is_replay_stable():
