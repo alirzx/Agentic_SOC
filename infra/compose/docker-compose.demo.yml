@@ -264,6 +264,11 @@ services:
     image: ghcr.io/beenuar/aisoc-ingest:${AISOC_TAG:-latest}
     build:
       context: services/ingest
+      # Liara IR Go module proxy — avoids proxy.golang.org 403 on restricted networks.
+      # Docs: https://liara.ir/mirrors/go/
+      args:
+        GOPROXY: ${GOPROXY:-https://package-mirror.liara.ir/repository/go/,https://goproxy.io,direct}
+        GOSUMDB: ${GOSUMDB:-off}
     container_name: aisoc-demo-ingest
     pull_policy: missing
     depends_on:
@@ -425,6 +430,9 @@ services:
         AGENTS_URL: http://agents:8084
         REALTIME_URL: http://realtime:4000
         FUSION_URL: http://fusion:8003
+        # Liara IR mirror — avoids registry.npmjs.org timeouts on restricted networks.
+        # Docs: https://liara.ir/mirrors/npm/
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://package-mirror.liara.ir/repository/npm/}
         # NEXT_PUBLIC_* left empty for live Splunk mode (no demo banner/auto-login).
         NEXT_PUBLIC_DEMO_MODE: ""
         NEXT_PUBLIC_DEMO_DEEPLINK: ""

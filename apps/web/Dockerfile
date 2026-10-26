@@ -75,9 +75,14 @@ ENV NEXT_PUBLIC_DEMO_BANNER=${NEXT_PUBLIC_DEMO_BANNER}
 ENV NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=${NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL}
 ENV NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=${NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD}
 
+# Optional registry mirror (Iranian Liara default for demo VM builds).
+# Override: docker build --build-arg NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
+ARG NPM_CONFIG_REGISTRY=https://package-mirror.liara.ir/repository/npm/
+ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 # Use pnpm's default symlinked node_modules — same layout as local dev,
 # so tsup/tsc bin shims resolve correctly inside each workspace package.
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm config set registry "${NPM_CONFIG_REGISTRY}" \
+ && pnpm install --no-frozen-lockfile
 
 # Build workspace packages then the Next.js app. @aisoc/report-card must be
 # built here too — the /tools/coverage page imports it, and without its dist the
