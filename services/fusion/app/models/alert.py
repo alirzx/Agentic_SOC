@@ -11,7 +11,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4, uuid5
-
 from pydantic import BaseModel, Field
 
 # Fixed namespace for deriving the canonical, replay-stable alert UUID from an
@@ -108,23 +107,36 @@ class RawAlert(BaseModel):
     def fingerprint(self) -> str:
         """Generate a stable deduplication fingerprint.
 
-        Includes ``source_event_ids`` / ``rule_id`` so two Splunk notables that
-        share the same title and host (common for ES stash) still stay distinct,
-        while an identical replay of the same notable collapses to one alert.
+        When a vendor event id is present (``source_event_ids`` / Splunk
+        ``finding.uid``), that id alone — plus tenant + source — is the key.
+        Enrichment fields (hostname, MITRE, IPs) must **not** participate:
+        re-polls often re-extract them differently and previously minted tens
+        of thousands of duplicate rows for the same notable.
+
+        Without a vendor id, fall back to rule + title + primary entity so
+        distinct firings of the same ESCU rule still stay separate.
         """
-        fields = {
-            "tenant_id": str(self.tenant_id),
-            "source": self.source,
-            "title": self.title,
-            "src_ip": self.src_ip,
-            "dst_ip": self.dst_ip,
-            "hostname": self.hostname,
-            "username": self.username,
-            "file_hash": self.file_hash,
-            "mitre_techniques": sorted(self.mitre_techniques),
-            "source_event_ids": sorted(self.source_event_ids),
-            "rule_id": self.rule_id,
-        }
+        event_ids = sorted(
+            {str(x).strip() for x in (self.source_event_ids or []) if str(x).strip()}
+        )
+        if event_ids:
+            fields: dict[str, Any] = {
+                "tenant_id": str(self.tenant_id),
+                "source": self.source,
+                "source_event_ids": event_ids,
+            }
+        else:
+            fields = {
+                "tenant_id": str(self.tenant_id),
+                "source": self.source,
+                "title": self.title,
+                "src_ip": self.src_ip,
+                "dst_ip": self.dst_ip,
+                "hostname": self.hostname,
+                "username": self.username,
+                "file_hash": self.file_hash,
+                "rule_id": self.rule_id,
+            }
         canonical = json.dumps(fields, sort_keys=True)
         return hashlib.sha256(canonical.encode()).hexdigest()
 

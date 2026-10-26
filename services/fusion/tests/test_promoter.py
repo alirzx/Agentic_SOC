@@ -166,6 +166,24 @@ class TestPromoteNormalizedEvent:
         assert alert.source_event_ids == ["UNIQUE-EVENT-1"]
         assert alert.rule_id != "UNIQUE-EVENT-1"
 
+    def test_fingerprint_ignores_enrichment_when_finding_uid_present(self):
+        # Re-polls often re-extract hostname / MITRE differently; the vendor
+        # event id must keep the fingerprint stable or Splunk floods /alerts.
+        msg_a = _message()
+        msg_a["ocsf_event"]["finding"] = {"uid": "NOTABLE-STABLE-1"}
+        msg_a["ocsf_event"]["device"] = {"name": "host-a.example"}
+        msg_b = _message()
+        msg_b["ocsf_event"]["finding"] = {"uid": "NOTABLE-STABLE-1"}
+        msg_b["ocsf_event"]["device"] = {"name": "host-b.example"}
+        msg_b["ocsf_event"]["attacks"] = {
+            "technique": {"uid": "T1059.001"},
+        }
+        a = promote_normalized_event(msg_a)
+        b = promote_normalized_event(msg_b)
+        assert a is not None and b is not None
+        assert a.fingerprint() == b.fingerprint()
+        assert a.deterministic_id() == b.deterministic_id()
+
     def test_prefers_finding_title_over_message(self):
         msg = _message(
             {

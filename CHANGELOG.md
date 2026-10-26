@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Splunk re-poll flooded `/alerts` with duplicate rows.** Fusion fingerprint
+  included hostname/MITRE/IPs alongside `finding.uid`, so enrichment drift on
+  every poll minted new UUIDs (tens of thousands of identical ESCU titles).
+  When a vendor event id is present, fingerprint is now tenant+source+event
+  ids only. SOC Funnel **Remove duplicates** collapses existing display-identical
+  rows.
 - **Connector Sync showed 500 while ingest succeeded.** Manual Sync awaited
   the full Splunk search + Kafka publish; Next.js / browser proxies timed
   out and reported failure even after `Batch published to Kafka`. Forced
