@@ -56,12 +56,12 @@ def _required_config() -> tuple[str, str, str, float, int]:
         ttl = int(os.getenv("AISOC_PRIVACY_CONTEXT_TTL_SECONDS", "3600"))
     except ValueError as exc:
         raise PrivacyEgressError("invalid_privacy_config") from exc
-    if not url or not key or not profile or timeout <= 0 or ttl <= 0:
+    if not url or not key or not profile or not (0 < timeout <= 600) or not (60 <= ttl <= 86400):
         raise PrivacyEgressError("incomplete_privacy_config")
     if "@" in url.split("://")[-1].split("/")[0]:
         raise PrivacyEgressError("gateway_url_contains_credentials")
-    if _production() and not url.startswith("https://"):
-        raise PrivacyEgressError("production_gateway_requires_https")
+    if _required() and not url.startswith("https://"):
+        raise PrivacyEgressError("production_gateway_requires_https" if _production() else "required_gateway_requires_https")
     if not (url.startswith("https://") or url.startswith("http://")):
         raise PrivacyEgressError("invalid_gateway_url")
     return url, key, profile, timeout, ttl

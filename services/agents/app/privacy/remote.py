@@ -324,9 +324,9 @@ class RemotePrivacyBackend:
             raise RemotePrivacyError("remote_url_required")
         if "@" in self.base_url.split("://", 1)[-1].split("/", 1)[0]:
             raise RemotePrivacyError("remote_url_must_not_embed_credentials")
-        from app.privacy.context import production_environment  # noqa: PLC0415 - avoids import cycle at module load
+        from app.privacy.context import privacy_required, production_environment  # noqa: PLC0415 - avoids import cycle at module load
 
-        if production_environment() and not self.base_url.startswith("https://"):
+        if (production_environment() or privacy_required()) and not self.base_url.startswith("https://"):
             raise RemotePrivacyError("remote_https_required_in_production")
         if not self._api_key:
             raise RemotePrivacyError("remote_service_credential_required")
