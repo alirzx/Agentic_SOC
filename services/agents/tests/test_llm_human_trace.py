@@ -132,7 +132,9 @@ async def test_privacy_off_trace_does_not_claim_projection(
     internal = _event(trace_events, INTERNAL_INPUT)
     provider = _event(trace_events, PROVIDER_INPUT)
     assert json.loads(internal["payload"])[0]["content"] == "plain request"
-    assert json.loads(provider["payload"])[0]["content"] == "plain request"
+    provider_payload = json.loads(provider["payload"])
+    assert provider_payload["messages"][0]["content"] == "plain request"
+    assert provider_payload["model_options"] == {"temperature": 0}
     assert provider["privacy_enabled"] is False
     assert provider["projection_applied"] is False
     assert provider["tenant_id"] is None
@@ -177,14 +179,17 @@ async def test_raw_http_trace_scrubs_credentials_and_preserves_four_stages(
     provider_key = "provider-key-human-trace-123456"
     privacy_key = "privacy-key-human-trace-1234567890"
     signing_key = "signing-key-human-trace-1234567890"
+    remote_key = "remote-key-human-trace-1234567890"
     path_token = "path-token-human-trace-1234567890"
     monkeypatch.setenv("OPENAI_API_KEY", provider_key)
     monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", privacy_key)
     monkeypatch.setenv("AISOC_AGENTS_TENANT_SIGNING_KEY", signing_key)
+    monkeypatch.setenv("AISOC_PRIVACY_REMOTE_API_KEY", remote_key)
 
     response_payload = {
         "choices": [{"message": {"content": "synthetic response"}}],
         "authorization": f"Bearer {provider_key}",
+        "gateway_echo": remote_key,
     }
     response = MagicMock(spec=httpx.Response)
     response.raise_for_status.return_value = None
@@ -213,6 +218,7 @@ async def test_raw_http_trace_scrubs_credentials_and_preserves_four_stages(
     assert provider_key not in rendered_events
     assert privacy_key not in rendered_events
     assert signing_key not in rendered_events
+    assert remote_key not in rendered_events
     assert path_token not in rendered_events
     assert "Authorization" not in rendered_events
     assert "[REDACTED_CREDENTIAL]" in rendered_events

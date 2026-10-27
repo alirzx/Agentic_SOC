@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import contextvars
 import os
@@ -16,6 +17,8 @@ from app.privacy.remote import RemotePrivacyBackend, RemotePrivacyError
 PRIVACY_ENABLED_ENV = "AISOC_LLM_PRIVACY_ENABLED"
 PRIVACY_TOKEN_KEY_ENV = "AISOC_PRIVACY_TOKEN_KEY"
 PRIVACY_BACKEND_ENV = "AISOC_PRIVACY_BACKEND"
+_PRODUCTION_VALUES = frozenset({"prod", "production"})
+_ENVIRONMENT_NAMES = ("AISOC_ENV", "ENV", "ENVIRONMENT", "APP_ENV")
 
 
 class PrivacyConfigurationError(RuntimeError):
@@ -35,6 +38,18 @@ def privacy_enabled() -> bool:
     return os.getenv(PRIVACY_ENABLED_ENV, "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def production_environment() -> bool:
+    """Recognize every environment convention used by the agents service."""
+    return any(os.getenv(name, "").strip().lower() in _PRODUCTION_VALUES for name in _ENVIRONMENT_NAMES)
+
+
+def _external_llm_configured() -> bool:
+    return any(
+        os.getenv(name, "").strip()
+        for name in ("OPENAI_API_KEY", "LLM_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_BASE_URL", "LLM_BASE_URL")
+    )
+
+
 def privacy_backend_name() -> str:
     """Selected backend; local remains the explicit compatibility default."""
     name = os.getenv(PRIVACY_BACKEND_ENV, "local").strip().lower()
@@ -46,6 +61,10 @@ def privacy_backend_name() -> str:
 def validate_privacy_configuration() -> None:
     """Fail startup for an enabled but incomplete privacy configuration."""
     if not privacy_enabled():
+        if production_environment() and _external_llm_configured():
+            raise PrivacyConfigurationError(
+                "production external LLM configuration requires AISOC_LLM_PRIVACY_ENABLED=1"
+            )
         return
     if privacy_backend_name() == "local":
         load_privacy_token_key()
@@ -122,6 +141,9 @@ async def async_privacy_context(
             raise PrivacyConfigurationError("remote privacy backend tenant mismatch")
         try:
             await gateway.start()
+        except asyncio.CancelledError:
+            await gateway.aclose()
+            raise
         except RemotePrivacyError as exc:
             await gateway.aclose()
             raise PrivacyConfigurationError(str(exc)) from exc
@@ -150,6 +172,11 @@ def _canonical_tenant(tenant_id: str) -> str:
 
 def current_privacy_gateway() -> Any | None:
     if not privacy_enabled():
+        # This check also covers request-scoped BYOK credentials that cannot be
+        # discovered during startup. Deterministic/offline paths never enter the
+        # provider boundary and remain usable in production.
+        if production_environment():
+            raise PrivacyConfigurationError("production external LLM egress requires privacy to be enabled")
         return None
     session = _session.get()
     if session is None:

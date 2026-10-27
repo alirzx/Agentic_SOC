@@ -25,6 +25,22 @@ SYNTHETIC = {
 }
 
 
+def _available_policy_names(payload: dict[str, Any]) -> set[str]:
+    """Validate the Gateway policy-list shape and return its profile names."""
+    policies = payload.get("policies")
+    if not isinstance(policies, list):
+        raise RuntimeError("policy response omitted the policies list")
+    names: set[str] = set()
+    for policy in policies:
+        if not isinstance(policy, dict):
+            raise RuntimeError("policy response contained a non-object entry")
+        name, version = policy.get("name"), policy.get("version")
+        if not isinstance(name, str) or not name or not isinstance(version, str) or not version:
+            raise RuntimeError("policy response contained an invalid entry")
+        names.add(name)
+    return names
+
+
 def _required(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
@@ -65,7 +81,7 @@ async def run() -> int:
     async with httpx.AsyncClient(base_url=base_url, headers=headers, timeout=timeout, follow_redirects=False) as client:
         try:
             health, started = await _json(client, "GET", "/health")
-            if health.get("status") != "ok":
+            if health.get("status") != "ok" or health.get("service") != "soorin-data-privacy-gateway":
                 raise RuntimeError("unexpected health response")
             _pass("GET /health", started)
 
@@ -75,7 +91,7 @@ async def run() -> int:
             _pass("GET /ready", started)
 
             policies, started = await _json(client, "GET", "/v1/policies")
-            if profile not in policies.get("policies", []):
+            if profile not in _available_policy_names(policies):
                 raise RuntimeError("configured profile is not available")
             _pass("GET /v1/policies", started)
 
@@ -86,7 +102,14 @@ async def run() -> int:
                 json={"tenant_id": tenant, "profile": profile, "ttl_seconds": 300},
             )
             context_id = context.get("context_id")
-            if not isinstance(context_id, str) or context.get("tenant_id") != tenant or context.get("profile") != profile:
+            if (
+                not isinstance(context_id, str)
+                or not context_id.startswith("ctx_")
+                or context.get("tenant_id") != tenant
+                or context.get("profile") != profile
+                or not isinstance(context.get("policy_version"), str)
+                or not isinstance(context.get("expires_at"), str)
+            ):
                 raise RuntimeError("created context binding does not match request")
             _pass("POST /v1/contexts", started)
 
@@ -94,6 +117,16 @@ async def run() -> int:
             if info.get("tenant_id") != tenant or info.get("profile") != profile:
                 raise RuntimeError("context inspection binding mismatch")
             _pass("GET /v1/contexts/{id}", started)
+
+            classified, started = await _json(
+                client,
+                "POST",
+                "/v1/classify",
+                json={"profile": profile, "format": "json", "payload": SYNTHETIC, "registrations": []},
+            )
+            if not isinstance(classified.get("counts"), dict) or not isinstance(classified.get("total_detected"), int):
+                raise RuntimeError("classify response omitted detection statistics")
+            _pass("POST /v1/classify", started, stats={"total_detected": classified["total_detected"]})
 
             encoded, started = await _json(
                 client,
@@ -133,17 +166,9 @@ async def run() -> int:
             )
             if decoded.get("payload") != SYNTHETIC:
                 raise RuntimeError("decode did not exactly restore the synthetic payload")
+            if decoded.get("stats", {}).get("unknown_aliases", 0):
+                raise RuntimeError("decode reported unknown aliases")
             _pass("POST /v1/decode", started, stats=decoded.get("stats"))
-
-            classified, started = await _json(
-                client,
-                "POST",
-                "/v1/classify",
-                json={"profile": profile, "format": "json", "payload": SYNTHETIC, "registrations": []},
-            )
-            if not isinstance(classified.get("counts"), dict) or not isinstance(classified.get("total_detected"), int):
-                raise RuntimeError("classify response omitted detection statistics")
-            _pass("POST /v1/classify", started, stats={"total_detected": classified["total_detected"]})
         finally:
             if context_id is not None:
                 started = time.monotonic()

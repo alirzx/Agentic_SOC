@@ -372,7 +372,7 @@ async def _call_llm(system: str, user: str, _model: str) -> tuple[str, int]:
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
     except ImportError as exc:
-        logger.warning("contextual.llm.import_failed", error=str(exc))
+        logger.warning("contextual.llm.import_failed", error_category=type(exc).__name__)
         return _fallback_response(system, user), 0
 
     llm = make_chat_model("copilot", temperature=0.2)
@@ -460,7 +460,7 @@ async def run_action(req: ContextualActionRequest, request: Request) -> Contextu
             page=req.page,
             action=req.action,
             entity_id=req.entity_id,
-            error=str(exc),
+            error_category=type(exc).__name__,
         )
         content = _fallback_response(system, user)
         tokens = 0
@@ -515,7 +515,7 @@ async def run_action_stream(req: ContextualActionRequest, request: Request) -> S
     try:
         canonical_tenant = await resolve_tenant_for_llm(tenant_id)
     except PrivacyConfigurationError as exc:
-        logger.warning("contextual.stream.tenant_unresolved", error=str(exc))
+        logger.warning("contextual.stream.tenant_unresolved", error_category=type(exc).__name__)
     fallback = not bool(os.getenv("OPENAI_API_KEY")) or (privacy_enabled() and not canonical_tenant)
 
     async def gen() -> AsyncIterator[bytes]:

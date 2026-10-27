@@ -7,10 +7,16 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
-from app.privacy.context import PrivacyConfigurationError, async_privacy_context, current_privacy_gateway
+from app.privacy.context import (
+    PrivacyConfigurationError,
+    async_privacy_context,
+    current_privacy_gateway,
+    validate_privacy_configuration,
+)
 from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE
 from app.privacy.remote import RemotePrivacyBackend, RemotePrivacyError
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
 from tests.remote_privacy_fakes import FakePrivacyClient
 
 TENANT = "11111111-1111-1111-1111-111111111111"
@@ -138,6 +144,76 @@ async def test_remote_configuration_rejects_credentials_in_url_and_plain_http_pr
             base_url="http://10.0.0.8:8484",
             api_key="synthetic",
         )
+
+
+@pytest.mark.parametrize("name", ["AISOC_ENV", "ENV", "ENVIRONMENT", "APP_ENV"])
+@pytest.mark.parametrize("value", ["prod", "production"])
+def test_remote_https_required_for_all_production_environment_conventions(monkeypatch, name, value) -> None:
+    for env_name in ("AISOC_ENV", "ENV", "ENVIRONMENT", "APP_ENV"):
+        monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.setenv(name, value)
+    with pytest.raises(RemotePrivacyError, match="https_required"):
+        RemotePrivacyBackend(tenant_id=TENANT, base_url="http://privacy.internal", api_key="synthetic")
+
+
+def test_production_provider_configuration_requires_privacy(monkeypatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-provider-credential")
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "0")
+    with pytest.raises(PrivacyConfigurationError, match="requires AISOC_LLM_PRIVACY_ENABLED=1"):
+        validate_privacy_configuration()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_workflow_closes_remote_context(monkeypatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
+    client = FakePrivacyClient()
+    entered = asyncio.Event()
+
+    async def work() -> None:
+        async with async_privacy_context(TENANT, remote_backend=_backend(client)):
+            entered.set()
+            await asyncio.Event().wait()
+
+    task = asyncio.create_task(work())
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert client.deleted is True
+    assert client.closed is False  # injected clients are caller-owned
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_context_creation_closes_owned_client(monkeypatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
+    entered = asyncio.Event()
+    client = FakePrivacyClient()
+
+    async def blocked_create(**_kwargs):
+        entered.set()
+        await asyncio.Event().wait()
+
+    client.create_context = blocked_create  # type: ignore[method-assign]
+    backend = RemotePrivacyBackend(
+        tenant_id=TENANT,
+        base_url="https://privacy.synthetic.test",
+        api_key="synthetic-service-credential",
+        client_factory=lambda **_kwargs: client,
+    )
+
+    async def work() -> None:
+        async with async_privacy_context(TENANT, remote_backend=backend):
+            raise AssertionError("context creation should not complete")
+
+    task = asyncio.create_task(work())
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert client.closed is True
 
 
 @pytest.mark.asyncio

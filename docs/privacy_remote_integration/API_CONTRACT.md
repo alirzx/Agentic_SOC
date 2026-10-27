@@ -1,8 +1,11 @@
 # Privacy Gateway API Contract
 
-The SOC consumes `soorin-privacy-sdk` `0.1.0`, pinned to Gateway commit
-`1f759f2f95dbc74c7f22db6671f26d74daea8776`. Only the SDK is installed in the
-agents image; the Gateway backend remains a separate service.
+The server contract was verified read-only against Gateway `main` commit
+`91e5150b384f380dc26a48b7301a76f7a8f936d8`. The SOC consumes
+`soorin-privacy-sdk` `0.1.0`, separately pinned to immutable SDK revision
+`1f759f2f95dbc74c7f22db6671f26d74daea8776`. The SDK did not change between
+those revisions. Only the SDK is installed in the agents image; the Gateway
+backend remains a separate service.
 
 ## Endpoints
 
@@ -22,6 +25,15 @@ The SOC uses `AsyncPrivacyClient.create_context`, `encode`, `decode`, and
 `delete_context`. Health, readiness, policy, context inspection, and classify
 are exercised by the connectivity script with an internal `httpx` client.
 
+`GET /health` returns `{"status":"ok","service":"soorin-data-privacy-gateway"}`.
+`GET /ready` returns `{"status":"ready","store":"<configured-backend>"}`;
+the storage name is configuration-dependent. `GET /v1/policies` returns
+objects, not profile-name strings:
+
+```json
+{"policies":[{"name":"agentic-soc-v1","version":"1.0.0"}]}
+```
+
 ## Context request
 
 ```json
@@ -36,6 +48,16 @@ The tenant is resolved through the SOC trusted resolver before this request.
 The adapter verifies the returned tenant and profile. It tracks the returned
 absolute `expires_at` and policy version. It never creates its own Context ID.
 
+```json
+{
+  "context_id": "ctx_<gateway-generated-id>",
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "profile": "agentic-soc-v1",
+  "policy_version": "1.0.0",
+  "expires_at": "<ISO-8601 timestamp>"
+}
+```
+
 ## Encode and Decode
 
 LangChain calls use `format=messages`. The adapter serializes role, content,
@@ -49,11 +71,39 @@ Typed registrations are limited to values taken from known structured fields;
 prose is not guessed into a type. The Gateway enforces the 250-registration
 maximum. The adapter adds privacy guidance only after encoding.
 
+```json
+{
+  "context_id": "<created-context-id>",
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "profile": "agentic-soc-v1",
+  "purpose": "llm-egress",
+  "format": "json",
+  "payload": {"hostname":"dc01.corp.example","username":"CORP\\alice","src_ip":"10.20.3.7"},
+  "registrations": []
+}
+```
+
 The SDK fixes normal decode to `purpose=llm-response` and
 `reveal_credentials=false`. Credential aliases therefore restore as
 `[PROTECTED_CREDENTIAL]`, never as the original secret. A nonzero
 `unknown_aliases` count is a safety failure: the SOC does not release that
 response or execute tool arguments from it.
+
+```json
+{
+  "context_id": "<created-context-id>",
+  "format": "json",
+  "payload": "<encoded-payload>",
+  "purpose": "llm-response",
+  "reveal_credentials": false
+}
+```
+
+Encode responses contain `context_id`, `policy_version`, `format`, `payload`,
+`expires_at`, and integer `stats`. Decode responses contain `context_id`,
+`format`, `payload`, and integer `stats`. Classify requests contain `profile`,
+`format`, `payload`, and `registrations`; responses contain at least integer
+`total_detected` and an object `counts`.
 
 ## Failure contract
 

@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -67,6 +67,7 @@ class CopilotConversation(BaseModel):
 # ---------------------------------------------------------------------------
 
 _CONVERSATIONS: dict[str, dict[str, Any]] = {}
+_ANONYMOUS_DEVELOPMENT_OWNER = "anonymous-development"
 
 _SYNTHETIC_REPLIES = [
     (
@@ -112,6 +113,26 @@ def _title_from_message(msg: str) -> str:
     return msg[:60] + ("…" if len(msg) > 60 else "")
 
 
+def _conversation_owner(request: Request) -> tuple[str, str | None]:
+    """Return the trusted storage owner and the tenant reference for LLM use."""
+    from app.privacy.context import production_environment
+    from app.privacy.tenant import resolve_request_tenant
+
+    tenant_id = resolve_request_tenant(request)
+    if tenant_id:
+        return f"tenant:{tenant_id}", tenant_id
+    if production_environment():
+        raise HTTPException(status_code=403, detail="A trusted tenant identity is required")
+    return _ANONYMOUS_DEVELOPMENT_OWNER, None
+
+
+def _owned_conversation(conversation_id: str, owner: str) -> dict[str, Any] | None:
+    conversation = _CONVERSATIONS.get(conversation_id)
+    if conversation is None or conversation.get("owner") != owner:
+        return None
+    return conversation
+
+
 async def _get_openai_reply(
     conversation: dict[str, Any],
     user_message: str,
@@ -155,7 +176,7 @@ async def _get_openai_reply(
             )
         return body["choices"][0]["message"]["content"]
     except Exception as exc:
-        logger.warning("copilot.openai_error", error=str(exc))
+        logger.warning("copilot.openai_error", error_category=type(exc).__name__)
         return _synthetic_reply(user_message)
 
 
@@ -165,9 +186,10 @@ async def _get_openai_reply(
 
 
 @router.get("/conversations")
-async def list_conversations(limit: int = 20) -> dict[str, Any]:
+async def list_conversations(request: Request, limit: int = 20) -> dict[str, Any]:
+    owner, _tenant_id = _conversation_owner(request)
     convs = sorted(
-        _CONVERSATIONS.values(),
+        (conversation for conversation in _CONVERSATIONS.values() if conversation.get("owner") == owner),
         key=lambda c: c["updatedAt"],
         reverse=True,
     )[:limit]
@@ -185,9 +207,12 @@ async def list_conversations(limit: int = 20) -> dict[str, Any]:
 
 
 @router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str) -> dict[str, Any]:
-    conv = _CONVERSATIONS.get(conversation_id)
+async def get_conversation(conversation_id: str, request: Request) -> dict[str, Any]:
+    owner, _tenant_id = _conversation_owner(request)
+    conv = _owned_conversation(conversation_id, owner)
     if conv is None:
+        if conversation_id in _CONVERSATIONS:
+            raise HTTPException(status_code=404, detail="Conversation not found")
         return {"id": conversation_id, "title": "Not found", "messages": []}
     return {
         "id": conv["id"],
@@ -198,21 +223,22 @@ async def get_conversation(conversation_id: str) -> dict[str, Any]:
 
 @router.post("/chat", response_model=CopilotChatResponse)
 async def chat(req: CopilotChatRequest, request: Request) -> CopilotChatResponse:
-    from app.privacy.tenant import resolve_request_tenant
-
-    tenant_id = resolve_request_tenant(request)
+    owner, tenant_id = _conversation_owner(request)
     conv_id = req.conversationId or str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
 
     if conv_id not in _CONVERSATIONS:
         _CONVERSATIONS[conv_id] = {
             "id": conv_id,
+            "owner": owner,
             "title": _title_from_message(req.message),
             "messages": [],
             "updatedAt": now,
         }
 
-    conv = _CONVERSATIONS[conv_id]
+    conv = _owned_conversation(conv_id, owner)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
     user_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -242,9 +268,7 @@ async def chat(req: CopilotChatRequest, request: Request) -> CopilotChatResponse
 @router.post("/chat/stream")
 async def chat_stream(req: CopilotChatRequest, request: Request) -> StreamingResponse:
     """Stream a chat reply as NDJSON deltas."""
-    from app.privacy.tenant import resolve_request_tenant
-
-    tenant_id = resolve_request_tenant(request)
+    owner, tenant_id = _conversation_owner(request)
 
     conv_id = req.conversationId or str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
@@ -252,12 +276,15 @@ async def chat_stream(req: CopilotChatRequest, request: Request) -> StreamingRes
     if conv_id not in _CONVERSATIONS:
         _CONVERSATIONS[conv_id] = {
             "id": conv_id,
+            "owner": owner,
             "title": _title_from_message(req.message),
             "messages": [],
             "updatedAt": now,
         }
 
-    conv = _CONVERSATIONS[conv_id]
+    conv = _owned_conversation(conv_id, owner)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     user_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "role": "user",

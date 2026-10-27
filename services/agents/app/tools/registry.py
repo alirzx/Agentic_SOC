@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from jsonschema import ValidationError, validate
+from jsonschema import SchemaError, ValidationError, validate, validators
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,12 @@ class ToolRegistry:
             self.register(tool)
 
     def register(self, tool: Tool) -> None:
+        if not isinstance(tool.parameters, dict):
+            raise ValueError("tool parameters must be a JSON Schema object")
+        try:
+            validators.validator_for(tool.parameters).check_schema(tool.parameters)
+        except SchemaError as exc:
+            raise ValueError("tool parameters contain an invalid JSON Schema") from exc
         self._tools[tool.name] = tool
 
     def names(self) -> list[str]:
@@ -64,15 +70,15 @@ class ToolRegistry:
             # the canonical arguments immediately before the authorized tool
             # callable sees them; never echo rejected values in the error.
             validate(instance=args, schema=tool.parameters)
-        except (ValidationError, TypeError, ValueError):
+        except (SchemaError, ValidationError, TypeError, ValueError):
             return {"error": "tool arguments failed schema validation"}
         try:
             result = tool.fn(**(args or {}))
             if inspect.isawaitable(result):
                 result = await result
             return result
-        except Exception as exc:  # noqa: BLE001 — surface tool failure to the model, don't abort
-            return {"error": f"{type(exc).__name__}: {exc}"}
+        except Exception as exc:  # noqa: BLE001 — surface a credential-safe failure category
+            return {"error": f"tool execution failed: {type(exc).__name__}"}
 
 
 def _str_param(name: str, desc: str) -> dict[str, Any]:

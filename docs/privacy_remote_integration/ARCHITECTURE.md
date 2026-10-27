@@ -69,6 +69,11 @@ response with a replacement context. Concurrent operations share one context;
 the Gateway's Redis CAS resolves mapping updates. SOC retries are bounded to
 two attempts for transport timeouts/unavailability and 409/502/503/504.
 
+Copilot conversation records additionally carry a trusted tenant owner.
+Creation, continuation, retrieval, and listing all enforce that owner; a
+conversation ID from another tenant is treated as not found. The anonymous
+demo namespace is available only outside recognized production environments.
+
 ## LLM path inventory
 
 | Workflow | Entry point | Central boundary | Context source / response use |
@@ -91,6 +96,11 @@ only the bundled public ATT&CK corpus. It is not tenant chat inference and is
 explicitly allowlisted by the static no-bypass gate. No tenant evidence is sent
 on that path.
 
+This inventory is intentionally scoped to `services/agents`. A repository-wide
+search also found pre-existing direct chat-completions clients owned by
+`services/api`; see `LLM_EGRESS_INVENTORY.md`. They are not covered by this
+agents-service Context and must not be represented as protected.
+
 ## Streaming, tools, cache, and telemetry
 
 Remote streams remain bounded and buffered. Provider chunks are combined,
@@ -103,6 +113,12 @@ raise a typed privacy error before execution, and `ToolRegistry` validates the
 decoded argument object against the registered JSON Schema immediately before
 calling a tool. Existing runtime permission, approval, and shadow/read-only
 controls remain downstream and unchanged.
+
+Tool schemas are validated when registered. Before `bind_tools`, their
+model-visible descriptions and examples pass through the active privacy
+Context; function names and JSON Schema structural semantics must remain
+unchanged or the provider call is rejected. Per-call LangChain provider kwargs
+use the same projection, and unknown kwargs fail before egress.
 
 The response cache is disabled for Remote mode because protected responses are
 context-bound. Local/disabled modes keep their existing behavior. Cost is

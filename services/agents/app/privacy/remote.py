@@ -34,7 +34,11 @@ _ALIAS_PREFIX = (
     r"DOMAIN|URL_INTERNAL|PATH|TICKET|CASE|REFERENCE|PHONE|EMPLOYEE_ID|USER_SID|ORG_ID|"
     r"AD_GROUP|CLOUD_RESOURCE|DEVICE_SERIAL|SPLUNK_INDEX)_"
 )
-_ALIAS_LIKE_RE = re.compile(rf"(?<![A-Za-z0-9_]){_ALIAS_PREFIX}[A-Z0-9_]{{8,48}}(?![A-Za-z0-9_])")
+_ALIAS_LIKE_RE = re.compile(
+    rf"(?<![A-Za-z0-9_]){_ALIAS_PREFIX}[A-Za-z0-9]{{16,48}}(?![A-Za-z0-9_])",
+    re.IGNORECASE,
+)
+_ALLOWED_ROLES = frozenset({"system", "user", "assistant", "tool", "developer", "function"})
 _REGISTRATION_FIELDS: dict[str, str] = {
     "src_ip": "IP",
     "source_ip": "IP",
@@ -125,14 +129,19 @@ def _json_value(value: Any, *, _depth: int = 0) -> Any:
 
 def _message_to_wire(message: Any) -> dict[str, Any]:
     if isinstance(message, tuple) and len(message) == 2:
-        return {"role": str(message[0]), "content": _json_value(message[1])}
+        role = _ROLE_BY_TYPE.get(str(message[0]), str(message[0]))
+        if role not in _ALLOWED_ROLES:
+            raise RemotePrivacyError("invalid_message_role")
+        return {"role": role, "content": _json_value(message[1])}
     data = _json_value(message)
     if not isinstance(data, dict):
         raise RemotePrivacyError("unsupported_message_type")
     role = data.get("role")
     if not isinstance(role, str) or not role:
         message_type = str(data.get("type") or getattr(message, "type", "human"))
-        role = _ROLE_BY_TYPE.get(message_type, message_type if message_type in _ROLE_BY_TYPE.values() else "user")
+        role = _ROLE_BY_TYPE.get(message_type, message_type)
+    if role not in _ALLOWED_ROLES:
+        raise RemotePrivacyError("invalid_message_role")
     if "content" not in data:
         raise RemotePrivacyError("message_content_missing")
     return {"role": role, **data}
@@ -315,7 +324,9 @@ class RemotePrivacyBackend:
             raise RemotePrivacyError("remote_url_required")
         if "@" in self.base_url.split("://", 1)[-1].split("/", 1)[0]:
             raise RemotePrivacyError("remote_url_must_not_embed_credentials")
-        if os.getenv("AISOC_ENV", "").strip().lower() == "production" and not self.base_url.startswith("https://"):
+        from app.privacy.context import production_environment  # noqa: PLC0415 - avoids import cycle at module load
+
+        if production_environment() and not self.base_url.startswith("https://"):
             raise RemotePrivacyError("remote_https_required_in_production")
         if not self._api_key:
             raise RemotePrivacyError("remote_service_credential_required")
@@ -433,6 +444,32 @@ class RemotePrivacyBackend:
             {"role": "system", "content": PRIVACY_SYSTEM_GUIDANCE},
             *payload["messages"],
         ]
+        return payload
+
+    async def encode_model_options(self, options: dict[str, Any]) -> dict[str, Any]:
+        """Encode model-visible LangChain kwargs in the active Context."""
+        context_id = self._assert_active()
+        snapshot = _json_value(options)
+        if not isinstance(snapshot, dict):
+            raise RemotePrivacyError("invalid_model_options")
+        started = time.monotonic()
+        result = await self._gateway_call(
+            "encode",
+            lambda: self._client.encode(
+                snapshot,
+                format="json",
+                context_id=context_id,
+                profile=self.profile,
+                tenant_id=self.tenant_id,
+                registrations=_registration_values(snapshot),
+            ),
+        )
+        payload = result.get("payload") if isinstance(result, dict) else None
+        if not isinstance(payload, dict):
+            raise RemotePrivacyError("gateway_response_shape_mismatch")
+        self.last_encode_stats = self._stats(result)
+        self.policy_version = str(result.get("policy_version") or self.policy_version)
+        self._audit("encode", (time.monotonic() - started) * 1000, self.last_encode_stats)
         return payload
 
     async def decode_response(self, response: Any) -> Any:

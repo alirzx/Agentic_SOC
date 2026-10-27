@@ -193,3 +193,17 @@ def resolve_request_tenant(request: Request) -> str | None:
     if _allow_unsigned_header():
         return tenant
     return None
+
+
+def trusted_workflow_tenant(request: Request, requested_tenant: str | None) -> str:
+    """Select an authenticated request tenant before an LLM workflow starts.
+
+    Body tenant fields remain a privacy-off development compatibility input;
+    they never authorize protected provider egress.
+    """
+    trusted = resolve_request_tenant(request)
+    if trusted:
+        return trusted
+    if privacy_enabled():
+        raise PrivacyConfigurationError("a trusted request tenant is required for protected LLM egress")
+    return str(requested_tenant or "default")

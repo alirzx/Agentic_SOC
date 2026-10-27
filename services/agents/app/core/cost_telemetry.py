@@ -314,6 +314,17 @@ def _extract_token_usage(response: Any) -> tuple[int, int]:
     if response is None:
         return 0, 0
 
+    if isinstance(response, dict):
+        usage = response.get("usage")
+        if isinstance(usage, dict):
+            prompt = int(usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0)
+            completion = int(usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0)
+            if prompt or completion:
+                return prompt, completion
+            total = int(usage.get("total_tokens", 0) or 0)
+            if total:
+                return total, 0
+
     usage_meta = getattr(response, "usage_metadata", None)
     if isinstance(usage_meta, dict):
         prompt = int(usage_meta.get("input_tokens", 0) or 0)

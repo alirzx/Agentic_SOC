@@ -65,6 +65,14 @@ class PrivacyGateway:
         protected["messages"] = [self._guidance_message(list(body["messages"])), *protected["messages"]]
         return protected
 
+    async def encode_model_options(self, options: dict[str, Any]) -> dict[str, Any]:
+        """Protect model-visible invocation options without mutating the caller."""
+        self.codec.discover_value(options)
+        protected = self.codec.redact_value(options)
+        if not isinstance(protected, dict):  # pragma: no cover - defensive
+            raise TypeError("model options must remain an object")
+        return protected
+
     @staticmethod
     def _message_value(value: Any) -> Any:
         if isinstance(value, (str, dict, list, tuple)):

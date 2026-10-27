@@ -19,6 +19,7 @@ import structlog
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from app.llm import safe_ainvoke
+from app.llm.contract import protect_model_options
 from app.tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
@@ -37,7 +38,11 @@ async def run_with_tools(
     Returns ``{"content": str, "tool_trace": [...], "iterations": int,
     "truncated": bool}``.
     """
-    bound = llm.bind_tools(registry.openai_schemas())
+    # Pass schemas through the central boundary as model-visible kwargs. This
+    # lets Privacy protect sensitive description/example text while preserving
+    # function names and JSON Schema semantics before provider egress.
+    model_options = await protect_model_options({"tools": registry.openai_schemas()})
+    bound = llm.bind_tools(model_options["tools"])
     messages: list[Any] = [SystemMessage(content=system), HumanMessage(content=user)]
     trace: list[dict[str, Any]] = []
 

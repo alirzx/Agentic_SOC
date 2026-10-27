@@ -46,6 +46,12 @@ Run the SOC smoke script from the same container/network namespace that will
 make production calls. Passing host-side curl alone does not prove container
 routing.
 
+Production is recognized from `AISOC_ENV`, `ENV`, `ENVIRONMENT`, or `APP_ENV`
+when any is `prod` or `production`. A configured external provider with Privacy
+disabled fails startup. Request-scoped BYOK calls are also blocked at the
+central provider boundary if Privacy is disabled. Deliberate Local rollback
+still requires Privacy enabled and a valid Local token key.
+
 ## TLS and authentication
 
 - Use HTTPS or mTLS over the private network in production.
@@ -54,6 +60,9 @@ routing.
 - Keep TLS keys, Bearer credentials, provider keys, Gateway master keys, and
   Redis credentials in separate secret-manager entries.
 - Never place credentials in the Gateway URL.
+- For a private CA, mount its bundle into the agents container and set the
+  standard `SSL_CERT_FILE` path. Never use `curl -k` or disable SDK certificate
+  verification.
 
 ## Rollout
 
@@ -66,3 +75,7 @@ routing.
 
 No production deployment is performed by this repository patch; host access and
 deployment authorization are separate prerequisites.
+
+Before rollout, confirm VPN DNS and routing, ingress firewall rules, TLS chain,
+service credential hash, canonical tenant allowlist, Gateway and Redis
+readiness, request timeouts, and clock synchronization on both machines.

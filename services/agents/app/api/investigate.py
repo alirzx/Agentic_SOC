@@ -21,12 +21,13 @@ from uuid import UUID, uuid4
 
 import httpx
 import structlog
-from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from app.investigator import InvestigatorOrchestrator
 from app.orchestrator.router import RouterOrchestrator
+from app.privacy.tenant import trusted_workflow_tenant
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["investigations"])
@@ -229,6 +230,7 @@ async def launch_investigation(
     case_id: str,
     body: InvestigateRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
 ):
     """Launch a Pillar-1 autonomous investigation for a case."""
     run_id = str(uuid4())
@@ -238,7 +240,9 @@ async def launch_investigation(
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
     }
-    background_tasks.add_task(_run_and_store, run_id, case_id, body)
+    trusted_tenant = trusted_workflow_tenant(request, body.tenant_id)
+    trusted_body = body.model_copy(update={"tenant_id": trusted_tenant})
+    background_tasks.add_task(_run_and_store, run_id, case_id, trusted_body)
     logger.info("investigation.launched", run_id=run_id, case_id=case_id)
     return InvestigateResponse(
         run_id=run_id,

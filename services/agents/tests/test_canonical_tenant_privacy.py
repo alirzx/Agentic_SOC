@@ -16,6 +16,7 @@ from app.privacy.tenant import (
     resolve_request_tenant,
     resolve_tenant_for_llm,
     tenant_signature,
+    trusted_workflow_tenant,
 )
 from app.workers import fused_alert_consumer as worker_module
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker, build_state
@@ -172,10 +173,23 @@ async def test_unknown_signed_api_tenant_has_zero_provider_egress(monkeypatch: p
     assert response.reply.content in copilot._SYNTHETIC_REPLIES
 
 
+def test_protected_workflow_uses_authenticated_tenant_not_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_AGENTS_TENANT_SIGNING_KEY", SIGNING_KEY)
+
+    assert trusted_workflow_tenant(_signed_request(str(TENANT_A)), str(TENANT_B)) == str(TENANT_A)
+    with pytest.raises(PrivacyConfigurationError, match="trusted request tenant"):
+        trusted_workflow_tenant(
+            Request({"type": "http", "method": "POST", "path": "/", "headers": []}),
+            str(TENANT_B),
+        )
+
+
 @pytest.mark.asyncio
 async def test_triage_api_queues_canonical_tenant_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
     monkeypatch.setenv("AISOC_PRIVACY_TOKEN_KEY", KEY)
+    monkeypatch.setenv("AISOC_AGENTS_TENANT_SIGNING_KEY", SIGNING_KEY)
 
     async def _canonical(*_args, **_kwargs):
         return str(TENANT_A)
@@ -186,6 +200,7 @@ async def test_triage_api_queues_canonical_tenant_state(monkeypatch: pytest.Monk
         "CASE-CANONICAL-TENANT",
         triage_api.TriageRequest(tenant_id="tenant-a"),
         background,
+        _signed_request("tenant-a"),
     )
 
     queued_state = background.tasks[0].args[2]

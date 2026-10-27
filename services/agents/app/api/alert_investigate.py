@@ -17,11 +17,12 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.investigator import InvestigatorOrchestrator
 from app.llm.gateway_config import validate_gateway_config
+from app.privacy.tenant import trusted_workflow_tenant
 
 logger = structlog.get_logger()
 
@@ -133,7 +134,7 @@ def _findings_markdown(state: Any) -> str:
 
 
 @router.post("/investigate", response_model=AgentInvestigationOut)
-async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationOut:
+async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> AgentInvestigationOut:
     """Run a full agent investigation for one alert and return the report."""
     alert_id = _resolve_alert_id(req)
     summary = _build_summary(req, alert_id)
@@ -156,11 +157,12 @@ async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationO
         base_url=gateway.get("base_url_normalized_sanitized"),
     )
     try:
+        tenant_id = trusted_workflow_tenant(request, req.tenant_id)
         state = await InvestigatorOrchestrator().run(
             case_id=alert_id,
             alert_summary=summary,
             raw_alert=req.raw_alert or {"alert_id": alert_id},
-            tenant_id=req.tenant_id or "default",
+            tenant_id=tenant_id,
         )
         completed_at = datetime.now(UTC).isoformat()
         status = state.status if state.status in ("completed", "failed", "running") else "completed"

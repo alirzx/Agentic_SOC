@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from app.llm import safe_ainvoke, safe_astream
 from app.llm import contract as contract_module
+from app.llm import safe_ainvoke, safe_astream
 from app.llm.contract import LLMContractViolation, safe_chat_completions_request
-from app.privacy.context import async_privacy_context
+from app.privacy.context import PrivacyConfigurationError, async_privacy_context
 from app.privacy.remote import RemotePrivacyBackend, RemotePrivacyError
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+
 from tests.remote_privacy_fakes import FakePrivacyClient
 
 TENANT = "11111111-1111-1111-1111-111111111111"
@@ -111,6 +111,55 @@ async def test_unsupported_serialization_prevents_provider_egress(monkeypatch) -
 
 
 @pytest.mark.asyncio
+async def test_invalid_message_role_prevents_provider_egress(monkeypatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
+    client = FakePrivacyClient()
+    llm = ProviderSpy(client)
+    async with async_privacy_context(TENANT, remote_backend=_backend(client)):
+        with pytest.raises(RemotePrivacyError, match="invalid_message_role"):
+            await safe_ainvoke(llm, [{"role": "attacker-controlled-role", "content": "hello"}])
+    assert llm.calls == []
+
+
+@pytest.mark.asyncio
+async def test_unknown_model_visible_kwarg_is_rejected_before_provider_egress(monkeypatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
+    client = FakePrivacyClient()
+    llm = ProviderSpy(client)
+    async with async_privacy_context(TENANT, remote_backend=_backend(client)):
+        with pytest.raises(LLMContractViolation, match="unsupported LangChain invocation"):
+            await safe_ainvoke(llm, [HumanMessage(content="hello")], provider_payload={"host": "raw"})
+    assert llm.calls == []
+
+
+@pytest.mark.asyncio
+async def test_production_call_with_privacy_disabled_has_zero_provider_egress(monkeypatch) -> None:
+    monkeypatch.setenv("ENV", "prod")
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "0")
+    client = FakePrivacyClient()
+    llm = ProviderSpy(client)
+    with pytest.raises(PrivacyConfigurationError, match="requires privacy"):
+        await safe_ainvoke(llm, [HumanMessage(content="hello")])
+    assert llm.calls == []
+
+
+@pytest.mark.asyncio
+async def test_oversized_protected_stream_is_not_released(monkeypatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_STREAM_MAX_CHARS", "8")
+    client = FakePrivacyClient()
+    yielded = []
+    async with async_privacy_context(TENANT, remote_backend=_backend(client)):
+        with pytest.raises(PrivacyConfigurationError, match="bounded buffer"):
+            async for chunk in safe_astream(ProviderSpy(client), [HumanMessage(content="dc01.corp.example")]):
+                yielded.append(chunk)
+    assert yielded == []
+
+
+@pytest.mark.asyncio
 async def test_raw_http_protects_complete_body_and_decodes(monkeypatch) -> None:
     monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
     monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
@@ -172,10 +221,13 @@ async def test_decode_failure_never_releases_protected_response(monkeypatch) -> 
     client = FakePrivacyClient(fail="decode", fail_status=503)
     backend = _backend(client)
     llm = ProviderSpy(client)
+    recorded = []
+    monkeypatch.setattr(contract_module, "record_llm_call", lambda *args, **kwargs: recorded.append((args, kwargs)))
     async with async_privacy_context(TENANT, remote_backend=backend):
         with pytest.raises(RemotePrivacyError, match="storage_unavailable"):
             await safe_ainvoke(llm, [HumanMessage(content="Investigate dc01.corp.example")])
     assert len(llm.calls) == 1
+    assert len(recorded) == 1
 
 
 @pytest.mark.asyncio

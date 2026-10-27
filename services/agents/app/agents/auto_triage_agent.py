@@ -249,10 +249,11 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         # Issue #571: do NOT swallow + return a null-verdict RUNNING state.
         # Raise a typed error so the caller falls back to deterministic triage
         # (or marks the alert needs_review) instead of completing with no verdict.
-        logger.error("Auto-triage LLM call failed", error=str(exc))
-        state.add_finding(f"Auto-triage LLM error: {exc}")
+        category = str(getattr(exc, "category", "") or type(exc).__name__)
+        logger.error("Auto-triage LLM call failed", error_category=category)
+        state.add_finding(f"Auto-triage LLM error category: {category}")
         _metrics["total_processed"] += 1
-        raise AutoTriageError(str(exc)) from exc
+        raise AutoTriageError(f"LLM execution failed: {category}") from exc
 
     elapsed_ms = round((time.monotonic() - t0) * 1000)
 

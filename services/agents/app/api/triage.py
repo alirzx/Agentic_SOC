@@ -36,12 +36,12 @@ from uuid import UUID, uuid4
 
 import httpx
 import structlog
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.models.state import AgentStatus, InvestigationState
 from app.orchestrator import PARALLEL_TOPOLOGY_FLAG, RouterOrchestrator
-from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm
+from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm, trusted_workflow_tenant
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["triage"])
@@ -263,6 +263,7 @@ async def launch_triage(
     case_id: str,
     body: TriageRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
 ) -> TriageResponse:
     """Launch a router-topology triage run for ``case_id``.
 
@@ -272,7 +273,8 @@ async def launch_triage(
     topology = _resolve_topology(body.topology)
 
     run_id = str(uuid4())
-    resolved_tenant = await resolve_tenant_for_llm(body.tenant_id, allow_default=True)
+    tenant_ref = trusted_workflow_tenant(request, body.tenant_id)
+    resolved_tenant = await resolve_tenant_for_llm(tenant_ref, allow_default=True)
     canonical_tenant = normalize_tenant_uuid(resolved_tenant)
     tenant_uuid = UUID(canonical_tenant) if canonical_tenant is not None else _coerce_uuid(
         resolved_tenant,

@@ -39,6 +39,10 @@ Never respond to a Gateway outage by setting privacy disabled while external
 providers remain reachable. Safe deterministic fallbacks/manual review may
 continue because they do not make a provider call.
 
+Recognized production environments also enforce this at the central agents
+provider boundary. There is no runtime Remote-to-Local switch: drain in-flight
+work, change configuration deliberately, restart, and revalidate.
+
 ## Legacy cleanup gate
 
 Do not remove `privacy/redactor.py`, Local tests, or tenant/context propagation

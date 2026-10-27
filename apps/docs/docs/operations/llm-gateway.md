@@ -55,6 +55,8 @@ AISOC_PRIVACY_REMOTE_API_KEY=<secret-manager-injected-service-credential>
 AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS=30
 AISOC_PRIVACY_CONTEXT_TTL_SECONDS=3600
 AISOC_LLM_PRIVACY_STREAM_MAX_CHARS=1000000
+# Standard CA-bundle trust; mount the file into the agents container:
+SSL_CERT_FILE=/run/secrets/privacy-gateway-ca.pem
 # Separate key used by an authenticated upstream to sign X-Tenant-Id:
 AISOC_AGENTS_TENANT_SIGNING_KEY=<different-at-least-32-random-bytes>
 ```
@@ -156,6 +158,12 @@ The response cache is disabled in Remote mode because a protected response is
 bound to one Gateway context. Local mode retains its tenant/policy-namespaced
 cache behavior.
 
+Recognized production values (`prod` or `production`) are read from
+`AISOC_ENV`, `ENV`, `ENVIRONMENT`, and `APP_ENV`. A provider call cannot enter
+the central boundary with Privacy disabled in those environments. Remote HTTP
+is rejected in production; private CAs use the standard `SSL_CERT_FILE` trust
+path and certificate verification remains enabled.
+
 ### Human trace diagnostics
 
 Human Trace is an explicit, default-off debugging mode at the centralized LLM
@@ -192,6 +200,8 @@ missing, the call fails before network access. This V1 boundary covers the
 agents service's sanctioned chat calls. API-service-owned LLM synthesis paths
 remain a separate deployment boundary and must not be described as protected
 until they are routed through a shared service/package in a follow-up release.
+The source-backed list is maintained in
+`docs/privacy_remote_integration/LLM_EGRESS_INVENTORY.md`.
 
 Direct Copilot, contextual Copilot, Explain, and NL-playbook requests do not
 trust a browser-controlled `X-Tenant-Id` by itself. An authenticated upstream
@@ -203,6 +213,11 @@ agents service refuses that escape hatch when `AISOC_ENV`, `ENV`, or
 `ENVIRONMENT` indicates `prod`/`production`. With
 privacy enabled, an unavailable trusted tenant causes deterministic fallback or
 failure before provider egress.
+
+Copilot conversation IDs are tenant-owned in the in-memory store. Creation,
+continuation, listing, and retrieval use the same trusted tenant identity;
+cross-tenant reuse is returned as not found. An anonymous conversation scope is
+available only for non-production demo/development use.
 
 A public-looking FQDN is protected when a structured field, nested path,
 typed entity, or contextual label establishes that it is tenant-owned. A

@@ -23,6 +23,8 @@ AISOC_PRIVACY_REMOTE_API_KEY=<secret-manager-injected-service-credential>
 AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS=30
 AISOC_PRIVACY_CONTEXT_TTL_SECONDS=3600
 AISOC_LLM_PRIVACY_STREAM_MAX_CHARS=1000000
+# Mount this path in the agents container when the Gateway uses a private CA:
+SSL_CERT_FILE=/run/secrets/privacy-gateway-ca.pem
 ```
 
 Do not set `AISOC_PRIVACY_TOKEN_KEY` for Remote mode. It belongs only to the
@@ -40,14 +42,17 @@ provider:
 
 ```bash
 export AISOC_PRIVACY_TEST_TENANT_ID=11111111-1111-1111-1111-111111111111
-python services/agents/scripts/check_remote_privacy_gateway.py
+python3 services/agents/scripts/check_remote_privacy_gateway.py
+bash services/agents/scripts/privacy_gateway_curl_smoke.sh
 ```
 
 It checks health, readiness, policy availability, context create/get/delete,
 encode/decode equality, classify statistics, and exits nonzero on any failure.
 It never prints the credential, Context ID, or payload bodies.
+See `CURL_SMOKE_RUNBOOK.md` for cross-host/container execution and selectable
+negative checks. See `SOC_E2E_VERIFICATION.md` for controlled provider stages.
 
-## Start and verify
+## Later deployment verification
 
 ```bash
 docker compose config --quiet
@@ -58,6 +63,9 @@ docker compose logs --since=5m agents
 Expected ordinary logs are `privacy.remote.operation` with sanitized counts and
 latencies. Detailed HUMAN TRACE payload events remain off unless deliberately
 enabled for controlled debugging.
+
+These commands are operator steps, not results from this patch. The final
+hardening pass intentionally did not build images or start containers.
 
 ## Focused tests
 

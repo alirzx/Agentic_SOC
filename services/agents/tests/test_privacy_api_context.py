@@ -11,6 +11,7 @@ from app.api import contextual, copilot, explain, playbooks
 from app.privacy.context import PrivacyConfigurationError, current_privacy_gateway
 from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE
 from app.privacy.tenant import resolve_request_tenant, tenant_signature
+from fastapi import HTTPException
 from langchain_core.messages import AIMessage, AIMessageChunk
 from starlette.requests import Request
 
@@ -25,6 +26,20 @@ def _request(*, signed: bool = True) -> Request:
     if signed:
         headers.append((b"x-aisoc-tenant-signature", tenant_signature(TENANT, SIGNING_KEY).encode()))
     return Request({"type": "http", "method": "POST", "path": "/", "headers": headers})
+
+
+def _tenant_request(tenant_id: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/",
+            "headers": [
+                (b"x-tenant-id", tenant_id.encode()),
+                (b"x-aisoc-tenant-signature", tenant_signature(tenant_id, SIGNING_KEY).encode()),
+            ],
+        }
+    )
 
 
 @pytest.fixture
@@ -127,6 +142,36 @@ async def test_generic_copilot_missing_trusted_tenant_has_zero_network_egress(pr
         )
     client.assert_not_called()
     assert result.reply.content in copilot._SYNTHETIC_REPLIES
+
+
+async def test_copilot_conversations_are_tenant_owned(privacy_api, monkeypatch) -> None:
+    tenant_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    copilot._CONVERSATIONS.clear()
+
+    async def reply(_conversation, _message, _tenant_id=None):
+        return "synthetic isolated reply"
+
+    monkeypatch.setattr(copilot, "_get_openai_reply", reply)
+    created = await copilot.chat(copilot.CopilotChatRequest(message="tenant A message"), _tenant_request(TENANT))
+
+    own_listing = await copilot.list_conversations(_tenant_request(TENANT))
+    other_listing = await copilot.list_conversations(_tenant_request(tenant_b))
+    assert [item["id"] for item in own_listing["conversations"]] == [created.conversationId]
+    assert other_listing["conversations"] == []
+
+    with pytest.raises(HTTPException) as continued:
+        await copilot.chat(
+            copilot.CopilotChatRequest(message="tenant B message", conversationId=created.conversationId),
+            _tenant_request(tenant_b),
+        )
+    assert continued.value.status_code == 404
+
+    with pytest.raises(HTTPException) as retrieved:
+        await copilot.get_conversation(created.conversationId, _tenant_request(tenant_b))
+    assert retrieved.value.status_code == 404
+
+    own = await copilot.get_conversation(created.conversationId, _tenant_request(TENANT))
+    assert own["messages"][0]["content"] == "tenant A message"
 
 
 async def test_contextual_one_shot_uses_factory_and_signed_privacy_context(privacy_api, monkeypatch) -> None:

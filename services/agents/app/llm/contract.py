@@ -50,6 +50,46 @@ from app.privacy.context import PrivacyConfigurationError, current_privacy_gatew
 
 logger = structlog.get_logger()
 
+_ALLOWED_MESSAGE_ROLES = frozenset({"system", "user", "assistant", "tool", "developer", "function"})
+_LANGCHAIN_RUNTIME_KWARGS = frozenset({"config"})
+_MODEL_VISIBLE_KWARGS = frozenset(
+    {
+        "frequency_penalty",
+        "functions",
+        "logit_bias",
+        "logprobs",
+        "max_completion_tokens",
+        "max_tokens",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "service_tier",
+        "stop",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+    }
+)
+_STRUCTURAL_OPTION_KEYS = frozenset(
+    {
+        "$ref",
+        "additionalProperties",
+        "const",
+        "enum",
+        "format",
+        "name",
+        "pattern",
+        "required",
+        "strict",
+        "type",
+    }
+)
+
 # Wave 1 — content-addressed response cache in the LLM hot path. Identical
 # (model + prompt + input) calls are served from cache instead of paid for
 # again. Byte-identical to what the model returned, so it's determinism-safe.
@@ -347,6 +387,8 @@ def _coerce_message(msg: Any) -> tuple[str, str]:
     """
     if isinstance(msg, dict):
         role = str(msg.get("role") or "user")
+        if role not in _ALLOWED_MESSAGE_ROLES:
+            raise LLMContractViolation("invalid message role", role=role)
         content = msg.get("content")
         return role, content if isinstance(content, str) else json.dumps(content, default=str)
     if hasattr(msg, "type") and hasattr(msg, "content"):
@@ -357,13 +399,74 @@ def _coerce_message(msg: Any) -> tuple[str, str]:
         return role, content if isinstance(content, str) else json.dumps(content, default=str)
     if isinstance(msg, tuple) and len(msg) == 2:
         role, content = msg
-        return str(role), content if isinstance(content, str) else json.dumps(content, default=str)
+        normalized_role = {"human": "user", "ai": "assistant"}.get(str(role), str(role))
+        if normalized_role not in _ALLOWED_MESSAGE_ROLES:
+            raise LLMContractViolation("invalid message role", role=normalized_role)
+        return normalized_role, content if isinstance(content, str) else json.dumps(content, default=str)
     return "user", str(msg)
 
 
 def validate_messages(messages: Iterable[Any]) -> list[dict[str, Any]]:
     """Module-level convenience for one-off validation."""
     return LLMInputContract.validate(messages)
+
+
+def _split_invocation_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    unsupported = sorted(set(kwargs) - _LANGCHAIN_RUNTIME_KWARGS - _MODEL_VISIBLE_KWARGS)
+    if unsupported:
+        raise LLMContractViolation(f"unsupported LangChain invocation fields: {unsupported}")
+    runtime = {key: value for key, value in kwargs.items() if key in _LANGCHAIN_RUNTIME_KWARGS}
+    provider = {key: value for key, value in kwargs.items() if key in _MODEL_VISIBLE_KWARGS}
+    return runtime, provider
+
+
+def _assert_model_option_structure(original: Any, protected: Any, *, key: str = "") -> None:
+    """Reject a Gateway transformation that changes tool/schema semantics."""
+    if isinstance(original, dict):
+        if not isinstance(protected, dict) or set(original) != set(protected):
+            raise PrivacyConfigurationError("privacy projection changed model-option structure")
+        for child_key, value in original.items():
+            if child_key in _STRUCTURAL_OPTION_KEYS and protected[child_key] != value:
+                raise PrivacyConfigurationError("privacy projection changed provider schema semantics")
+            _assert_model_option_structure(value, protected[child_key], key=child_key)
+        return
+    if isinstance(original, list):
+        if not isinstance(protected, list) or len(original) != len(protected):
+            raise PrivacyConfigurationError("privacy projection changed model-option structure")
+        for before, after in zip(original, protected, strict=True):
+            _assert_model_option_structure(before, after, key=key)
+        return
+    if not isinstance(original, str) and protected != original:
+        raise PrivacyConfigurationError("privacy projection changed model-option value")
+
+
+async def _provider_invocation(
+    gateway: Any,
+    messages: list[Any],
+    kwargs: dict[str, Any],
+) -> tuple[list[Any], dict[str, Any]]:
+    runtime, model_options = _split_invocation_kwargs(kwargs)
+    provider_messages = await gateway.encode_messages(messages) if gateway else messages
+    protected_options = model_options
+    if gateway and model_options:
+        protected_options = await gateway.encode_model_options(model_options)
+        _assert_model_option_structure(model_options, protected_options)
+    return provider_messages, {**runtime, **protected_options}
+
+
+async def protect_model_options(options: dict[str, Any]) -> dict[str, Any]:
+    """Protect trusted model-visible binding options before ``llm.bind*``.
+
+    Bound LangChain runnables keep their provider kwargs outside the later
+    ``ainvoke`` call, so callers must use this helper before binding them.
+    """
+    _runtime, model_options = _split_invocation_kwargs(dict(options))
+    gateway = current_privacy_gateway()
+    if gateway is None or not model_options:
+        return model_options
+    protected = await gateway.encode_model_options(model_options)
+    _assert_model_option_structure(model_options, protected)
+    return protected
 
 
 # ---------------------------------------------------------------------------
@@ -382,8 +485,13 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
     gateway = current_privacy_gateway()
     model = _model_name(llm)
     _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="ainvoke")
-    provider_messages = await gateway.encode_messages(materialised) if gateway else materialised
-    _trace(PROVIDER_INPUT, provider_messages, gateway=gateway, model=model, path="ainvoke")
+    provider_messages, provider_kwargs = await _provider_invocation(gateway, materialised, kwargs)
+    provider_trace = (
+        {"messages": provider_messages, "model_options": {k: v for k, v in provider_kwargs.items() if k != "config"}}
+        if provider_kwargs
+        else provider_messages
+    )
+    _trace(PROVIDER_INPUT, provider_trace, gateway=gateway, model=model, path="ainvoke")
     LLMInputContract.validate(provider_messages)
 
     prompt, user_input = _cache_parts(provider_messages)
@@ -394,7 +502,7 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
         and not bool(getattr(gateway, "is_remote", False))
         and bool(model)
         and bool(user_input)
-        and not kwargs
+        and not provider_kwargs
         and _cache_safe(provider_messages)
     )
     if use_cache:
@@ -423,7 +531,7 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
             return local_result
 
     t0 = time.monotonic()
-    result = await llm.ainvoke(provider_messages, **kwargs)
+    result = await llm.ainvoke(provider_messages, **provider_kwargs)
     latency_ms = (time.monotonic() - t0) * 1000.0
     _trace(PROVIDER_RESPONSE, result, gateway=gateway, model=model, path="ainvoke", provider_called=True)
     # Record token/cost against the active CostTracker (no-op if none bound), so
@@ -458,12 +566,19 @@ async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
     gateway = current_privacy_gateway()
     model = _model_name(llm)
     _trace(INTERNAL_INPUT, materialised, gateway=gateway, model=model, path="astream")
-    provider_messages = await gateway.encode_messages(materialised) if gateway else materialised
-    _trace(PROVIDER_INPUT, provider_messages, gateway=gateway, model=model, path="astream")
+    provider_messages, provider_kwargs = await _provider_invocation(gateway, materialised, kwargs)
+    provider_trace = (
+        {"messages": provider_messages, "model_options": {k: v for k, v in provider_kwargs.items() if k != "config"}}
+        if provider_kwargs
+        else provider_messages
+    )
+    _trace(PROVIDER_INPUT, provider_trace, gateway=gateway, model=model, path="astream")
     LLMInputContract.validate(provider_messages)
     if gateway is None:
         chunk_index = 0
-        async for chunk in llm.astream(provider_messages, **kwargs):
+        t0 = time.monotonic()
+        combined: Any | None = None
+        async for chunk in llm.astream(provider_messages, **provider_kwargs):
             _trace(
                 PROVIDER_RESPONSE,
                 chunk,
@@ -483,13 +598,23 @@ async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
                 chunk_index=chunk_index,
             )
             yield chunk
+            try:
+                combined = chunk if combined is None else combined + chunk
+            except (TypeError, ValueError):
+                combined = None
             chunk_index += 1
+        if combined is not None:
+            try:
+                record_llm_call(combined, model=model, latency_ms=(time.monotonic() - t0) * 1000.0)
+            except Exception:  # noqa: BLE001 - telemetry never breaks streaming
+                pass
         return
 
     combined: Any | None = None
     size = 0
     max_chars = int(os.getenv("AISOC_LLM_PRIVACY_STREAM_MAX_CHARS", "1000000"))
-    async for chunk in llm.astream(provider_messages, **kwargs):
+    t0 = time.monotonic()
+    async for chunk in llm.astream(provider_messages, **provider_kwargs):
         content = getattr(chunk, "content", chunk)
         size += len(content) if isinstance(content, str) else len(str(content))
         if size > max_chars:
@@ -503,6 +628,10 @@ async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
                 raise PrivacyConfigurationError("protected LLM stream returned unsupported chunk types") from exc
     if combined is not None:
         _trace(PROVIDER_RESPONSE, combined, gateway=gateway, model=model, path="astream", provider_called=True)
+        try:
+            record_llm_call(combined, model=model, latency_ms=(time.monotonic() - t0) * 1000.0)
+        except Exception:  # noqa: BLE001 - telemetry never breaks streaming
+            pass
         local_result = await gateway.decode_response(combined)
         _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="astream", provider_called=True)
         yield local_result
@@ -621,10 +750,15 @@ async def safe_chat_completions_request(
         headers.update(extra_headers)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
+        t0 = time.monotonic()
         resp = await client.post(url, headers=headers, json=body)
         resp.raise_for_status()
         payload = resp.json()
         _trace(PROVIDER_RESPONSE, payload, gateway=gateway, model=model, path="http", provider_called=True)
+        try:
+            record_llm_call(payload, model=model, latency_ms=(time.monotonic() - t0) * 1000.0)
+        except Exception:  # noqa: BLE001 - telemetry never breaks an LLM call
+            pass
         local_result = await gateway.decode_response(payload) if gateway else payload
         _trace(LOCAL_RESPONSE, local_result, gateway=gateway, model=model, path="http", provider_called=True)
         return local_result

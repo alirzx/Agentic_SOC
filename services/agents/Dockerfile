@@ -26,33 +26,34 @@ RUN set -eux; \
     else \
         echo "[agents] poetry install failed; using pip fallback"; \
         pip install --no-cache-dir \
-            "fastapi>=0.109,<0.110" \
-            "uvicorn[standard]>=0.27,<0.28" \
+            "fastapi>=0.109,<0.142" \
+            "uvicorn[standard]>=0.27,<0.53" \
             "pydantic>=2.5,<3" \
             "pydantic-settings>=2.1,<3" \
             "langchain>=0.3,<0.4" \
             "langchain-core>=0.3,<0.4" \
-            "langchain-openai>=0.2,<0.3" \
+            "langchain-openai>=0.2,<0.4" \
             "langchain-community>=0.3,<0.4" \
-            "langgraph>=0.2.40,<0.4" \
-            "openai>=1.12,<2" \
-            "redis[hiredis]>=5.0,<6" \
-            "httpx>=0.26,<0.27" \
+            "langgraph>=0.2.40,<1.1" \
+            "openai>=1.12,<3" \
+            "redis[hiredis]>=5.0.1,<9" \
+            "httpx>=0.27,<0.29" \
             "soorin-privacy-sdk @ git+https://github.com/alirzx/Agent_Data_privacy_gateway.git@1f759f2f95dbc74c7f22db6671f26d74daea8776#subdirectory=sdk/python" \
             "structlog>=24,<25" \
-            "prometheus-client>=0.19,<0.20" \
+            "prometheus-client>=0.19,<0.27" \
             "python-dateutil>=2.8,<3" \
-            "aiokafka>=0.10,<0.11" \
+            "aiokafka>=0.10,<0.15" \
             "qdrant-client[fastembed]>=1.9,<2" \
             "markdown>=3.5,<4" \
             "opentelemetry-sdk>=1.24,<2" \
             "opentelemetry-instrumentation-fastapi>=0.45b0" \
             "opentelemetry-instrumentation-httpx>=0.45b0" \
-            "asyncpg>=0.29,<0.30" \
+            "asyncpg>=0.29,<0.32" \
             "sqlalchemy[asyncio]>=2.0.25,<3" \
             "apscheduler>=3.10.4,<4" \
             "pyyaml>=6.0.1,<7" \
-            "cryptography>=46,<50" ; \
+            "jsonschema>=4.21,<5" \
+            "cryptography>=46,<51" ; \
     fi
 
 # Smoke-import the modules the orchestrator pulls in at module load time.
