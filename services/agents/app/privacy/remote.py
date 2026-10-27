@@ -23,6 +23,7 @@ import httpx
 import structlog
 
 from app.privacy.gateway import PRIVACY_SYSTEM_GUIDANCE
+from app.privacy.rest_client import PrivacyGatewayRESTClient
 
 logger = structlog.get_logger()
 
@@ -74,6 +75,9 @@ class RemotePrivacyError(RuntimeError):
 
 def _error_category(exc: BaseException) -> tuple[str, int | None]:
     status = getattr(exc, "status_code", None)
+    category = getattr(exc, "category", None)
+    if isinstance(category, str) and category not in {"gateway_request_rejected"}:
+        return category, status if isinstance(status, int) else None
     if isinstance(status, int):
         return {
             400: "invalid_context_or_policy",
@@ -348,13 +352,7 @@ class RemotePrivacyBackend:
             if self._context_id is not None:
                 return self
             if self._client is None:
-                factory = self._client_factory
-                if factory is None:
-                    try:
-                        from soorin_privacy import AsyncPrivacyClient
-                    except ImportError as exc:
-                        raise RemotePrivacyError("privacy_sdk_not_installed") from exc
-                    factory = AsyncPrivacyClient
+                factory = self._client_factory or PrivacyGatewayRESTClient
                 self._client = factory(
                     base_url=self.base_url,
                     api_key=self._api_key,
@@ -392,6 +390,13 @@ class RemotePrivacyBackend:
             raise RemotePrivacyError("remote_context_expired")
         return self._context_id
 
+    @staticmethod
+    def _assert_result_binding(result: Any, *, context_id: str, format: str) -> None:
+        if not isinstance(result, dict):
+            raise RemotePrivacyError("invalid_gateway_response")
+        if result.get("context_id") != context_id or result.get("format") != format:
+            raise RemotePrivacyError("gateway_context_binding_mismatch")
+
     async def encode_messages(self, messages: list[Any]) -> list[Any]:
         context_id = self._assert_active()
         wire = [_message_to_wire(message) for message in messages]
@@ -405,8 +410,10 @@ class RemotePrivacyBackend:
                 profile=self.profile,
                 tenant_id=self.tenant_id,
                 registrations=_registration_values(wire),
+                purpose="llm-egress",
             ),
         )
+        self._assert_result_binding(result, context_id=context_id, format="messages")
         payload = result.get("payload") if isinstance(result, dict) else None
         if not isinstance(payload, list) or len(payload) != len(messages):
             raise RemotePrivacyError("gateway_response_shape_mismatch")
@@ -432,8 +439,10 @@ class RemotePrivacyBackend:
                 profile=self.profile,
                 tenant_id=self.tenant_id,
                 registrations=_registration_values(snapshot),
+                purpose="llm-egress",
             ),
         )
+        self._assert_result_binding(result, context_id=context_id, format="json")
         payload = result.get("payload") if isinstance(result, dict) else None
         if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
             raise RemotePrivacyError("gateway_response_shape_mismatch")
@@ -462,8 +471,10 @@ class RemotePrivacyBackend:
                 profile=self.profile,
                 tenant_id=self.tenant_id,
                 registrations=_registration_values(snapshot),
+                purpose="llm-egress",
             ),
         )
+        self._assert_result_binding(result, context_id=context_id, format="json")
         payload = result.get("payload") if isinstance(result, dict) else None
         if not isinstance(payload, dict):
             raise RemotePrivacyError("gateway_response_shape_mismatch")
@@ -478,9 +489,16 @@ class RemotePrivacyBackend:
         started = time.monotonic()
         result = await self._gateway_call(
             "decode",
-            lambda: self._client.decode(snapshot, context_id=context_id, format="json"),
+            lambda: self._client.decode(
+                snapshot,
+                context_id=context_id,
+                format="json",
+                purpose="llm-response",
+                reveal_credentials=False,
+            ),
         )
-        if not isinstance(result, dict) or "payload" not in result:
+        self._assert_result_binding(result, context_id=context_id, format="json")
+        if "payload" not in result:
             raise RemotePrivacyError("invalid_gateway_response")
         self.last_decode_stats = self._stats(result)
         self._audit("decode", (time.monotonic() - started) * 1000, self.last_decode_stats)

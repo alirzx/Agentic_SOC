@@ -7,7 +7,6 @@ WORKDIR /app
 # proves a missing system library is required.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
-        git \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir poetry==1.7.1 \
@@ -38,7 +37,6 @@ RUN set -eux; \
             "openai>=1.12,<3" \
             "redis[hiredis]>=5.0.1,<9" \
             "httpx>=0.27,<0.29" \
-            "soorin-privacy-sdk @ git+https://github.com/alirzx/Agent_Data_privacy_gateway.git@1f759f2f95dbc74c7f22db6671f26d74daea8776#subdirectory=sdk/python" \
             "structlog>=24,<25" \
             "prometheus-client>=0.19,<0.27" \
             "python-dateutil>=2.8,<3" \
@@ -61,13 +59,14 @@ RUN set -eux; \
 # Also assert that the langgraph version on disk exposes the ``START``
 # sentinel — langgraph 0.0.x silently lacked it, which previously crashed the
 # agents service at boot with ``ImportError: cannot import name 'START'``.
-RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, redis, httpx, structlog, apscheduler, yaml, _cffi_backend, soorin_privacy; from cryptography.fernet import Fernet; from langgraph.graph import END, START, StateGraph"
+RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, redis, httpx, structlog, apscheduler, yaml, _cffi_backend; from cryptography.fernet import Fernet; from langgraph.graph import END, START, StateGraph"
 
 COPY app/ ./app/
 
 # Import the application module that first exposed the missing direct
 # dependency. Keep this after COPY so the build validates the real import path.
 RUN python -c "from app.security.credential_vault import CredentialVault"
+RUN python -c "from app.privacy.rest_client import PrivacyGatewayRESTClient"
 
 EXPOSE 8084
 

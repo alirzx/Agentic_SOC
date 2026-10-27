@@ -4438,26 +4438,6 @@ files = [
 ]
 
 [[package]]
-name = "soorin-privacy-sdk"
-version = "0.1.0"
-description = "Typed Python client for Soorin Data Privacy Gateway"
-optional = false
-python-versions = ">=3.11"
-groups = ["main"]
-files = []
-develop = false
-
-[package.dependencies]
-httpx = ">=0.27,<1"
-
-[package.source]
-type = "git"
-url = "https://github.com/alirzx/Agent_Data_privacy_gateway.git"
-reference = "1f759f2f95dbc74c7f22db6671f26d74daea8776"
-resolved_reference = "1f759f2f95dbc74c7f22db6671f26d74daea8776"
-subdirectory = "sdk/python"
-
-[[package]]
 name = "sqlalchemy"
 version = "2.0.51"
 description = "Database Abstraction Library"
@@ -5887,4 +5867,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "04618ea62097a75f641cf9991e03025fc759a40d135aa8e142b55b56eb119e83"
+content-hash = "c783a2a4a6e77c9752d26b686677ce3cfe15901b936cea48339e32709b0323cc"
