@@ -5,8 +5,8 @@
 ```text
 Legacy Local backend
   -> deploy independent Gateway and Redis
-  -> validate SDK/API and synthetic semantics
-  -> deploy SOC Remote adapter with cache disabled
+  -> validate direct REST contracts and synthetic semantics
+  -> deploy SOC REST adapters with Remote cache disabled
   -> canary Auto-Triage
   -> canary Investigator
   -> controlled tenant rollout
@@ -18,7 +18,8 @@ branch. It is never selected automatically after a Remote error.
 
 Before enabling Remote mode, verify canonical tenant resolution, Gateway tenant
 allowlists, `agentic-soc-v1`, HTTPS routing, context TTL, stream buffer sizing,
-and that the pinned SDK is present in the built image.
+and that the built Agents image imports its internal REST client without an
+external DLP package.
 
 ## Rollback
 

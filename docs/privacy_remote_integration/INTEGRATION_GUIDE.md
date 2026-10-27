@@ -2,8 +2,8 @@
 
 ## Install
 
-The agents Poetry dependency and Docker fallback both pin the SDK to an
-immutable Gateway commit. Install with the repository's normal command:
+Agents uses the repository's normal HTTPX dependency and its internal REST
+client. No external DLP package or Gateway Git checkout is required:
 
 ```bash
 cd services/agents
@@ -16,6 +16,7 @@ Do not install the Gateway backend into the SOC environment.
 
 ```dotenv
 AISOC_LLM_PRIVACY_ENABLED=1
+AISOC_LLM_PRIVACY_REQUIRED=1
 AISOC_PRIVACY_BACKEND=remote
 AISOC_PRIVACY_REMOTE_URL=https://privacy-gateway.internal.example
 AISOC_PRIVACY_REMOTE_PROFILE=agentic-soc-v1
@@ -64,8 +65,8 @@ Expected ordinary logs are `privacy.remote.operation` with sanitized counts and
 latencies. Detailed HUMAN TRACE payload events remain off unless deliberately
 enabled for controlled debugging.
 
-These commands are operator steps, not results from this patch. The final
-hardening pass intentionally did not build images or start containers.
+These commands are operator steps unless explicitly recorded in
+`TEST_REPORT.md`; configuration validation alone is not deployment evidence.
 
 ## Focused tests
 
@@ -74,7 +75,7 @@ cd services/agents
 python -m pytest -q \
   tests/test_privacy_remote_adapter.py \
   tests/test_privacy_remote_contract.py \
-  tests/test_privacy_remote_sdk_contract.py \
+  tests/test_privacy_remote_rest_contract.py \
   tests/test_privacy_remote_tool_calls.py \
   tests/test_auto_triage_llm_payload.py
 ```

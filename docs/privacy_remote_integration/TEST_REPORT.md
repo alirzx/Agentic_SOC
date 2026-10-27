@@ -87,3 +87,56 @@ for the final commands above.
 
 Mocks prove request shape and local fail-closed behavior; they do not prove VPN,
 TLS, service authorization, Redis health, provider behavior, or deployment.
+
+## Direct HTTPX REST migration — 2026-10-27
+
+The rows above are historical SDK-era evidence. They were preserved rather
+than rewritten. The commands below validate the SDK-free transport introduced
+after that evidence was recorded. Test groups overlap and must not be summed as
+a unique-test count.
+
+| Command / focused group | Passed | Failed | Skipped | Timed out | Status |
+|---|---:|---:|---:|---:|---|
+| Remote REST/packaging/adapter/contract/tool/tenant group | 93 | 0 | 0 | 0 | PASS |
+| LLM no-bypass/gateway/HTTP/trace/smoke/config/NL group | 62 | 0 | 0 | 0 | PASS |
+| Auto-Triage/router/runtime/structured-Investigator group | 67 | 0 | 0 | 0 | PASS |
+| Fused worker/playbook/runtime/shadow group | 85 | 0 | 0 | 0 | PASS |
+| API `test_privacy_llm_api_boundary.py` + eight-path inventory | 19 | 0 | 0 | 0 | PASS |
+| `bash scripts/privacy_prebuild_check.sh` | 70 (10 API + 60 Agents) | 0 | 0 | 0 | PASS |
+| Required Python 3.11 `compileall` paths | n/a | 0 | n/a | 0 | PASS |
+| `poetry check --lock` | n/a | 0 | n/a | 0 | PASS |
+| Root and demo `docker compose ... config --quiet` | 2 configs | 0 | 0 | 0 | PASS |
+| Ruff on changed Python source/tests | n/a | 0 findings | n/a | 0 | PASS |
+| Bash syntax for curl smoke and pre-build scripts | n/a | 0 | n/a | 0 | PASS |
+| Active runtime/install SDK-reference scan | n/a | 0 references | n/a | 0 | PASS |
+| Additional API tenant endpoint group in shared root environment | 0 | 3 collection errors | 0 | 0 | BLOCKED (environment) |
+| `docker compose build agents` | 0 | 0 | 0 | 0 | NOT RUN (execution environment rejected image build) |
+
+The additional API endpoint command did not execute tests: the inherited
+`DEBUG=release` value was invalid for API Settings and the shared root virtual
+environment lacks the API-only `python-jose` dependency. Setting `DEBUG=0`
+allowed the required privacy boundary and inventory command to pass 19/19. No
+dependency was installed to force the optional endpoint group to collect.
+
+The existing Poetry executable is 1.7.1 while the checked-in lock was generated
+by Poetry 2.4.1. A bounded no-update resolver attempt required package metadata
+and timed out. Because the removed package's sole dependency (`httpx`) was
+already direct and locked, the lock received the minimal equivalent update:
+only the external package/source block was removed and the installed Poetry
+locker supplied the new manifest content hash. `poetry check --lock` passes and
+no unrelated package version changed.
+
+The new non-skipped `test_privacy_remote_rest_contract.py` verifies actual
+HTTPX request serialization with `MockTransport`: method/path, Bearer header,
+tenant/profile/TTL, typed registrations, Encode purpose, Decode
+`reveal_credentials=false`, response parsing, delete cleanup, invalid JSON,
+malformed success, HTTP 400/401/403/413/422/503 mapping, timeout, connection
+failure, cleanup failure, required response fields/typed stats, and Encode/Decode
+response binding. Other focused tests retain cancellation,
+cross-tenant Context isolation, expiry, provider no-egress on Encode failure,
+Decode fail-closed, unknown aliases, bounded streaming, tool safety, and model
+semantics coverage.
+
+No real Gateway, Redis, VPN, provider, container image, or deployment was used
+in this migration validation. The independent Gateway repository remained
+read-only.

@@ -1,7 +1,8 @@
 # Curl Smoke Runbook
 
 `services/agents/scripts/privacy_gateway_curl_smoke.sh` validates the real
-Gateway REST contract without contacting an LLM provider. It uses only fixed
+Gateway REST contract used by both internal SOC HTTPX clients without
+contacting an LLM provider. It uses only fixed
 synthetic SOC values, keeps its temporary files mode `0600` under a mode `0700`
 directory, deletes the test Context in a trap, and never prints the service
 credential, Context ID, headers, or payload bodies.

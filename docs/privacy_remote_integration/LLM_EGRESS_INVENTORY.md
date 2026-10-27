@@ -1,7 +1,7 @@
 # Source-Backed LLM Egress Inventory
 
 This inventory was produced from Graphify queries plus repository searches for
-LangChain invocation, provider SDKs, and chat-completions URLs. “Protected”
+LangChain invocation, provider clients, and chat-completions URLs. “Protected”
 means the request is inside an authorized `async_privacy_context`, encoded
 before provider egress, and decoded before local use. Offline tests use only
 synthetic data and mocked providers.
@@ -52,6 +52,10 @@ enabled, Context creation/Encode must succeed before any provider request,
 and Decode must succeed before local use. API services must deploy with the
 same Gateway host, service credential, profile, and canonical tenant allowlist
 as Agents.
+
+Both service boundaries use internal HTTPX clients. There is no external DLP
+Python dependency and no cross-service Python import; the shared compatibility
+point is the published Gateway REST schema.
 
 **Validation status:** Source integration only. These changes have not yet
 been proven by live Gateway, real-provider, cross-server VPN, Docker build,

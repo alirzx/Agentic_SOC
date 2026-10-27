@@ -7,9 +7,9 @@ That Gateway repository was **not changed**.
 
 ## Architecture and endpoints
 
-Agents uses the pinned `soorin-privacy-sdk` `AsyncPrivacyClient`.
-API uses its own `httpx` REST transport in
-`services/api/app/services/privacy_llm.py`.
+Agents uses `app/privacy/rest_client.py`; API uses its own HTTPX REST transport
+in `services/api/app/services/privacy_llm.py`. Neither service installs an
+external DLP Python package or Gateway Git repository.
 Both call the Gateway's `POST /v1/contexts`, `POST /v1/encode`,
 `POST /v1/decode`, and `DELETE /v1/contexts/{id}`.
 Agents can keep a context across a complete authorized workflow; API uses
@@ -65,7 +65,8 @@ bash scripts/privacy_prebuild_check.sh
 ```
 
 This runs compilation, script syntax validation, focused API/Agents unit
-tests and the SDK mock contract. The script has bounded timeouts.
+tests and the non-skipped HTTPX MockTransport contract. The script has bounded
+timeouts.
 It does NOT perform a Docker build, dependency installation, live Gateway,
 Redis, VPN, or provider calls. Run additional existing workflow regressions
 before claiming complete coverage.
@@ -78,8 +79,9 @@ resolve `app` from `services/api`.
 
 1. Run all relevant API/Agents focused regression groups and record actual
    results. The static eight-path inventory is **not** a runtime test.
-2. Verify Docker Compose config and build both images with the VPN/registry
-   access and the pinned SDK; test the `soorin_privacy` import inside Agents.
+2. Verify Docker Compose config and build both images with the required
+   registry access; smoke-import `app.privacy.rest_client` inside Agents and
+   verify that no Gateway Git checkout is fetched during the build.
 3. From inside **each container**, verify Gateway HTTPS, CA chain, health,
    readiness, policy discovery, and authenticated Context create/encode/
    decode/delete. Use only synthetic tenants and identities.
@@ -95,8 +97,7 @@ resolve `app` from `services/api`.
 
 ## Evidence state
 
-As of creation, new branch source checks were **not executed in the user's
-local environment**. Prior logs showed 8 API focused tests passing (with
-`PYTHONPATH=.`) and 42 Agents focused tests passing on parent commit
-`89a3329`. Those earlier results do not validate these new changes.
-Do not claim production readiness until build and live integration pass.
+The original pre-build evidence predates the direct REST migration. Current
+migration commands and outcomes are appended to `TEST_REPORT.md`; older rows
+remain historical and do not validate the new transport. Do not claim
+production readiness until build and live integration pass.

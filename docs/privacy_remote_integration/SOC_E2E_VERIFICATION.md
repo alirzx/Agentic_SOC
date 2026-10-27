@@ -17,7 +17,7 @@ bash services/agents/scripts/privacy_gateway_curl_smoke.sh
 Confirm health, ready store, `agentic-soc-v1`, Context binding, classify,
 Encode, exact Decode, unknown aliases zero, and delete.
 
-## Stage B — SOC Remote Adapter
+## Stage B — SOC Internal REST Adapter
 
 Use the existing provider probe with synthetic data only after Stage A:
 
@@ -31,6 +31,10 @@ short controlled run. `INTERNAL_INPUT` may contain the synthetic canonical
 host/user; `PROVIDER_INPUT` must contain only aliases/redactions;
 `PROVIDER_RESPONSE` must still be protected; `LOCAL_RESPONSE` must exactly
 restore authorized identities. Disable HUMAN TRACE immediately afterward.
+
+The Agents image must import `app.privacy.rest_client` without installing or
+cloning the Gateway repository. The API image remains independently deployable
+and exercises its own HTTPX Gateway client.
 
 ## Stage C — Auto-Triage
 

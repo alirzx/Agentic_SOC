@@ -1,11 +1,11 @@
 # Privacy Gateway API Contract
 
 The server contract was verified read-only against Gateway `main` commit
-`91e5150b384f380dc26a48b7301a76f7a8f936d8`. The SOC consumes
-`soorin-privacy-sdk` `0.1.0`, separately pinned to immutable SDK revision
-`1f759f2f95dbc74c7f22db6671f26d74daea8776`. The SDK did not change between
-those revisions. Only the SDK is installed in the agents image; the Gateway
-backend remains a separate service.
+`91e5150b384f380dc26a48b7301a76f7a8f936d8`. Agents calls this contract through
+`app.privacy.rest_client.PrivacyGatewayRESTClient`; API uses its independent
+`app.services.privacy_llm` HTTPX boundary. No external DLP Python package or
+Gateway repository is installed during an SOC build. The Gateway backend and
+all Context/Alias storage remain a separate service.
 
 ## Endpoints
 
@@ -21,9 +21,9 @@ backend remains a separate service.
 | POST | `/v1/decode` | Bearer | Restore provider output locally |
 | POST | `/v1/classify` | Bearer | Smoke diagnostics only |
 
-The SOC uses `AsyncPrivacyClient.create_context`, `encode`, `decode`, and
-`delete_context`. Health, readiness, policy, context inspection, and classify
-are exercised by the connectivity script with an internal `httpx` client.
+The Agents REST client implements Context create/delete, Encode, and Decode.
+Health, readiness, policy, context inspection, and classify are exercised by
+the connectivity scripts with direct HTTP requests.
 
 `GET /health` returns `{"status":"ok","service":"soorin-data-privacy-gateway"}`.
 `GET /ready` returns `{"status":"ready","store":"<configured-backend>"}`;
@@ -83,8 +83,8 @@ maximum. The adapter adds privacy guidance only after encoding.
 }
 ```
 
-The SDK fixes normal decode to `purpose=llm-response` and
-`reveal_credentials=false`. Credential aliases therefore restore as
+Both SOC REST clients explicitly set normal decode to `purpose=llm-response`
+and `reveal_credentials=false`. Credential aliases therefore restore as
 `[PROTECTED_CREDENTIAL]`, never as the original secret. A nonzero
 `unknown_aliases` count is a safety failure: the SOC does not release that
 response or execute tool arguments from it.
@@ -119,8 +119,10 @@ Encode responses contain `context_id`, `policy_version`, `format`, `payload`,
 | timeout | `gateway_timeout` |
 | connection failure | `gateway_unavailable` |
 
-Stable categories are logged without SDK exception text or payloads. Encode
-failure occurs before provider egress. Decode failure never returns the
+Stable categories are logged without upstream exception text, response bodies,
+or payloads. The Agents transport requires exact success status codes and JSON
+objects before the backend validates binding, expiry, payload, and statistics.
+Encode failure occurs before provider egress. Decode failure never returns the
 protected provider response. Remote mode never silently falls back to Local or
 disabled privacy.
 

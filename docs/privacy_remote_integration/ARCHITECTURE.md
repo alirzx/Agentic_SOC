@@ -10,16 +10,18 @@ SOC workflow
   -> canonical tenant resolution
   -> async_privacy_context (one workflow-owned Gateway context)
   -> safe_ainvoke | safe_astream | safe_chat_completions_request
-  -> Remote Encode
+  -> internal HTTPX REST client -> Gateway Encode
   -> existing model/provider route
   -> Remote Decode (purpose=llm-response, reveal_credentials=false)
   -> validated local response
 ```
 
-The independent Gateway performs detection, tokenization, encryption, and
-mapping storage. The SOC adapter does not duplicate those functions. Provider
-credentials remain between the SOC and its configured inference provider and
-are never sent to the Privacy Gateway.
+The Agents and API services each own a small internal HTTPX client and remain
+independently deployable. No external DLP Python package or Gateway Git checkout
+is installed into either service. The independent Gateway performs detection,
+tokenization, encryption, and mapping storage; SOC transports do not duplicate
+those functions. Provider credentials remain between the SOC and its configured
+inference provider and are never sent to the Privacy Gateway.
 
 ## Production data and Auto-Triage evidence
 
@@ -91,15 +93,15 @@ demo namespace is available only outside recognized production environments.
 | Full graph/manual investigation | graph/API runners | Shared boundaries above | Workflow-scoped context |
 | Shadow runtime | shadow consumer/runtime | Shared boundaries above | Separate record/run context |
 
-The MITRE corpus startup embedding path uses an embedding-only SDK client and
+The MITRE corpus startup embedding path uses an embedding-only provider client and
 only the bundled public ATT&CK corpus. It is not tenant chat inference and is
 explicitly allowlisted by the static no-bypass gate. No tenant evidence is sent
 on that path.
 
-This inventory is intentionally scoped to `services/agents`. A repository-wide
-search also found pre-existing direct chat-completions clients owned by
-`services/api`; see `LLM_EGRESS_INVENTORY.md`. They are not covered by this
-agents-service Context and must not be represented as protected.
+`services/api` uses its own direct HTTPX Gateway boundary for its eight
+provider-calling workflows because it cannot share the Agents `ContextVar`.
+See `LLM_EGRESS_INVENTORY.md` for the source-backed split. There is no
+cross-service Python import.
 
 ## Streaming, tools, cache, and telemetry
 
@@ -130,7 +132,7 @@ error categories.
 ## Cross-machine topology
 
 ```text
-Machine A: agents container
+Machine A: API and agents containers
        | HTTPS over private network/VPN, Bearer service authentication
        v
 Machine B: Privacy Gateway :8484 -> private Redis encrypted context store
@@ -139,5 +141,6 @@ Machine B: Privacy Gateway :8484 -> private Redis encrypted context store
 ```
 
 Docker service DNS does not cross independent hosts. Configure a routable VPN
-DNS name or address in `AISOC_PRIVACY_REMOTE_URL`. Production startup rejects a
-plain HTTP Gateway URL.
+DNS name or address in `AISOC_PRIVACY_REMOTE_URL`. Production/required-mode
+startup rejects a plain HTTP Gateway URL. A public CA uses normal container
+trust; a private CA is supplied through the documented `SSL_CERT_FILE` mount.

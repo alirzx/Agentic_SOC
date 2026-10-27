@@ -38,9 +38,10 @@ Machine A. Confirm DNS, route, firewall, certificate chain, and clock health
 from inside the agents container.
 
 Inject `AISOC_PRIVACY_REMOTE_API_KEY` through the deployment secret mechanism,
-not Compose source or a committed `.env`. Rebuild the agents image so the pinned
-SDK is present, then restart agents. The Dockerfile asserts that
-`soorin_privacy` imports successfully, including on its pip fallback path.
+not Compose source or a committed `.env`. Rebuild the agents image and restart
+agents. The Dockerfile installs HTTPX directly and smoke-imports the internal
+REST transport after copying application source. It does not clone or install
+the Gateway repository.
 
 Run the SOC smoke script from the same container/network namespace that will
 make production calls. Passing host-side curl alone does not prove container
@@ -61,8 +62,8 @@ still requires Privacy enabled and a valid Local token key.
   Redis credentials in separate secret-manager entries.
 - Never place credentials in the Gateway URL.
 - For a private CA, mount its bundle into the agents container and set the
-  standard `SSL_CERT_FILE` path. Never use `curl -k` or disable SDK certificate
-  verification.
+  standard `SSL_CERT_FILE` path. Never use `curl -k` or disable certificate
+  verification. No override is needed for a publicly trusted certificate.
 
 ## Rollout
 
