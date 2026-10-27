@@ -1,0 +1,15 @@
+# Optional private-CA trust mount for independently hosted Privacy Gateway.
+# Usage: docker compose -f docker-compose.yml -f infra/compose/privacy-ca.override.yml config
+# Set AISOC_PRIVACY_CA_BUNDLE_HOST to an existing readable PEM certificate
+# chain on the SOC host. No private TLS keys or service credentials belong here.
+services:
+  api:
+    volumes:
+      - ${AISOC_PRIVACY_CA_BUNDLE_HOST:?Set an absolute path to the trusted DLP CA PEM}:/run/secrets/aisoc-dlp-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /run/secrets/aisoc-dlp-ca.pem
+  agents:
+    volumes:
+      - ${AISOC_PRIVACY_CA_BUNDLE_HOST:?Set an absolute path to the trusted DLP CA PEM}:/run/secrets/aisoc-dlp-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /run/secrets/aisoc-dlp-ca.pem
