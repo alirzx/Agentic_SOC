@@ -144,7 +144,7 @@ def _message_to_wire(message: Any) -> dict[str, Any]:
         raise RemotePrivacyError("invalid_message_role")
     if "content" not in data:
         raise RemotePrivacyError("message_content_missing")
-    return {"role": role, **data}
+    return {**data, "role": role}
 
 
 def _rebuild(template: Any, transformed: Any) -> Any:

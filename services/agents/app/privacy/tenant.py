@@ -8,7 +8,7 @@ import os
 import uuid
 from typing import Any
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from app.privacy.context import PrivacyConfigurationError, privacy_enabled
 
@@ -39,8 +39,8 @@ def tenant_signature(tenant_id: str, key: str | bytes) -> str:
 
 def _allow_unsigned_header() -> bool:
     enabled = os.getenv(ALLOW_UNSIGNED_TENANT_ENV, "0").strip().lower() in {"1", "true", "yes", "on"}
-    environments = {os.getenv(name, "").strip().lower() for name in ("AISOC_ENV", "ENV", "ENVIRONMENT")}
-    if enabled and environments.intersection({"prod", "production"}):
+    from app.privacy.context import production_environment
+    if enabled and production_environment():
         raise PrivacyConfigurationError(f"{ALLOW_UNSIGNED_TENANT_ENV} cannot be enabled in production")
     return enabled
 
@@ -207,3 +207,19 @@ def trusted_workflow_tenant(request: Request, requested_tenant: str | None) -> s
     if privacy_enabled():
         raise PrivacyConfigurationError("a trusted request tenant is required for protected LLM egress")
     return str(requested_tenant or "default")
+
+async def require_run_owner(request: Request, owner: str | None) -> None:
+    """Require trusted tenant ownership of a stored investigation/triage run.
+
+    Query/body tenant parameters never authorize result retrieval. Unauthorized
+    and nonexistent runs deliberately produce the same response.
+    """
+    trusted = resolve_request_tenant(request)
+    if not owner or not trusted:
+        raise HTTPException(status_code=404, detail="Run not found")
+    requested = normalize_tenant_uuid(trusted) or trusted
+    stored = normalize_tenant_uuid(owner) or owner
+    if requested != stored:
+        canonical = await resolve_canonical_tenant(trusted)
+        if canonical != stored:
+            raise HTTPException(status_code=404, detail="Run not found")

@@ -79,8 +79,11 @@ negative_check() {
       request GET /v1/policies "$out" 401
       ;;
     unauthorized-tenant)
-      "$PYTHON_BIN" - "$TENANT" "$PROFILE" "$body" <<'PY'
-import json, sys
+      [[ -n "${AISOC_PRIVACY_TEST_UNAUTHORIZED_TENANT_ID:-}" ]] || { echo "FAIL missing AISOC_PRIVACY_TEST_UNAUTHORIZED_TENANT_ID" >&2; return 2; }
+      [[ "$AISOC_PRIVACY_TEST_UNAUTHORIZED_TENANT_ID" != "$TENANT" ]] || { echo "FAIL unauthorized tenant must differ from authorized tenant" >&2; return 2; }
+      "$PYTHON_BIN" - "$AISOC_PRIVACY_TEST_UNAUTHORIZED_TENANT_ID" "$PROFILE" "$body" <<'PY'
+import json, sys, uuid
+uuid.UUID(sys.argv[1])
 json.dump({"tenant_id":sys.argv[1],"profile":sys.argv[2],"ttl_seconds":300}, open(sys.argv[3],"w"))
 PY
       request POST /v1/contexts "$out" 403 "$body"
