@@ -954,7 +954,7 @@ async def generate_alert_explanation(
                 "explain.cost_track_failed tenant=%s alert=%s error=%s",
                 alert.tenant_id,
                 alert.id,
-                exc,
+                type(exc).__name__,
             )
 
     return AlertExplanation(

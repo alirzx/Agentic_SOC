@@ -174,13 +174,13 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
             id=run_id,
             alertId=alert_id,
             status=status,
-            findings=_findings_markdown(state) if status != "failed" else state.error,
+            findings=_findings_markdown(state) if status != "failed" else "Investigation failed",
             recommendations=_map_recommendations(responder) if status != "failed" else [],
             actions=_map_actions(responder) if status != "failed" else [],
             startedAt=started_at,
             completedAt=completed_at,
             model=model_name,
-            error=state.error,
+            error="Investigation failed" if status == "failed" else None,
         )
         _runs[run_id] = {**result.model_dump(), "_tenant_owner": tenant_id}
         logger.info(
