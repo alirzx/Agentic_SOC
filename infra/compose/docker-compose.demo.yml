@@ -158,9 +158,22 @@ services:
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SECRET_KEY: dev_secret_key_change_in_production
-      ENV: development
-      ENVIRONMENT: development
+      ENV: ${ENV:-development}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: info
+      # API-owned LLM workflows share the independent DLP service.
+      AISOC_LLM_PRIVACY_ENABLED: ${AISOC_LLM_PRIVACY_ENABLED:-0}
+      AISOC_PRIVACY_BACKEND: ${AISOC_PRIVACY_BACKEND:-local}
+      AISOC_PRIVACY_REMOTE_URL: ${AISOC_PRIVACY_REMOTE_URL:-}
+      AISOC_PRIVACY_REMOTE_PROFILE: ${AISOC_PRIVACY_REMOTE_PROFILE:-agentic-soc-v1}
+      AISOC_PRIVACY_REMOTE_API_KEY: ${AISOC_PRIVACY_REMOTE_API_KEY:-}
+      AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS: ${AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS:-30}
+      AISOC_PRIVACY_CONTEXT_TTL_SECONDS: ${AISOC_PRIVACY_CONTEXT_TTL_SECONDS:-3600}
+      SSL_CERT_FILE: ${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       # Browser → api CORS origin tracks the web host port so a fallback
       # publish (e.g. 3001) still passes the api's CORS preflight when a
       # caller hits the api directly.

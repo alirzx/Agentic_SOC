@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field
 from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
-from app.services.privacy_llm import PrivacyEgressError, safe_chat_post
+from app.services.privacy_llm import safe_chat_post
 from app.services.esql_runner import (
     ESQLExecutionError,
     ESQLNotConfigured,
@@ -224,7 +224,7 @@ async def _enhance_via_api_privacy(nl: NLQuery, *, api_key: str, tenant_id: str,
     from app.services.model_aliases import resolve_model_alias
 
     model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
-    base = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    base = (os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
     url = base + "/chat/completions"
     prompt = textwrap.dedent(
         f"""Translate this security question into ES|QL, KQL, and SPL.
@@ -300,7 +300,7 @@ async def _translate(
     if not api_key:
         return deterministic, "deterministic"
 
-    completions_url = "https://api.openai.com/v1/chat/completions"
+    completions_url = (os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
     try:
         enforce_airgap_for_url(completions_url)
     except AirgapViolation:

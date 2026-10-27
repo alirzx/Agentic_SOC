@@ -29,28 +29,31 @@ The startup MITRE embedding client is the sole agents-service allowlist entry.
 It sends bundled public ATT&CK text, not tenant evidence. Connecting it to
 tenant-private text requires a separate embedding privacy design.
 
-## Confirmed provider clients outside the agents boundary
+## API service: independently protected provider boundary
 
-The following pre-existing `services/api` paths call chat-completions directly
-with `httpx`. They do not import the agents contract, do not create a Remote
-Privacy Context, and do not Decode provider output. They are therefore a
-confirmed cross-service coverage gap, not a claim of protection:
+The API service has a separate process, so it does not share the Agents
+`ContextVar`. Its `app.services.privacy_llm.safe_chat_post` uses the same
+remote Gateway endpoints with a trusted authenticated tenant UUID.
 
-| API-owned path | Function | Data class | Current status |
-|---|---|---|---|
-| `api/v1/endpoints/hunts.py` | `_generate_queries` | analyst hypothesis / MITRE | Unprotected direct provider call |
-| `api/v1/endpoints/translation.py` | `_llm_translate` | detection rule text | Unprotected direct provider call |
-| `api/v1/endpoints/knowledge_base.py` | `_synthesise` | question and retrieved chunks | Unprotected direct provider call |
-| `api/v1/endpoints/phishing.py` | `_triage` | email/artifact content and URLs | Unprotected direct provider call |
-| `api/v1/endpoints/detection_loop.py` | `_llm_draft_sigma` | Sigma, alert fields, analyst note | Unprotected direct provider call |
-| `api/v1/endpoints/nl_detection.py` | `_llm_translate` | threat description and techniques | Unprotected direct provider call |
-| `api/v1/endpoints/nl_query.py` | `enhance_with_llm` call path | analyst natural-language query | Unprotected direct provider call |
-| `services/alert_explain.py` | `_call_llm` | alert explanation context | Unprotected direct provider call |
+| Workflow | Caller tenant | Protected boundary |
+|---|---|---|
+| Hunts generation | `AuthUser.tenant_id` | `safe_chat_post` |
+| Detection translation | `AuthUser.tenant_id` | `safe_chat_post` |
+| Knowledge-base synthesis | `AuthUser.tenant_id` | `safe_chat_post` |
+| Phishing triage | `AuthUser.tenant_id` | `safe_chat_post` |
+| Detection loop | `AuthUser.tenant_id` | `safe_chat_post` |
+| NL detection | `AuthUser.tenant_id` | `safe_chat_post` |
+| NL query enhancement | `AuthUser.tenant_id` | API-scoped helper and `safe_chat_post` |
+| Alert explanation | stored `Alert.tenant_id` | `safe_chat_post` |
 
-This branch does not pretend these calls are covered. Closing the gap requires
-a shared cross-service privacy client or routing these API features through an
-authenticated agents-service provider boundary with canonical tenant identity.
-Copying tokenization logic into `services/api` is not acceptable. Until that
-architecture is implemented and tested, platform-wide “all LLM calls are
-protected” is a blocked claim even though the agents-service integration is
-ready for manual Gateway testing.
+The API-side client is REST-contract based and does not duplicate the
+Gateway detector or its tokenization/alias store. When remote privacy is
+enabled, Context creation/Encode must succeed before any provider request,
+and Decode must succeed before local use. API services must deploy with the
+same Gateway host, service credential, profile, and canonical tenant allowlist
+as Agents.
+
+**Validation status:** Source integration only. These changes have not yet
+been proven by live Gateway, real-provider, cross-server VPN, Docker build,
+or full-platform regression tests. Run the focused synthetic tests and
+the integration runbook before enabling external production egress.

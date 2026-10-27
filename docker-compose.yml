@@ -242,8 +242,21 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: neo4j_dev_secret
       SECRET_KEY: dev_secret_key_change_in_production
-      ENVIRONMENT: development
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: info
+      # API-owned LLM workflows share the independent DLP service.
+      AISOC_LLM_PRIVACY_ENABLED: ${AISOC_LLM_PRIVACY_ENABLED:-0}
+      AISOC_PRIVACY_BACKEND: ${AISOC_PRIVACY_BACKEND:-local}
+      AISOC_PRIVACY_REMOTE_URL: ${AISOC_PRIVACY_REMOTE_URL:-}
+      AISOC_PRIVACY_REMOTE_PROFILE: ${AISOC_PRIVACY_REMOTE_PROFILE:-agentic-soc-v1}
+      AISOC_PRIVACY_REMOTE_API_KEY: ${AISOC_PRIVACY_REMOTE_API_KEY:-}
+      AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS: ${AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS:-30}
+      AISOC_PRIVACY_CONTEXT_TTL_SECONDS: ${AISOC_PRIVACY_CONTEXT_TTL_SECONDS:-3600}
+      SSL_CERT_FILE: ${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       # Issue #478 — LiteLLM gateway. Route this service's live LLM endpoints
       # (translation, hunts, KB, phishing, NL-detection) through the gateway by
       # setting OPENAI_BASE_URL=http://litellm:4000/v1 + OPENAI_API_KEY=$LITELLM_MASTER_KEY.

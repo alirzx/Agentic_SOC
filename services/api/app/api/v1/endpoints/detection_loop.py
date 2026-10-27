@@ -19,6 +19,7 @@ Endpoints
 from __future__ import annotations
 
 import json
+import os
 import textwrap
 import uuid
 from datetime import UTC, datetime
@@ -114,10 +115,10 @@ async def _llm_draft_sigma(
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await safe_chat_post(client, 
-                "https://api.openai.com/v1/chat/completions",
+                (os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/") + "/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 body={
-                    "model": "gpt-4o-mini",
+                    "model": os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini",
                     "response_format": {"type": "json_object"},
                     "messages": [
                         {"role": "system", "content": _SYS_PROMPT},

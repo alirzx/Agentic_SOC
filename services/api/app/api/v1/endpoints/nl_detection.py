@@ -135,7 +135,7 @@ async def _llm_translate(request: NLDetectionRequest, tenant_id: str) -> dict[st
         f"Return JSON with keys matching the platform names (sigma, kql, spl, esql)."
     )
 
-    completions_url = "https://api.openai.com/v1/chat/completions"
+    completions_url = (os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
     try:
         enforce_airgap_for_url(completions_url)
     except AirgapViolation as exc:
@@ -174,7 +174,7 @@ async def _llm_translate(request: NLDetectionRequest, tenant_id: str) -> dict[st
                 "_model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
             }
     except Exception as exc:
-        logger.warning("nl_detection.llm_error", error=str(exc))
+        logger.warning("nl_detection.llm_error", error_category=type(exc).__name__)
         return _template_fallback(request)
 
 
