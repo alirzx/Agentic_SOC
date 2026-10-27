@@ -279,3 +279,16 @@ def test_unsupported_python_object_fails_serialization() -> None:
     # Keep a concrete unsupported value for contract-path fail-closed tests.
     assert isinstance(SimpleNamespace(value=object()), SimpleNamespace)
     assert backend.backend_name == "remote"
+
+def test_required_privacy_rejects_plain_http_gateway(monkeypatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_REQUIRED", "1")
+    monkeypatch.delenv("AISOC_ENV", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+    with pytest.raises(RemotePrivacyError, match="remote_https_required_in_production"):
+        RemotePrivacyBackend(
+            tenant_id=TENANT,
+            base_url="http://gateway.synthetic.test",
+            api_key="synthetic-service-credential",
+        )

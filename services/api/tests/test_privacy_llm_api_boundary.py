@@ -177,3 +177,22 @@ async def test_explicit_privacy_required_flag_blocks_raw_egress(enabled, monkeyp
     with pytest.raises(privacy.PrivacyEgressError):
         await privacy.safe_chat_post(provider, URL, headers={}, body=BODY, tenant_id=TENANT)
     assert provider.posts == []
+
+@pytest.mark.asyncio
+async def test_explicit_required_privacy_enforces_https(enabled, monkeypatch):
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_REQUIRED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_REMOTE_URL", "http://gateway.example")
+    provider = ProviderStub()
+    with pytest.raises(privacy.PrivacyEgressError, match="required_gateway_requires_https"):
+        await privacy.safe_chat_post(provider, URL, headers={}, body=BODY, tenant_id=TENANT)
+    assert provider.posts == []
+
+
+@pytest.mark.asyncio
+async def test_decode_failure_does_not_release_response(enabled):
+    enabled.failure = "/v1/decode"
+    provider = ProviderStub()
+    with pytest.raises(privacy.PrivacyEgressError):
+        await privacy.safe_chat_post(provider, URL, headers={}, body=BODY, tenant_id=TENANT)
+    assert len(provider.posts) == 1
+    assert "DELETE /v1/contexts/ctx_synthetic" in enabled.calls
