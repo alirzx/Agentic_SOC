@@ -38,6 +38,11 @@ def privacy_enabled() -> bool:
     return os.getenv(PRIVACY_ENABLED_ENV, "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def privacy_required() -> bool:
+    """Explicit deployment egress policy in addition to inferred production mode."""
+    return os.getenv("AISOC_LLM_PRIVACY_REQUIRED", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def production_environment() -> bool:
     """Recognize every environment convention used by the agents service."""
     return any(os.getenv(name, "").strip().lower() in _PRODUCTION_VALUES for name in _ENVIRONMENT_NAMES)
@@ -61,7 +66,7 @@ def privacy_backend_name() -> str:
 def validate_privacy_configuration() -> None:
     """Fail startup for an enabled but incomplete privacy configuration."""
     if not privacy_enabled():
-        if production_environment() and _external_llm_configured():
+        if privacy_required() or (production_environment() and _external_llm_configured()):
             raise PrivacyConfigurationError(
                 "production external LLM configuration requires AISOC_LLM_PRIVACY_ENABLED=1"
             )
@@ -175,8 +180,8 @@ def current_privacy_gateway() -> Any | None:
         # This check also covers request-scoped BYOK credentials that cannot be
         # discovered during startup. Deterministic/offline paths never enter the
         # provider boundary and remain usable in production.
-        if production_environment():
-            raise PrivacyConfigurationError("production external LLM egress requires privacy to be enabled")
+        if production_environment() or privacy_required():
+            raise PrivacyConfigurationError("external LLM egress requires privacy to be enabled")
         return None
     session = _session.get()
     if session is None:
