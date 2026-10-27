@@ -24,6 +24,9 @@ from __future__ import annotations
 
 import sys
 import uuid
+import json
+import os
+import textwrap
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,6 +38,7 @@ from pydantic import BaseModel, Field
 from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
+from app.services.privacy_llm import PrivacyEgressError, safe_chat_post
 from app.services.esql_runner import (
     ESQLExecutionError,
     ESQLNotConfigured,
@@ -214,11 +218,62 @@ class NLQueryExecuteResponse(NLQueryTranslateResponse):
 # Translation orchestration
 # ────────────────────────────────────────────────────────────────────────────
 
+async def _enhance_via_api_privacy(nl: NLQuery, *, api_key: str, tenant_id: str, fallback: TranslatedQuery) -> TranslatedQuery:
+    """Run API-side LLM enhancement with the authorized tenant, never via Agents ContextVar."""
+    from importlib import import_module
+    from app.services.model_aliases import resolve_model_alias
+
+    model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
+    base = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    url = base + "/chat/completions"
+    prompt = textwrap.dedent(
+        f"""Translate this security question into ES|QL, KQL, and SPL.
+        Return JSON only with esql, kql, spl, explanation.
+        Question: {nl.question}
+        Index: {nl.index_pattern}
+        Time range: last {nl.time_range_hours} hours"""
+    ).strip()
+    body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Translate security questions into queries."},
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30) as provider:
+            response = await safe_chat_post(
+                provider, url, headers={"Authorization": f"Bearer {api_key}"},
+                body=body, tenant_id=tenant_id,
+            )
+            response.raise_for_status()
+            parsed = json.loads(response.json()["choices"][0]["message"]["content"])
+            esql = str(parsed.get("esql", "")).strip()
+            kql = str(parsed.get("kql", "")).strip()
+            spl = str(parsed.get("spl", "")).strip()
+            if not (esql and kql and spl):
+                return fallback
+            grammar = import_module(_nl_query.__name__ + ".grammar")
+            grammar.validate_esql(esql)
+            grammar.validate_kql(kql)
+            grammar.validate_spl(spl)
+            return TranslatedQuery(
+                esql=esql, kql=kql, spl=spl,
+                explanation=str(parsed.get("explanation", fallback.explanation)),
+                intents=fallback.intents,
+            )
+    except Exception:
+        return fallback
+
+
 
 async def _translate(
     question: str,
     index_pattern: str,
     time_range_hours: int,
+    tenant_id: str,
 ) -> tuple[TranslatedQuery, str]:
     """Translate *question* into ES|QL / SPL / KQL.
 
@@ -251,7 +306,7 @@ async def _translate(
     except AirgapViolation:
         return deterministic, "deterministic"
 
-    enhanced = await enhance_with_llm(nl, api_key=api_key, fallback=deterministic)
+    enhanced = await _enhance_via_api_privacy(nl, api_key=api_key, tenant_id=tenant_id, fallback=deterministic)
     engine = "llm" if enhanced is not deterministic else "deterministic"
     return enhanced, engine
 
@@ -303,7 +358,7 @@ async def translate_query(
     body: NLQueryTranslateRequest,
     user: AuthUser,
 ) -> NLQueryTranslateResponse:
-    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
+    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours, tenant_id=str(user.tenant_id))
     return NLQueryTranslateResponse(
         request_id=uuid.uuid4(),
         question=body.question,
@@ -327,7 +382,7 @@ async def execute_query(
     body: NLQueryExecuteRequest,
     user: AuthUser,
 ) -> NLQueryExecuteResponse:
-    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
+    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours, tenant_id=str(user.tenant_id))
 
     base = NLQueryExecuteResponse(
         request_id=uuid.uuid4(),

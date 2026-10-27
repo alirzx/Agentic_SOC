@@ -60,6 +60,7 @@ from app.models.alert import Alert
 from app.models.detection_rule import DetectionRule
 from app.services.cost_dashboard import _impute_public_cost
 from app.services.llm_resolver import LlmConfig, resolve_llm_config
+from app.services.privacy_llm import safe_chat_post
 
 logger = logging.getLogger(__name__)
 
@@ -754,10 +755,12 @@ async def _call_llm_for_summary(
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
+            resp = await safe_chat_post(
+                client,
                 url,
                 headers={"Authorization": f"Bearer {llm_config.api_key}"},
-                json={"model": llm_config.model, "messages": messages, "max_tokens": 360},
+                body={"model": llm_config.model, "messages": messages, "max_tokens": 360},
+                tenant_id=alert.tenant_id,
             )
             resp.raise_for_status()
             payload = resp.json()
