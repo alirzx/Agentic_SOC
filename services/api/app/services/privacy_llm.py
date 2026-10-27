@@ -5,7 +5,9 @@ service's in-process ContextVar. Never log sensitive request/response bodies.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import uuid
 from typing import Any
 
@@ -16,6 +18,22 @@ from app.core.airgap import enforce_airgap_for_url
 
 class PrivacyEgressError(RuntimeError):
     """Credential-safe error; never include upstream response text."""
+
+
+_ALIAS_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:IP_(?:V4|V6)_[A-Z_]+|IP_OPAQUE|HOST|USER|EMAIL|"
+    r"ASSET|MAC|SUBNET|DOMAIN|URL_INTERNAL|PATH|TICKET|CASE|REFERENCE|"
+    r"PHONE|EMPLOYEE_ID|USER_SID|ORG_ID|AD_GROUP|CLOUD_RESOURCE|"
+    r"DEVICE_SERIAL|SPLUNK_INDEX|CRED_[A-Z_]+)_[A-Za-z0-9]{16,48}"
+    r"(?![A-Za-z0-9_])",
+    re.IGNORECASE,
+)
+
+
+def _required() -> bool:
+    return _production() or os.getenv("AISOC_LLM_PRIVACY_REQUIRED", "0").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
 
 
 def _production() -> bool:
@@ -74,7 +92,7 @@ async def safe_chat_post(
     """
     enforce_airgap_for_url(url)
     if not _enabled():
-        if _production():
+        if _required():
             raise PrivacyEgressError("production_provider_privacy_disabled")
         return await provider.post(url, headers=headers, json=body)
 
@@ -105,6 +123,8 @@ async def safe_chat_post(
             context_id = context.get("context_id")
             if not isinstance(context_id, str) or not context_id.startswith("ctx_"):
                 raise PrivacyEgressError("invalid_gateway_context")
+            if context.get("tenant_id") != tenant or context.get("profile") != profile:
+                raise PrivacyEgressError("gateway_context_binding_mismatch")
             encoded = await gateway_post(
                 "/v1/encode",
                 {
@@ -144,6 +164,8 @@ async def safe_chat_post(
             stats = decoded.get("stats", {})
             if isinstance(stats, dict) and stats.get("unknown_aliases", 0):
                 raise PrivacyEgressError("unknown_provider_alias")
+            if _ALIAS_RE.search(json.dumps(restored, ensure_ascii=False)):
+                raise PrivacyEgressError("unresolved_provider_alias")
             return httpx.Response(
                 status_code=response.status_code,
                 json=restored,
