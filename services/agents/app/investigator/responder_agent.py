@@ -17,7 +17,7 @@ from typing import Any
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.core.cost_telemetry import record_llm_call
+from app.core.cost_telemetry import last_llm_call_record
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
@@ -108,14 +108,8 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
         tokens = 0
         if hasattr(response, "response_metadata"):
             tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
-        # Tier 1.6: record cost telemetry on the active CostTracker.
-        call_record = record_llm_call(
-            response,
-            model=model,
-            latency_ms=latency_ms,
-            step="responder",
-            tool="llm.responder",
-        )
+        # The shared safe LLM boundary records the provider call exactly once.
+        call_record = last_llm_call_record()
         cost_usd = call_record.cost_usd if call_record is not None else 0.0
         state.log_llm_response(
             agent="ResponderAgent",

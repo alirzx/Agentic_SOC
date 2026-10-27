@@ -93,6 +93,17 @@ class CallRecord:
         self.cost_usd = _estimate_cost(self.model, self.prompt_tokens, self.completion_tokens)
 
 
+_last_call_record: contextvars.ContextVar[CallRecord | None] = contextvars.ContextVar(
+    "aisoc_last_llm_call_record",
+    default=None,
+)
+
+
+def last_llm_call_record() -> CallRecord | None:
+    """Return the record produced by the latest call in this async task."""
+    return _last_call_record.get()
+
+
 # ---------------------------------------------------------------------------
 # DB persistence
 # ---------------------------------------------------------------------------
@@ -342,11 +353,12 @@ def record_llm_call(
     persist ``cost_usd`` into the audit log alongside the existing
     ``tokens_used`` field.
     """
+    _last_call_record.set(None)
     tracker = current_cost_tracker()
     if tracker is None:
         return None
     prompt_tokens, completion_tokens = _extract_token_usage(response)
-    return tracker.record(
+    record = tracker.record(
         model=model,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
@@ -354,3 +366,5 @@ def record_llm_call(
         tool=tool,
         step=step,
     )
+    _last_call_record.set(record)
+    return record

@@ -34,11 +34,10 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
-from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
+from app.context.auto_triage import compose_auto_triage_context
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
 from app.models.state import AgentStatus, InvestigationState
-from app.prompt_serialization import format_extra_fields_for_llm
 from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
 
 logger = structlog.get_logger()
@@ -170,39 +169,9 @@ def set_threshold(value: float) -> float:
     return AUTO_CLOSE_THRESHOLD
 
 
-def _build_alert_context(state: InvestigationState) -> str:
-    """Serialise the alert into a compact string the LLM can reason over."""
-    raw = state.raw_alert
-    parts = [
-        f"Alert Summary: {sanitize_text(state.alert_summary)}",
-        f"Severity (vendor): {sanitize_text(str(raw.get('severity', 'unknown')))}",
-        f"Risk Score (vendor): {sanitize_text(str(raw.get('risk_score', 'N/A')))}",
-    ]
-
-    ioc_fields = {
-        "src_ip": "Source IP",
-        "dst_ip": "Destination IP",
-        "domain": "Domain",
-        "file_hash": "File Hash",
-        "url": "URL",
-        "hostname": "Hostname",
-    }
-    present_iocs = {label: sanitize_text(str(raw[key])) for key, label in ioc_fields.items() if raw.get(key)}
-    if present_iocs:
-        parts.append("IOCs present: " + ", ".join(f"{k}={v}" for k, v in present_iocs.items()))
-    else:
-        parts.append("IOCs present: none")
-
-    techniques = raw.get("mitre_techniques", [])
-    if techniques:
-        parts.append(f"MITRE Techniques: {', '.join(sanitize_text(str(t)) for t in techniques)}")
-
-    extra_keys = {k for k in raw if k not in {"severity", "risk_score", "mitre_techniques", *ioc_fields}}
-    if extra_keys:
-        extras = {k: raw[k] for k in sorted(extra_keys)[:10]}
-        parts.append("Additional fields (summary, not raw JSON):\n" + format_extra_fields_for_llm(extras))
-
-    return wrap_untrusted("\n".join(parts), label="alert_telemetry")
+def _build_alert_context(state: InvestigationState, *, nonce: str | None = None) -> str:
+    """Compatibility wrapper around the dedicated Auto-Triage composer."""
+    return compose_auto_triage_context(state, nonce=nonce or make_nonce()).text
 
 
 def _parse_llm_response(text: str) -> dict[str, Any]:
@@ -260,7 +229,8 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     injection = scan_evidence_fields((str(k), v) for k, v in raw.items() if isinstance(v, str | int | float | list | dict))
     nonce = make_nonce()
 
-    alert_context = _build_alert_context(state)
+    composed_context = compose_auto_triage_context(state, nonce=nonce)
+    alert_context = composed_context.text
 
     llm = make_chat_model("triage", temperature=0.0, max_tokens=512)
 
@@ -312,6 +282,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     ]
 
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
+    state.add_finding(f"Auto-triage evidence source: {composed_context.source}")
     state.add_finding(f"Auto-triage rationale: {rationale}")
 
     # Auto-close FP / benign / benign_true_positive (no active threat, no

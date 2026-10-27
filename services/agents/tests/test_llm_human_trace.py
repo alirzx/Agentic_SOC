@@ -200,14 +200,6 @@ async def test_raw_http_trace_scrubs_credentials_and_preserves_four_stages(
             model="synthetic-http-model",
             messages=[{"role": "user", "content": f"Summarize credential echo {provider_key}"}],
             url=f"https://user:{provider_key}@provider.synthetic.test/v1/chat/completions?token={signing_key}",
-            extra_headers={"Authorization": f"Bearer {provider_key}"},
-            diagnostics={
-                "api_key": provider_key,
-                "authorization": f"Bearer {provider_key}",
-                "privacy": privacy_key,
-                "signing": signing_key,
-                "url": f"https://user:{provider_key}@provider.synthetic.test/{path_token}/v1?token={signing_key}",
-            },
         )
 
     rendered_events = json.dumps(trace_events)

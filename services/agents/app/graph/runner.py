@@ -30,7 +30,7 @@ from app.agents.dispositions import NEEDS_REVIEW
 from app.core.cost_telemetry import current_cost_tracker
 from app.investigator import ledger as ledger_module
 from app.models.state import AgentStatus, InvestigationState
-from app.privacy.context import privacy_context
+from app.privacy.context import async_privacy_context
 
 logger = structlog.get_logger()
 
@@ -140,7 +140,7 @@ async def _run(
     budget_stopped = False
     try:
         async with asyncio.timeout(budget.max_seconds):
-            with privacy_context(tenant_ref):
+            async with async_privacy_context(tenant_ref):
                 async for step in graph.astream(state_dict):
                     if not isinstance(step, dict):
                         continue

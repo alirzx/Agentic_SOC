@@ -143,9 +143,9 @@ async def _get_openai_reply(
             messages.append({"role": m["role"], "content": m["content"]})
         messages.append({"role": "user", "content": user_message})
 
-        from app.privacy.context import privacy_context
+        from app.privacy.context import async_privacy_context
 
-        with privacy_context(canonical_tenant):
+        async with async_privacy_context(canonical_tenant):
             body = await safe_chat_completions_request(
                 api_key=api_key,
                 model=resolve_model_alias("copilot"),

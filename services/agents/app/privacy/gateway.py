@@ -22,6 +22,8 @@ PRIVACY_SYSTEM_GUIDANCE = (
 
 
 class PrivacyGateway:
+    backend_name = "local"
+    is_remote = False
     policy_version = "v1.1"
 
     def __init__(self, *, tenant_id: str, token_key: str | bytes) -> None:
@@ -47,6 +49,21 @@ class PrivacyGateway:
 
     def process_response(self, response: Any) -> Any:
         return self._transform_message(response, project=False)
+
+    async def encode_messages(self, messages: list[Any]) -> list[Any]:
+        """Async backend seam shared with :class:`RemotePrivacyBackend`."""
+        return self.project_messages(messages)
+
+    async def decode_response(self, response: Any) -> Any:
+        """Async backend seam shared with :class:`RemotePrivacyBackend`."""
+        return self.process_response(response)
+
+    async def encode_http_body(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Protect the complete raw-HTTP body before provider egress."""
+        self.codec.discover_value(body)
+        protected = self.codec.redact_value(body)
+        protected["messages"] = [self._guidance_message(list(body["messages"])), *protected["messages"]]
+        return protected
 
     @staticmethod
     def _message_value(value: Any) -> Any:

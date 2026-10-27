@@ -22,7 +22,7 @@ from langgraph.graph import END, START, StateGraph
 from opentelemetry import trace
 
 from app.core.cost_telemetry import CostTracker
-from app.privacy.context import PrivacyConfigurationError, privacy_context
+from app.privacy.context import PrivacyConfigurationError, async_privacy_context
 from app.privacy.tenant import resolve_tenant_for_llm
 
 from . import ledger
@@ -188,8 +188,8 @@ class InvestigatorOrchestrator:
             )
 
             logger.info("investigation.start", case_id=case_id, run_id=str(run_uuid))
-            scope = privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
-            with scope:
+            scope = async_privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
+            async with scope:
                 async with CostTracker(run_id=str(run_uuid), tenant_id=tenant_id) as tracker:
                     result = await self._graph.ainvoke(initial.to_dict())
                     final = InvestigatorState.from_dict(result)
@@ -308,8 +308,8 @@ class InvestigatorOrchestrator:
         tracker = CostTracker(run_id=str(run_uuid), tenant_id=tenant_id)
         try:
             await tracker.__aenter__()
-            scope = privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
-            with scope:
+            scope = async_privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
+            async with scope:
                 async for event in self._graph.astream(initial.to_dict()):
                     # event is {node_name: state_dict}
                     for node_name, state_dict in event.items():

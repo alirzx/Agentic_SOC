@@ -5,6 +5,11 @@ description: Operate model routing and the centralized privacy boundary for sanc
 
 # LLM routing and privacy gateway
 
+> The independent cross-host Privacy Gateway integration is documented under
+> `docs/privacy_remote_integration/`. Remote mode performs tenant-scoped Encode
+> before provider egress and Decode before local use; it is distinct from
+> inference-provider routing.
+
 AiSOC runs several distinct LLM workloads — triage, recon, investigation, the
 contextual copilot, summaries, reports, and natural-language generation. The
 **LiteLLM gateway** is the preferred routing entry point for these workloads.
@@ -38,15 +43,26 @@ gateway is never on the critical path for a baseline triage.
 Routing and privacy enforcement are separate controls. The agents service can
 call a configured gateway or a provider directly, so its privacy boundary is
 the sanctioned invocation layer in `app.llm.contract`, immediately before
-network egress. Enable it with a deployment-wide high-entropy key:
+network egress. The production target is the independent Remote Privacy
+Gateway:
 
 ```bash
 AISOC_LLM_PRIVACY_ENABLED=1
-AISOC_PRIVACY_TOKEN_KEY=<at-least-32-random-bytes>
+AISOC_PRIVACY_BACKEND=remote
+AISOC_PRIVACY_REMOTE_URL=https://privacy-gateway.internal.example
+AISOC_PRIVACY_REMOTE_PROFILE=agentic-soc-v1
+AISOC_PRIVACY_REMOTE_API_KEY=<secret-manager-injected-service-credential>
+AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS=30
+AISOC_PRIVACY_CONTEXT_TTL_SECONDS=3600
 AISOC_LLM_PRIVACY_STREAM_MAX_CHARS=1000000
 # Separate key used by an authenticated upstream to sign X-Tenant-Id:
 AISOC_AGENTS_TENANT_SIGNING_KEY=<different-at-least-32-random-bytes>
 ```
+
+The previous in-process backend remains an explicit development/rollback mode:
+set `AISOC_PRIVACY_BACKEND=local` and provide a separate, high-entropy
+`AISOC_PRIVACY_TOKEN_KEY`. Remote mode never falls back to Local after an
+error. A Gateway/configuration failure prevents provider egress.
 
 For each tenant, private IP, host, asset, user, email, and path identities
 become stable typed HMAC aliases. Structured classification is semantic and
@@ -125,10 +141,10 @@ must not be decoded, abbreviated, or treated as malicious evidence. Internal
 storage, Splunk queries, tools, Kafka, Postgres, and the entity graph continue
 to use canonical values.
 
-HMAC aliases are not decrypted. Each active gateway session retains only an
-in-memory `alias → original` mapping. A provider-emitted alias in a tool
-argument is restored before the local tool executes; any private identity
-included in the next model turn is projected again before egress.
+In Remote mode, reversible mappings are encrypted and owned by the independent
+Gateway context store. A provider-emitted alias in a tool argument is restored
+before schema validation and local execution; any private identity included in
+the next model turn is encoded again in the same workflow context.
 
 Privacy-enabled streaming is intentionally buffered up to
 `AISOC_LLM_PRIVACY_STREAM_MAX_CHARS`. The boundary reassembles all provider
@@ -136,11 +152,9 @@ chunks before exact restoration, so an alias split between chunks is never
 partially exposed to the caller. Privacy-disabled streaming preserves the
 underlying chunk behavior.
 
-The response cache uses only provider-safe projected prompt material. Its
-namespace includes the tenant-derived privacy namespace and privacy policy
-version, preventing cross-tenant and cross-policy reuse. The stable identity
-HMAC namespace remains `aisoc-privacy-v1`; the current projection/cache policy
-is `v1.1`.
+The response cache is disabled in Remote mode because a protected response is
+bound to one Gateway context. Local mode retains its tenant/policy-namespaced
+cache behavior.
 
 ### Human trace diagnostics
 
@@ -196,16 +210,18 @@ public-looking FQDN appearing only in unconstrained prose may remain visible so
 public IOC reasoning is not destroyed. Organization-owned domain and CIDR
 inventory is intentionally deferred.
 
-Both the root and demo Compose definitions pass the privacy settings into the
-agents container with privacy disabled and secret values empty by default.
+Both the root and demo Compose definitions pass Local/Remote privacy settings
+into the agents container with privacy disabled and secret values empty by
+default.
 
 ### Offline privacy smoke tests
 
-From `services/agents`, use a temporary synthetic key. Both commands are local
-and make zero network calls:
+From `services/agents`, use a temporary synthetic key for the legacy Local
+backend. Both commands are local and make zero network calls:
 
 ```bash
 export AISOC_LLM_PRIVACY_ENABLED=1
+export AISOC_PRIVACY_BACKEND=local
 export AISOC_PRIVACY_TOKEN_KEY="$(openssl rand -hex 32)"
 PYTHONPATH=. python -m app.scripts.privacy_smoke --tenant-id synthetic-smoke
 PYTHONPATH=. python -m app.scripts.privacy_splunk_smoke --tenant-id synthetic-smoke

@@ -21,6 +21,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from jsonschema import ValidationError, validate
+
 
 @dataclass(frozen=True)
 class Tool:
@@ -55,6 +57,15 @@ class ToolRegistry:
         tool = self._tools.get(name)
         if tool is None:
             return {"error": f"unknown tool: {name}"}
+        if not isinstance(args, dict):
+            return {"error": "tool arguments failed schema validation"}
+        try:
+            # LLM output is untrusted even after alias restoration. Validate
+            # the canonical arguments immediately before the authorized tool
+            # callable sees them; never echo rejected values in the error.
+            validate(instance=args, schema=tool.parameters)
+        except (ValidationError, TypeError, ValueError):
+            return {"error": "tool arguments failed schema validation"}
         try:
             result = tool.fn(**(args or {}))
             if inspect.isawaitable(result):

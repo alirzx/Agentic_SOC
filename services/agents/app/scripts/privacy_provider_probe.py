@@ -10,7 +10,12 @@ from urllib.parse import urlparse
 
 from app.agents.auto_triage_agent import run_auto_triage
 from app.llm.factory import resolve_base_url, resolve_model_alias
-from app.privacy.context import PRIVACY_TOKEN_KEY_ENV, load_privacy_token_key, privacy_context
+from app.privacy.context import (
+    PRIVACY_TOKEN_KEY_ENV,
+    async_privacy_context,
+    load_privacy_token_key,
+    privacy_backend_name,
+)
 from app.privacy.gateway import PrivacyGateway
 from app.workers.fused_alert_consumer import build_state
 
@@ -70,16 +75,18 @@ async def _run(privacy_mode: str) -> int:
     print(f"MODEL ROLE: triage ({resolve_model_alias('triage')})")
     print(f"PRIVACY: {privacy_mode.upper()}")
 
-    if privacy_mode == "on":
+    if privacy_mode == "on" and privacy_backend_name() == "local":
         key = load_privacy_token_key(os.getenv(PRIVACY_TOKEN_KEY_ENV))
         preview = PrivacyGateway(tenant_id=str(state.tenant_id), token_key=key).project_value(
             {"alert_summary": state.alert_summary, "raw_alert": state.raw_alert}
         )
         print("PROVIDER_SAFE_PREVIEW")
         print(json.dumps(preview, indent=2, sort_keys=True, default=str))
+    elif privacy_mode == "on":
+        print("PROVIDER_SAFE_PREVIEW: use controlled HUMAN TRACE for Remote mode")
 
     try:
-        with privacy_context(str(state.tenant_id)):
+        async with async_privacy_context(str(state.tenant_id)):
             result = await run_auto_triage(state)
     except Exception as exc:  # noqa: BLE001 - CLI reports a credential-safe category only
         print(f"PROVIDER PROBE: FAIL ({type(exc).__name__})")

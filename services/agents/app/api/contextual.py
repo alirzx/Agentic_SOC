@@ -47,7 +47,7 @@ from pydantic import BaseModel, Field
 
 from app.llm import safe_ainvoke, safe_astream
 from app.llm.factory import make_chat_model, resolve_model_alias
-from app.privacy.context import PrivacyConfigurationError, privacy_context, privacy_enabled
+from app.privacy.context import PrivacyConfigurationError, async_privacy_context, privacy_enabled
 from app.privacy.tenant import resolve_request_tenant, resolve_tenant_for_llm
 from app.prompt_serialization import summarize_structure_for_llm
 
@@ -452,7 +452,7 @@ async def run_action(req: ContextualActionRequest, request: Request) -> Contextu
     fallback = not bool(os.getenv("OPENAI_API_KEY"))
     try:
         canonical_tenant = await resolve_tenant_for_llm(tenant_id)
-        with privacy_context(canonical_tenant):
+        async with async_privacy_context(canonical_tenant):
             content, tokens = await _call_llm(system, user, model)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -535,7 +535,7 @@ async def run_action_stream(req: ContextualActionRequest, request: Request) -> S
         ).encode()
 
         try:
-            with privacy_context(canonical_tenant or ""):
+            async with async_privacy_context(canonical_tenant or ""):
                 async for chunk in _stream_llm(system, user, model):
                     yield (json.dumps({"delta": chunk}) + "\n").encode()
         except Exception:  # noqa: BLE001
