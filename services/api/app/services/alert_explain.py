@@ -771,7 +771,7 @@ async def _call_llm_for_summary(
             prompt_tokens=0,
             completion_tokens=0,
             latency_ms=(time.monotonic() - started) * 1000.0,
-            error=str(exc),
+            error=type(exc).__name__,
         )
 
     text = ""

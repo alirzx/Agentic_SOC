@@ -142,6 +142,10 @@ async def safe_chat_post(
                 raise PrivacyEgressError("invalid_gateway_payload")
             if protected.get("model") != body.get("model"):
                 raise PrivacyEgressError("gateway_changed_model")
+            for structural_key in ("response_format", "tool_choice", "temperature",
+                                   "max_tokens", "max_completion_tokens"):
+                if structural_key in body and protected.get(structural_key) != body[structural_key]:
+                    raise PrivacyEgressError("gateway_changed_provider_semantics")
             # No fields may be introduced outside the protected request.
             if set(protected) != set(body):
                 raise PrivacyEgressError("gateway_changed_body_keys")
