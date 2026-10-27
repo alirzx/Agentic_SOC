@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from app.privacy.context import (
@@ -119,6 +120,39 @@ async def test_async_context_reuses_one_remote_context_for_parallel_work(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_concurrent_tenants_keep_contexts_task_local(monkeypatch) -> None:
+    monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
+    monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
+    other_tenant = "22222222-2222-2222-2222-222222222222"
+    first_client = FakePrivacyClient()
+    second_client = FakePrivacyClient()
+    second_client.context_id = "ctx_synthetic_other_tenant"
+
+    async def workflow(tenant_id: str, client: FakePrivacyClient) -> tuple[str, str]:
+        backend = RemotePrivacyBackend(
+            tenant_id=tenant_id,
+            base_url="https://privacy.synthetic.test",
+            api_key="synthetic-service-credential",
+            client=client,
+        )
+        async with async_privacy_context(tenant_id, remote_backend=backend):
+            current = current_privacy_gateway()
+            assert current is backend
+            await current.encode_messages([HumanMessage(content="host dc01.corp.example")])
+            return current.tenant_id, client.context_id
+
+    first, second = await asyncio.gather(
+        workflow(TENANT, first_client),
+        workflow(other_tenant, second_client),
+    )
+
+    assert first == (TENANT, "ctx_synthetic_remote")
+    assert second == (other_tenant, "ctx_synthetic_other_tenant")
+    assert first_client.deleted is True
+    assert second_client.deleted is True
+
+
+@pytest.mark.asyncio
 async def test_nested_context_rejects_cross_tenant_reuse(monkeypatch) -> None:
     monkeypatch.setenv("AISOC_LLM_PRIVACY_ENABLED", "1")
     monkeypatch.setenv("AISOC_PRIVACY_BACKEND", "remote")
@@ -217,7 +251,7 @@ async def test_cancellation_during_context_creation_closes_owned_client(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_gateway_failure_error_does_not_expose_sdk_message() -> None:
+async def test_gateway_failure_error_does_not_expose_upstream_message() -> None:
     client = FakePrivacyClient(fail="create_context", fail_status=401)
     backend = _backend(client)
     with pytest.raises(RemotePrivacyError) as raised:
@@ -272,6 +306,32 @@ async def test_gateway_context_binding_mismatch_is_cleaned_up(monkeypatch) -> No
         async with async_privacy_context(TENANT, remote_backend=_backend(client)):
             pass
     assert client.deleted is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["encode", "decode"])
+async def test_gateway_operation_response_binding_mismatch_fails_closed(operation: str) -> None:
+    class MismatchedClient(FakePrivacyClient):
+        async def encode(self, payload: Any, **kwargs: Any) -> dict[str, Any]:
+            result = await super().encode(payload, **kwargs)
+            if operation == "encode":
+                result["context_id"] = "ctx_unexpected"
+            return result
+
+        async def decode(self, payload: Any, **kwargs: Any) -> dict[str, Any]:
+            result = await super().decode(payload, **kwargs)
+            if operation == "decode":
+                result["format"] = "messages"
+            return result
+
+    backend = _backend(MismatchedClient())
+    await backend.start()
+    with pytest.raises(RemotePrivacyError, match="gateway_context_binding_mismatch"):
+        if operation == "encode":
+            await backend.encode_messages([HumanMessage(content="host dc01.corp.example")])
+        else:
+            await backend.decode_response(AIMessage(content="no aliases"))
+    await backend.aclose()
 
 
 def test_unsupported_python_object_fails_serialization() -> None:

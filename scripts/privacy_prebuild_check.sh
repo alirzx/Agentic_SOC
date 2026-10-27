@@ -27,6 +27,6 @@ fi
     tests/test_privacy_final_ownership.py \
     tests/test_privacy_remote_adapter.py \
     tests/test_privacy_remote_contract.py \
-    tests/test_privacy_remote_sdk_contract.py
+    tests/test_privacy_remote_rest_contract.py
 )
 echo "PASS: bounded offline privacy prebuild checks completed."

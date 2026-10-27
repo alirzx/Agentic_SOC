@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
-class SyntheticSDKError(RuntimeError):
+class SyntheticGatewayError(RuntimeError):
     def __init__(self, status_code: int) -> None:
         super().__init__("synthetic gateway failure")
         self.status_code = status_code
@@ -32,7 +32,7 @@ class FakePrivacyClient:
 
     def _maybe_fail(self, operation: str) -> None:
         if self.fail == operation:
-            raise SyntheticSDKError(self.fail_status)
+            raise SyntheticGatewayError(self.fail_status)
 
     async def create_context(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("create_context", copy.deepcopy(kwargs)))
