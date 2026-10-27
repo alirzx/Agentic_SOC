@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.privacy_llm import safe_chat_post
 from app.services.kb_chunking import chunk_text
 from app.services.model_aliases import resolve_model_alias
 
@@ -111,7 +112,7 @@ Cite document titles inline as [Doc Title].
 If the answer cannot be found in the context, say so clearly."""
 
 
-async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
+async def _synthesise(question: str, chunks: list[KBChunk], tenant_id: str) -> str | None:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
     if not api_key:
         return None
@@ -122,10 +123,10 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
     enforce_airgap_for_url(completions_url)
     try:
         async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
+            resp = await safe_chat_post(client, 
                 completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
+                body={
                     "model": model,
                     "messages": [
                         {"role": "system", "content": _SYNTH_SYSTEM},
@@ -133,6 +134,7 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
                     ],
                     "temperature": 0.2,
                 },
+                tenant_id=tenant_id,
             )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
@@ -273,7 +275,7 @@ async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryRe
         # Air-gapped deployments refuse the LLM call; still return the retrieved
         # chunks with no synthesized answer rather than failing the whole query.
         try:
-            answer = await _synthesise(body.question, chunks)
+            answer = await _synthesise(body.question, chunks, tenant_id=str(user.tenant_id))
         except AirgapViolation:
             answer = None
 

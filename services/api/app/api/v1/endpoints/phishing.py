@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.privacy_llm import safe_chat_post
 from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ Analyse the submitted artifact and return ONLY valid JSON with:
 }"""
 
 
-async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageResult | None:
+async def _triage(artifact_kind: str, content: str, urls: list[str], tenant_id: str) -> TriageResult | None:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
     if not api_key:
         return None
@@ -105,10 +106,10 @@ async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageRe
     enforce_airgap_for_url(completions_url)
     try:
         async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
+            resp = await safe_chat_post(client, 
                 completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
+                body={
                     "model": model,
                     "messages": [
                         {"role": "system", "content": _SYSTEM},
@@ -117,6 +118,7 @@ async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageRe
                     "temperature": 0.1,
                     "response_format": {"type": "json_object"},
                 },
+                tenant_id=tenant_id,
             )
         resp.raise_for_status()
         data = json.loads(resp.json()["choices"][0]["message"]["content"])
@@ -183,7 +185,7 @@ def _row_to_submission(row: Any) -> SubmissionResponse:
 )
 async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> SubmissionResponse:
     try:
-        result = await _triage(body.artifact_kind, body.raw_content or "", body.urls)
+        result = await _triage(body.artifact_kind, body.raw_content or "", body.urls, tenant_id=str(user.tenant_id))
     except AirgapViolation:
         # Air-gapped mode is on but the configured LLM endpoint isn't on the
         # allowlist — fall through to heuristic triage rather than 503-ing
@@ -281,7 +283,7 @@ async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> S
         raise HTTPException(status_code=404, detail="Submission not found.")
 
     try:
-        result = await _triage(existing.artifact_kind, existing.raw_content or "", list(existing.urls or []))
+        result = await _triage(existing.artifact_kind, existing.raw_content or "", list(existing.urls or []), tenant_id=str(user.tenant_id))
     except AirgapViolation:
         result = None
     if not result:

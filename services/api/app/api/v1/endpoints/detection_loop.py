@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+from app.services.privacy_llm import safe_chat_post
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -95,6 +96,7 @@ async def _llm_draft_sigma(
     current_sigma: str,
     alert_fields: dict[str, Any],
     analyst_note: str,
+    tenant_id: str,
 ) -> dict[str, Any]:
     """Call LLM to draft a Sigma improvement. Returns parsed JSON or template."""
     api_key = getattr(settings, "OPENAI_API_KEY", None) or getattr(settings, "LLM_API_KEY", None)
@@ -111,10 +113,10 @@ async def _llm_draft_sigma(
     )
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
+            resp = await safe_chat_post(client, 
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
+                body={
                     "model": "gpt-4o-mini",
                     "response_format": {"type": "json_object"},
                     "messages": [
@@ -122,6 +124,7 @@ async def _llm_draft_sigma(
                         {"role": "user", "content": user_msg},
                     ],
                 },
+                tenant_id=tenant_id,
             )
             resp.raise_for_status()
             raw = resp.json()["choices"][0]["message"]["content"]
@@ -219,6 +222,7 @@ async def suggest_fp_fix(
         current_sigma=current_sigma,
         alert_fields=evidence,
         analyst_note=body.analyst_note or "",
+        tenant_id=str(user.tenant_id),
     )
 
     suggestion_id = uuid.uuid4()

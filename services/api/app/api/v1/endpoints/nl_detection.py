@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.privacy_llm import safe_chat_post
 from app.models.detection_proposal import DetectionRuleProposal
 from app.services.detection_eval import evaluate_candidate_rule
 from app.services.fixture_synth import derive_fixtures_from_sigma
@@ -118,7 +119,7 @@ FROM logs-*
 }
 
 
-async def _llm_translate(request: NLDetectionRequest) -> dict[str, str | None]:
+async def _llm_translate(request: NLDetectionRequest, tenant_id: str) -> dict[str, str | None]:
     """Attempt LLM-based translation; fall back to templates on any error."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
@@ -145,10 +146,10 @@ async def _llm_translate(request: NLDetectionRequest) -> dict[str, str | None]:
         import httpx
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
+            resp = await safe_chat_post(client, 
                 completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
+                body={
                     "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
                     "messages": [
                         {"role": "system", "content": _SYSTEM_PROMPT},
@@ -158,6 +159,7 @@ async def _llm_translate(request: NLDetectionRequest) -> dict[str, str | None]:
                     "temperature": 0.1,
                     "max_tokens": 2000,
                 },
+                tenant_id=tenant_id,
             )
             resp.raise_for_status()
             import json
@@ -194,7 +196,7 @@ def _template_fallback(request: NLDetectionRequest) -> dict[str, str | None]:
 
 
 @router.post("/translate", response_model=NLDetectionResponse)
-async def translate_detection(payload: NLDetectionRequest) -> NLDetectionResponse:
+async def translate_detection(payload: NLDetectionRequest, user: AuthUser) -> NLDetectionResponse:
     """Convert a plain-English threat description into multi-platform detection rules."""
     if not payload.description.strip():
         raise HTTPException(
@@ -202,7 +204,7 @@ async def translate_detection(payload: NLDetectionRequest) -> NLDetectionRespons
             detail="description must not be empty",
         )
 
-    rules = await _llm_translate(payload)
+    rules = await _llm_translate(payload, tenant_id=str(user.tenant_id))
     model_used = rules.pop("_model", "unknown")
 
     logger.info(
@@ -258,7 +260,7 @@ async def propose_from_nl(
         severity=payload.severity,
         mitre_techniques=payload.mitre_techniques,
     )
-    rules = await _llm_translate(translate_req)
+    rules = await _llm_translate(translate_req, tenant_id=str(current_user.tenant_id))
     model_used = rules.pop("_model", "unknown")
     sigma = rules.get("sigma") or ""
     if not sigma.strip():
