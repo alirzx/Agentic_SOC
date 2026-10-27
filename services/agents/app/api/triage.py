@@ -41,7 +41,7 @@ from pydantic import BaseModel, Field
 
 from app.models.state import AgentStatus, InvestigationState
 from app.orchestrator import PARALLEL_TOPOLOGY_FLAG, RouterOrchestrator
-from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm, trusted_workflow_tenant
+from app.privacy.tenant import normalize_tenant_uuid, require_run_owner, resolve_tenant_for_llm, trusted_workflow_tenant
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["triage"])
@@ -158,7 +158,7 @@ async def _emit_event(run_id: str, tenant_id: str, event: dict[str, Any]) -> Non
         async with httpx.AsyncClient(timeout=2.0) as client:
             await client.post(url, json=payload, headers=headers)
     except Exception as exc:  # noqa: BLE001
-        logger.debug("realtime_emit_skipped", reason=str(exc))
+        logger.debug("realtime_emit_skipped", error_category=type(exc).__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -233,12 +233,12 @@ async def _run_router_and_store(
             wall_clock_ms=info.get("wall_clock_ms"),
         )
     except Exception as exc:  # noqa: BLE001
-        logger.error("triage.failed", run_id=run_id, case_id=case_id, error=str(exc))
+        logger.error("triage.failed", run_id=run_id, case_id=case_id, error_category=type(exc).__name__)
         _triage_runs[run_id].update(
             {
                 "status": "failed",
                 "completed_at": datetime.utcnow().isoformat(),
-                "error": str(exc),
+                "error": "Triage failed",
             }
         )
         await _emit_event(
@@ -247,7 +247,7 @@ async def _run_router_and_store(
             {
                 "kind": "error",
                 "agent": "router",
-                "summary": f"Router triage failed: {exc}",
+                "summary": "Router triage failed",
                 "data": {"status": "failed"},
             },
         )
@@ -296,7 +296,7 @@ async def launch_triage(
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
         "topology": topology,
-        "tenant_id": body.tenant_id,
+        "_tenant_owner": resolved_tenant,
         "incident_id": str(incident_uuid),
     }
 
@@ -306,7 +306,7 @@ async def launch_triage(
         case_id,
         state,
         topology,
-        body.tenant_id,
+        resolved_tenant,
     )
     logger.info(
         "triage.launched",
@@ -324,23 +324,10 @@ async def launch_triage(
 
 
 @router.get("/triage/{run_id}")
-async def get_triage(
-    run_id: str,
-    tenant_id: str = "default",
-) -> dict[str, Any]:
-    """Return the current state of a router triage run.
-
-    Tenant isolation is enforced at the query layer (project convention,
-    see PRs #116–#128): the caller MUST pass the same ``tenant_id`` the
-    run was launched with. Mismatched (or absent) tenant returns 404
-    rather than 403 to avoid leaking the existence of run IDs across
-    tenant boundaries.
-    """
+async def get_triage(run_id: str, request: Request) -> dict[str, Any]:
+    """Return run status only for its authenticated tenant owner."""
     run = _triage_runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Triage run not found")
-    if str(run.get("tenant_id")) != tenant_id:
-        # Same response shape as the not-found branch so a probing
-        # caller can't distinguish "wrong tenant" from "no such run".
-        raise HTTPException(status_code=404, detail="Triage run not found")
-    return run
+    await require_run_owner(request, run.get("_tenant_owner"))
+    return {key: value for key, value in run.items() if key != "_tenant_owner"}

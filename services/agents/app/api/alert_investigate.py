@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.investigator import InvestigatorOrchestrator
 from app.llm.gateway_config import validate_gateway_config
-from app.privacy.tenant import trusted_workflow_tenant
+from app.privacy.tenant import require_run_owner, resolve_tenant_for_llm, trusted_workflow_tenant
 
 logger = structlog.get_logger()
 
@@ -157,7 +157,8 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
         base_url=gateway.get("base_url_normalized_sanitized"),
     )
     try:
-        tenant_id = trusted_workflow_tenant(request, req.tenant_id)
+        tenant_id = await resolve_tenant_for_llm(trusted_workflow_tenant(request, req.tenant_id), allow_default=True)
+        _runs[run_id]["_tenant_owner"] = tenant_id
         state = await InvestigatorOrchestrator().run(
             case_id=alert_id,
             alert_summary=summary,
@@ -181,7 +182,7 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
             model=model_name,
             error=state.error,
         )
-        _runs[run_id] = result.model_dump()
+        _runs[run_id] = {**result.model_dump(), "_tenant_owner": tenant_id}
         logger.info(
             "alert_investigate.done",
             run_id=run_id,
@@ -193,7 +194,7 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
         return result
     except Exception as exc:  # noqa: BLE001 — surface failure to the console
         completed_at = datetime.now(UTC).isoformat()
-        logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error=str(exc))
+        logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error_category=type(exc).__name__)
         result = AgentInvestigationOut(
             id=run_id,
             alertId=alert_id,
@@ -204,18 +205,19 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
             startedAt=started_at,
             completedAt=completed_at,
             model=model_name,
-            error=str(exc),
+            error="Investigation failed",
         )
         _runs[run_id] = result.model_dump()
-        raise HTTPException(status_code=502, detail=f"Investigation failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail="Investigation failed") from exc
 
 
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)
-async def get_alert_investigation(run_id: str) -> AgentInvestigationOut:
+async def get_alert_investigation(run_id: str, request: Request) -> AgentInvestigationOut:
     """Poll a previously started alert investigation (in-memory status cache)."""
     run = _runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Investigation run not found")
+    await require_run_owner(request, run.get("_tenant_owner"))
     if "id" not in run:
         return AgentInvestigationOut(
             id=run_id,

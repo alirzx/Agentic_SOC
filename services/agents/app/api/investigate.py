@@ -27,7 +27,7 @@ from pydantic import BaseModel
 
 from app.investigator import InvestigatorOrchestrator
 from app.orchestrator.router import RouterOrchestrator
-from app.privacy.tenant import trusted_workflow_tenant
+from app.privacy.tenant import require_run_owner, resolve_request_tenant, resolve_tenant_for_llm, trusted_workflow_tenant
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["investigations"])
@@ -141,7 +141,7 @@ async def _emit_event(run_id: str, tenant_id: str, event: dict[str, Any]) -> Non
         async with httpx.AsyncClient(timeout=2.0) as client:
             await client.post(url, json=payload, headers=headers)
     except Exception as exc:  # noqa: BLE001
-        logger.debug("realtime_emit_skipped", reason=str(exc))
+        logger.debug("realtime_emit_skipped", error_category=type(exc).__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +202,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
                 )
 
             elif event.get("type") == "error":
-                err_msg = event.get("error", "Unknown error")
+                err_msg = "Investigation failed"
                 _runs[run_id].update({"status": "failed", "error": err_msg})
                 await _emit_event(
                     run_id,
@@ -216,8 +216,8 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
                 )
 
     except Exception as exc:  # noqa: BLE001
-        logger.error("investigation_bg_task failed", run_id=run_id, error=str(exc))
-        _runs[run_id].update({"status": "failed", "error": str(exc)})
+        logger.error("investigation_bg_task failed", run_id=run_id, error_category=type(exc).__name__)
+        _runs[run_id].update({"status": "failed", "error": "Investigation failed"})
 
 
 # ---------------------------------------------------------------------------
@@ -233,15 +233,17 @@ async def launch_investigation(
     request: Request,
 ):
     """Launch a Pillar-1 autonomous investigation for a case."""
+    trusted_tenant = trusted_workflow_tenant(request, body.tenant_id)
+    tenant_owner = await resolve_tenant_for_llm(trusted_tenant, allow_default=True)
     run_id = str(uuid4())
     _runs[run_id] = {
         "run_id": run_id,
         "case_id": case_id,
+        "_tenant_owner": tenant_owner,
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
     }
-    trusted_tenant = trusted_workflow_tenant(request, body.tenant_id)
-    trusted_body = body.model_copy(update={"tenant_id": trusted_tenant})
+    trusted_body = body.model_copy(update={"tenant_id": tenant_owner})
     background_tasks.add_task(_run_and_store, run_id, case_id, trusted_body)
     logger.info("investigation.launched", run_id=run_id, case_id=case_id)
     return InvestigateResponse(
@@ -253,46 +255,49 @@ async def launch_investigation(
 
 
 @router.get("/investigations/{run_id}")
-async def get_investigation(run_id: str):
+async def get_investigation(run_id: str, request: Request):
     """Poll investigation status and results."""
     run = _runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Investigation run not found")
-    # Strip large fields from polling response — use dedicated endpoints instead
-    slim = {k: v for k, v in run.items() if k not in ("report_md", "report_html")}
+    await require_run_owner(request, run.get("_tenant_owner"))
+    slim = {k: v for k, v in run.items() if k not in ("report_md", "report_html", "_tenant_owner")}
     return slim
 
 
 @router.get("/investigations/{run_id}/report.md", response_class=PlainTextResponse)
-async def get_report_md(run_id: str):
+async def get_report_md(run_id: str, request: Request):
     """Download the Markdown incident report."""
     run = _runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    await require_run_owner(request, run.get("_tenant_owner"))
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
     return run.get("report_md", "")
 
 
 @router.get("/investigations/{run_id}/report.html", response_class=HTMLResponse)
-async def get_report_html(run_id: str):
+async def get_report_html(run_id: str, request: Request):
     """Download the HTML incident report."""
     run = _runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    await require_run_owner(request, run.get("_tenant_owner"))
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
     return run.get("report_html", "<html><body>No report yet.</body></html>")
 
 
 @router.get("/investigations/{run_id}/report.pdf")
-async def get_report_pdf(run_id: str):
+async def get_report_pdf(run_id: str, request: Request):
     """Download the PDF incident report (rendered from HTML via weasyprint)."""
     from fastapi.responses import Response as FastAPIResponse
 
     run = _runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    await require_run_owner(request, run.get("_tenant_owner"))
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
 
@@ -316,7 +321,7 @@ async def get_report_pdf(run_id: str):
             detail="PDF generation requires weasyprint. Install with: pip install weasyprint",
         ) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="PDF generation failed") from exc
 
 
 @router.websocket("/investigations/{run_id}/stream")
@@ -330,9 +335,22 @@ async def stream_investigation(ws: WebSocket, run_id: str):
     2. If query params case_id + alert_summary are supplied, run a fresh
        investigation directly on this connection (dev/test use-case).
     """
+    authenticated = resolve_request_tenant(ws)
+    if not authenticated:
+        await ws.close(code=1008)
+        return
+    owner = await resolve_tenant_for_llm(authenticated, allow_default=True)
+    run = _runs.get(run_id)
+    if run is not None:
+        if run.get("_tenant_owner") != owner:
+            await ws.close(code=1008)
+            return
+    elif os.getenv("AISOC_INVESTIGATION_ADHOC_WS_ENABLED", "0").lower() not in {"1", "true", "yes"}:
+        await ws.close(code=1008)
+        return
     case_id = ws.query_params.get("case_id", run_id)
     alert_summary = ws.query_params.get("alert_summary", "")
-    tenant_id = ws.query_params.get("tenant_id", "default")
+    tenant_id = owner
 
     await ws.accept()
     try:
@@ -373,5 +391,5 @@ async def stream_investigation(ws: WebSocket, run_id: str):
     except WebSocketDisconnect:
         logger.info("ws.disconnected", run_id=run_id)
     except Exception as exc:  # noqa: BLE001
-        logger.error("ws.error", run_id=run_id, error=str(exc))
+        logger.error("ws.error", run_id=run_id, error_category=type(exc).__name__)
         await ws.close(code=1011)
