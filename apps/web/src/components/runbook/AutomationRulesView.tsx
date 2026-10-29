@@ -326,6 +326,9 @@ const RuleForm: FC<{
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [autonomyMenuOpen, setAutonomyMenuOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [playbookOptions, setPlaybookOptions] = useState<Array<{ id: string; name: string; description: string }>>([]);
+  const [playbookMenuOpen, setPlaybookMenuOpen] = useState(false);
+  const [playbookLoadError, setPlaybookLoadError] = useState<string | null>(null);
 
   // Show columns for all conditions that have a field, even if they don't have a value yet.
   // The backend extracts values from matched records for all fields listed here.
@@ -389,6 +392,27 @@ const RuleForm: FC<{
     // `previewKey` is the debounced identity of everything the preview reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewKey]);
+
+  // Load available playbooks on component mount
+  useEffect(() => {
+    const fetchPlaybooks = async () => {
+      try {
+        setPlaybookLoadError(null);
+        const response = await fetch('/api/v1/runbook/playbooks');
+        if (!response.ok) {
+          throw new Error(`Failed to load playbooks: HTTP ${response.status}`);
+        }
+        const data = (await response.json()) as Array<{ id: string; name: string; description: string }>;
+        setPlaybookOptions(data);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load playbooks';
+        setPlaybookLoadError(message);
+        // Still allow form to function, just with no playbook dropdown
+        setPlaybookOptions([]);
+      }
+    };
+    fetchPlaybooks();
+  }, []);
 
   const set = <K extends keyof RuleFormState>(k: K, v: RuleFormState[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }));
@@ -706,17 +730,84 @@ const RuleForm: FC<{
             </div>
             <div className="col-span-2">
               <FieldLabel
-                label="Linked Playbook ID"
-                help="Reference to an existing playbook shown on the rule row. Linking does not execute the playbook — the rule's action is what runs."
-                hint="default: empty"
+                label="Linked Playbook"
+                help="Select an existing playbook to run when this rule matches. The playbook will execute before the rule's action (if approved by governance)."
+                hint="optional"
               />
-              <input
-                type="text"
-                value={form.playbook_ref}
-                onChange={(e) => set('playbook_ref', e.target.value)}
-                placeholder="playbook UUID or slug"
-                className="w-full bg-slate-800/60 border border-slate-700/60 rounded px-2.5 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
-              />
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPlaybookMenuOpen((open) => !open)}
+                  className="flex w-full items-center justify-between rounded border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-left text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
+                  aria-expanded={playbookMenuOpen}
+                  aria-haspopup="listbox"
+                  title={playbookOptions.find(p => p.id === form.playbook_ref)?.name || form.playbook_ref || 'Select a playbook'}
+                >
+                  <span>
+                    {form.playbook_ref
+                      ? playbookOptions.find(p => p.id === form.playbook_ref)?.name || form.playbook_ref
+                      : 'No playbook selected'}
+                  </span>
+                  <span className="text-slate-400">▾</span>
+                </button>
+
+                {playbookMenuOpen && (
+                  <div
+                    role="listbox"
+                    aria-label="Playbook options"
+                    className="absolute z-20 mt-1 w-full overflow-hidden rounded border border-slate-700/60 bg-slate-900/95 shadow-xl max-h-64 overflow-y-auto"
+                  >
+                    {playbookOptions.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-slate-500">
+                        {playbookLoadError
+                          ? `Error loading playbooks: ${playbookLoadError}`
+                          : 'No playbooks found'}
+                      </div>
+                    ) : (
+                      <>
+                        {/* Option to clear selection */}
+                        <button
+                          type="button"
+                          role="option"
+                          onClick={() => {
+                            set('playbook_ref', '');
+                            setPlaybookMenuOpen(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                            form.playbook_ref === ''
+                              ? 'bg-blue-500/30 text-blue-200 font-medium'
+                              : 'text-slate-200 hover:bg-slate-800/60'
+                          }`}
+                        >
+                          None
+                        </button>
+                        {playbookOptions.map((playbook) => (
+                          <button
+                            key={playbook.id}
+                            type="button"
+                            role="option"
+                            onClick={() => {
+                              set('playbook_ref', playbook.id);
+                              setPlaybookMenuOpen(false);
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                              form.playbook_ref === playbook.id
+                                ? 'bg-blue-500/30 text-blue-200 font-medium'
+                                : 'text-slate-200 hover:bg-slate-800/60'
+                            }`}
+                            title={playbook.description || playbook.name}
+                          >
+                            <div className="font-medium">{playbook.name}</div>
+                            {playbook.description && (
+                              <div className="text-xs text-slate-400">{playbook.description}</div>
+                            )}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="col-span-2">
               <FieldLabel

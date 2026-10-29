@@ -37,7 +37,7 @@ from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
 from app.models.alert import Alert
 from app.models.runbook_task import RunbookTask
-from app.services.agents_client import post_outcome_feedback, resume_playbook_run
+from app.services.agents_client import list_playbooks, post_outcome_feedback, resume_playbook_run
 from app.services.runbook.action_catalog import ACTIONS, required_connectors
 from app.services.runbook.condition_eval import evaluate_all, validate_conditions
 from app.services.runbook.detections import (
@@ -883,6 +883,19 @@ async def list_automation_actions(
         }
         for defn in ACTIONS.values()
     ]
+
+
+@router.get("/playbooks", summary="Playbooks available for rule linking")
+async def list_available_playbooks(
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+) -> list[dict[str, Any]]:
+    """Return the list of available playbooks for the automation rules dropdown.
+    
+    Each playbook includes: id, name, and description.
+    Returns an empty list if the agents service is unreachable.
+    """
+    playbooks = await list_playbooks(tenant_id=str(current_user.tenant_id))
+    return playbooks
 
 
 @router.get("/governance", summary="Governed action catalog")

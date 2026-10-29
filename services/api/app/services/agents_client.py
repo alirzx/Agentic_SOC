@@ -245,3 +245,58 @@ async def resume_playbook_run(
     except ValueError:
         logger.warning("agents_client.resume_bad_response")
         return False
+
+
+async def list_playbooks(
+    *,
+    tenant_id: str,
+) -> list[dict[str, Any]]:
+    """Fetch all playbooks from the agents service for the given tenant.
+
+    Returns a list of playbook objects with at least ``id``, ``name``, and
+    ``description`` fields. Returns an empty list if the agents service is
+    unreachable or returns an error.
+
+    Unlike the other agent client functions, this call does NOT require a
+    tenant signing key because playbooks are fetched without credentials.
+    If a signing key is configured, we use it for consistency.
+    """
+    signing_key = (settings.AGENTS_TENANT_SIGNING_KEY or "").strip()
+    url = f"{_agents_base_url()}/api/v1/playbooks"
+    headers = {}
+    if signing_key:
+        headers[_TENANT_HEADER] = str(tenant_id)
+        headers[_SIGNATURE_HEADER] = sign_tenant(str(tenant_id), signing_key)
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.AGENTS_TIMEOUT_SECONDS) as client:
+            response = await client.get(url, headers=headers)
+    except httpx.HTTPError as exc:
+        logger.warning("agents_client.list_playbooks_transport_failed", error=str(exc))
+        return []
+
+    if response.status_code != 200:
+        logger.warning(
+            "agents_client.list_playbooks_rejected",
+            status=response.status_code,
+        )
+        return []
+
+    try:
+        playbooks = response.json()
+        if not isinstance(playbooks, list):
+            logger.warning("agents_client.list_playbooks_invalid_response", type=type(playbooks))
+            return []
+        # Extract only the fields we need for the UI dropdown
+        return [
+            {
+                "id": pb.get("id", ""),
+                "name": pb.get("name", "Untitled"),
+                "description": pb.get("description", ""),
+            }
+            for pb in playbooks
+            if pb.get("id")  # Skip any playbooks without an id
+        ]
+    except (ValueError, KeyError) as exc:
+        logger.warning("agents_client.list_playbooks_parse_failed", error=str(exc))
+        return []
