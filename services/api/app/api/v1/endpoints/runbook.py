@@ -31,13 +31,14 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
 from app.models.alert import Alert
 from app.models.runbook_task import RunbookTask
 from app.services.agents_client import post_outcome_feedback, resume_playbook_run
-from app.services.runbook.action_catalog import ACTIONS
+from app.services.runbook.action_catalog import ACTIONS, required_connectors
 from app.services.runbook.condition_eval import evaluate_all, validate_conditions
 from app.services.runbook.detections import (
     DetectionActivityOut,
@@ -840,18 +841,45 @@ async def _seed_default_rules_for_tenant(db: DBSession, tenant_id: uuid.UUID) ->
 @router.get("/actions", summary="Actions available in automation rules")
 async def list_automation_actions(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    db: DBSession,
 ) -> list[dict[str, Any]]:
-    """Return the simple action list for automation rule dropdowns.
+    """Return the action list for automation rule dropdowns.
     
-    Each action has: name, label, and category for grouping in the UI.
+    Each action includes: name, label, category, and available flag.
+    available=false means required connectors are not configured.
     For the full governance details (blast radius, contracts, thresholds),
     use GET /governance instead.
     """
+    # Fetch active connectors for availability check
+    try:
+        result = await db.execute(
+            text(
+                """
+                SELECT DISTINCT connector_type
+                FROM connectors
+                WHERE tenant_id = :tenant_id AND is_enabled = true
+                """
+            ),
+            {"tenant_id": str(current_user.tenant_id)},
+        )
+        active_connectors = set(result.scalars().all() or [])
+    except Exception:
+        # If query fails, assume no connectors are active (safe default)
+        active_connectors = set()
+    
+    # Check if action is available based on required connectors
+    def is_action_available(action_name: str) -> bool:
+        req = required_connectors(action_name)
+        if not req:
+            return True
+        return any(ct in active_connectors for ct in req)
+    
     return [
         {
             "name": defn.name,
             "label": defn.label,
             "category": defn.category.value,
+            "available": is_action_available(defn.name),
         }
         for defn in ACTIONS.values()
     ]

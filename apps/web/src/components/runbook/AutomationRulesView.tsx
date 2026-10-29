@@ -317,7 +317,7 @@ const RuleForm: FC<{
   onSave: (data: RuleFormState) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
-  actionOptions: Array<{ value: string; label: string; group: string }>;
+  actionOptions: Array<{ value: string; label: string; group: string; available?: boolean }>;
 }> = ({ initial, onSave, onCancel, saving, actionOptions }) => {
   const [form, setForm] = useState<RuleFormState>(initial);
   const [attempted, setAttempted] = useState(false);
@@ -325,6 +325,7 @@ const RuleForm: FC<{
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [autonomyMenuOpen, setAutonomyMenuOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
 
   // Show columns for all conditions that have a field, even if they don't have a value yet.
   // The backend extracts values from matched records for all fields listed here.
@@ -498,19 +499,63 @@ const RuleForm: FC<{
             help="Governed action the rule proposes. Every action is gated: read actions can run automatically, containment actions stop at the autonomy ceiling."
             hint="default: close_alert"
           />
-          <select
-            value={form.action_slug}
-            onChange={(e) => set('action_slug', e.target.value)}
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded px-2.5 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
-          >
-            {Object.entries(actionGroups).map(([group, options]) => (
-              <optgroup key={group} label={group}>
-                {options.map((a) => (
-                  <option key={a.value} value={a.value}>{a.label}</option>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setActionMenuOpen((open) => !open)}
+              className="flex w-full items-center justify-between rounded border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-left text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
+              aria-expanded={actionMenuOpen}
+              aria-haspopup="listbox"
+              title={`Current action: ${actionOptions.find(a => a.value === form.action_slug)?.label ?? form.action_slug}`}
+            >
+              <span>{actionOptions.find(a => a.value === form.action_slug)?.label ?? form.action_slug}</span>
+              <span className="text-slate-400">▾</span>
+            </button>
+
+            {actionMenuOpen && (
+              <div
+                role="listbox"
+                aria-label="Action options"
+                className="absolute z-20 mt-1 w-full overflow-hidden rounded border border-slate-700/60 bg-slate-900/95 shadow-xl max-h-64 overflow-y-auto"
+              >
+                {Object.entries(actionGroups).map(([group, options]) => (
+                  <div key={group}>
+                    <div className="px-3 py-2 text-xs font-semibold text-slate-400 bg-slate-800/50 sticky top-0">
+                      {group}
+                    </div>
+                    {options.map((a) => {
+                      const isSelected = form.action_slug === a.value;
+                      const isUnavailable = a.available === false;
+                      return (
+                        <button
+                          key={a.value}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => {
+                            set('action_slug', a.value);
+                            setActionMenuOpen(false);
+                          }}
+                          disabled={isUnavailable}
+                          className={`w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-blue-500/30 text-blue-200 font-medium'
+                              : isUnavailable
+                                ? 'text-slate-500 cursor-not-allowed opacity-60'
+                                : 'text-slate-200 hover:bg-slate-800/60'
+                          }`}
+                          title={isUnavailable ? 'Action unavailable — required connector not configured' : ''}
+                        >
+                          <span>{a.label}</span>
+                          {isUnavailable && <span className="ml-2 text-amber-400">⚠️</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 ))}
-              </optgroup>
-            ))}
-          </select>
+              </div>
+            )}
+          </div>
         </div>
         <div>
           <FieldLabel
@@ -1122,7 +1167,7 @@ export const AutomationRulesView: FC = () => {
   const [testResults, setTestResults] = useState<RulePreviewResult[]>([]);
   const [runningRuleTest, setRunningRuleTest] = useState(false);
   const [search, setSearch] = useState('');
-  const [actionOptions, setActionOptions] = useState<Array<{ value: string; label: string; group: string }>>([]);
+  const [actionOptions, setActionOptions] = useState<Array<{ value: string; label: string; group: string; available?: boolean }>>([]);
   const importRef = useRef<HTMLInputElement>(null);
 
   // Fetch action catalog from API
