@@ -5,6 +5,7 @@
  * Start: connectors / ingest → End: Jira ticket. Presentational only.
  */
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -19,6 +20,12 @@ interface WorkflowStep {
   glow: string;
   /** Percent along the pipe path (0–100) for the traveling pulse */
   pathPercent: number;
+  /**
+   * The live surface where this stage actually stops and waits for a human.
+   * Only stages that own a real queue get one: this page is a diagram, and a
+   * link that opens an unrelated screen would make the diagram a lie.
+   */
+  link?: { href: string; label: string; note: string };
 }
 
 const STEPS: WorkflowStep[] = [
@@ -41,6 +48,11 @@ const STEPS: WorkflowStep[] = [
     accent: 'text-emerald-300',
     glow: 'bg-emerald-400',
     pathPercent: 20,
+    link: {
+      href: '/runbook?tab=detect',
+      label: 'Open detect & fuse activity',
+      note: 'Each recent alert with the rule that fired, its source, and what fusion did with it.',
+    },
   },
   {
     id: 'investigate',
@@ -61,6 +73,11 @@ const STEPS: WorkflowStep[] = [
     accent: 'text-cyan-300',
     glow: 'bg-cyan-400',
     pathPercent: 60,
+    link: {
+      href: '/runbook?tab=action-plan&task_type=manual_review',
+      label: 'Open the manual-review queue',
+      note: 'Every needs_review verdict your analysts have not confirmed yet is a task here.',
+    },
   },
   {
     id: 'respond',
@@ -71,6 +88,11 @@ const STEPS: WorkflowStep[] = [
     accent: 'text-amber-300',
     glow: 'bg-amber-400',
     pathPercent: 80,
+    link: {
+      href: '/runbook?tab=action-plan&task_type=approval_gate',
+      label: 'Open pending approval gates',
+      note: 'Governed actions the autonomy ceiling blocked are waiting for sign-off here.',
+    },
   },
   {
     id: 'jira',
@@ -160,9 +182,16 @@ function StepIcon({ stepId, className }: { stepId: string; className?: string })
   }
 }
 
-export function WorkflowSocView() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+export function WorkflowSocView({ initialStage }: { initialStage?: string } = {}) {
+  // The Runbook links back here with ?stage=<id>, so the stage an operator came
+  // from is the one already open — and the animation does not drift away from it.
+  const initialIndex = Math.max(
+    0,
+    STEPS.findIndex((step) => step.id === initialStage),
+  );
+
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [paused, setPaused] = useState(initialIndex > 0);
 
   useEffect(() => {
     if (paused) return;
@@ -314,6 +343,15 @@ export function WorkflowSocView() {
                     <span className="text-[10px] uppercase tracking-wider text-gray-500">
                       {step.number}
                     </span>
+                    {step.link && (
+                      <span
+                        className="ml-auto text-[10px] text-gray-500"
+                        title="This stage has a live queue in the Runbook"
+                        aria-hidden
+                      >
+                        live
+                      </span>
+                    )}
                   </div>
                   <p
                     className={clsx(
@@ -396,6 +434,18 @@ export function WorkflowSocView() {
                 </div>
                 <p className="text-sm text-gray-300 leading-relaxed">{active.summary}</p>
                 <p className="text-sm text-gray-500 leading-relaxed">{active.detail}</p>
+                {active.link && (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-xs text-gray-500">{active.link.note}</p>
+                    <Link
+                      href={active.link.href}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-brand-400/40 bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-200 transition-colors hover:bg-brand-500/20 hover:text-white"
+                    >
+                      {active.link.label}
+                      <span aria-hidden>→</span>
+                    </Link>
+                  </div>
+                )}
                 {active.id === 'jira' && (
                   <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-orange-500/10 border border-orange-400/30 px-3 py-2 text-xs text-orange-200">
                     <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />

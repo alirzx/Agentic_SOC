@@ -33,6 +33,9 @@ from app.services.event_sanitiser import (
 )
 from app.services.narrative_loader import build_narrative
 from app.services.narrative_projection import project_alert_to_narrative_inputs
+from app.services.runbook.emitters import emit_alert_escalation, emit_alert_update_events
+from app.services.runbook.materialize import materialize_alert_provenance
+from app.services.runbook.rule_executor import alert_subject_fields, run_rules_for_trigger
 from app.services.splunk_notable import hydrate_alert, iocs_from_raw, mitre_attack_rows
 from app.services.timestamp_bounds import coerce_with_bounds, now_utc
 
@@ -87,7 +90,7 @@ class AlertResponse(BaseModel):
     confidence_label: str | None = None
     confidence_rationale: list | None = None
     disposition: str | None = None
-    funnel_stage: str = "ingested"
+    funnel_stage: str | None = "ingested"
     affected_ips: list
     affected_hosts: list
     affected_users: list
@@ -628,6 +631,24 @@ async def submit_alert(
         },
     )
 
+    # Fire automation rules after commit — best effort, never blocks the response.
+    try:
+        import asyncio as _asyncio
+        _asyncio.ensure_future(
+            run_rules_for_trigger(
+                db,
+                tenant_id=alert.tenant_id,
+                trigger_type="alert.created",
+                subject_type="alert",
+                subject_id=alert.id,
+                # One definition shared with the preview endpoints; a second
+                # inline copy is how the test panel drifted from the executor.
+                subject_fields=alert_subject_fields(alert),
+            )
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     return AlertResponse.model_validate(alert)
 
 
@@ -976,6 +997,27 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
                 alert.id,
                 exc_info=True,
             )
+
+    # Promote the connector's provenance block (query mode, notable volume,
+    # payload source) into the Runbook ledger on first read — the same lazy
+    # pattern as the narrative fill above. ``materialize_alert_provenance``
+    # checks the ledger first (indexed lookup) so a re-read costs one SELECT
+    # and writes nothing. Best effort: a missing table, an unreadable
+    # envelope or a disabled feature must never break the view.
+    try:
+        await materialize_alert_provenance(
+            db,
+            tenant_id=alert.tenant_id,
+            alert_id=alert.id,
+            raw_event=alert.raw_event,
+        )
+    except Exception:  # noqa: BLE001 — bookkeeping must not fail a read
+        await db.rollback()
+        logger.warning(
+            "runbook provenance materialisation failed for alert %s",
+            alert.id,
+            exc_info=True,
+        )
     envelope = await build_rail_envelope(db, alert)
     extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
     techniques = [str(t) for t in (alert.mitre_techniques or []) if t]
@@ -1103,10 +1145,38 @@ async def update_alert(
         updates["case_id"] = request.case_id
 
     if updates:
+        # Snapshot before the write: the Runbook records transitions, and after
+        # ``refresh`` the previous values are gone.
+        previous = {field: getattr(alert, field, None) for field in updates}
         updates["updated_at"] = datetime.now(UTC)
         await db.execute(update(Alert).where(Alert.id == alert_id).values(**updates))
         await db.commit()
         await db.refresh(alert)
+        await emit_alert_update_events(
+            db,
+            alert=alert,
+            tenant_id=current_user.tenant_id,
+            actor_id=str(current_user.user_id),
+            actor_label=current_user.email,
+            updates=updates,
+            previous=previous,
+        )
+
+        # Fire automation rules for the update — best effort.
+        try:
+            import asyncio as _asyncio
+            _asyncio.ensure_future(
+                run_rules_for_trigger(
+                    db,
+                    tenant_id=current_user.tenant_id,
+                    trigger_type="alert.updated",
+                    subject_type="alert",
+                    subject_id=alert_id,
+                    subject_fields=alert_subject_fields(alert),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
     return AlertResponse.model_validate(alert)
 
@@ -1128,9 +1198,18 @@ async def escalate_alert(
     current_idx = severity_ladder.index(alert.severity) if alert.severity in severity_ladder else 2
     new_severity = severity_ladder[min(current_idx + 1, len(severity_ladder) - 1)]
 
+    previous_severity = alert.severity
     await db.execute(update(Alert).where(Alert.id == alert_id).values(severity=new_severity, updated_at=datetime.now(UTC)))
     await db.commit()
     await db.refresh(alert)
+    await emit_alert_escalation(
+        db,
+        alert=alert,
+        tenant_id=current_user.tenant_id,
+        actor_id=str(current_user.user_id),
+        actor_label=current_user.email,
+        previous_severity=previous_severity,
+    )
 
     return AlertResponse.model_validate(alert)
 

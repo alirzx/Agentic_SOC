@@ -27,6 +27,8 @@ const KAFKA_TOPIC_GRAPH_UPDATES =
   process.env.AISOC_GRAPH_UPDATES_TOPIC ||
   process.env.KAFKA_TOPIC_GRAPH_UPDATES ||
   'security.graph_updates';
+// Runbook task updates from agents service. Fanned out to `/ws/runbook` subscribers.
+const KAFKA_TOPIC_RUNBOOK = process.env.KAFKA_TOPIC_RUNBOOK || 'aisoc.runbook.task_updates';
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:soc@example.com';
@@ -179,8 +181,12 @@ const server = http.createServer(app);
 // full GraphUpdate envelope from `security.graph_updates` (entity_id,
 // change_type, label, rel_type, from, to, properties, schema_version), so
 // the client can apply the mutation locally without re-querying Neo4j.
-type Channel = 'alerts' | 'cases' | 'agents' | 'insights' | 'graph' | 'all';
-const VALID_CHANNELS: Channel[] = ['alerts', 'cases', 'agents', 'insights', 'graph', 'all'];
+//
+// The `runbook` channel carries manual task updates for the Action Plan UI,
+// consumed from `aisoc.runbook.task_updates` topic. Clients subscribe via
+// `/ws/runbook` to receive real-time task creation/completion notifications.
+type Channel = 'alerts' | 'cases' | 'agents' | 'insights' | 'graph' | 'runbook' | 'all';
+const VALID_CHANNELS: Channel[] = ['alerts', 'cases', 'agents', 'insights', 'graph', 'runbook', 'all'];
 
 const wss = new WebSocketServer({ noServer: true });
 
@@ -283,6 +289,12 @@ const CHANNEL_FOR_TYPE: Record<string, Channel[]> = {
   // `insights` here — the SOC Insights dashboard is a stats poke, not a
   // graph-render surface.
   'graph.update': ['graph', 'all'],
+  // Runbook task events (manual triage tasks). Pushed to `/ws/runbook` channel
+  // for Action Plan UI real-time updates. Includes task_created, task_updated,
+  // task_completed events from the agents service.
+  'runbook.task_created': ['runbook', 'all'],
+  'runbook.task_updated': ['runbook', 'all'],
+  'runbook.task_completed': ['runbook', 'all'],
 };
 
 function broadcastToTenant(tenantId: string, message: { type: string } & Record<string, unknown>) {
@@ -553,6 +565,65 @@ async function startGraphUpdateConsumer() {
   });
 }
 
+// --- Runbook task update consumer (Action Plan UI real-time updates) ---
+// Fan out manual task creation/updates from agents service to `/ws/runbook` subscribers.
+// Separate consumer group so runbook stalls don't backpressure alerts or graph updates.
+async function startRunbookTaskConsumer() {
+  if (!KAFKA_TOPIC_RUNBOOK) {
+    log.info('Runbook task consumer disabled (empty KAFKA_TOPIC_RUNBOOK)');
+    return;
+  }
+
+  const consumer = kafka.consumer({ groupId: 'aisoc-realtime-runbook' });
+
+  await consumer.connect();
+  await consumer.subscribe({
+    topic: KAFKA_TOPIC_RUNBOOK,
+    fromBeginning: false,
+  });
+
+  log.info(
+    { topic: KAFKA_TOPIC_RUNBOOK, groupId: 'aisoc-realtime-runbook' },
+    'Runbook task Kafka consumer connected',
+  );
+
+  await consumer.run({
+    eachMessage: async ({ message }) => {
+      if (!message.value) return;
+      try {
+        const event = JSON.parse(message.value.toString()) as {
+          type?: string;
+          task_id?: string;
+          tenant_id?: string;
+          alert_id?: string;
+          task_type?: string;
+          title?: string;
+          status?: string;
+          confidence?: number;
+          timestamp?: string;
+        };
+
+        if (!event.type || !event.task_id || !event.tenant_id) {
+          log.warn(
+            { type: event.type, task_id: event.task_id, tenant_id: event.tenant_id },
+            'Dropping malformed runbook task event (missing required fields)',
+          );
+          return;
+        }
+
+        const tenantId = event.tenant_id;
+        broadcastToTenant(tenantId, {
+          type: event.type,
+          payload: event,
+          timestamp: event.timestamp || new Date().toISOString(),
+        });
+      } catch (err) {
+        log.warn({ err }, 'Failed to parse runbook task Kafka message');
+      }
+    },
+  });
+}
+
 // --- Web Push routes (Phase 4B mobile responder PWA) ---
 // Public key is needed by the browser to subscribe; the rest are
 // authenticated routes the API gateway forwards on behalf of a user.
@@ -720,6 +791,16 @@ server.listen(PORT, '::', async () => {
       // alerts/cases/agents/insights channels still work, the graph panel
       // just won't light up in real time.
       log.warn({ err }, 'Graph update consumer failed to start (will retry)');
+    }
+  })();
+
+  void (async () => {
+    try {
+      await startRunbookTaskConsumer();
+    } catch (err) {
+      // Runbook task consumer is best-effort: if unavailable, the Action Plan
+      // page falls back to polling. No impact on alert/case/agent streams.
+      log.warn({ err }, 'Runbook task consumer failed to start (will retry)');
     }
   })();
 });

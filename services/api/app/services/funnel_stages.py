@@ -116,11 +116,42 @@ def has_investigation_evidence(
     *,
     ai_summary: str | None = None,
     narrative: str | None = None,
+    runbook_tasks_completed: int = 0,
+    runbook_tasks_total: int = 0,
 ) -> bool:
-    """Light evidence signal that Investigation produced usable output."""
+    """Light evidence signal that Investigation produced usable output.
+    
+    Evidence bars (any one qualifies):
+    1. AI summary >= 100 chars (previously 80, raised per Task 1.3)
+    2. Narrative >= 200 chars (previously 80, raised per Task 1.3)
+    3. At least 80% of investigation tasks completed (new via Runbook)
+    
+    Args:
+        ai_summary: Analyst-written AI investigation summary
+        narrative: Analyst-written investigation narrative/findings
+        runbook_tasks_completed: Number of completed investigation tasks in Runbook
+        runbook_tasks_total: Total investigation tasks in Runbook
+    
+    Returns:
+        True if investigation has produced evidence, False otherwise.
+    """
+    # Evidence bar 1: Summary length (raised from 80 to 100 per Task 1.3)
     summary = (ai_summary or "").strip()
+    if len(summary) >= 100:
+        return True
+    
+    # Evidence bar 2: Narrative length (raised from 80 to 200 per Task 1.3)
     narr = (narrative or "").strip()
-    return len(summary) >= 80 or len(narr) >= 80
+    if len(narr) >= 200:
+        return True
+    
+    # Evidence bar 3: Investigation tasks in Runbook completed (new per Task 1.3)
+    if runbook_tasks_total > 0:
+        completion_ratio = runbook_tasks_completed / runbook_tasks_total
+        if completion_ratio >= 0.80:  # 80% threshold
+            return True
+    
+    return False
 
 
 def passes_investigation_gate(

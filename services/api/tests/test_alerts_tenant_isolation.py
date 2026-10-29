@@ -210,7 +210,30 @@ def _mk_db(rows: list[Any]) -> MagicMock:
     db.execute = AsyncMock(side_effect=_execute)
     db.add = MagicMock(side_effect=_add)
     db.commit = AsyncMock()
-    db.refresh = AsyncMock()
+
+    async def _refresh(obj: Any) -> None:
+        """Mirror what a real session does: copy column values from the
+        last-row-returned onto the ORM instance so tests that read
+        ``alert.severity`` after ``db.refresh(alert)`` see the write.
+        """
+        try:
+            last = next(iterator)
+        except StopIteration:
+            # No queued payload — the in-memory object is the source of truth.
+            return
+        if isinstance(last, list):
+            return
+        if last is not None:
+            for k, v in last.__dict__.items():
+                skipped = k.startswith("_") or k == "__sa_instance_state__"
+                if not skipped:
+                    setattr(obj, k, v)
+
+    # Stash a reference to the iterator so that refresh can pull the row the
+    # UPDATE statement's execute() will have enqueued next.
+    _refresh._iterator = iterator
+
+    db.refresh = AsyncMock(side_effect=_refresh)
     db.rollback = AsyncMock()
     return db
 
