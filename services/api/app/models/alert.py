@@ -119,6 +119,16 @@ class Alert(Base):
     # migration 044_alerts_idempotency_key.sql for the index definition.
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
+    # Creation-time automation-rule evaluation marker (migration 073).
+    #
+    # NULL means "queued": ``app/workers/rule_evaluator.py`` claims the row and
+    # runs the ``alert.created`` rules for it. The API and fusion both leave it
+    # NULL, so a connector-ingested alert is evaluated exactly like one a human
+    # submitted. Set at claim time, so an alert is evaluated at most once.
+    automation_rules_evaluated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Timestamps
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

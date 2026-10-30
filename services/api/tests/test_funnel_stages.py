@@ -86,6 +86,14 @@ def test_ready_for_jira_stage_evidence_bar():
         severity="medium",
         confidence=0.2,
         case_id=case_id,
+        ai_summary="x" * 120,
+    )
+    # The bar was raised to 100 chars: a 90-char summary is no longer evidence.
+    assert not passes_ready_for_jira_stage(
+        disposition="true_positive",
+        severity="medium",
+        confidence=0.2,
+        case_id=case_id,
         ai_summary="x" * 90,
     )
 

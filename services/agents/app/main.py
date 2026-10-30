@@ -15,6 +15,7 @@ from app.api.explain import router as explain_router
 from app.api.hunt_search import router as hunt_search_router
 from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
+from app.api.outcomes import router as outcomes_router
 from app.api.playbooks import router as playbook_router
 from app.api.router import router
 from app.api.triage import router as triage_router
@@ -24,9 +25,9 @@ from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
 from app.llm.factory import preflight_llm
 from app.playbook import PlaybookStore
-from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
 from app.runtime.flags import enabled as agentic_enabled
 from app.runtime.shadow_consumer import AgenticShadowConsumer, shadow_consumer_enabled
+from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
 from app.workers.business_context import BusinessContextApplier
 from app.workers.business_context import is_enabled as business_context_enabled
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker, worker_enabled
@@ -208,6 +209,7 @@ app.include_router(hunts_router)  # prefix: /api/v1/hunts
 app.include_router(hunt_search_router)  # prefix: /api/v1/hunt  (search + saved)
 app.include_router(copilot_router)  # prefix: /api/v1/copilot
 app.include_router(explain_router)  # prefix: /api/v1  (POST /explain — NDJSON stream)
+app.include_router(outcomes_router)  # prefix: /api/v1/outcomes  (Runbook analyst feedback)
 
 
 @app.get("/health")

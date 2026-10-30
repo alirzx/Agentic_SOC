@@ -11,6 +11,21 @@ import Link from 'next/link';
 import { clsx } from 'clsx';
 import { socFunnelApi, type FunnelBoardAlert, type FunnelBoardStage } from '@/lib/api';
 
+const TASK_BADGE: Record<string, { label: string; className: string }> = {
+  manual_review: {
+    label: 'needs review',
+    className: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+  },
+  approval_gate: {
+    label: 'approval',
+    className: 'border-orange-500/30 bg-orange-500/10 text-orange-200',
+  },
+  mssp_sla_check: {
+    label: 'SLA',
+    className: 'border-purple-500/30 bg-purple-500/10 text-purple-200',
+  },
+};
+
 const STAGE_ACCENT: Record<string, string> = {
   ingested: 'border-sky-500/40 bg-sky-500/5',
   triaged: 'border-cyan-500/40 bg-cyan-500/5',
@@ -46,18 +61,27 @@ function StageColumn({
           {stage.count}
         </Link>
       </header>
+      {(stage.open_tasks ?? 0) > 0 ? (
+        <p
+          className="text-[10px] text-amber-300/90"
+          title="These alerts are waiting on an analyst in the Runbook — that is what is holding this stage up."
+        >
+          {stage.open_tasks} waiting on an analyst
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto">
         {alerts.length === 0 ? (
           <li className="text-[11px] text-gray-600 py-2">No alerts in window</li>
         ) : (
           alerts.map((alert) => {
             const copies = alert.same_title_count ?? 1;
+            const tasks = alert.open_tasks ?? [];
             return (
-              <li key={alert.id}>
-                <Link
-                  href={`/alerts/${alert.id}`}
-                  className="block rounded-lg border border-[#374151]/50 bg-dark-20/40 px-2.5 py-2 hover:border-brand-500/40 transition-colors"
-                >
+              <li
+                key={alert.id}
+                className="rounded-lg border border-[#374151]/50 bg-dark-20/40 px-2.5 py-2 hover:border-brand-500/40 transition-colors"
+              >
+                <Link href={`/alerts/${alert.id}`} className="block">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs text-gray-200 line-clamp-2">{alert.title}</p>
                     {copies > 1 ? (
@@ -74,6 +98,28 @@ function StageColumn({
                     {alert.disposition ? ` · ${alert.disposition}` : ''}
                   </p>
                 </Link>
+                {/* The reason this alert is stuck, and the way out of it. */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                  {tasks.map((task) => {
+                    const badge = TASK_BADGE[task.task_type] ?? TASK_BADGE.manual_review;
+                    return (
+                      <span
+                        key={`${task.task_type}-${task.title}`}
+                        title={task.title}
+                        className={`rounded border px-1.5 py-0.5 text-[10px] ${badge.className}`}
+                      >
+                        {badge.label}
+                      </span>
+                    );
+                  })}
+                  <Link
+                    href={`/runbook/alert/${alert.id}`}
+                    className="ml-auto text-[10px] text-gray-500 hover:text-brand-300"
+                    title="Open this alert's Runbook: procedure, ledger, and the task blocking it"
+                  >
+                    Runbook →
+                  </Link>
+                </div>
               </li>
             );
           })
@@ -188,6 +234,13 @@ export function SocFunnelBoardView() {
               {h === 168 ? '7d' : `${h}h`}
             </button>
           ))}
+          <Link
+            href="/runbook?tab=action-plan"
+            className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/40 text-blue-100 hover:bg-blue-500/25"
+            title="Open the analyst queue: every task that is holding an alert in this funnel"
+          >
+            Open Runbook
+          </Link>
           <button
             type="button"
             disabled={busy}

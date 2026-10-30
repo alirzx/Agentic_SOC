@@ -49,6 +49,8 @@ const STATUS_BADGE: Record<string, string> = {
   completed: 'bg-green-900/40 text-green-400 border-green-800',
   failed:    'bg-red-900/40 text-red-400 border-red-800',
   cancelled: 'bg-dark-20 text-gray-500 border-[#333A47]',
+  // Parked at an approval step — nothing after the gate ran.
+  pending_approval: 'bg-amber-900/40 text-amber-300 border-amber-800',
 };
 
 function RunHistoryTab() {
@@ -75,34 +77,50 @@ function RunHistoryTab() {
     );
   return (
     <div className="space-y-2">
-      {data.map((run) => (
-        <div key={run.run_id} className="bg-dark-60 border border-[#374151] rounded-xl px-5 py-3 flex items-center gap-4">
-          <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_BADGE[run.status] ?? 'bg-dark-20 text-gray-400 border-[#333A47]'}`}>
-            {run.status}
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="text-white text-sm font-medium truncate">{run.playbook_name}</div>
-            <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
-              <span className="font-mono">{run.run_id.slice(0, 12)}…</span>
-              <span>{run.steps.length} steps</span>
-              {run.dry_run && <span className="text-yellow-700 border border-yellow-900 px-1.5 rounded">dry run</span>}
-              {run.started_at && <span suppressHydrationWarning>{new Date(run.started_at).toLocaleString()}</span>}
+      {data.map((run) => {
+        const steps = run.step_results ?? [];
+        const parked = run.status === 'pending_approval';
+        return (
+          <div key={run.run_id} className="bg-dark-60 border border-[#374151] rounded-xl px-5 py-3 flex items-center gap-4">
+            <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_BADGE[run.status] ?? 'bg-dark-20 text-gray-400 border-[#333A47]'}`}>
+              {run.status === 'pending_approval' ? 'awaiting approval' : run.status}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-white text-sm font-medium truncate">{run.playbook_name}</div>
+              <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
+                <span className="font-mono">{run.run_id.slice(0, 12)}…</span>
+                <span>{steps.length} steps</span>
+                {run.dry_run && <span className="text-yellow-700 border border-yellow-900 px-1.5 rounded">dry run</span>}
+                {run.started_at && <span suppressHydrationWarning>{new Date(run.started_at).toLocaleString()}</span>}
+              </div>
+              {parked && (
+                <p className="mt-1 text-[11px] text-amber-300/80">
+                  Paused at{' '}
+                  <span className="font-medium">{run.gate_step_name ?? 'an approval step'}</span>. Nothing
+                  after the gate has run — approve or reject it from{' '}
+                  <Link href="/runbook?tab=action-plan" className="underline hover:text-amber-200">
+                    Runbook → Action Plan
+                  </Link>
+                  .
+                </p>
+              )}
+            </div>
+            {/* Step progress dots */}
+            <div className="flex items-center gap-1">
+              {steps.slice(0, 8).map((s) => {
+                const dot =
+                  s.status === 'success'   ? 'bg-green-500' :
+                  s.status === 'failed'    ? 'bg-red-500' :
+                  s.status === 'running'   ? 'bg-brand-400 animate-pulse' :
+                  s.status === 'blocked'   ? 'bg-amber-400' :
+                  s.status === 'skipped'   ? 'bg-gray-700' : 'bg-dark-20';
+                return <div key={s.step_id} className={`w-2 h-2 rounded-full ${dot}`} title={`${s.name}: ${s.status}`} />;
+              })}
+              {steps.length > 8 && <span className="text-xs text-gray-700">+{steps.length - 8}</span>}
             </div>
           </div>
-          {/* Step progress dots */}
-          <div className="flex items-center gap-1">
-            {run.steps.slice(0, 8).map((s) => {
-              const dot =
-                s.status === 'completed' ? 'bg-green-500' :
-                s.status === 'failed'    ? 'bg-red-500' :
-                s.status === 'running'   ? 'bg-brand-400 animate-pulse' :
-                s.status === 'skipped'   ? 'bg-gray-700' : 'bg-dark-20';
-              return <div key={s.step_id} className={`w-2 h-2 rounded-full ${dot}`} title={`${s.step_name}: ${s.status}`} />;
-            })}
-            {run.steps.length > 8 && <span className="text-xs text-gray-700">+{run.steps.length - 8}</span>}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

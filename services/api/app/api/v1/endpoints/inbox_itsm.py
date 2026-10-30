@@ -88,6 +88,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import DBSession
 from app.core.logging import safe_log_value
+from app.services.runbook.emitters import emit_itsm_status_change
 
 logger = logging.getLogger(__name__)
 
@@ -547,6 +548,7 @@ async def _apply_status_to_case(
     )
 
 
+
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
@@ -762,6 +764,21 @@ async def inbound_itsm_webhook(
             actor_label=actor_label,
             external_id=external_id,
             vendor=vendor,
+        )
+        await db.commit()
+
+        # Runbook: one ledger row for the inbound transition, AFTER the case
+        # write has committed — the helper above keeps its documented
+        # "exactly three writes, no commit" contract, and a failed ledger row
+        # must not turn a successful transition into a 503 the vendor retries.
+        await emit_itsm_status_change(
+            db,
+            case_id=ref_row.aisoc_case_id,
+            tenant_id=token_row.tenant_id,
+            new_status=new_status,
+            vendor=vendor,
+            external_id=external_id,
+            actor_label=actor_label,
         )
         await db.commit()
     except Exception as exc:

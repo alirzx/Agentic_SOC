@@ -30,6 +30,7 @@ from app.models.mssp import (
     MSSPTenantNote,
 )
 from app.models.oauth import OAuthAppCredential, OAuthState
+from app.models.playbook_approval import PlaybookApproval
 from app.models.posture import PostureDriftEvent, PostureFinding, PostureScanRun
 from app.models.published_replay import PublishedReplay
 from app.models.remediation import RemediationGateLog, RemediationMaturity, RemediationWhitelist
@@ -40,6 +41,7 @@ from app.models.responder import (
     PasskeyChallenge,
     PasskeyCredential,
 )
+from app.models.runbook_task import RunbookTask
 from app.models.saved_hunt import SavedHunt
 from app.models.saved_view import SavedView
 from app.models.tenant import ApiKey, Tenant, User
@@ -88,6 +90,7 @@ __all__ = [
     "PasskeyChallenge",
     "OnCallStatus",
     "AgentApproval",
+    "PlaybookApproval",
     "PostureDriftEvent",
     "PostureFinding",
     "PostureScanRun",
@@ -97,6 +100,7 @@ __all__ = [
     "RemediationWhitelist",
     "ReportArtefact",
     "ReportTemplate",
+    "RunbookTask",
     "SavedHunt",
     "SavedView",
     "ThreatActor",

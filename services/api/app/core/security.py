@@ -39,6 +39,11 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "playbooks:read",
         "playbooks:write",
         "playbooks:execute",
+        # Clearing a playbook approval gate releases the steps it guards
+        # (isolate_host, disable_user, …). Kept separate from
+        # ``playbooks:execute`` so a tier-1 analyst who may *start* a playbook
+        # cannot also rubber-stamp its own gate.
+        "playbooks:approve",
         "connectors:read",
         "connectors:write",
         "connectors:delete",
@@ -74,6 +79,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "cases:write",
         "playbooks:read",
         "playbooks:execute",
+        "playbooks:approve",
         "connectors:read",
         "users:read",
         "rules:read",
