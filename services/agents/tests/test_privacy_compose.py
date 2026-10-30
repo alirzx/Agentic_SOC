@@ -23,6 +23,9 @@ def test_agents_compose_definitions_propagate_privacy_environment() -> None:
             stripped = {line.strip() for line in text.splitlines()}
             missing = required - stripped
         assert not missing, f"{relative} is missing agents privacy env: {sorted(missing)}"
+        assert text.count("AISOC_AGENTS_TENANT_SIGNING_KEY:") >= 2, (
+            f"{relative} must pass the same tenant-signing key to API and Agents"
+        )
 
 
 def test_env_example_documents_default_off_human_trace() -> None:

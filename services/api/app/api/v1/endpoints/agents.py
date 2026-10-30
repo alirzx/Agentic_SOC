@@ -24,6 +24,7 @@ from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.api.v1.endpoints.connectors import _fetch_catalog, _safe_log_val
 from app.models.alert import Alert
 from app.models.connector import Connector
+from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,13 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 _AGENTS_URL = (os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL") or "http://agents:8084").rstrip("/")
 _SAFE_PROXY_PATH_RE = re.compile(r"^/[A-Za-z0-9_\-./%]*$")
 _INVESTIGATE_TIMEOUT_SECONDS = float(os.getenv("AISOC_ALERT_INVESTIGATE_TIMEOUT", "180"))
+
+
+def _tenant_headers(tenant_id: UUID) -> dict[str, str]:
+    try:
+        return signed_tenant_headers(tenant_id)
+    except AgentsTenantAuthError as exc:
+        raise HTTPException(status_code=503, detail="Agents tenant authentication is not configured") from exc
 
 
 # --------------------------------------------------------------- Pydantic schemas
@@ -319,7 +327,7 @@ async def investigate_alert(
     url = f"{_AGENTS_URL}{path}"
     try:
         async with httpx.AsyncClient(timeout=_INVESTIGATE_TIMEOUT_SECONDS) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, json=payload, headers=_tenant_headers(current_user.tenant_id))
     except httpx.HTTPError as exc:
         logger.exception("agents.investigate.proxy_failed alert_id=%s", alert.id)
         raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
@@ -360,7 +368,7 @@ async def get_alert_investigation(
     url = f"{_AGENTS_URL}{path}"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, headers=_tenant_headers(current_user.tenant_id))
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
     if resp.status_code >= 400:

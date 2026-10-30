@@ -156,9 +156,11 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
         model=model_name,
         base_url=gateway.get("base_url_normalized_sanitized"),
     )
+    tenant_owner: str | None = None
     try:
         tenant_id = await resolve_tenant_for_llm(trusted_workflow_tenant(request, req.tenant_id), allow_default=True)
-        _runs[run_id]["_tenant_owner"] = tenant_id
+        tenant_owner = tenant_id
+        _runs[run_id]["_tenant_owner"] = tenant_owner
         state = await InvestigatorOrchestrator().run(
             case_id=alert_id,
             alert_summary=summary,
@@ -207,7 +209,10 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
             model=model_name,
             error="Investigation failed",
         )
-        _runs[run_id] = result.model_dump()
+        _runs[run_id] = {
+            **result.model_dump(),
+            **({"_tenant_owner": tenant_owner} if tenant_owner is not None else {}),
+        }
         raise HTTPException(status_code=502, detail="Investigation failed") from exc
 
 

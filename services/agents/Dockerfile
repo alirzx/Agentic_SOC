@@ -36,7 +36,7 @@ RUN set -eux; \
             "langgraph>=0.2.40,<1.1" \
             "openai>=1.12,<3" \
             "redis[hiredis]>=5.0.1,<9" \
-            "httpx>=0.27,<0.29" \
+            "httpx>=0.26,<0.29" \
             "structlog>=24,<25" \
             "prometheus-client>=0.19,<0.27" \
             "python-dateutil>=2.8,<3" \
@@ -62,6 +62,7 @@ RUN set -eux; \
 RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, redis, httpx, structlog, apscheduler, yaml, _cffi_backend; from cryptography.fernet import Fernet; from langgraph.graph import END, START, StateGraph"
 
 COPY app/ ./app/
+COPY scripts/check_remote_privacy_gateway.py ./scripts/check_remote_privacy_gateway.py
 
 # Import the application module that first exposed the missing direct
 # dependency. Keep this after COPY so the build validates the real import path.

@@ -49,6 +49,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.logging import safe_log_value
+from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers
 from app.services.case_fanout import (
     FanoutResult,
     fanout_create_case,
@@ -1165,10 +1166,23 @@ async def update_task(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def _agents_proxy(method: str, path: str, **kwargs: Any) -> httpx.Response:
+async def _agents_proxy(
+    method: str,
+    path: str,
+    *,
+    tenant_id: str | uuid.UUID | None = None,
+    **kwargs: Any,
+) -> httpx.Response:
     safe_path = _validate_agents_path(path)
     url = f"{_AGENTS_URL}{safe_path}"
     timeout = kwargs.pop("timeout", 30.0)
+    if tenant_id is not None:
+        try:
+            headers = dict(kwargs.pop("headers", {}))
+            headers.update(signed_tenant_headers(tenant_id))
+            kwargs["headers"] = headers
+        except AgentsTenantAuthError as exc:
+            raise HTTPException(status_code=503, detail="Agents tenant authentication is not configured") from exc
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             return await client.request(method, url, **kwargs)
@@ -1209,6 +1223,7 @@ async def case_investigate(
     resp = await _agents_proxy(
         "POST",
         f"/api/v1/cases/{cid}/investigate",
+        tenant_id=user.tenant_id,
         json={"alert_summary": body.alert_summary or "", "tenant_id": str(user.tenant_id)},
     )
     if resp.status_code >= 400:
@@ -1229,7 +1244,11 @@ async def list_case_investigations(
     """
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     try:
-        resp = await _agents_proxy("GET", f"/api/v1/cases/{cid}/investigations")
+        resp = await _agents_proxy(
+            "GET",
+            f"/api/v1/cases/{cid}/investigations",
+            tenant_id=user.tenant_id,
+        )
         if resp.status_code == 404:
             return {"runs": []}
         if resp.status_code >= 400:
@@ -1249,7 +1268,11 @@ async def case_investigation_run(
     # URL-encode the user-supplied run_id so it cannot inject `/`, `?`, `#`,
     # CR/LF, or other URL syntax into the proxied path.
     safe_run_id = quote(run_id, safe="")
-    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}")
+    resp = await _agents_proxy(
+        "GET",
+        f"/api/v1/investigations/{safe_run_id}",
+        tenant_id=user.tenant_id,
+    )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return resp.json()
@@ -1456,7 +1479,11 @@ async def case_investigation_pdf(
     user: AuthUser,
 ) -> Response:
     safe_run_id = quote(run_id, safe="")
-    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.pdf")
+    resp = await _agents_proxy(
+        "GET",
+        f"/api/v1/investigations/{safe_run_id}/report.pdf",
+        tenant_id=user.tenant_id,
+    )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     safe_case_id = _safe_filename_segment(case_id)

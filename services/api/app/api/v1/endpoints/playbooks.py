@@ -14,6 +14,10 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel, Field
+
+from app.api.v1.deps import AuthUser
+from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL", "http://agents:8084")
 
@@ -22,6 +26,11 @@ router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 # Allowlist for playbook/run IDs: UUIDs or short slug-style alphanumeric IDs.
 # Prevents partial-SSRF via path traversal in proxied requests.
 _SAFE_ID_RE = re.compile(r"^[0-9a-zA-Z_\-]{1,128}$")
+
+
+class DraftFromNLRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    allow_llm: bool = True
 
 
 def _validate_path_id(value: str, name: str = "id") -> str:
@@ -53,6 +62,21 @@ async def _proxy(method: str, path: str, **kwargs) -> Any:
         return r.json()
     except httpx.RequestError as exc:
         raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
+
+
+@router.post("/draft-from-nl", summary="Draft a playbook from natural language")
+async def draft_playbook_from_nl(body: DraftFromNLRequest, user: AuthUser) -> Any:
+    """Proxy the authenticated tenant so protected LLM drafting can run."""
+    try:
+        headers = signed_tenant_headers(user.tenant_id)
+    except AgentsTenantAuthError as exc:
+        raise HTTPException(status_code=503, detail="Agents tenant authentication is not configured") from exc
+    return await _proxy(
+        "POST",
+        "/draft-from-nl",
+        headers=headers,
+        json=body.model_dump(),
+    )
 
 
 # ---------------------------------------------------------------------------

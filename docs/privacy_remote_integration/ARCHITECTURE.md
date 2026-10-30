@@ -44,6 +44,16 @@ The fallback excludes `raw_event` and never walks or serializes the raw OCSF
 envelope. Both paths sanitize attacker-controlled strings and place evidence
 inside a per-run nonce fence.
 
+The Auto-Triage output remains the existing five-verdict JSON contract with a
+numeric 0–1 confidence used by current parsers and auto-close thresholds. Its
+reasoning guidance treats Splunk RBA `risk_score` as accumulated risk, not a
+probability; separates event time from alert-creation fallback; treats SPL,
+macros, and allowlists as configuration rather than fire-time/authorization
+proof; handles MITRE string/list values; states correct Sysmon Event ID 10
+SourceImage→TargetImage semantics; and treats `investigation_hint` as retrieval
+guidance. Unknown authorization or missing contributing RBA events therefore
+leans `needs_review`, without weakening nonce-based prompt-injection demotion.
+
 ## Context ownership
 
 The active backend is stored in a `ContextVar`, so concurrent requests, Kafka
@@ -75,6 +85,10 @@ Copilot conversation records additionally carry a trusted tenant owner.
 Creation, continuation, retrieval, and listing all enforce that owner; a
 conversation ID from another tenant is treated as not found. The anonymous
 demo namespace is available only outside recognized production environments.
+Legacy and current manual-investigation launch/poll routes likewise resolve a
+signed/authenticated tenant, store the canonical owner, and return not-found on
+cross-tenant polling. The legacy route-order compatibility fallback enforces
+the same owner before serving a run from the newer investigator store.
 
 ## LLM path inventory
 

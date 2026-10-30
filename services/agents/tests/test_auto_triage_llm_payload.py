@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
+from app.agents.auto_triage_agent import _SYSTEM_PROMPT
 from app.context.auto_triage import compose_auto_triage_context
 from app.models.state import InvestigationState
 
@@ -114,3 +115,14 @@ def test_curated_payload_preserves_all_rule_specific_fields_without_ten_key_cap(
     assert "signal_00" in result.text
     assert "signal_17" in result.text
     assert "value-17" in result.text
+
+
+def test_system_prompt_interprets_splunk_evidence_without_normalized_risk_assumption() -> None:
+    assert "risk_score > 0.7" not in _SYSTEM_PROMPT
+    assert "not a normalized" in _SYSTEM_PROMPT
+    assert "event_time_source" in _SYSTEM_PROMPT
+    assert "not fire-time evidence" in _SYSTEM_PROMPT
+    assert "SourceImage accessed TargetImage" in _SYSTEM_PROMPT
+    assert "investigation_hint is retrieval guidance" in _SYSTEM_PROMPT
+    assert "remain needs_review" in _SYSTEM_PROMPT
+    assert '"confidence": <float 0.0–1.0>' in _SYSTEM_PROMPT

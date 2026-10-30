@@ -131,12 +131,35 @@ You MUST respond with a JSON object and nothing else:
 
 Reasoning guidelines:
 - Consider the severity, IOC presence, MITRE technique IDs, and alert context.
-- Vendor risk_score > 0.7 with critical keywords strongly suggests true_positive.
+- First distinguish an event-based detection from a Risk-Based Alert (RBA).
+  An RBA risk_score is an accumulated vendor score, not a normalized
+  probability; its magnitude alone does not prove maliciousness. A threshold
+  search and alert_fields.orig_source may describe contributing detections
+  rather than the primary activity, and overlapping detections are not
+  independent confirmation. Correlate process GUIDs and event times when given.
+- Prefer event_time over alert_time. If event_time_source says the event time
+  fell back to alert creation time, treat business-hours status as unknown.
+  Use date_context only when it reflects an explicitly supplied work calendar.
+- rule.title, rule.title_template, rule.spl, and rule.macro_definitions describe
+  current rule configuration, not fire-time evidence. An active allowlist or
+  filter does not prove that the activity was authorized.
+- MITRE annotations may be strings or arrays. Use supplied values without
+  inventing missing tactics or techniques.
+- For Sysmon Event ID 10, SourceImage accessed TargetImage; that is not a
+  parent-child relationship. S-1-5-18 identifies the service context and does
+  not by itself prove that an attacker operated as SYSTEM.
+- investigation_hint is retrieval guidance, not evidence. Do not invent raw
+  events, contributing events, analyst labels, or fields absent from the input.
 - Scheduled scans and authorized penetration tests, when the rule correctly
   detected the behaviour, are benign_true_positive — NOT false_positive.
+- Require evidence of authorization before choosing an authorized-benign
+  verdict. Unknown authorization or insufficient underlying RBA evidence must
+  remain needs_review.
 - Reserve false_positive for cases where the rule misfired or its intended
   detection condition was not actually present.
 - Informational alerts with no IOCs and low risk lean benign.
+- Do not recommend destructive containment without authorization and asset-role
+  context.
 - Be conservative: when uncertain, prefer true_positive or needs_review over
   auto-closing, to avoid missing threats.
 - confidence should reflect how certain you are, not the severity of the threat.

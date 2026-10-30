@@ -88,6 +88,46 @@ for the final commands above.
 Mocks prove request shape and local fail-closed behavior; they do not prove VPN,
 TLS, service authorization, Redis health, provider behavior, or deployment.
 
+## Final pre-build source audit — 2026-10-30
+
+This section is current evidence for the uncommitted final-hardening patch. It
+does not replace or retroactively update the historical rows above. All tests
+used synthetic data and mocked transports; no image build, container startup,
+live Gateway, Redis, provider, VPN, migration, or production system was used.
+
+| Command / focused group | Passed | Failed | Status |
+|---|---:|---:|---|
+| Agents Remote adapter/contract/REST/tools, Context, LLM contract/no-bypass, Auto-Triage, tenant ownership, packaging, Compose, and Human Trace | 136 | 0 | PASS (one LangGraph pending-deprecation warning) |
+| API Remote boundary, eight-workflow inventory, tenant-signing helper, and browser/NL proxy contracts | 32 | 0 | PASS |
+| Selected Agents and API `compileall` | n/a | 0 | PASS |
+| `node --check apps/web/next.config.js` | n/a | 0 | PASS |
+| Shell syntax for `privacy_prebuild_check.sh` and `privacy_gateway_curl_smoke.sh` | n/a | 0 | PASS |
+| Root and demo Compose defaults | 2 configs | 0 | PASS |
+| Root and demo with private-CA configuration | 2 configs | 0 | PASS |
+| Root and demo with external privacy network | 2 configs | 0 | PASS |
+| `git diff --check` | n/a | 0 | PASS |
+| `graphify update .` for Agents application graph | 2,861 nodes / 5,908 edges | 0 | PASS |
+
+The shared root virtual environment still lacks the API-only `python-jose`
+package, so runtime collection of the full API endpoint modules was not forced
+by installing dependencies. The new endpoint wiring is syntax-compiled and
+covered by focused source-contract tests; authenticated container/API E2E is a
+pending build-session gate. Ruff was not rerun because no installed project
+Ruff executable was available in this environment; no package was installed.
+
+Current status categories:
+
+- `SOURCE_READY`
+- `CONFIG_READY`
+- `STATIC_VALIDATION_PASSED`
+- `BUILD_PENDING`
+- `LIVE_GATEWAY_TEST_PENDING`
+- `E2E_PENDING`
+- `SERVER_DEPLOYMENT_PENDING`
+- `PR_PENDING`
+- `BLOCKED` (external only: organizational remote/teammate branch visibility,
+  and Gateway production-hardening/operator acceptance)
+
 ## Direct HTTPX REST migration — 2026-10-27
 
 The rows above are historical SDK-era evidence. They were preserved rather

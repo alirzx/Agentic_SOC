@@ -13,7 +13,7 @@ def test_docker_fallback_installs_rest_runtime_without_external_sdk() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = pyproject["tool"]["poetry"]["dependencies"]
 
-    assert '"httpx>=0.27,<0.29"' in dockerfile
+    assert '"httpx>=0.26,<0.29"' in dockerfile
     assert '"jsonschema>=4.21,<5"' in dockerfile
     assert dependencies["httpx"] == ">=0.26,<0.29"
     assert dependencies["jsonschema"] == ">=4.21,<5.0"
@@ -21,6 +21,7 @@ def test_docker_fallback_installs_rest_runtime_without_external_sdk() -> None:
     assert "soorin-privacy-sdk" not in dockerfile
     assert "soorin_privacy" not in dockerfile
     assert "from app.privacy.rest_client import PrivacyGatewayRESTClient" in dockerfile
+    assert "COPY scripts/check_remote_privacy_gateway.py ./scripts/check_remote_privacy_gateway.py" in dockerfile
     assert "import opentelemetry" in dockerfile
 
 

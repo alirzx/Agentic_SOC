@@ -38,6 +38,25 @@ _FUSED_MESSAGE = {
         "connector_id": "connector-synthetic-provider-probe",
         "connector_type": "splunk",
         "source_event_ids": ["event-synthetic-provider-probe"],
+        "llm_payload": {
+            "alert_id": "00000000-0000-0000-0000-000000000072",
+            "alert_time": "2026-10-30T10:05:00Z",
+            "event_time": "2026-10-30T10:00:00Z",
+            "event_time_source": "source_field",
+            "rule_name": "Synthetic password spray risk aggregation",
+            "severity": "high",
+            "risk_score": 82,
+            "risk_object": "CORP\\soc_analyst",
+            "risk_object_type": "user",
+            "detection_type": "rba",
+            "annotations": {"mitre_attack": ["T1110.003", "T1078"]},
+            "investigation_hint": "Retrieve contributing authentication events before disposition.",
+            "alert_fields": {
+                "orig_source": ["Synthetic password spray", "Synthetic successful login"],
+                "src_ip": "10.20.3.7",
+                "hostname": "endpoint01.corp.synthetic.test",
+            },
+        },
     },
 }
 

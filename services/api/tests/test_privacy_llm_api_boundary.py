@@ -33,6 +33,8 @@ class GatewayStub:
         self.failure: str | None = None
         self.return_tenant = TENANT
         self.unknown_aliases = 0
+        self.overrides: dict[str, dict] = {}
+        self.statuses: dict[str, int] = {}
 
     async def __aenter__(self):
         return self
@@ -45,24 +47,39 @@ class GatewayStub:
         if self.failure == path:
             raise httpx.ConnectError("synthetic gateway unavailable")
         if path == "/v1/contexts":
-            return _response("https://gateway.example" + path, {
+            data = {
                 "context_id": "ctx_synthetic",
                 "tenant_id": self.return_tenant,
                 "profile": json["profile"],
                 "policy_version": "1.0.0",
                 "expires_at": "2099-01-01T00:00:00Z",
-            })
+            }
+            data.update(self.overrides.get(path, {}))
+            return _response("https://gateway.example" + path, data, self.statuses.get(path, 201))
         if path == "/v1/encode":
             protected = copy.deepcopy(json["payload"])
-            protected["messages"][1]["content"] = "Protected " + ALIAS
-            return _response("https://gateway.example" + path, {"payload": protected})
+            protected["messages"][2]["content"] = "Protected " + ALIAS
+            data = {
+                "context_id": "ctx_synthetic",
+                "policy_version": "1.0.0",
+                "format": "json",
+                "payload": protected,
+                "expires_at": "2099-01-01T00:00:00Z",
+                "stats": {"tokenized_unique": 2},
+            }
+            data.update(self.overrides.get(path, {}))
+            return _response("https://gateway.example" + path, data, self.statuses.get(path, 200))
         if path == "/v1/decode":
             restored = copy.deepcopy(json["payload"])
             restored["choices"][0]["message"]["content"] = "CORP\\alice"
-            return _response("https://gateway.example" + path, {
+            data = {
+                "context_id": "ctx_synthetic",
+                "format": "json",
                 "payload": restored,
                 "stats": {"unknown_aliases": self.unknown_aliases},
-            })
+            }
+            data.update(self.overrides.get(path, {}))
+            return _response("https://gateway.example" + path, data, self.statuses.get(path, 200))
         raise AssertionError(path)
 
     async def delete(self, path: str):
@@ -101,12 +118,16 @@ def enabled(monkeypatch):
 @pytest.mark.asyncio
 async def test_encode_provider_decode_and_cleanup(enabled):
     provider = ProviderStub()
+    original = copy.deepcopy(BODY)
     result = await privacy.safe_chat_post(
         provider, URL, headers={"Authorization": "Bearer synthetic"}, body=BODY, tenant_id=uuid.UUID(TENANT)
     )
     assert len(provider.posts) == 1
     assert "CORP\\alice" not in str(provider.posts[0])
     assert ALIAS in str(provider.posts[0])
+    assert provider.posts[0]["messages"][0]["role"] == "system"
+    assert "opaque but stable identity" in provider.posts[0]["messages"][0]["content"]
+    assert BODY == original
     assert result.json()["choices"][0]["message"]["content"] == "CORP\\alice"
     assert enabled.calls == [
         "/v1/contexts", "/v1/encode", "/v1/decode", "DELETE /v1/contexts/ctx_synthetic"
@@ -196,3 +217,38 @@ async def test_decode_failure_does_not_release_response(enabled):
         await privacy.safe_chat_post(provider, URL, headers={}, body=BODY, tenant_id=TENANT)
     assert len(provider.posts) == 1
     assert "DELETE /v1/contexts/ctx_synthetic" in enabled.calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "override", "error", "provider_calls"),
+    [
+        ("/v1/encode", {"context_id": "ctx_other"}, "gateway_encode_binding_mismatch", 0),
+        ("/v1/encode", {"format": "messages"}, "gateway_encode_binding_mismatch", 0),
+        ("/v1/encode", {"stats": []}, "invalid_gateway_encode_response", 0),
+        ("/v1/decode", {"context_id": "ctx_other"}, "gateway_decode_binding_mismatch", 1),
+        ("/v1/decode", {"format": "messages"}, "gateway_decode_binding_mismatch", 1),
+        ("/v1/decode", {"stats": {"unknown_aliases": False}}, "invalid_gateway_decode_response", 1),
+    ],
+)
+async def test_gateway_operation_responses_are_bound_to_context_and_schema(
+    enabled,
+    path,
+    override,
+    error,
+    provider_calls,
+):
+    enabled.overrides[path] = override
+    provider = ProviderStub()
+    with pytest.raises(privacy.PrivacyEgressError, match=error):
+        await privacy.safe_chat_post(provider, URL, headers={}, body=BODY, tenant_id=TENANT)
+    assert len(provider.posts) == provider_calls
+
+
+@pytest.mark.asyncio
+async def test_gateway_rejects_unexpected_success_status(enabled):
+    enabled.statuses["/v1/contexts"] = 200
+    provider = ProviderStub()
+    with pytest.raises(privacy.PrivacyEgressError, match="gateway_request_failed"):
+        await privacy.safe_chat_post(provider, URL, headers={}, body=BODY, tenant_id=TENANT)
+    assert provider.posts == []

@@ -148,7 +148,14 @@ const nextConfig = {
       },
       {
         source: '/api/v1/contextual/:path*',
-        destination: `${AGENTS_HOST}/api/v1/contextual/:path*`,
+        destination: `${API_HOST}/api/v1/agent-llm/contextual/:path*`,
+      },
+      // LLM drafting requires the authenticated core API to sign the canonical
+      // tenant before forwarding to Agents. Keep this ahead of the generic
+      // direct playbook proxy.
+      {
+        source: '/api/v1/playbooks/draft-from-nl',
+        destination: `${API_HOST}/api/v1/playbooks/draft-from-nl`,
       },
       {
         source: '/api/v1/playbooks/:path*',
@@ -170,11 +177,11 @@ const nextConfig = {
       // Copilot persistent chat conversations
       {
         source: '/api/v1/copilot/:path*',
-        destination: `${AGENTS_HOST}/api/v1/copilot/:path*`,
+        destination: `${API_HOST}/api/v1/agent-llm/copilot/:path*`,
       },
       {
         source: '/api/v1/copilot',
-        destination: `${AGENTS_HOST}/api/v1/copilot`,
+        destination: `${API_HOST}/api/v1/agent-llm/copilot`,
       },
       // Hunt corpus management (plural /hunts)
       {

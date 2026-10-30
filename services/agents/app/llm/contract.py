@@ -379,30 +379,34 @@ class LLMInputContract:
 
 
 def _coerce_message(msg: Any) -> tuple[str, str]:
-    """Best-effort extract (role, content) from a chat-message-shaped object.
+    """Extract string content from a supported chat-message-shaped object.
 
     Supports plain dicts, LangChain ``BaseMessage`` subclasses, and tuples
-    of ``(role, content)``. Falls back to ``("user", str(msg))`` so the
-    contract still has *something* to validate.
+    of ``(role, content)``. Multipart or otherwise structured content is
+    rejected because stringifying it for validation while sending the original
+    object would let provider-visible content bypass this contract.
     """
+    def require_string(content: Any, *, role: str) -> str:
+        if not isinstance(content, str):
+            raise LLMContractViolation("non-string message content is unsupported", role=role)
+        return content
+
     if isinstance(msg, dict):
         role = str(msg.get("role") or "user")
         if role not in _ALLOWED_MESSAGE_ROLES:
             raise LLMContractViolation("invalid message role", role=role)
-        content = msg.get("content")
-        return role, content if isinstance(content, str) else json.dumps(content, default=str)
+        return role, require_string(msg.get("content"), role=role)
     if hasattr(msg, "type") and hasattr(msg, "content"):
         # LangChain BaseMessage: ``.type`` is "system" / "human" / "ai" / "tool"
         type_to_role = {"human": "user", "ai": "assistant", "system": "system", "tool": "tool"}
         role = type_to_role.get(getattr(msg, "type", "user"), "user")
-        content = getattr(msg, "content", "")
-        return role, content if isinstance(content, str) else json.dumps(content, default=str)
+        return role, require_string(getattr(msg, "content", ""), role=role)
     if isinstance(msg, tuple) and len(msg) == 2:
         role, content = msg
         normalized_role = {"human": "user", "ai": "assistant"}.get(str(role), str(role))
         if normalized_role not in _ALLOWED_MESSAGE_ROLES:
             raise LLMContractViolation("invalid message role", role=normalized_role)
-        return normalized_role, content if isinstance(content, str) else json.dumps(content, default=str)
+        return normalized_role, require_string(content, role=normalized_role)
     return "user", str(msg)
 
 

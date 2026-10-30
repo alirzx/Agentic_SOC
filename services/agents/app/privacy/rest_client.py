@@ -88,7 +88,7 @@ class PrivacyGatewayRESTClient:
         if stats:
             values = payload.get("stats")
             if not isinstance(values, dict) or any(
-                not isinstance(key, str) or not isinstance(value, int) for key, value in values.items()
+                not isinstance(key, str) or type(value) is not int for key, value in values.items()
             ):
                 raise PrivacyGatewayRESTError("invalid_gateway_response")
         return payload

@@ -9,17 +9,17 @@ all Context/Alias storage remain a separate service.
 
 ## Endpoints
 
-| Method | Path | Auth | SOC use |
-|---|---|---|---|
-| GET | `/health` | none | Liveness smoke check |
-| GET | `/ready` | none | Storage readiness smoke check |
-| GET | `/v1/policies` | Bearer | Verify configured profile |
-| POST | `/v1/contexts` | Bearer | Create tenant/workflow context |
-| GET | `/v1/contexts/{id}` | Bearer | Smoke inspection only |
-| DELETE | `/v1/contexts/{id}` | Bearer | Workflow cleanup |
-| POST | `/v1/encode` | Bearer | Protect provider-visible data |
-| POST | `/v1/decode` | Bearer | Restore provider output locally |
-| POST | `/v1/classify` | Bearer | Smoke diagnostics only |
+| Method | Path | Auth | SOC caller / trigger | Contract and failure behavior |
+|---|---|---|---|---|
+| GET | `/health` | none | Python/curl smoke scripts; liveness only | `status=ok`; never authorizes inference |
+| GET | `/ready` | none | Python/curl smoke scripts; storage readiness | `status=ready` plus store name; never authorizes inference |
+| GET | `/v1/policies` | Bearer | Python/curl smoke scripts; profile discovery | objects with `name`/`version`; missing profile fails smoke |
+| POST | `/v1/contexts` | Bearer | Agents `RemotePrivacyBackend.start`; API `safe_chat_post` | tenant/profile/TTL; exact `201`; binding/expiry validated before Encode |
+| GET | `/v1/contexts/{id}` | Bearer | curl smoke inspection only | service-principal/tenant ownership; not an inference call |
+| DELETE | `/v1/contexts/{id}` | Bearer | Agents context exit; API per-call `finally`; smoke cleanup | exact `204` in Agents; TTL is secondary cleanup |
+| POST | `/v1/encode` | Bearer | Agents/API immediately before provider egress | exact `200`; binding/payload/stats validated; failure blocks provider |
+| POST | `/v1/decode` | Bearer | Agents/API after complete provider response | exact `200`; binding/payload/stats validated; failure releases nothing |
+| POST | `/v1/classify` | Bearer | curl smoke diagnostics only | diagnostic counts; not used for inference decisions |
 
 The Agents REST client implements Context create/delete, Encode, and Decode.
 Health, readiness, policy, context inspection, and classify are exercised by
@@ -60,11 +60,14 @@ absolute `expires_at` and policy version. It never creates its own Context ID.
 
 ## Encode and Decode
 
-LangChain calls use `format=messages`. The adapter serializes role, content,
-tool calls, tool call IDs, additional kwargs, response/usage metadata, and
-multipart content without mutating the caller's objects. Raw HTTP calls use
-`format=json` on the complete final provider body so tool definitions and
-structured response schemas are protected too.
+LangChain calls use `format=messages`. The adapter serializes role, string
+content, tool calls, tool call IDs, additional kwargs, and response/usage
+metadata without mutating the caller's objects. The centralized
+`LLMInputContract` rejects multipart/non-string message content before provider
+egress because validating a stringified copy while sending a structured object
+would be unsafe. Raw HTTP calls use `format=json` on the complete final provider
+body, where JSON multipart fields, tool definitions, and structured response
+schemas remain part of the protected body.
 
 Encode always supplies the current context, profile, and canonical tenant.
 Typed registrations are limited to values taken from known structured fields;
@@ -120,8 +123,11 @@ Encode responses contain `context_id`, `policy_version`, `format`, `payload`,
 | connection failure | `gateway_unavailable` |
 
 Stable categories are logged without upstream exception text, response bodies,
-or payloads. The Agents transport requires exact success status codes and JSON
-objects before the backend validates binding, expiry, payload, and statistics.
+or payloads. Both SOC transports require exact success status codes and JSON
+objects, then validate context/format binding, expiry where returned, payload
+shape, and integer statistics. The API boundary also adds system-level alias
+guidance to a deep-copied provider body before Encode; the caller's body is not
+modified.
 Encode failure occurs before provider egress. Decode failure never returns the
 protected provider response. Remote mode never silently falls back to Local or
 disabled privacy.

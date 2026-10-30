@@ -175,7 +175,7 @@ async def test_direct_rest_malformed_success_is_rejected() -> None:
                 "format": "json",
                 "payload": {},
                 "expires_at": "2030-01-01T00:00:00+00:00",
-                "stats": [],
+                "stats": {"tokenized_unique": False},
             },
         ),
         (
