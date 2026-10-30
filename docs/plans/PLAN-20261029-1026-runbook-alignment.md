@@ -1,7 +1,9 @@
 # Runbook Alignment Review & Corrected Requirements
 
 **Date Created:** 2026-10-29 10:26
-**Status:** REVIEW COMPLETE — implementation not started
+**Status:** IMPLEMENTED (2026-10-30) — every requirement below landed; the evidence,
+including the seven defects the review surfaced and the suites that cover them, is in
+`docs/plans/RUNBOOK-PROGRESS.md` § Phase 13
 **Scope of review:** `apps/web` Runbook surfaces + the API/agents code they call (working tree, uncommitted)
 **Reviewed inputs:** `PLAN-20261027-1501-runbook-page.md`, `PLAN-20261028-1200-runbook-control-plane.md`,
 `PLAN-20261028-1200-runbook-professional.md`, `PLAN-20261028-1710-runbook-restructure.md`,

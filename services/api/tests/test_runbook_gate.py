@@ -22,8 +22,9 @@ import json
 from pathlib import Path
 
 import pytest
-from app.core import config as app_config
 from app.api.v1.deps import require_runbook_enabled
+from app.core import config as app_config
+from app.models.runbook_task import RunbookTask
 from app.services.runbook.action_catalog import (
     ACTIONS,
     ActionCategory,
@@ -38,7 +39,6 @@ from app.services.runbook.contracts import (
     DataSafetyContract,
     FailureContract,
 )
-from app.models.runbook_task import RunbookTask
 from app.services.runbook.gate import (
     TenantOverride,
     autonomy_level_for,

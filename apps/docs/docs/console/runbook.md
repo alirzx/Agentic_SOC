@@ -100,7 +100,28 @@ applied. An empty strip means no analyst has graded the model yet.
 
 Simple condition → action rules that fire on alert events. Every action goes through
 the governance gate, and every outcome is recorded in the ledger. Rules are dry-run by
-default. Authoring opens in a dialog; **Search** filters the list across the name,
+default.
+
+**Nothing is installed for you.** A workspace starts with zero automation rules; the
+page shows an empty state that points at **Browse rule packs** and **New rule**. Rules
+used to be inserted the first time the page was opened, which meant a tenant gained
+automations it never chose — some of them executing. They now live in the
+[`core-defaults` pack](#rule-packs) and are added one at a time.
+
+**When a rule fires.** `alert.created` rules are evaluated for **every** new alert, not
+only for alerts submitted through the alert API: a small worker inside the API process
+claims each new alert once (visible as `alerts.automation_rules_evaluated_at`) and runs
+the rules for it, typically a few seconds after the alert is stored. That is what makes a
+rule work on connector telemetry — fusion writes those alerts straight to Postgres, a
+path no HTTP endpoint sees. `alert.updated` rules run immediately when an analyst edits
+the alert. An alert is evaluated **at most once** on creation; if an evaluation is lost
+(the process died holding the claim), clear the marker to re-queue it:
+
+```sql
+UPDATE alerts SET automation_rules_evaluated_at = NULL WHERE id = '<alert-id>';
+```
+
+Authoring opens in a dialog; **Search** filters the list across the name,
 description, action slug, trigger, autonomy level, owner, refs, and the conditions
 themselves (typing `confidence` finds the rule that filters on it).
 
@@ -116,7 +137,7 @@ What each field actually does:
 
 | Field | Default | Behaviour |
 | --- | --- | --- |
-| Trigger | `alert.created` | Only `alert.created` and `alert.updated` are emitted today. `case.created` and `manual` are stored but marked **(inert)** — a rule using them never fires. |
+| Trigger | `alert.created` | `alert.created` (every new alert, via the evaluator worker) and `alert.updated` (the alert PATCH path) are the only emitted triggers. `case.created` and `manual` are stored but marked **(inert)** — a rule using them never fires. |
 | Subject type | `alert` | Enforced in the executor's rule query, so a case-scoped rule cannot fire on an alert event. `all` is a catch-all. |
 | Autonomy ceiling | `L2` | The **stricter** of this and the platform policy wins. A rule capped at L1 turns an L4 auto-approval into a queued approval — it never silently refuses an action the policy allows. |
 | Priority | `100` (1–9999) | Rules are evaluated lowest first, up to 50 per event. |
@@ -126,6 +147,56 @@ What each field actually does:
 Condition fields are exactly the keys the executor puts in the subject dict. A field
 that is not there can never match, so it is not offered — this is why `risk_score`
 (exists in the alert API response but not on the `alerts` table) is absent.
+
+### Rule packs
+
+A **pack** is a checked-in bundle of rules, listed rule by rule. **Packs** in the rules
+toolbar opens the catalogue: every rule of every pack is shown with the action it takes,
+the autonomy level and the dry-run state it will be installed with, so an operator adds
+the rules they want instead of a bundle they never read. Rules the workspace already has
+are marked **Added** and cannot be selected again.
+
+| Pack | Rules | Source |
+| --- | --- | --- |
+| `core-defaults` | 17 | AiSOC built-in — general rules keyed on alert shape |
+| `windows-splunk` | 31 | Splunk Security Content (ESCU) endpoint detections |
+
+**Nothing is written until you press Add.** The un-added rules are pre-selected when the
+dialog opens, so the common case is one click, but the click is the consent. **Add
+selected (n)** installs the checked rules; **Add all missing** installs everything the
+workspace does not have yet. Import is idempotent by rule name, so re-running it after a
+pack is extended adds only the new rules.
+
+#### Windows — Splunk detections
+
+**How a rule finds its detection.** Packs do not guess from titles. Each rule carries one
+condition — `rule_name in [<detection names>]` — and `rule_name` is filled from the
+Splunk notable's `search_name`, which for Splunk Security Content (ESCU) is the
+detection's own `name:` value. So `Access LSASS Memory for Dump Creation` matches the
+correlation search with that exact name. Upstream renames are therefore visible rather
+than silent: the pack reports how many upstream names it covers.
+
+**Importing installs decisions, not execution.** Every `windows-splunk` rule ships
+`dry_run` on, so a match writes a ledger row (and, for case/containment actions, an
+approval task) without calling a vendor. Autonomy is conservative — 11 rules at L1, 18 at
+L2, 2 at L3 — and an operator raises it per rule after previewing what it matches.
+`isolate_host` is also gated by connector availability: a tenant without an EDR/firewall
+connector sees the action marked unavailable instead of configured-but-inert.
+
+**Availability is a precondition for enabling, not a backstop at execution time.** A
+rule whose action is currently unavailable can still match an alert and record its
+decision in the ledger; connecting the missing connector is what makes the action
+executable. That is why the console shows the requirement per action instead of
+pretending the rule is inert.
+
+Nothing in either pack links out to a docs URL. The rules previously carried a
+"What these rules do" link whose target anchor did not exist.
+
+API: `GET /api/v1/runbook/automation-rules/packs` (`alerts:read`) returns every pack
+with its `rules[]` — each carrying `autonomy_level`, `dry_run` and `installed` — and
+`POST /api/v1/runbook/automation-rules/packs/{pack_id}/import` (`alerts:write`) accepts
+`{"rule_names": [...]}` to install a subset (an empty body installs the whole pack).
+Names that are not in the pack are reported back under `unknown` and ignored.
 
 ### Governance
 
@@ -138,6 +209,29 @@ override.
 and composes with the category buttons — searching `isolate` and filtering to
 *Containment* narrows to the same row. The header reports `N of M actions` whenever a
 search or filter is active.
+
+**Connector availability.** Every action in the catalog declares the connectors it
+needs to actually run (`required_connectors` in `action_catalog.py` — e.g. `lookup_ip`
+needs Splunk, `block_ip` needs a firewall/EDR, `create_case` needs the ITSM connector).
+`available` is computed from the tenant's **enabled** connectors on both
+`GET /api/v1/runbook/actions` and `GET /api/v1/runbook/governance` (which also returns
+`required_connectors` and the stored `enabled` flag alongside the contracts). An action
+with no declared requirement is always available; where a definition lists several
+connectors, any one of them is enough.
+
+This is enforced, not just displayed:
+
+- The **power** toggle on an unavailable action is disabled, and its tooltip names the
+  connector(s) that would unlock it.
+- **Edit Policy** is disabled for the same rows, so a threshold cannot be tuned for an
+  action that could never run.
+- `PATCH /api/v1/autonomy-policy/{action}/enabled` returns **409** when asked to enable
+  an action whose connector is missing. Disabling is always allowed, so an existing row
+  can be cleared.
+
+If a connector is disconnected later, rows previously enabled simply become
+unavailable; the platform does not rewrite stored policy behind the operator's back.
+Nothing is inferred from traffic — availability is configuration, not observation.
 
 ## Relationship to Playbooks
 

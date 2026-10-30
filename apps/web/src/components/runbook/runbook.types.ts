@@ -200,4 +200,9 @@ export interface GovernanceActionEntry {
   is_system_core?: boolean;
   /** Whether required connectors are active; False means the action cannot execute. */
   available?: boolean;
+  /**
+   * Connector types that would let this action run, e.g. `["firewall", "edr"]`
+   * (either one is enough). Empty means the action has no connector dependency.
+   */
+  required_connectors?: string[];
 }

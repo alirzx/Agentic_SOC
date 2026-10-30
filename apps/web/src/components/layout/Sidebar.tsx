@@ -293,11 +293,6 @@ const navSections: NavSection[] = [
         href: '/purple-team',
         icon: <ShieldIcon />,
       },
-      {
-        label: 'Runbook',
-        href: '/runbook',
-        icon: <EyeIcon />,
-      },
     ],
   },
   {

@@ -531,19 +531,37 @@ const PolicyEditModal: FC<{
 
 const GovernanceRow: FC<{ 
   entry: GovernanceActionEntry;
-  onToggleEnabled?: (action: string, enabled: boolean) => void;
+  /** Resolves true when the server accepted the change. */
+  onToggleEnabled?: (action: string, enabled: boolean) => Promise<boolean>;
 }> = ({ entry, onToggleEnabled }) => {
   const [expanded, setExpanded] = useState(false);
   const [isEnabled, setIsEnabled] = useState(entry.enabled ?? true);
   const [editingEntry, setEditingEntry] = useState<GovernanceActionEntry | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const badge = getActionBadge(entry);
   const BadgeIcon = badge.icon;
   const isContainment = entry.category === 'containment';
+  const unavailable = entry.available === false;
+  const requiredConnectors = entry.required_connectors ?? [];
 
-  const handleToggle = () => {
+  /**
+   * Optimistic, then reverted: a toggle the server refused (no connector able to
+   * run the action) must not keep looking switched on in the UI.
+   */
+  const handleToggle = async () => {
+    if (unavailable) return;
     const newState = !isEnabled;
+    setToggleError(null);
     setIsEnabled(newState);
-    onToggleEnabled?.(entry.name, newState);
+    const accepted = (await onToggleEnabled?.(entry.name, newState)) ?? true;
+    if (!accepted) {
+      setIsEnabled(!newState);
+      setToggleError(
+        newState
+          ? 'Not enabled: the server rejected this change (required connector missing?).'
+          : 'Not disabled: the change could not be saved.',
+      );
+    }
   };
 
   const handleSavePolicy = (action: string, thresholds: { auto: number; review: number; escalation: number }, reason?: string) => {
@@ -612,17 +630,17 @@ const GovernanceRow: FC<{
           <button
             type="button"
             onClick={handleToggle}
-            disabled={entry.available === false}
+            disabled={unavailable}
             className={`p-2 rounded transition-colors ${
-              entry.available === false
+              unavailable
                 ? 'bg-slate-800/40 text-slate-600 cursor-not-allowed opacity-50'
                 : isEnabled
                   ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
                   : 'bg-slate-800/60 text-slate-500 hover:bg-slate-800'
             }`}
             title={
-              entry.available === false
-                ? 'Action unavailable — required connectors not configured'
+              unavailable
+                ? `Cannot be enabled — connect ${requiredConnectors.length > 0 ? requiredConnectors.join(' or ') : 'the required connector'} first`
                 : (isEnabled ? 'Disable this action for your workspace' : 'Enable this action')
             }
             aria-label={`${isEnabled ? 'Disable' : 'Enable'} ${entry.label}`}
@@ -645,15 +663,36 @@ const GovernanceRow: FC<{
       {/* Expanded content */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-slate-800/40 space-y-4 pt-4">
-          {/* Unavailable action notice */}
-          {entry.available === false && (
+          {/* Unavailable action notice — names the connector(s) that would
+              unlock it instead of guessing a generic list. */}
+          {unavailable && (
             <div className="rounded border border-slate-600/40 bg-slate-800/30 p-3">
               <p className="text-xs text-slate-300 flex items-start gap-2">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                 <span>
-                  This action requires an active data connector (e.g. <span className="font-mono text-slate-400">firewall</span>, <span className="font-mono text-slate-400">edr</span>, or <span className="font-mono text-slate-400">splunk</span>) which is not currently configured for this workspace.
+                  {requiredConnectors.length > 0 ? (
+                    <>
+                      This action needs an enabled{' '}
+                      {requiredConnectors.map((connector, index) => (
+                        <span key={connector}>
+                          {index > 0 && ' or '}
+                          <span className="font-mono text-slate-400">{connector}</span>
+                        </span>
+                      ))}{' '}
+                      connector. None is configured for this workspace yet, so the
+                      action cannot be enabled or executed.
+                    </>
+                  ) : (
+                    <>This action cannot run in this workspace right now.</>
+                  )}
                 </span>
               </p>
+            </div>
+          )}
+
+          {toggleError && (
+            <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-300">
+              {toggleError}
             </div>
           )}
 
@@ -775,14 +814,27 @@ export const GovernanceView: FC = () => {
     { read: 0, case: 0, containment: 0 } as Record<GovernanceCategory, number>,
   );
 
-  const handleToggleAction = useCallback((actionName: string, enabled: boolean) => {
-    // Call API to persist enable/disable state
-    request(`/api/v1/autonomy-policy/${actionName}/enabled`, {
-      method: 'PATCH',
-      body: JSON.stringify({ enabled }),
-    }).catch((err) => {
-      console.error(`Failed to toggle ${actionName}:`, err);
-    });
+  const handleToggleAction = useCallback(async (actionName: string, enabled: boolean) => {
+    // The server refuses to enable an action whose connector is missing; surface
+    // that as a real message rather than a silently reverted switch.
+    try {
+      await request(`/api/v1/autonomy-policy/${actionName}/enabled`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
+      });
+      setCatalog((prev) =>
+        prev.map((entry) => (entry.name === actionName ? { ...entry, enabled } : entry)),
+      );
+      setError(null);
+      return true;
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `Could not ${enabled ? 'enable' : 'disable'} ${actionName}: ${err.message}`
+          : `Could not ${enabled ? 'enable' : 'disable'} ${actionName}.`,
+      );
+      return false;
+    }
   }, []);
 
   return (

@@ -159,8 +159,6 @@ Source: [`services/agents/app/`](https://github.com/SoorinSecurity/Agentic_SOC/t
 | `REALTIME_INTERNAL_TOKEN` / `INTERNAL_TOKEN` | — | Shared secret matching the API/realtime services |
 | `PLAYBOOK_STORE_DIR` | `/data/playbooks` | Filesystem path for executable playbook DSL files |
 | `PLAYBOOK_PACK_ROOT` | `/data/playbook-packs` | Root directory for community playbook packs |
-| `AISOC_PLAYBOOK_RESUME` | `false` | Enables resumable playbook approvals: a run parked at an `approval` step creates a Runbook gate task, and `POST /api/v1/playbooks/runs/{id}/resume` accepts a decision. When off, parked runs create no task and the endpoint answers 503 — the pre-resume behaviour, which is honest but useless. Gates both halves, so they cannot disagree. |
-| `AISOC_AGENTS_TENANT_SIGNING_KEY` | — | HMAC key (≥32 bytes) the API signs its internal agents calls with. Without it, analyst feedback and playbook resumes are not sent (never sent unsigned). |
 | `ATTCK_DATA_PATH` | — | Path to a local MITRE ATT&CK STIX bundle (falls back to the bundled snapshot) |
 | `OTEL_SERVICE_NAME` | `aisoc-agents` | Service name in OTel traces |
 | `AISOC_VERSION` | `0.1.0` | Reported in OTel resource attributes |

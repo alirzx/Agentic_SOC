@@ -14,7 +14,7 @@ const path = require('path');
 // `http://realtime:4000`).
 const REALTIME_HOST = process.env.REALTIME_URL || 'http://localhost:8086';
 const API_HOST = process.env.API_URL || 'http://localhost:8888';
-const AGENTS_HOST = process.env.AGENTS_URL || process.env.AGENTS_SERVICE_URL || 'http://localhost:8084';
+const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8887';
 // Fusion service exposes /entity-risk/*, /ml/*, /metrics, /health at root.
 // We surface those to the browser under the same-origin namespace
 // /api/v1/fusion/* so the bundle stays host-agnostic.
@@ -59,11 +59,7 @@ const nextConfig = {
   // call a different origin directly (skipping the Next proxy).
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
-    NEXT_PUBLIC_AGENTS_URL:
-      process.env.NEXT_PUBLIC_AGENTS_URL ||
-      process.env.AGENTS_URL ||
-      process.env.AGENTS_SERVICE_URL ||
-      '',
+    NEXT_PUBLIC_AGENTS_URL: process.env.NEXT_PUBLIC_AGENTS_URL || '',
     NEXT_PUBLIC_ACTIONS_URL: process.env.NEXT_PUBLIC_ACTIONS_URL || '',
     NEXT_PUBLIC_FUSION_URL: process.env.NEXT_PUBLIC_FUSION_URL || '',
     NEXT_PUBLIC_THREATINTEL_URL: process.env.NEXT_PUBLIC_THREATINTEL_URL || '',

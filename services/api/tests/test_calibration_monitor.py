@@ -7,31 +7,41 @@ Focused tests for the ConfidenceCalibrationMonitor worker:
 - Metrics aggregation
 - Error handling & resilience
 
-Run with: poetry run pytest services/api/tests/test_calibration_monitor.py -v
+Needs a live, alembic-migrated Postgres, so it is gated like the rest of the
+integration suites:
+
+    AISOC_RUN_INTEGRATION=1 pytest -m integration tests/test_calibration_monitor.py
 """
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.core.config import settings
-from app.models.runbook_task import RunbookTask, RunbookTaskStatus
+from app.models.runbook_task import RunbookTask
 from app.workers.calibration_monitor import ConfidenceCalibrationMonitor
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+_REQUIRES_ENV = "AISOC_RUN_INTEGRATION"
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not os.getenv(_REQUIRES_ENV),
+        reason=f"set {_REQUIRES_ENV}=1 to run calibration tests against Postgres",
+    ),
+]
 
 
 @pytest.fixture(scope="function")
 async def test_db():
     """Test database using PostgreSQL."""
     from app.db.database import AsyncSessionLocal
-    from app.db.database import Base
     from app.models.tenant import Tenant
-    from sqlalchemy import text
-    
+
     # Use existing PostgreSQL connection
     async with AsyncSessionLocal() as session:
         # Create tenant with unique slug
@@ -46,9 +56,14 @@ async def test_db():
         session.add(tenant)
         await session.commit()
 
-        # Ensure no prior runbook or alert rows leak into the tenant-specific test.
-        await session.execute(text("DELETE FROM runbook_tasks"))
-        await session.execute(text("DELETE FROM alerts"))
+        # Scoped to this fixture's own tenant. An unscoped DELETE would wipe the
+        # real alerts and ledger rows of whatever database DATABASE_URL points at.
+        await session.execute(
+            text("DELETE FROM runbook_tasks WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+        )
+        await session.execute(
+            text("DELETE FROM alerts WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+        )
         await session.commit()
 
         # Store tenant_id in session for later use
@@ -58,8 +73,15 @@ async def test_db():
 
         # Cleanup
         try:
-            await session.execute(text("DELETE FROM runbook_tasks"))
-            await session.execute(text("DELETE FROM alerts"))
+            await session.execute(
+                text("DELETE FROM runbook_tasks WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+            )
+            await session.execute(
+                text("DELETE FROM alerts WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+            )
+            await session.execute(
+                text("DELETE FROM tenants WHERE id = :tid"), {"tid": str(tenant_id)}
+            )
             await session.commit()
         except Exception:
             pass
@@ -83,7 +105,7 @@ def calibration_monitor():
 @pytest.mark.asyncio
 async def test_binning_4_ranges(test_db: AsyncSession, test_tenant_id, calibration_monitor):
     """Test 1.1: Tasks are correctly binned into 4 confidence ranges.
-    
+
     Ranges:
     - [0.00-0.25]: Low confidence
     - [0.25-0.50]: Medium-low confidence
@@ -102,7 +124,7 @@ async def test_binning_4_ranges(test_db: AsyncSession, test_tenant_id, calibrati
         (0.95, "0.75-1.0"),
     ]
 
-    for conf, expected_bin in test_data:
+    for conf, _expected_bin in test_data:
         task = RunbookTask(
             id=uuid4(),
             tenant_id=test_tenant_id,
@@ -117,19 +139,21 @@ async def test_binning_4_ranges(test_db: AsyncSession, test_tenant_id, calibrati
         test_db.add(task)
     await test_db.commit()
 
-    # Bin the tasks
+    # Bin the tasks. SQLAlchemy 2.x refuses a bare string here — it must be text().
     result = await test_db.execute(
-        "SELECT COUNT(*) as count, "
-        "CASE WHEN confidence_at_submission < 0.25 THEN '0.0-0.25' "
-        "     WHEN confidence_at_submission < 0.50 THEN '0.25-0.5' "
-        "     WHEN confidence_at_submission < 0.75 THEN '0.5-0.75' "
-        "     ELSE '0.75-1.0' END as bin "
-        "FROM runbook_tasks WHERE tenant_id = :tid GROUP BY bin ORDER BY bin",
-        {"tid": str(test_tenant_id)}
+        text(
+            "SELECT COUNT(*) as count, "
+            "CASE WHEN confidence_at_submission < 0.25 THEN '0.0-0.25' "
+            "     WHEN confidence_at_submission < 0.50 THEN '0.25-0.5' "
+            "     WHEN confidence_at_submission < 0.75 THEN '0.5-0.75' "
+            "     ELSE '0.75-1.0' END as bin "
+            "FROM runbook_tasks WHERE tenant_id = :tid GROUP BY bin ORDER BY bin"
+        ),
+        {"tid": str(test_tenant_id)},
     )
 
     bins = {row[1]: row[0] for row in result}
-    
+
     # Verify each bin has expected count
     assert bins.get("0.0-0.25", 0) == 2
     assert bins.get("0.25-0.5", 0) == 2
@@ -145,7 +169,7 @@ async def test_binning_4_ranges(test_db: AsyncSession, test_tenant_id, calibrati
 @pytest.mark.asyncio
 async def test_ece_perfect_calibration(test_db: AsyncSession, test_tenant_id, calibration_monitor):
     """Test 2.1: ECE calculation with perfect calibration (all correct).
-    
+
     Perfect calibration: confidence = accuracy
     Example: all 0.80-confidence tasks are correct → ECE ≈ 0
     """
@@ -193,7 +217,7 @@ async def test_ece_perfect_calibration(test_db: AsyncSession, test_tenant_id, ca
 @pytest.mark.asyncio
 async def test_ece_poor_calibration(test_db: AsyncSession, test_tenant_id, calibration_monitor):
     """Test 2.2: ECE calculation with poor calibration (mostly wrong).
-    
+
     Poor calibration: high confidence but low accuracy
     Example: 90% confidence but only 20% correct → high ECE
     """
@@ -333,7 +357,7 @@ async def test_status_poor_when_ece_high(test_db: AsyncSession, test_tenant_id, 
 @pytest.mark.asyncio
 async def test_lookback_window_filters_old_tasks(test_db: AsyncSession, test_tenant_id, calibration_monitor):
     """Test 4.1: Lookback window correctly filters old tasks.
-    
+
     Task completed > lookback_hours ago should be excluded
     """
     # Create old task (> 24 hours ago)
@@ -440,7 +464,7 @@ async def test_tenant_isolation_tasks_not_mixed(test_db: AsyncSession, calibrati
 
     # Measure for tenant A only
     metrics_a = await calibration_monitor.measure_calibration(test_db, lookback_hours=24, tenant_id=tenant_a)
-    
+
     # Measure for tenant B only
     metrics_b = await calibration_monitor.measure_calibration(test_db, lookback_hours=24, tenant_id=tenant_b)
 
@@ -509,7 +533,7 @@ async def test_edge_case_boundary_confidence_values(test_db: AsyncSession, test_
     """Test 6.3: Handle boundary confidence values correctly (0.0, 1.0, 0.25, 0.50, 0.75)."""
     boundary_values = [0.0, 0.25, 0.50, 0.75, 1.0]
 
-    for idx, conf in enumerate(boundary_values):
+    for _idx, conf in enumerate(boundary_values):
         task = RunbookTask(
             id=uuid4(),
             tenant_id=test_tenant_id,

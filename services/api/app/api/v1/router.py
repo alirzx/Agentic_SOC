@@ -3,8 +3,6 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
-    agentic_evaluation,
-    agentic_shadow,
     agents,
     airgap,
     alert_explain,
@@ -68,7 +66,6 @@ from app.api.v1.endpoints import (
     report_builder,
     reports,
     rule_tuning,
-    runbook,
     saved_hunts,
     saved_views,
     shifts,
@@ -81,6 +78,8 @@ from app.api.v1.endpoints import (
     translation,
     waitlist,
 )
+from app.api.v1.endpoints import agentic_evaluation
+from app.api.v1.endpoints import agentic_shadow
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -183,12 +182,6 @@ api_router.include_router(data_lifecycle.router)
 
 # Analyst feedback loop
 api_router.include_router(feedback.router)
-
-# Runbook read API — governed action ledger for a subject.
-# /runbook/{subject_type}/{subject_id} mirrors the case-investigation-brief
-# pattern but projects the runbook_events ledger instead of the case's agent+
-# analyst activity. Subject types: alert | case | incident.
-api_router.include_router(runbook.router)
 
 # Configurable autonomy guardrails — three-tier per-action confidence (Tier 1.3)
 api_router.include_router(autonomy_policy.router)

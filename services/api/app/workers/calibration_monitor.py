@@ -45,17 +45,15 @@ Author: GitHub Copilot (generated from Task 1.2)
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 from datetime import UTC, datetime, timedelta
 from statistics import mean
 from typing import Any
 
 import structlog
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.models.runbook_task import RunbookTask
 

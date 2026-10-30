@@ -177,7 +177,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(path: string, options: FetchOptions = {}): Promise<T> {
+async function request<T>(path: string, options: FetchOptions = {}): Promise<T> {
   const { params, baseUrl, ...fetchOptions } = options;
 
   let url = `${baseUrl ?? API_BASE}${path}`;
@@ -674,8 +674,6 @@ export interface Alert {
   disposition?: 'true_positive' | 'false_positive' | 'benign' | 'escalate' | null;
   /** Product funnel stage (ingested → … → jira_pushed). */
   funnelStage?: FunnelStage;
-  /** Connector type that produced this alert (e.g. 'splunk', 'crowdstrike'). */
-  connectorType?: string | null;
   // ─── Investigation Rail envelope (W6) ─────────────────────────────────────
   //
   // The list endpoint never populates these — they're only present
@@ -850,7 +848,6 @@ function normalizeAlert(raw: unknown): Alert {
       (r.llm_payload as Record<string, unknown> | null | undefined) ??
       (r.llmPayload as Record<string, unknown> | null | undefined),
     assignee: pickStr('assignee', 'assignee'),
-    connectorType: pickStr('connector_type', 'connectorType') ?? null,
     caseId: pickStr('case_id', 'caseId'),
     funnelStage: (pickStr('funnel_stage', 'funnelStage') as FunnelStage | undefined) ?? 'ingested',
     tags,
@@ -912,15 +909,6 @@ export interface FunnelBoardStage {
   id: string;
   label: string;
   count: number;
-  /** Alerts in this stage waiting on a human in the Runbook. */
-  open_tasks?: number;
-}
-
-/** An open Runbook task attached to a funnel card. */
-export interface FunnelBoardTask {
-  task_type: 'manual_review' | 'approval_gate' | 'mssp_sla_check' | string;
-  title: string;
-  status: string;
 }
 
 export interface FunnelBoardAlert {
@@ -935,8 +923,6 @@ export interface FunnelBoardAlert {
   created_at?: string | null;
   /** How many alerts in this stage share the same title (sample is one representative). */
   same_title_count?: number;
-  /** Open Runbook tasks for this alert — the reason it is stuck. */
-  open_tasks?: FunnelBoardTask[];
 }
 
 export interface FunnelBoardResponse {
@@ -2333,7 +2319,6 @@ export interface LedgerExplain {
   artifacts: LedgerArtifactDetail[];
 }
 
-// ADDED_BY_CODEBUFF: casesApi block ends here
 export const ledgerApi = {
   /** List investigation runs for the current tenant (optionally scoped to a case). */
   listRuns: (params?: { caseId?: string; status?: string; limit?: number }) =>

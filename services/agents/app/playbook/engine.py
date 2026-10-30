@@ -51,8 +51,6 @@ class RunStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-    #: Parked at an `approval` step. Nothing after the gate has executed.
-    PENDING_APPROVAL = "pending_approval"
 
 
 class StepStatus(str, Enum):
@@ -61,8 +59,6 @@ class StepStatus(str, Enum):
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
-    #: An `approval` gate that has not been cleared. The step did not run.
-    BLOCKED = "blocked"
 
 
 # ---------------------------------------------------------------------------
@@ -75,12 +71,7 @@ class StepResult(dict):  # thin dict subclass for JSON serialisation
 
 
 class PlaybookRun:
-    """Mutable run state threaded through the engine.
-
-    ``playbook_snapshot`` freezes the definition the run is executing. A run that
-    parks at an approval gate is resumed hours later, against the steps the
-    analyst approved — never the current edit of the document.
-    """
+    """Mutable run state threaded through the engine."""
 
     def __init__(self, playbook: Playbook, trigger_context: dict[str, Any]) -> None:
         self.run_id: str = str(uuid.uuid4())
@@ -94,47 +85,6 @@ class PlaybookRun:
         self.started_at: str = ""
         self.finished_at: str = ""
         self.error: str | None = None
-        # Durable-run bookkeeping (see app/playbook/run_store.py).
-        self.playbook_snapshot: dict[str, Any] = playbook.model_dump(mode="json")
-        self.tenant_ref: str = str(trigger_context.get("tenant_id") or "default")
-        self.next_step_index: int | None = None
-        self.gate_step_id: str | None = None
-        self.gate_step_name: str | None = None
-        #: Set when an approved gate actually released the run. Lets the caller
-        #: report "resumed" honestly even when a later step fails.
-        self.gate_released: bool = False
-
-    @classmethod
-    def from_state(
-        cls,
-        playbook: Playbook,
-        *,
-        run_id: str,
-        trigger_context: dict[str, Any] | None = None,
-        context: dict[str, Any] | None = None,
-        step_results: list[dict[str, Any]] | None = None,
-        status: RunStatus = RunStatus.PENDING,
-        next_step_index: int | None = None,
-        gate_step_id: str | None = None,
-        gate_step_name: str | None = None,
-        started_at: str = "",
-        error: str | None = None,
-        tenant_ref: str | None = None,
-    ) -> PlaybookRun:
-        """Rebuild a run from its persisted ``playbook_runs`` row."""
-        pr = cls(playbook, dict(trigger_context or {}))
-        pr.run_id = run_id
-        pr.context = dict(context or {})
-        pr.step_results = list(step_results or [])
-        pr.status = status
-        pr.next_step_index = next_step_index
-        pr.gate_step_id = gate_step_id
-        pr.gate_step_name = gate_step_name
-        pr.started_at = started_at
-        pr.error = error
-        if tenant_ref:
-            pr.tenant_ref = tenant_ref
-        return pr
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -147,9 +97,6 @@ class PlaybookRun:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "error": self.error,
-            "next_step_index": self.next_step_index,
-            "gate_step_id": self.gate_step_id,
-            "gate_step_name": self.gate_step_name,
         }
 
 
@@ -596,40 +543,6 @@ async def _emit(run_id: str, event_type: str, payload: dict, http: httpx.AsyncCl
 # ---------------------------------------------------------------------------
 
 
-# One in-flight execution per run inside this process. Two clicks on the same
-# approval must not run the guarded steps twice; cross-worker safety rests on the
-# ``pending_approval`` status check in ``resume``.
-_RUN_LOCKS: dict[str, asyncio.Lock] = {}
-
-
-def _run_lock(run_id: str) -> asyncio.Lock:
-    lock = _RUN_LOCKS.get(run_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        _RUN_LOCKS[run_id] = lock
-    return lock
-
-
-async def _persist(pr: PlaybookRun) -> None:
-    """Best-effort durable write. A missing/unmigrated database must never break a run."""
-    try:
-        from . import run_store  # noqa: PLC0415 — keeps the DB path optional at import time
-
-        await run_store.persist_run(pr)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_run.persist_unavailable: %s", exc)
-
-
-async def _raise_gate_task(pr: PlaybookRun) -> None:
-    """Best-effort: put the parked run in the analyst's Action Plan."""
-    try:
-        from .approvals import create_gate_task  # noqa: PLC0415
-
-        await create_gate_task(pr)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_gate.task_unavailable: %s", exc)
-
-
 class PlaybookEngine:
     """Executes playbooks step-by-step, emitting realtime events."""
 
@@ -639,295 +552,124 @@ class PlaybookEngine:
         trigger_context: dict[str, Any],
         *,
         dry_run: bool = False,
-        run_id: str | None = None,
     ) -> PlaybookRun:
         pr = PlaybookRun(playbook, trigger_context)
-        # Caller-allocated id (the API hands out a run_id before the run starts so
-        # it can be polled). Must be set *before* the first persist, otherwise the
-        # durable row and the id the caller was given disagree.
-        if run_id:
-            pr.run_id = run_id
         pr.started_at = datetime.now(UTC).isoformat()
         pr.status = RunStatus.RUNNING
 
         async with httpx.AsyncClient() as http:
             await _emit(pr.run_id, "run.started", {"playbook": playbook.name, "dry_run": dry_run}, http)
-            # Persist the opening row so a run that parks later has a durable
-            # identity even if the process dies before the gate is reached.
-            await _persist(pr)
-            async with _run_lock(pr.run_id):
-                await self._execute(pr, playbook, start_index=0, dry_run=dry_run, http=http)
-                await self._finalize(pr, http)
 
-        return pr
+            # Build a step index for branching
+            step_index = {s.id: i for i, s in enumerate(playbook.steps)}
+            visited: set[str] = set()
+            current_idx = 0
 
-    async def resume(
-        self,
-        pr: PlaybookRun,
-        playbook: Playbook,
-        *,
-        actor: str = "analyst",
-    ) -> PlaybookRun:
-        """Continue a parked run from its recorded ``next_step_index``.
+            while current_idx < len(playbook.steps):
+                step = playbook.steps[current_idx]
 
-        Steps before the gate are never re-executed: an approval releases what
-        comes *after* it, not a replay of the side effects that already happened.
-        """
-        if pr.status != RunStatus.PENDING_APPROVAL:
-            raise ValueError(f"run {pr.run_id} is not awaiting approval (status={pr.status.value})")
+                if step.id in visited:
+                    logger.warning("Cycle detected at step %s, aborting", step.id)
+                    pr.status = RunStatus.FAILED
+                    pr.error = f"cycle at step {step.id}"
+                    break
+                visited.add(step.id)
 
-        start_index = pr.next_step_index
-        if start_index is None or start_index < 0 or start_index > len(playbook.steps):
-            pr.status = RunStatus.FAILED
-            pr.error = "gate step no longer present in the playbook snapshot"
-            async with httpx.AsyncClient() as http:
-                await self._finalize(pr, http)
-            return pr
+                # Condition gate
+                condition_passed = True
+                if step.condition:
+                    condition_passed = _evaluate_condition(step.condition, pr.context)
 
-        # The gate was cleared by a human: stop reporting it as blocked.
-        if pr.gate_step_id:
-            for entry in pr.step_results:
-                if entry.get("step_id") == pr.gate_step_id and entry.get("status") == StepStatus.BLOCKED:
-                    entry["status"] = StepStatus.SUCCESS
-                    entry.setdefault("result", {})["approved_by"] = actor
-
-        pr.status = RunStatus.RUNNING
-        pr.error = None
-        pr.next_step_index = None
-        pr.gate_released = True
-
-        async with httpx.AsyncClient() as http:
-            async with _run_lock(pr.run_id):
-                await _emit(
-                    pr.run_id,
-                    "run.resumed",
-                    {"actor": actor, "from_step_index": start_index},
-                    http,
-                )
-                await self._execute(pr, playbook, start_index=start_index, dry_run=False, http=http)
-                await self._finalize(pr, http)
-
-        return pr
-
-    async def cancel(self, pr: PlaybookRun, *, actor: str, reason: str) -> PlaybookRun:
-        """End a parked run without executing anything (a rejected gate)."""
-        pr.status = RunStatus.CANCELLED
-        pr.error = reason
-        pr.next_step_index = None
-        async with httpx.AsyncClient() as http:
-            await _emit(pr.run_id, "run.cancelled", {"actor": actor, "reason": reason}, http)
-            await self._finalize(pr, http)
-        return pr
-
-    async def _finalize(self, pr: PlaybookRun, http: httpx.AsyncClient) -> None:
-        """Close out a run: settle its terminal status and persist the row."""
-        if pr.status == RunStatus.RUNNING:
-            pr.status = RunStatus.COMPLETED
-        if pr.status != RunStatus.PENDING_APPROVAL:
-            pr.finished_at = datetime.now(UTC).isoformat()
-        await _emit(pr.run_id, "run.done", pr.to_dict(), http)
-        await _persist(pr)
-        # A parked run is only useful if the analyst can see it. This covers
-        # both a first gate and a later gate reached after a resume.
-        if pr.status == RunStatus.PENDING_APPROVAL:
-            await _raise_gate_task(pr)
-
-    async def _execute(
-        self,
-        pr: PlaybookRun,
-        playbook: Playbook,
-        *,
-        start_index: int,
-        dry_run: bool,
-        http: httpx.AsyncClient,
-    ) -> None:
-        """Run the step loop from ``start_index``. Mutates ``pr`` in place."""
-        # Build a step index for branching
-        step_index = {s.id: i for i, s in enumerate(playbook.steps)}
-        visited: set[str] = set()
-        current_idx = start_index
-
-        while current_idx < len(playbook.steps):
-            step = playbook.steps[current_idx]
-
-            if step.id in visited:
-                logger.warning("Cycle detected at step %s, aborting", step.id)
-                pr.status = RunStatus.FAILED
-                pr.error = f"cycle at step {step.id}"
-                break
-            visited.add(step.id)
-
-            # Condition gate
-            condition_passed = True
-            if step.condition:
-                condition_passed = _evaluate_condition(step.condition, pr.context)
-
-            if not condition_passed:
-                pr.step_results.append({"step_id": step.id, "name": step.name, "status": StepStatus.SKIPPED})
-                # Branching: use next_false if set
-                if step.next_false and step.next_false in step_index:
-                    current_idx = step_index[step.next_false]
-                else:
-                    current_idx += 1
-                continue
-
-            # CONDITION type — just branch, no external action
-            if step.type == StepType.CONDITION:
-                branch_id = step.next_true if condition_passed else step.next_false
-                if branch_id and branch_id in step_index:
-                    current_idx = step_index[branch_id]
-                else:
-                    current_idx += 1
-                pr.step_results.append({"step_id": step.id, "name": step.name, "status": StepStatus.SUCCESS, "branch": branch_id})
-                continue
-
-            # Human-in-the-loop gate. Before this was handled, `approval` fell
-            # through to the generic "no handler" branch, was recorded as
-            # success with `{"skipped": true}`, and the run continued — so a
-            # playbook could isolate a host *after* an approval step nobody
-            # had approved. A gate that cannot be cleared now parks the run.
-            if step.type == StepType.APPROVAL:
-                if dry_run:
-                    pr.step_results.append(
-                        {
-                            "step_id": step.id,
-                            "name": step.name,
-                            "status": StepStatus.SKIPPED,
-                            "result": {
-                                "dry_run": True,
-                                "would_require_approval": True,
-                                "reason": "dry run: approval gate not exercised",
-                            },
-                        }
-                    )
-                    current_idx += 1
+                if not condition_passed:
+                    pr.step_results.append({"step_id": step.id, "name": step.name, "status": StepStatus.SKIPPED})
+                    # Branching: use next_false if set
+                    if step.next_false and step.next_false in step_index:
+                        current_idx = step_index[step.next_false]
+                    else:
+                        current_idx += 1
                     continue
 
-                pr.step_results.append(
-                    {
-                        "step_id": step.id,
-                        "name": step.name,
-                        "status": StepStatus.BLOCKED,
-                        "result": {
-                            "requires_approval": True,
-                            "reason": (
-                                "playbook parked at an approval step; no further "
-                                "steps were executed"
-                            ),
-                        },
-                    }
-                )
-                pr.status = RunStatus.PENDING_APPROVAL
-                pr.error = f"step '{step.name}' requires analyst approval"
-                # Record where a resume must start: the step *after* the gate.
-                # Without this the parked run has no way back in.
-                pr.next_step_index = current_idx + 1
-                pr.gate_step_id = step.id
-                pr.gate_step_name = step.name
-                await _emit(
-                    pr.run_id,
-                    "run.pending_approval",
-                    {"step": step.name, "step_id": step.id},
-                    http,
-                )
-                break
+                # CONDITION type — just branch, no external action
+                if step.type == StepType.CONDITION:
+                    branch_id = step.next_true if condition_passed else step.next_false
+                    if branch_id and branch_id in step_index:
+                        current_idx = step_index[branch_id]
+                    else:
+                        current_idx += 1
+                    pr.step_results.append({"step_id": step.id, "name": step.name, "status": StepStatus.SUCCESS, "branch": branch_id})
+                    continue
 
-            await _emit(pr.run_id, "step.started", {"step": step.name, "type": step.type}, http)
+                await _emit(pr.run_id, "step.started", {"step": step.name, "type": step.type}, http)
 
-            result: dict = {}
-            step_status = StepStatus.SUCCESS
-            attempt = 0
-            handler = _HANDLERS.get(step.type)
+                result: dict = {}
+                step_status = StepStatus.SUCCESS
+                attempt = 0
+                handler = _HANDLERS.get(step.type)
 
-            if handler is None and not dry_run:
-                # A step kind this engine cannot execute must never report
-                # success: a `disable_user` that silently skipped would leave
-                # an analyst believing the account was disabled. Abort the run
-                # regardless of `on_failure`, because the playbook's intent
-                # cannot be carried out from here on.
-                unsupported = {
-                    "error": f"no handler implemented for step type '{step.type.value}'",
-                    "unsupported_step_type": step.type.value,
-                }
-                pr.step_results.append(
-                    {
-                        "step_id": step.id,
-                        "name": step.name,
-                        "status": StepStatus.FAILED,
-                        "result": unsupported,
-                    }
-                )
-                pr.status = RunStatus.FAILED
-                pr.error = unsupported["error"]
+                while True:
+                    attempt += 1
+                    t0 = time.perf_counter()
+                    try:
+                        if dry_run:
+                            result = {"dry_run": True, "step": step.name}
+                        elif handler:
+                            result = await handler(step, pr.context, http)
+                        else:
+                            result = {"skipped": True, "reason": f"no handler for {step.type}"}
+                        elapsed = time.perf_counter() - t0
+                        result["_elapsed_ms"] = round(elapsed * 1000)
+                        break  # success
+                    except Exception as exc:  # noqa: BLE001
+                        elapsed = time.perf_counter() - t0
+                        logger.error("Step %s attempt %d failed: %s", step.name, attempt, exc)
+                        if attempt <= step.retry_max:
+                            await asyncio.sleep(min(2**attempt, 30))
+                        else:
+                            step_status = StepStatus.FAILED
+                            result = {"error": str(exc), "_elapsed_ms": round(elapsed * 1000)}
+                            break
+
+                pr.step_results.append({"step_id": step.id, "name": step.name, "status": step_status, "result": result})
+                # Merge result into context for downstream steps. The namespaced
+                # key ``_step_<id>`` always reflects this step's full result.
+                pr.context[f"_step_{step.id}"] = result
+                # Flatten top-level keys for convenience so downstream steps can
+                # reference ``alert.severity`` or ``user_id`` directly without
+                # the ``_step_<id>.`` prefix. We *overwrite* prior values so a
+                # later enrichment step can refine context (e.g. replacing a
+                # placeholder ``user_id`` from the trigger with the resolved
+                # canonical id). Keys starting with ``_`` are reserved for
+                # engine bookkeeping and never auto-flattened.
+                for k, v in result.items():
+                    if not k.startswith("_"):
+                        pr.context[k] = v
+
                 await _emit(
                     pr.run_id,
                     "step.done",
                     {
                         "step": step.name,
-                        "status": StepStatus.FAILED,
-                        "unsupported_step_type": step.type.value,
+                        "status": step_status,
+                        "result_keys": list(result.keys()),
                     },
                     http,
                 )
-                break
 
-            while True:
-                attempt += 1
-                t0 = time.perf_counter()
-                try:
-                    if dry_run:
-                        result = {"dry_run": True, "step": step.name}
-                    elif handler:
-                        result = await handler(step, pr.context, http)
-                    else:
-                        # Unreachable: rejected below before the retry loop.
-                        raise NotImplementedError(step.type.value)
-                    elapsed = time.perf_counter() - t0
-                    result["_elapsed_ms"] = round(elapsed * 1000)
-                    break  # success
-                except Exception as exc:  # noqa: BLE001
-                    elapsed = time.perf_counter() - t0
-                    logger.error("Step %s attempt %d failed: %s", step.name, attempt, exc)
-                    if attempt <= step.retry_max:
-                        await asyncio.sleep(min(2**attempt, 30))
-                    else:
-                        step_status = StepStatus.FAILED
-                        result = {"error": str(exc), "_elapsed_ms": round(elapsed * 1000)}
-                        break
+                if step_status == StepStatus.FAILED and step.on_failure == "abort":
+                    pr.status = RunStatus.FAILED
+                    pr.error = f"step '{step.name}' failed"
+                    break
 
-            pr.step_results.append({"step_id": step.id, "name": step.name, "status": step_status, "result": result})
-            # Merge result into context for downstream steps. The namespaced
-            # key ``_step_<id>`` always reflects this step's full result.
-            pr.context[f"_step_{step.id}"] = result
-            # Flatten top-level keys for convenience so downstream steps can
-            # reference ``alert.severity`` or ``user_id`` directly without
-            # the ``_step_<id>.`` prefix. We *overwrite* prior values so a
-            # later enrichment step can refine context (e.g. replacing a
-            # placeholder ``user_id`` from the trigger with the resolved
-            # canonical id). Keys starting with ``_`` are reserved for
-            # engine bookkeeping and never auto-flattened.
-            for k, v in result.items():
-                if not k.startswith("_"):
-                    pr.context[k] = v
+                # Advance: branching on success
+                if step_status == StepStatus.SUCCESS and step.next_true and step.next_true in step_index:
+                    current_idx = step_index[step.next_true]
+                else:
+                    current_idx += 1
 
-            await _emit(
-                pr.run_id,
-                "step.done",
-                {
-                    "step": step.name,
-                    "status": step_status,
-                    "result_keys": list(result.keys()),
-                },
-                http,
-            )
+            if pr.status == RunStatus.RUNNING:
+                pr.status = RunStatus.COMPLETED
 
-            if step_status == StepStatus.FAILED and step.on_failure == "abort":
-                pr.status = RunStatus.FAILED
-                pr.error = f"step '{step.name}' failed"
-                break
+            pr.finished_at = datetime.now(UTC).isoformat()
+            await _emit(pr.run_id, "run.done", pr.to_dict(), http)
 
-            # Advance: branching on success
-            if step_status == StepStatus.SUCCESS and step.next_true and step.next_true in step_index:
-                current_idx = step_index[step.next_true]
-            else:
-                current_idx += 1
+        return pr

@@ -46,6 +46,7 @@ from app.services.runbook.detections import (
     summarize,
 )
 from app.services.runbook.gate import decide
+from app.services.runbook.packs import get_pack, list_packs, pack_rule_payloads
 from app.services.runbook.read import load_runbook
 from app.services.runbook.rule_executor import (
     _gate_to_status,
@@ -63,9 +64,6 @@ except ImportError:  # pragma: no cover
 _MAX_TAG = 60
 
 logger = logging.getLogger(__name__)
-
-# Set to True once the optional extended columns are guaranteed present.
-_RULE_COLUMNS_READY: bool = False
 
 router = APIRouter(prefix="/runbook", tags=["runbook"])
 
@@ -90,262 +88,6 @@ _ACTION_SLUG_ALIASES: dict[str, str] = {
     "assign_case": "assign_case",
     "add_case_comment": "add_case_comment",
 }
-
-DEFAULT_AUTOMATION_RULES: list[dict[str, Any]] = [
-    {
-        "name": "High-risk alerts -> tag",
-        "description": "Tag medium/high severity alerts when they exceed the review threshold.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "severity", "op": "in", "value": ["high", "critical"]},
-            {"field": "confidence", "op": "ge", "value": 70},
-        ],
-        "action_slug": "add_alert_tag",
-        "action_params": {"tag": "high-risk"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 10,
-    },
-    {
-        "name": "Critical alerts -> case",
-        "description": "Open a follow-up case for critical alerts so the investigation stays visible and governed.",
-        "trigger_type": "alert.created",
-        "conditions": [{"field": "severity", "op": "eq", "value": "critical"}],
-        "action_slug": "create_case",
-        "action_params": {"template": "critical-alert"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 20,
-    },
-    {
-        "name": "Low-confidence alert close",
-        "description": "Dry-run close on low-confidence benign alerts after analyst review has ruled out risk.",
-        "trigger_type": "alert.updated",
-        "conditions": [
-            {"field": "severity", "op": "in", "value": ["info", "low"]},
-            {"field": "confidence", "op": "lt", "value": 35},
-        ],
-        "action_slug": "close_alert",
-        "action_params": {"status": "closed"},
-        "autonomy_level": "L1",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 30,
-    },
-    {
-        "name": "Phishing subject -> tag",
-        "description": "Apply a phishing tag when the alert title or description indicates a phishing lure.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "title", "op": "contains", "value": "phishing"},
-            {"field": "severity", "op": "in", "value": ["medium", "high", "critical"]},
-        ],
-        "action_slug": "add_alert_tag",
-        "action_params": {"tag": "phishing-lure"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 40,
-    },
-    {
-        "name": "Credential theft -> case",
-        "description": "Escalate suspicious credential-related activity into a case for analyst review.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "title", "op": "contains", "value": "credential"},
-            {"field": "source", "op": "eq", "value": "identity"},
-        ],
-        "action_slug": "create_case",
-        "action_params": {"template": "credential-theft"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 50,
-    },
-    {
-        "name": "Privileged account risk -> tag",
-        "description": "Highlight high-risk privileged-user events before the next review cycle.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "title", "op": "contains", "value": "privileged"},
-            {"field": "confidence", "op": "ge", "value": 80},
-        ],
-        "action_slug": "add_alert_tag",
-        "action_params": {"tag": "privileged-user"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 60,
-    },
-    {
-        "name": "Known malicious IP -> block",
-        "description": "Prepare a containment decision for known malicious IP indicators.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "tags", "op": "array_contains", "value": "malicious-ip"},
-            {"field": "confidence", "op": "ge", "value": 85},
-        ],
-        "action_slug": "block_ip",
-        "action_params": {"reason": "malicious-ip-indicator"},
-        "autonomy_level": "L3",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 70,
-    },
-    {
-        "name": "Endpoint infection -> isolate",
-        "description": "Trigger a host isolation recommendation for endpoint compromise indicators.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "category", "op": "eq", "value": "endpoint"},
-            {"field": "severity", "op": "eq", "value": "high"},
-            {"field": "confidence", "op": "ge", "value": 75},
-        ],
-        "action_slug": "isolate_host",
-        "action_params": {"target_type": "host", "reason": "endpoint_compromise"},
-        "autonomy_level": "L3",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 80,
-    },
-    {
-        "name": "Suspicious file -> quarantine",
-        "description": "Queue a quarantine recommendation for suspicious file-based executions.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "title", "op": "contains", "value": "ransomware"},
-            {"field": "confidence", "op": "ge", "value": 80},
-        ],
-        "action_slug": "quarantine_file",
-        "action_params": {"reason": "suspicious-file-execution"},
-        "autonomy_level": "L3",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 90,
-    },
-    {
-        "name": "Case assignment follow-up",
-        "description": "Assign open cases to the on-duty analyst queue when they remain unowned.",
-        "trigger_type": "case.created",
-        "conditions": [
-            {"field": "status", "op": "eq", "value": "new"},
-            {"field": "priority", "op": "ge", "value": 80},
-        ],
-        "action_slug": "assign_case",
-        "action_params": {"owner": "oncall"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 100,
-    },
-    {
-        "name": "Case comment on analyst escalation",
-        "description": "Add an operational note when the case is escalated for higher-level review.",
-        "trigger_type": "case.created",
-        "conditions": [
-            {"field": "status", "op": "eq", "value": "escalated"},
-            {"field": "confidence", "op": "ge", "value": 70},
-        ],
-        "action_slug": "add_case_comment",
-        "action_params": {"text": "Escalated for analyst review"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 110,
-    },
-    # ── Realistic SOC scenarios ───────────────────────────────────────────────
-    {
-        "name": "Auto-enrich network alerts",
-        "description": "Automatically query threat intel for any new network alert to add context before the analyst sees it.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "category", "op": "eq", "value": "network"},
-            {"field": "severity", "op": "in", "value": ["medium", "high", "critical"]},
-        ],
-        "action_slug": "lookup_ip",
-        "action_params": {},
-        "autonomy_level": "L4",
-        "dry_run": False,
-        "enabled": True,
-        "priority": 5,
-    },
-    {
-        "name": "Auto-close EICAR test files",
-        "description": "Close alerts from the standard EICAR antivirus test file to suppress noise during scheduled scans.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "title", "op": "contains", "value": "EICAR"},
-            {"field": "source", "op": "eq", "value": "Windows Defender"},
-        ],
-        "action_slug": "close_alert",
-        "action_params": {"status": "closed", "reason": "eicar-test-suppressed"},
-        "autonomy_level": "L4",
-        "dry_run": False,
-        "enabled": True,
-        "priority": 15,
-    },
-    {
-        "name": "Isolate host on ransomware TTP",
-        "description": "Immediately queue a host isolation decision when ransomware behaviour (T1486) is confirmed at critical severity.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "title", "op": "contains", "value": "T1486"},
-            {"field": "severity", "op": "eq", "value": "critical"},
-        ],
-        "action_slug": "isolate_host",
-        "action_params": {"target_type": "host", "reason": "ransomware-T1486"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 1,
-    },
-    {
-        "name": "Lock account on impossible travel",
-        "description": "Temporarily disable accounts showing impossible travel anomalies pending analyst verification.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "title", "op": "contains", "value": "Impossible Travel"},
-            {"field": "severity", "op": "in", "value": ["high", "critical"]},
-        ],
-        "action_slug": "disable_user_account",
-        "action_params": {"reason": "impossible-travel-anomaly"},
-        "autonomy_level": "L2",
-        "dry_run": True,
-        "enabled": True,
-        "priority": 2,
-    },
-    {
-        "name": "Add TI context to case on indicator match",
-        "description": "Add a system comment to the case with the matched threat actor profile when a threat-intel tag is present.",
-        "trigger_type": "case.created",
-        "conditions": [
-            {"field": "tags", "op": "array_contains", "value": "threat_intel_match"},
-        ],
-        "action_slug": "add_case_comment",
-        "action_params": {"text": "Threat intel match — see linked IOC record for actor attribution."},
-        "autonomy_level": "L4",
-        "dry_run": False,
-        "enabled": True,
-        "priority": 25,
-    },
-    {
-        "name": "Tag noisy endpoint rules for tuning",
-        "description": "Mark high-volume process-access events with 'needs_tuning' so detection engineering can review them.",
-        "trigger_type": "alert.created",
-        "conditions": [
-            {"field": "category", "op": "eq", "value": "endpoint"},
-            {"field": "confidence_label", "op": "eq", "value": "low"},
-        ],
-        "action_slug": "add_alert_tag",
-        "action_params": {"tag": "needs_tuning"},
-        "autonomy_level": "L4",
-        "dry_run": False,
-        "enabled": True,
-        "priority": 90,
-    },
-]
 
 
 def _normalize_action_slug(action_slug: str | None) -> str | None:
@@ -442,6 +184,67 @@ class RulePreviewResult(BaseModel):
 class RulePreviewResponse(BaseModel):
     rule_id: uuid.UUID
     results: list[RulePreviewResult]
+
+
+class RulePackRuleOut(BaseModel):
+    """One rule inside a pack, with whether this tenant already has it.
+
+    The whole list is returned (not just the count) so an operator can add rules
+    one at a time instead of importing a pack wholesale, and can see the posture
+    each rule will be installed with.
+    """
+
+    name: str
+    trigger_type: str
+    action_slug: str
+
+    autonomy_level: str
+    dry_run: bool
+
+    priority: int
+
+    installed: bool
+
+
+class RulePackOut(BaseModel):
+    """A pack of rules that can be imported into this tenant.
+
+    ``rule_count`` is how many rules the import would try to create;
+    ``covered_detections`` is how many upstream detection names they target.
+    Neither is a coverage claim for the whole corpus.
+    """
+
+    id: str
+    label: str
+    description: str
+    source: str
+    rule_count: int
+    covered_detections: int
+    docs_ref: str | None = None
+
+    #: Every rule in the pack, with whether this tenant already has it.
+    rules: list[RulePackRuleOut] = Field(default_factory=list)
+
+
+class RulePackImportRequest(BaseModel):
+    """Which rules of the pack to install.
+
+    ``rule_names`` empty (the default) means the whole pack. The UI sends an
+    explicit list so an operator adds the rules they want instead of gaining a
+    bundle they never read.
+    """
+
+    rule_names: list[str] = Field(default_factory=list)
+
+
+class RulePackImportResult(BaseModel):
+    """Outcome of an import. ``skipped`` already existed under the same name."""
+
+    pack_id: str
+    created: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+    #: Names sent by the caller that are not rules of this pack.
+    unknown: list[str] = Field(default_factory=list)
 
 
 class RuleDraftPreviewRequest(BaseModel):
@@ -578,43 +381,6 @@ def _validate_rule_input(data: AutomationRuleCreate | AutomationRulePatch) -> No
             raise HTTPException(status_code=400, detail={"conditions_errors": errors})
 
 
-# ── Ledger read ───────────────────────────────────────────────────────────────
-
-@router.get(
-    "/{subject_type}/{subject_id}",
-    summary="Runbook ledger for a subject",
-)
-async def get_runbook(
-    subject_type: str,
-    subject_id: str,
-    db: DBSession,
-    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
-) -> dict:
-    if subject_type not in VALID_SUBJECT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"subject_type must be one of {VALID_SUBJECT_TYPES}",
-        )
-    try:
-        sid = uuid.UUID(subject_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="subject_id must be a valid UUID") from None
-
-    logger.debug(
-        "RUNBOOK-READ tenant=%s type=%s id=%s",
-        safe_log_value(str(current_user.tenant_id)),
-        subject_type,
-        safe_log_value(subject_id)[:_MAX_TAG],
-    )
-    try:
-        envelope = await load_runbook(
-            db, tenant_id=current_user.tenant_id, subject_type=subject_type, subject_id=sid
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return envelope.model_dump(mode="json")
-
-
 # ── LLM Payload enrichment ────────────────────────────────────────────────────
 
 @router.post(
@@ -674,6 +440,12 @@ _LIST_RULES = text(
      WHERE tenant_id = :tid
      ORDER BY priority ASC, created_at DESC
      LIMIT 200
+    """
+)
+
+_RULE_NAMES = text(
+    """
+    SELECT name FROM automation_rules WHERE tenant_id = :tid
     """
 )
 
@@ -766,91 +538,53 @@ def _preview_rule_for_subjects(rule: dict[str, Any], subjects: list[dict[str, An
     return results
 
 
-async def _seed_default_rules_for_tenant(db: DBSession, tenant_id: uuid.UUID) -> list[Any]:
-    count = (
-        await db.execute(
-            text("SELECT COUNT(*) FROM automation_rules WHERE tenant_id = :tid").bindparams(tid=tenant_id)
-        )
-    ).scalar_one()
-    if count:
-        rows = (await db.execute(_LIST_RULES.bindparams(tid=tenant_id))).fetchall()
-        # Add missing default rules to existing tenants (for v8.0 upgrade)
-        existing_names = {r[1] for r in rows}  # r[1] is name
-        for rule in DEFAULT_AUTOMATION_RULES:
-            if rule["name"] not in existing_names:
-                await db.execute(
-                    text(
-                        """
-                        INSERT INTO automation_rules
-                          (tenant_id, name, description, trigger_type, conditions, action_slug,
-                           action_params, autonomy_level, dry_run, enabled, priority, created_by)
-                        VALUES
-                          (:tid, :name, :desc, :trigger, CAST(:conds AS jsonb), :slug, CAST(:params AS jsonb),
-                           :level, :dry, :enabled, :prio, :creator)
-                        """
-                    ).bindparams(
-                        tid=tenant_id,
-                        name=rule["name"],
-                        desc=rule.get("description"),
-                        trigger=rule["trigger_type"],
-                        conds=_json_param(rule["conditions"]),
-                        slug=_normalize_action_slug(rule["action_slug"]),
-                        params=_json_param(rule["action_params"]),
-                        level=rule["autonomy_level"],
-                        dry=bool(rule["dry_run"]),
-                        enabled=bool(rule["enabled"]),
-                        prio=int(rule["priority"]),
-                        creator=None,
-                    )
-                )
-        await db.commit()
-        rows = (await db.execute(_LIST_RULES.bindparams(tid=tenant_id))).fetchall()
-        return rows
+def _action_available(action_name: str, active_connectors: set[str]) -> bool:
+    """Whether an action's connector dependency is satisfied.
 
-    for rule in DEFAULT_AUTOMATION_RULES:
-        await db.execute(
+    An action is available when it needs no connector, or when *any* of its
+    required connector types is enabled for the tenant (``("firewall", "edr")``
+    means either one can execute the action).
+    """
+    req = required_connectors(action_name)
+    if not req:
+        return True
+    return any(ct in active_connectors for ct in req)
+
+
+async def _disabled_actions(db: DBSession, tenant_id: uuid.UUID) -> set[str]:
+    """Action names the tenant has switched off.
+
+    Read here as well as in ``/autonomy-policy`` so the governance page renders
+    the stored state instead of assuming everything is on. A missing table (an
+    install that predates the toggle) means nothing is disabled.
+    """
+    try:
+        result = await db.execute(
             text(
                 """
-                INSERT INTO automation_rules
-                  (tenant_id, name, description, trigger_type, conditions, action_slug,
-                   action_params, autonomy_level, dry_run, enabled, priority, created_by)
-                VALUES
-                  (:tid, :name, :desc, :trigger, CAST(:conds AS jsonb), :slug, CAST(:params AS jsonb),
-                   :level, :dry, :enabled, :prio, :creator)
+                SELECT action_name
+                FROM aisoc_autonomy_thresholds
+                WHERE tenant_id = :tenant_id AND enabled = false
                 """
-            ).bindparams(
-                tid=tenant_id,
-                name=rule["name"],
-                desc=rule.get("description"),
-                trigger=rule["trigger_type"],
-                conds=_json_param(rule["conditions"]),
-                slug=_normalize_action_slug(rule["action_slug"]),
-                params=_json_param(rule["action_params"]),
-                level=rule["autonomy_level"],
-                dry=bool(rule["dry_run"]),
-                enabled=bool(rule["enabled"]),
-                prio=int(rule["priority"]),
-                creator=None,
-            )
+            ),
+            {"tenant_id": str(tenant_id)},
         )
-    await db.commit()
-    rows = (await db.execute(_LIST_RULES.bindparams(tid=tenant_id))).fetchall()
-    return rows
+        return set(result.scalars().all() or [])
+    except Exception as exc:  # noqa: BLE001 - render the catalog even without the table
+        logger.warning(
+            "runbook.disabled_actions_lookup_failed tenant=%s error=%s",
+            safe_log_value(str(tenant_id)).replace("\r", "").replace("\n", " ")[:120],
+            safe_log_value(str(exc)).replace("\r", "").replace("\n", " ")[:300],
+        )
+        return set()
 
 
-@router.get("/actions", summary="Actions available in automation rules")
-async def list_automation_actions(
-    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
-    db: DBSession,
-) -> list[dict[str, Any]]:
-    """Return the action list for automation rule dropdowns.
-    
-    Each action includes: name, label, category, and available flag.
-    available=false means required connectors are not configured.
-    For the full governance details (blast radius, contracts, thresholds),
-    use GET /governance instead.
+async def _enabled_connector_types(db: DBSession, tenant_id: uuid.UUID) -> set[str]:
+    """Connector types enabled for the tenant, for action-availability checks.
+
+    A failed lookup is treated as "no connectors": an action is never advertised
+    as executable on the strength of a query that did not run.
     """
-    # Fetch active connectors for availability check
     try:
         result = await db.execute(
             text(
@@ -860,26 +594,38 @@ async def list_automation_actions(
                 WHERE tenant_id = :tenant_id AND is_enabled = true
                 """
             ),
-            {"tenant_id": str(current_user.tenant_id)},
+            {"tenant_id": str(tenant_id)},
         )
-        active_connectors = set(result.scalars().all() or [])
-    except Exception:
-        # If query fails, assume no connectors are active (safe default)
-        active_connectors = set()
-    
-    # Check if action is available based on required connectors
-    def is_action_available(action_name: str) -> bool:
-        req = required_connectors(action_name)
-        if not req:
-            return True
-        return any(ct in active_connectors for ct in req)
-    
+        return set(result.scalars().all() or [])
+    except Exception as exc:  # noqa: BLE001 - availability must never 500 the page
+        logger.warning(
+            "runbook.connector_lookup_failed tenant=%s error=%s",
+            safe_log_value(str(tenant_id)).replace("\r", "").replace("\n", " ")[:120],
+            safe_log_value(str(exc)).replace("\r", "").replace("\n", " ")[:300],
+        )
+        return set()
+
+
+@router.get("/actions", summary="Actions available in automation rules")
+async def list_automation_actions(
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    db: DBSession,
+) -> list[dict[str, Any]]:
+    """Return the action list for automation rule dropdowns.
+
+    Each action includes: name, label, category, and available flag.
+    available=false means required connectors are not configured.
+    For the full governance details (blast radius, contracts, thresholds),
+    use GET /governance instead.
+    """
+    active_connectors = await _enabled_connector_types(db, current_user.tenant_id)
+
     return [
         {
             "name": defn.name,
             "label": defn.label,
             "category": defn.category.value,
-            "available": is_action_available(defn.name),
+            "available": _action_available(defn.name, active_connectors),
         }
         for defn in ACTIONS.values()
     ]
@@ -890,7 +636,7 @@ async def list_available_playbooks(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
 ) -> list[dict[str, Any]]:
     """Return the list of available playbooks for the automation rules dropdown.
-    
+
     Each playbook includes: id, name, and description.
     Returns an empty list if the agents service is unreachable.
     """
@@ -901,8 +647,18 @@ async def list_available_playbooks(
 @router.get("/governance", summary="Governed action catalog")
 async def get_governance_catalog(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    db: DBSession,
 ) -> list[dict]:
-    """Return the full governed action catalog — labels, blast radii, and all four contracts."""
+    """Return the full governed action catalog — labels, blast radii, and all four contracts.
+
+    ``available`` and ``required_connectors`` are computed per tenant from the
+    enabled connectors. The console needs them: without a server-side answer an
+    action that depends on Splunk looked configurable (and was toggleable) in a
+    workspace that had never connected Splunk.
+    """
+    active_connectors = await _enabled_connector_types(db, current_user.tenant_id)
+    disabled_actions = await _disabled_actions(db, current_user.tenant_id)
+
     return [
         {
             "name": defn.name,
@@ -911,6 +667,10 @@ async def get_governance_catalog(
             "blast_radius": defn.blast_radius.value,
             "always_requires_approval": defn.always_requires_approval,
             "dry_run_default": defn.dry_run_default,
+            "required_connectors": list(required_connectors(defn.name)),
+            "available": _action_available(defn.name, active_connectors),
+            "enabled": defn.name not in disabled_actions,
+            "is_system_core": True,
             "thresholds": defn.thresholds.to_dict(),
             "audit": {
                 "record_ledger": defn.audit.record_ledger,
@@ -944,10 +704,15 @@ async def list_automation_rules(
     db: DBSession,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
 ) -> list[AutomationRuleOut]:
-    await _ensure_rule_extra_columns(db)
+    """Rules this tenant has created or imported. Nothing is seeded here.
+
+    This endpoint used to insert a default rule set the first time it was
+    called, which meant a tenant gained automations (some of them executing)
+    just by opening the page. The defaults now live in the ``core-defaults``
+    pack and are imported rule by rule via
+    ``POST /runbook/automation-rules/packs/core-defaults/import``.
+    """
     rows = (await db.execute(_LIST_RULES.bindparams(tid=current_user.tenant_id))).fetchall()
-    if not rows:
-        rows = await _seed_default_rules_for_tenant(db, current_user.tenant_id)
     return [_row_to_rule(r) for r in rows]
 
 
@@ -957,7 +722,6 @@ async def create_automation_rule(
     db: DBSession,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
 ) -> AutomationRuleOut:
-    await _ensure_rule_extra_columns(db)
     body.action_slug = _normalize_action_slug(body.action_slug) or body.action_slug
     _validate_rule_input(body)
     cond_dicts = [c.model_dump() for c in body.conditions]
@@ -1006,6 +770,151 @@ async def create_automation_rule(
     return _row_to_rule(row)
 
 
+@router.get("/automation-rules/packs", summary="List importable rule packs")
+async def list_rule_packs(
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+) -> list[RulePackOut]:
+    """Packs shipped with the platform, every rule listed individually.
+
+    Each rule carries the posture it would be installed with and whether this
+    tenant already has it, so the console can offer per-rule selection instead of
+    an all-or-nothing import. This is a read: nothing is written for a tenant
+    that has never opened the dialog.
+
+    Declared before ``/automation-rules/{rule_id}`` on purpose: FastAPI matches
+    routes in registration order, so a later declaration would make "packs" be
+    parsed as a rule id.
+    """
+    installed = {
+        row[0]
+        for row in (
+            await db.execute(_RULE_NAMES.bindparams(tid=current_user.tenant_id))
+        ).fetchall()
+    }
+
+    out: list[RulePackOut] = []
+    for pack in list_packs():
+        out.append(
+            RulePackOut(
+                id=pack.id,
+                label=pack.label,
+                description=pack.description,
+                source=pack.source,
+                rule_count=len(pack.rules),
+                covered_detections=len(pack.covered_detections),
+                # No docs link: the console page is one click away in the app and
+                # the anchor these rules pointed at never existed.
+                docs_ref=None,
+                rules=[
+                    RulePackRuleOut(
+                        name=payload["name"],
+                        trigger_type=payload.get("trigger_type") or "alert.created",
+                        action_slug=_normalize_action_slug(payload.get("action_slug") or "")
+                        or (payload.get("action_slug") or ""),
+                        autonomy_level=payload.get("autonomy_level") or "L2",
+                        dry_run=bool(payload.get("dry_run", True)),
+                        priority=int(payload.get("priority") or 200),
+                        installed=payload["name"] in installed,
+                    )
+                    for payload in pack_rule_payloads(pack)
+                ],
+            )
+        )
+    return out
+
+
+@router.post(
+    "/automation-rules/packs/{pack_id}/import",
+    status_code=201,
+    summary="Import a rule pack",
+)
+async def import_rule_pack(
+    pack_id: str,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    body: RulePackImportRequest | None = None,
+) -> RulePackImportResult:
+    """Install some or all of a pack's rules, skipping names that already exist.
+
+    Import is explicit rather than seeded for everyone: the vendor-neutral rules
+    apply to any telemetry but should still be chosen, and the Windows rules
+    match named Splunk detections, so a tenant without that telemetry would only
+    gain rules that can never fire. Idempotent by rule name, so re-running after
+    a pack update adds only the rules that are missing.
+
+    ``body.rule_names`` selects a subset; empty installs the whole pack.
+    """
+    pack = get_pack(pack_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail=f"Unknown rule pack {pack_id!r}")
+
+    existing = {
+        row[0]
+        for row in (
+            await db.execute(_RULE_NAMES.bindparams(tid=current_user.tenant_id))
+        ).fetchall()
+    }
+
+    result = RulePackImportResult(pack_id=pack.id)
+
+    payloads = pack_rule_payloads(pack)
+    selected = {n.strip() for n in (body.rule_names if body else []) if n and n.strip()}
+    if selected:
+        known = {payload["name"] for payload in payloads}
+        result.unknown = sorted(selected - known)
+        payloads = [payload for payload in payloads if payload["name"] in selected]
+
+    for payload in payloads:
+        if payload["name"] in existing:
+            result.skipped.append(payload["name"])
+            continue
+
+        # A malformed condition would silently never match, so refuse the
+        # import loudly instead of installing an inert rule.
+        errors = validate_conditions(payload["conditions"])
+        if errors:
+            raise HTTPException(
+                status_code=500,
+                detail=f"rule pack {pack.id!r} rule {payload['name']!r} is invalid: {errors}",
+            )
+
+        await db.execute(
+            text(
+                """
+                INSERT INTO automation_rules
+                  (tenant_id, name, description, trigger_type, conditions, action_slug,
+                   action_params, autonomy_level, dry_run, enabled, priority, created_by,
+                   subject_type, playbook_ref, docs_ref, owner_team)
+                VALUES
+                  (:tid, :name, :desc, :trigger, CAST(:conds AS jsonb), :slug,
+                   CAST(:params AS jsonb), :level, :dry, :enabled, :prio, :creator,
+                   :subject_type, NULL, :docs_ref, :owner_team)
+                """
+            ).bindparams(
+                tid=current_user.tenant_id,
+                name=payload["name"],
+                desc=payload["description"],
+                trigger=payload["trigger_type"],
+                conds=_json_param(payload["conditions"]),
+                slug=_normalize_action_slug(payload["action_slug"]) or payload["action_slug"],
+                params=_json_param(payload["action_params"]),
+                level=payload["autonomy_level"],
+                dry=bool(payload["dry_run"]),
+                enabled=bool(payload["enabled"]),
+                prio=int(payload["priority"]),
+                creator=current_user.user_id,
+                subject_type=payload.get("subject_type") or "alert",
+                docs_ref=payload.get("docs_ref"),
+                owner_team=payload.get("owner_team"),
+            )
+        )
+        result.created.append(payload["name"])
+
+    await db.commit()
+    return result
+
+
 @router.get("/automation-rules/{rule_id}", summary="Get one automation rule")
 async def get_automation_rule(
     rule_id: str,
@@ -1026,7 +935,6 @@ async def patch_automation_rule(
     db: DBSession,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
 ) -> AutomationRuleOut:
-    await _ensure_rule_extra_columns(db)
     rid = _parse_uuid(rule_id, "rule_id")
     if body.action_slug is not None:
         body.action_slug = _normalize_action_slug(body.action_slug) or body.action_slug
@@ -1267,32 +1175,6 @@ def _json_param(value: Any) -> str:
     """Serialize JSON values to text before casting to PostgreSQL jsonb."""
     import json
     return json.dumps(value)
-
-
-async def _ensure_rule_extra_columns(db: DBSession) -> None:
-    """Add extended columns to automation_rules if they don't exist yet.
-
-    Idempotent: cached after the first successful run per process.
-    Uses ALTER TABLE IF NOT EXISTS ADD COLUMN — safe on PostgreSQL ≥9.6.
-    """
-    global _RULE_COLUMNS_READY
-    if _RULE_COLUMNS_READY:
-        return
-    extra: list[tuple[str, str]] = [
-        ("subject_type", "VARCHAR(32) DEFAULT 'alert'"),
-        ("playbook_ref", "TEXT"),
-        ("docs_ref", "TEXT"),
-        ("owner_team", "VARCHAR(128)"),
-        ("success_count", "INTEGER NOT NULL DEFAULT 0"),
-        ("failed_count", "INTEGER NOT NULL DEFAULT 0"),
-        ("denied_count", "INTEGER NOT NULL DEFAULT 0"),
-    ]
-    for col, typedef in extra:
-        await db.execute(
-            text(f"ALTER TABLE automation_rules ADD COLUMN IF NOT EXISTS {col} {typedef}")
-        )
-    await db.commit()
-    _RULE_COLUMNS_READY = True
 
 
 # ── Runbook Tasks (Exception Handling & Manual Workflow) ──────────────────────
@@ -1596,3 +1478,46 @@ async def complete_runbook_task(
         playbook_run_id=row.playbook_run_id,
         resume_applied=row.resume_applied,
     )
+
+
+# ── Ledger read ───────────────────────────────────────────────────────────────
+#
+# Registered LAST on purpose. This is a two-segment catch-all, and FastAPI
+# matches routes in declaration order: declared earlier it swallowed
+# ``GET /runbook/tasks/{id}`` and ``GET /runbook/automation-rules/{id}``, which
+# then answered 400 ("subject_type must be one of …") instead of the resource.
+# Any new two-segment GET route must be declared above this one.
+
+@router.get(
+    "/{subject_type}/{subject_id}",
+    summary="Runbook ledger for a subject",
+)
+async def get_runbook(
+    subject_type: str,
+    subject_id: str,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+) -> dict:
+    if subject_type not in VALID_SUBJECT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"subject_type must be one of {VALID_SUBJECT_TYPES}",
+        )
+    try:
+        sid = uuid.UUID(subject_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="subject_id must be a valid UUID") from None
+
+    logger.debug(
+        "RUNBOOK-READ tenant=%s type=%s id=%s",
+        safe_log_value(str(current_user.tenant_id)),
+        subject_type,
+        safe_log_value(subject_id)[:_MAX_TAG],
+    )
+    try:
+        envelope = await load_runbook(
+            db, tenant_id=current_user.tenant_id, subject_type=subject_type, subject_id=sid
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return envelope.model_dump(mode="json")

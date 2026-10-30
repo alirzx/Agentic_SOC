@@ -1,8 +1,10 @@
 # Runbook — progress log
 
-Tracks implementation of [PLAN-20261027-1501-runbook-page.md](PLAN-20261027-1501-runbook-page.md).
-The plan document itself is not edited (per repo preference); status lives here so
-work can resume after a crash.
+Tracks implementation of the original `PLAN-20261027-1501-runbook-page.md` and its
+successors (`PLAN-20261028-1200-runbook-professional.md`, `PLAN-20261028-1710-runbook-restructure.md`,
+`PLAN-20261029-1026-runbook-alignment.md`). Those plan documents were consolidated as the
+design settled and are no longer in the tree; this log is the durable record, kept so work
+can resume after a crash. Plan documents are never edited in place (per repo preference).
 
 ---
 
@@ -474,3 +476,275 @@ closes the loop, following [DESIGN-20261029-playbook-approval-resume.md](DESIGN-
 - `pytest tests/test_runbook_gate.py` → **34 passed**
 - `pytest tests/test_security_defaults.py tests/test_demo_mode.py tests/test_airgap.py tests/test_runbook_gate.py` → **98 passed, 4 errors** (pre-existing `prometheus_client` import error on this machine, not from Runbook work)
 - `tsc --noEmit` (apps/web) → **no errors**
+
+---
+
+## Phase 13 — Correctness review + documentation consolidation ✅ COMPLETE (2026-10-30)
+
+Whole-branch review of the uncommitted Runbook work: what actually runs, what only
+claims to run, and which documents are still true. Plan status for
+[PLAN-20261029-1026-runbook-alignment.md](PLAN-20261029-1026-runbook-alignment.md) is
+**implemented** (its header still says "implementation not started"; plan files are
+not edited, so the status lives here).
+
+### Defects found and fixed
+
+1. **`test_runbook_automation.py` did not parse.** Two truncated docstrings
+   (the `_claim_db` docstring, and the trailing `TestLinkApprovalGatesToRunbookTasks` block) left the
+   module unimportable, so its 101 tests — including the whole linked-playbook start
+   path — had never executed. Fixed; `PlaybookStart` import added; the trailing gate
+   test now asserts the real call shape (`alert_id` / `action_name` /
+   `autonomy_level`), which the previous version invented.
+2. **The ledger catch-all shadowed two resource routes.** `GET
+   /runbook/{subject_type}/{subject_id}` was declared first, so `GET
+   /runbook/tasks/{id}` and `GET /runbook/automation-rules/{id}` answered 400
+   ("subject_type must be one of …") instead of the resource. The catch-all is now
+   registered last, with a comment and a route-resolution regression test
+   (`tests/test_runbook_alignment.py`).
+3. **Runtime DDL from a read endpoint.** `_ensure_rule_extra_columns()` ran
+   `ALTER TABLE automation_rules …` on first call per process from
+   `GET /runbook/automation-rules`. A read-only endpoint needed ALTER privileges, and
+   `rule_executor._FETCH_RULES` (the alert write path) read the same columns without
+   calling it — so on a freshly migrated database every rule silently evaluated
+   nothing until somebody opened the Automation Rules page. Removed;
+   `migrations/070_automation_rules_metadata.sql` now owns those columns.
+4. **Three integration suites could destroy real data.** `test_calibration_monitor.py`,
+   `test_operational_queries.py` and `test_runbook_integration.py` ran unscoped
+   `DELETE FROM runbook_tasks / alerts / cases` against whatever `DATABASE_URL`
+   pointed at, and errored (rather than skipped) without Postgres. Now gated behind
+   `AISOC_RUN_INTEGRATION=1` like the rest of the integration suites, with every
+   delete scoped to the fixture's own tenant. Also fixed: a bare-string
+   `session.execute(...)` (SQLAlchemy 2.x rejects it), and `Alert(confidence=0.65)`
+   against an integer column.
+5. **The governance gate had no working test.** `test_phase3_governance.py` called
+   `engine.execute(...)`, which the engine has never had, so the containment gate
+   (`_check_governance` → park as `pending_approval`) was never covered. Rewritten to
+   drive `_execute` with stubbed handlers and `_check_governance` directly: parks,
+   approves, dry-run never asks, and both fail-closed paths.
+6. **A malformed playbooks response blanked the rule editor.**
+   `playbookOptions.find(...)` runs during render, so a non-array payload crashed the
+   whole Automation Rules form. The response is now validated.
+7. **Frontend tests asserted copy the shipped UI does not render** (Governance
+   aria-label, count text, empty-state text, autonomy option role, `getByDisplayValue`).
+   Fixed to the real markup; the `fetch` stub also stopped answering the playbooks
+   request with the preview payload.
+
+### Documentation
+
+One doc per audience, no dead plans:
+
+- kept — `apps/docs/docs/console/runbook.md` (console/user), `docs/operations/runbook.md`
+  (operator: writers, gates, debugging), `PLAN-20261029-1026-runbook-alignment.md`,
+  `DESIGN-20261029-playbook-approval-resume.md`, this log.
+- deleted — seven superseded runbook plans (the original Persian plan page, the
+  control-plane and "professional" plans whose paths never existed, the scope-reset
+  plan, two completed micro-plans), three near-duplicate connector-availability docs,
+  `docs/operations/automation-rules-debugging.md` (its unique checklist, with the wrong
+  `/api/v1/automation-rules` path corrected, is now a section of the operator doc),
+  `docs/phase-3-integration-complete.md` (stale status page claiming tests were "ready
+  to run"), and the scratch scripts (`check_rules.py`, `debug_rules.py`,
+  `run_runbook_tests.ps1`, `scripts/test_phase_2_e2e.py`, `services/api/_*.py`,
+  `apps/web/__tmp_commit_body.js`, `services/api/generated/`).
+- the connector-availability behaviour is documented in the console doc, so the three
+  deleted feature writeups lose nothing.
+
+### Verified (2026-10-30)
+
+- `pytest` api runbook suites (gate, events, automation, alignment, detections,
+  emission, rule authoring, actions endpoint, playbook resume, subject fields, funnel
+  board tasks, alert tenant isolation) → **212 passed, 15 skipped**
+- `pytest` the three Phase-13 integration suites → **45 skipped** without a database
+  (they were 45 errors before)
+- `pytest` agents playbook suites (approval gate, resume, resume API, outcome feedback,
+  governance, engine correctness) → **94 passed**
+- `pytest tests/test_splunk_simple_mode.py` (connectors) → **25 passed**
+- `ruff check` → clean on every touched file except 8 `E501` inside
+  `services/connectors/app/connectors/splunk.py`'s SPL pipeline string, where a newline
+  is a command separator and wrapping would change the query
+- `pnpm --filter @aisoc/web type-check` → clean
+- `vitest run src/components/{runbook,funnel,workflow,playbooks,alerts}` → **153 passed**
+
+### Known, pre-existing (verified identical on a clean `HEAD` worktree)
+
+- `services/connectors`: 8 failures (`test_auditd_connector`, `test_conformance`,
+  `test_hello_connector_example`, `test_kubernetes_audit`, 4 × `test_splunk_connector`).
+- `services/api/tests/test_alerts_tenant_isolation.py` failed 12/20 on `HEAD`; 8 of those
+  were test-harness gaps (missing `iocs`, unresolved `Query` sentinels) and are fixed
+  here — the file is green now.
+
+### Migration numbering fixed (2026-10-30)
+
+The branch carried two colliding migration numbers — `068_runbook_confidence_and_defaults.sql`
+next to `068_playbook_runs_dedupe.sql`, and `069_playbook_approvals.sql` next to
+`069_autonomy_action_enabled.sql`. `run_migrations.py` sorts by filename, so the pair order was
+decided by a lexicographic accident rather than intent. Renumbered to unique, intent-preserving
+names and re-verified the ordering:
+
+- `068_playbook_runs_dedupe.sql` → unchanged (still after `067_playbook_runs.sql`)
+- `069_autonomy_action_enabled.sql` → unchanged
+- `070_automation_rules_metadata.sql` → unchanged
+- `068_runbook_confidence_and_defaults.sql` → `071_runbook_confidence_and_defaults.sql`
+- `069_playbook_approvals.sql` → `072_playbook_approvals.sql`
+
+Both renumbered files are idempotent (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`)
+and depend only on tables at or below `067`, so the move is order-safe for existing databases
+whose `aisoc_schema_migrations` rows still carry the old names — those rows keep their schema
+effect and the files simply re-apply as no-ops.
+
+`services/api/tests/test_funnel_stages.py` also still asserted the old 80-character
+`ai_summary` evidence bar; it now asserts the raised 100-character bar (and pins that a 90-char
+summary no longer qualifies).
+
+---
+
+## Phase 14 — Splunk rule packs + review of the side-generated docs ✅ COMPLETE (2026-10-30)
+
+Plan: [PLAN-20261030-1200-splunk-automation-rule-packs.md](PLAN-20261030-1200-splunk-automation-rule-packs.md).
+
+### 14.1 Rule packs
+
+| # | Task | Status | Evidence |
+|---|---|---|---|
+| 14.1 | `packs.py` registry + `windows-splunk` pack (31 rules, 93 ESCU names) | ✅ | `services/api/app/services/runbook/packs.py` |
+| 14.2 | `GET /runbook/automation-rules/packs`, `POST …/packs/{id}/import` (404 / idempotent by name / validated conditions) | ✅ | `api/v1/endpoints/runbook.py` |
+| 14.3 | **Packs** dialog in the rules page (counts + Import + result line) | ✅ | `AutomationRulesView.tsx` |
+| 14.4 | Tests: validity, positive match, neutral-subject rejection, endpoint paths | ✅ | `tests/test_automation_rule_packs.py` |
+| 14.5 | Docs | ✅ | console doc *Windows — Splunk rule pack*, operator doc *Rule packs* |
+| 14.6 | UI test for the Packs dialog (list → import → result line) | ✅ | `AutomationRulesView.test.tsx` |
+
+Defect found by 14.4 (fixed): `condition_eval._coerce()` stringified a list when the
+subject field was a string, so `in` degenerated into a substring test and a 93-name
+`rule_name in [...]` condition matched any alert with an empty `rule_name`. Containers are
+no longer coerced; `_op_in` is membership-only and fails closed on a non-iterable right
+side. Covered in `tests/test_automation_rule_packs.py` and
+`tests/test_runbook_automation.py`.
+
+### 14.2 Review of `docs/plans/runbook-docs/` (deleted)
+
+Nineteen documents (~340 KB) produced while the design was still moving. Each was checked
+against the working tree; the folder is now deleted because the kept set covers every
+statement that is still true:
+
+**Verified true, already documented elsewhere** (no loss):
+
+- Calibration monitor (Task 1.2) — wired in `app/main.py` lifespan, gated by
+  `CALIBRATION_MONITOR_ENABLED` and `not is_dev_env()`. Documented in
+  `env-vars.md` § Runbook, with the ECE/interval/min-sample knobs.
+- Investigation evidence bars (Task 1.3) — `ai_summary >= 100`, `narrative >= 200`, and
+  the Runbook-task completion bar in `services/api/app/services/funnel_stages.py`.
+- Phase 13 suites — `test_runbook_integration.py`, `test_calibration_monitor.py`,
+  `test_operational_queries.py` exist and are `AISOC_RUN_INTEGRATION=1`-gated.
+- Phase 3 governance — `migrations/072_playbook_approvals.sql` exists and the engine
+  parks containment steps; covered in the operator doc *Playbook approval gates* and
+  `services/agents/tests/test_phase3_governance.py`.
+
+**Wrong or misleading** (why they had to go):
+
+- `IMPLEMENTATION_SUMMARY_1_2_1_3.md` / `CODE_VERIFICATION_SUMMARY.md` place the monitor at
+  `services/api/app/services/calibration_monitor.py` — it is
+  `services/api/app/workers/calibration_monitor.py`.
+- `RUNBOOK_E2E_TEST_GUIDE_FA.md` documents `./run_runbook_tests.ps1` flags and output that
+  never existed (the script was a scratch file, deleted in Phase 13), and claims the
+  three integration suites run by default — they skip unless `AISOC_RUN_INTEGRATION=1`.
+- `COMPLETE_DATA_FLOW_ANALYSIS.md` and `FLOWCHARTS_AND_DIAGRAMS.md` narrate an
+  eight-step `Splunk → auto-triage → Jira` pipeline with hand-maintained diagrams; the
+  shipped spine is Connectors → ingest (OCSF) → Kafka → fusion → Postgres → realtime,
+  with ITSM as an optional sink, so the step numbering and several component claims in
+  them no longer describe the code.
+- `IMPLEMENTATION_CHECKLIST.md` / `README_ANALYSIS_SUMMARY.md` score the platform
+  ("70–75 % SOC-ready", "Priority-1 tasks, 4–5 days") against features that have since
+  shipped (human gate, investigation gate, calibration), so the scores read as current
+  gaps when they are already closed.
+- `PHASE-2-E2E-TEST-GUIDE.md` / `PHASE-3-*.md` reference a `PlaybookApprovalQueue`
+  component that does not exist (`apps/web/src/components/playbooks/` has no such file);
+  the real surface is the Runbook Action Plan.
+- `INDEX.md` / `COMPREHENSIVE_INDEX.md` / `*_COMPLETION*.md` index and "completion
+  report" the documents above — dead links by construction, and their "COMPLETE" banners
+  pre-date Phase 13's fixes (route-ordering, runtime DDL, destructive integration tests).
+
+### Verified (2026-10-30)
+
+- `pytest` api runbook suites (gate, events, automation, alignment, detections, emission,
+  rule authoring, actions endpoint, playbook resume, rule packs, subject fields) →
+  **420 passed, 15 skipped**
+- `pytest tests/test_calibration_monitor.py` → **15 skipped** without `AISOC_RUN_INTEGRATION=1`
+  (as designed)
+- `ruff check` on the pack module, evaluator, endpoint and both touched test files → clean
+- `tsc --noEmit` (apps/web) → clean
+- `vitest run src/components/runbook` → **24 passed** (9 in `AutomationRulesView`, one new)
+
+---
+
+## Phase 15 — Rule/connector alignment: evaluator coverage, no auto-seed, connector-gated enabling ✅ COMPLETE (2026-10-30)
+
+Two problems, one root cause: the rules page described automations the platform was not
+actually running, and let operators switch on actions no connector could execute.
+
+### 15.1 `alert.created` now covers every alert, not just the alert API
+
+| # | Task | Status | Evidence |
+|---|---|---|---|
+| 15.1 | Migration `073` — `alerts.automation_rules_evaluated_at` (+ partial index, `NULLS FIRST`) | ✅ | `services/api/migrations/073_alerts_rule_evaluation.sql` |
+| 15.2 | `RuleEvaluator` worker: claim-once pass, guarded by `AISOC_RULE_EVALUATOR_ENABLED`, interval, batch | ✅ | `services/api/app/workers/rule_evaluator.py`, `app/main.py` lifespan |
+| 15.3 | `POST /alerts` no longer owns `alert.created`; `PATCH` runs on its own session | ✅ | `api/v1/endpoints/alerts.py` |
+| 15.4 | Tests: claim → evaluate → mark, once-only, disabled flag, batch bound | ✅ | `tests/test_rule_evaluator_worker.py` |
+| 15.5 | Docs | ✅ | console *When a rule fires*, operator *a rule that never fires*, `env-vars.md` § Runbook |
+
+The previous path fired rules inline from `POST /api/v1/alerts` on the request session, so
+a fusion-written alert — which never passes through an HTTP endpoint — never triggered a
+rule. The worker claims rows with `automation_rules_evaluated_at IS NULL` (`FOR UPDATE SKIP
+LOCKED`), runs `run_rules_for_trigger`, and stamps the row. One evaluation per alert by
+design: a claim that dies with its process stays claimed, and the operator doc says how to
+re-queue it.
+
+### 15.2 The automation rules are a catalogue, not a default
+
+| # | Task | Status | Evidence |
+|---|---|---|---|
+| 15.6 | `default_rules.py` — the 17 previously seeded rules, carried verbatim | ✅ | `services/api/app/services/runbook/default_rules.py` |
+| 15.7 | `core-defaults` pack (`RawPackRule`) registered beside `windows-splunk` | ✅ | `services/api/app/services/runbook/packs.py` |
+| 15.8 | `GET …/packs` lists **every** rule with `autonomy_level`, `dry_run`, `installed`; import accepts a subset and reports `unknown` | ✅ | `api/v1/endpoints/runbook.py` |
+| 15.9 | `GET …/automation-rules` no longer seeds; `_seed_default_rules_for_tenant` deleted | ✅ | same |
+| 15.10 | Packs dialog: per-rule checkboxes, *Add selected (n)* / *Add all missing*, **Added** badge; the dead **What these rules do** link removed | ✅ | `AutomationRulesView.tsx` |
+| 15.11 | Empty state points at *Browse rule packs* / *New rule* instead of staying silent | ✅ | same |
+| 15.12 | Tests: subset import, `unknown` names, `installed` flags, core posture parity, per-rule select | ✅ | `tests/test_automation_rule_packs.py`, `AutomationRulesView.test.tsx` |
+
+The seeded set was wrong twice over: it appeared the first time a tenant opened the page
+(so a tenant gained 17 automations nobody chose, four of them `dry_run=False`), and it
+duplicated `core-defaults` in spirit while living as a literal in the endpoint module.
+Both are gone. `RawPackRule` carries each row verbatim, and a test pins the four executing
+rules by name so moving them into a pack cannot quietly change their posture.
+
+The **What these rules do** link pointed at
+`docs.tryaisoc.com/console/runbook#windows--splunk-rule-pack`, an anchor that never
+existed. Packs now carry `docs_ref: None` and the UI renders no link; a test asserts it.
+
+### 15.3 Enabling an action requires the connector that would run it
+
+| # | Task | Status | Evidence |
+|---|---|---|---|
+| 15.13 | `GET /runbook/governance` returns `required_connectors`, `available`, `enabled` (per tenant) | ✅ | `api/v1/endpoints/runbook.py` |
+| 15.14 | `PATCH /autonomy-policy/{action}/enabled` → **409** when enabling without the connector; disabling always allowed | ✅ | `api/v1/endpoints/autonomy_policy.py` |
+| 15.15 | Console: toggle + **Edit Policy** disabled on unavailable rows, tooltip and notice name the connector(s), rejected toggle reverts with a message | ✅ | `GovernanceView.tsx`, `runbook.types.ts` |
+| 15.16 | Tests | ✅ | `GovernanceView.test.tsx`, `tests/test_runbook_actions_endpoint.py` |
+
+`available` was only computed by `GET /runbook/actions`; `/runbook/governance` — the
+endpoint the page actually calls — never returned it, so the client's
+`entry.available === false` guard could never fire and every action looked configurable.
+That is the reported symptom: a workspace with no Splunk connector could enable
+`lookup_ip` / `search_logs`. Availability is still display-and-enable-time only; the
+executor does not re-check it, which the console doc now states.
+
+### Verified (2026-10-30)
+
+- `pytest tests/test_automation_rule_packs.py` → **281 passed** (ASCII-only run; the
+  parametrised detection checks now apply to `PackRule` only, and the core pack has its
+  own posture-parity test)
+- `pytest tests/test_runbook_automation.py tests/test_runbook_actions_endpoint.py
+  tests/test_automation_rule_subject_fields.py tests/test_rule_evaluator_worker.py` →
+  **122 passed**
+- `tsc --noEmit` (apps/web) → clean
+- `vitest run src/components/runbook` → **25 passed** (10 in `AutomationRulesView`, 3 in
+  `GovernanceView`)
+- `python -m compileall` on both touched endpoint modules, the pack module and the worker
+  → clean

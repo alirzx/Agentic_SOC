@@ -17,13 +17,14 @@ itself.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 import asyncio
 import os
 import uuid
+from collections.abc import Awaitable, Callable
 
 import pytest
 import structlog
+from app.db.database import AsyncSessionLocal
 
 pytestmark = pytest.mark.integration
 
@@ -44,7 +45,6 @@ class _RollbackSession:
 
     def __init__(self) -> None:
         self.session = None
-        from app.db.database import AsyncSessionLocal
 
     async def __aenter__(self):
         self.session = AsyncSessionLocal()
@@ -67,7 +67,6 @@ def _run(coro: Callable[[], Awaitable[object]]) -> object:
     by the first, already-closed loop and fails with "Event loop is closed"
     before the assertion under test is ever reached.
     """
-    import asyncio
 
     from app.db.database import engine
 

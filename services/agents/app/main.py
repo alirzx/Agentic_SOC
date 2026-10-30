@@ -15,7 +15,6 @@ from app.api.explain import router as explain_router
 from app.api.hunt_search import router as hunt_search_router
 from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
-from app.api.outcomes import router as outcomes_router
 from app.api.playbooks import router as playbook_router
 from app.api.router import router
 from app.api.triage import router as triage_router
@@ -209,7 +208,6 @@ app.include_router(hunts_router)  # prefix: /api/v1/hunts
 app.include_router(hunt_search_router)  # prefix: /api/v1/hunt  (search + saved)
 app.include_router(copilot_router)  # prefix: /api/v1/copilot
 app.include_router(explain_router)  # prefix: /api/v1  (POST /explain — NDJSON stream)
-app.include_router(outcomes_router)  # prefix: /api/v1/outcomes  (Runbook analyst feedback)
 
 
 @app.get("/health")

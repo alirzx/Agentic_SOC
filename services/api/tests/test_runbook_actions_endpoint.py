@@ -6,6 +6,7 @@ Ensures the frontend can dynamically load the list of available actions from the
 from __future__ import annotations
 
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from app.api.v1.deps import CurrentUser
@@ -22,11 +23,22 @@ def _user() -> CurrentUser:
     )
 
 
+def _db() -> AsyncMock:
+    """Session stub: the endpoint only reads configured connectors.
+
+    ``execute`` raising is the documented fallback path (no connectors known =
+    every catalog action stays available), so the stub exercises it.
+    """
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=RuntimeError("no database in this unit test"))
+    return db
+
+
 @pytest.mark.asyncio
 async def test_get_actions_returns_all_available_actions() -> None:
     """Endpoint returns all actions from the action catalog with name, label, category."""
     user = _user()
-    result = await list_automation_actions(current_user=user)
+    result = await list_automation_actions(current_user=user, db=_db())
 
     # Verify we get a list
     assert isinstance(result, list)
@@ -56,7 +68,7 @@ async def test_get_actions_returns_all_available_actions() -> None:
 async def test_get_actions_has_read_case_containment_categories() -> None:
     """Endpoint groups actions by category (read, case, containment)."""
     user = _user()
-    result = await list_automation_actions(current_user=user)
+    result = await list_automation_actions(current_user=user, db=_db())
 
     categories = {action["category"] for action in result}
     # Verify we have at least the main categories (lowercase enum values)
@@ -67,7 +79,7 @@ async def test_get_actions_has_read_case_containment_categories() -> None:
 async def test_get_actions_close_alert_present() -> None:
     """Verify the close_alert action (a basic one) is present."""
     user = _user()
-    result = await list_automation_actions(current_user=user)
+    result = await list_automation_actions(current_user=user, db=_db())
 
     # Find close_alert
     close_alert = next((a for a in result if a["name"] == "close_alert"), None)

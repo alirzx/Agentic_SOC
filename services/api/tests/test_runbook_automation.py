@@ -12,7 +12,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
+from app.services.agents_client import PlaybookStart
 from app.services.runbook.condition_eval import (
     ConditionError,
     _validate_field,
@@ -20,9 +20,9 @@ from app.services.runbook.condition_eval import (
     evaluate_condition,
     validate_conditions,
 )
+from app.services.runbook.default_rules import CORE_DEFAULT_RULES
 from app.services.runbook.gate import GateDecision
 from app.services.runbook.thresholds import AutonomyDecision, make_thresholds
-
 
 # ── condition_eval unit tests ─────────────────────────────────────────────────
 
@@ -51,6 +51,31 @@ class TestEvaluateCondition:
 
     def test_not_in_operator(self):
         assert evaluate_condition(self._cond("severity", "not_in", ["critical", "high"]), {"severity": "medium"})
+
+    def test_in_with_list_value_is_membership_not_substring(self):
+        """Regression: a list value must not be stringified into a substring test.
+
+        ``_coerce`` used to stringify the list when the subject field was a
+        string, so ``a in b`` matched ``"" in "['high', 'critical']"`` — every
+        rule keyed on a list (severity tiers, detection names) fired on alerts
+        whose field was empty. Containment rules depended on this staying
+        correct.
+        """
+        cond = self._cond("rule_name", "in", ["Ransomware Notes bulk creation"])
+        assert not evaluate_condition(cond, {"rule_name": ""})
+        assert not evaluate_condition(cond, {"rule_name": "ransomware"})
+        assert evaluate_condition(cond, {"rule_name": "Ransomware Notes bulk creation"})
+
+    def test_in_with_scalar_value_is_a_one_item_list(self):
+        assert evaluate_condition(self._cond("severity", "in", "high"), {"severity": "high"})
+        assert not evaluate_condition(self._cond("severity", "in", "high"), {"severity": "low"})
+
+    def test_in_fails_closed_on_unusable_value(self):
+        assert not evaluate_condition(self._cond("severity", "in", 42), {"severity": "high"})
+
+    def test_not_in_with_empty_field_is_true(self):
+        cond = self._cond("rule_name", "not_in", ["Known Detection"])
+        assert evaluate_condition(cond, {"rule_name": ""})
 
     def test_contains_string(self):
         assert evaluate_condition(self._cond("title", "contains", "phishing"), {"title": "Credential phishing detected"})
@@ -178,19 +203,19 @@ def test_normalize_action_slug_accepts_ui_aliases() -> None:
     assert _normalize_action_slug("close_alert") == "close_alert"
 
 
-def test_default_automation_rule_seed_is_defined() -> None:
-    from app.api.v1.endpoints.runbook import DEFAULT_AUTOMATION_RULES
+def test_core_default_pack_rules_are_defined() -> None:
+    from app.services.runbook.default_rules import CORE_DEFAULT_RULES
 
-    assert len(DEFAULT_AUTOMATION_RULES) >= 2
-    assert any(rule["action_slug"] == "add_alert_tag" for rule in DEFAULT_AUTOMATION_RULES)
-    assert any(rule["action_slug"] == "create_case" for rule in DEFAULT_AUTOMATION_RULES)
+    assert len(CORE_DEFAULT_RULES) >= 2
+    assert any(rule["action_slug"] == "add_alert_tag" for rule in CORE_DEFAULT_RULES)
+    assert any(rule["action_slug"] == "create_case" for rule in CORE_DEFAULT_RULES)
 
 
-def test_default_automation_rule_seed_contains_realistic_demo_rules() -> None:
-    from app.api.v1.endpoints.runbook import DEFAULT_AUTOMATION_RULES
+def test_core_default_pack_contains_realistic_rules() -> None:
+    from app.services.runbook.default_rules import CORE_DEFAULT_RULES
 
-    assert len(DEFAULT_AUTOMATION_RULES) >= 10
-    action_slugs = {rule["action_slug"] for rule in DEFAULT_AUTOMATION_RULES}
+    assert len(CORE_DEFAULT_RULES) >= 10
+    action_slugs = {rule["action_slug"] for rule in CORE_DEFAULT_RULES}
     assert {"add_alert_tag", "create_case", "close_alert", "block_ip", "isolate_host", "quarantine_file"} <= action_slugs
 
 
@@ -272,14 +297,18 @@ def _build_matching_subject_for_rule(rule: dict) -> dict:
     return subject
 
 
-@pytest.mark.parametrize("rule", __import__("app.api.v1.endpoints.runbook", fromlist=["DEFAULT_AUTOMATION_RULES"]).DEFAULT_AUTOMATION_RULES, ids=lambda rule: rule["name"])
-def test_each_default_rule_matches_a_realistic_subject(rule: dict) -> None:
+@pytest.mark.parametrize(
+    "rule", CORE_DEFAULT_RULES, ids=lambda rule: rule["name"]
+)
+def test_each_core_default_rule_matches_a_realistic_subject(rule: dict) -> None:
     subject = _build_matching_subject_for_rule(rule)
     assert evaluate_all(rule["conditions"], subject) is True
 
 
-@pytest.mark.parametrize("rule", __import__("app.api.v1.endpoints.runbook", fromlist=["DEFAULT_AUTOMATION_RULES"]).DEFAULT_AUTOMATION_RULES, ids=lambda rule: rule["name"])
-def test_each_default_rule_rejects_a_non_matching_subject(rule: dict) -> None:
+@pytest.mark.parametrize(
+    "rule", CORE_DEFAULT_RULES, ids=lambda rule: rule["name"]
+)
+def test_each_core_default_rule_rejects_a_non_matching_subject(rule: dict) -> None:
     subject = _build_matching_subject_for_rule(rule)
 
     if "severity" in subject:
@@ -302,8 +331,10 @@ def test_each_default_rule_rejects_a_non_matching_subject(rule: dict) -> None:
     assert evaluate_all(rule["conditions"], subject) is False
 
 
-@pytest.mark.parametrize("rule", __import__("app.api.v1.endpoints.runbook", fromlist=["DEFAULT_AUTOMATION_RULES"]).DEFAULT_AUTOMATION_RULES, ids=lambda rule: rule["name"])
-def test_each_default_rule_executes_through_rule_executor(rule: dict) -> None:
+@pytest.mark.parametrize(
+    "rule", CORE_DEFAULT_RULES, ids=lambda rule: rule["name"]
+)
+def test_each_core_default_rule_executes_through_rule_executor(rule: dict) -> None:
     import asyncio
 
     from app.services.runbook.rule_executor import _apply_rule
@@ -425,6 +456,7 @@ class TestRunRulesForTrigger:
 
     def test_no_rules_does_nothing(self):
         import asyncio
+
         from app.services.runbook.rule_executor import run_rules_for_trigger
 
         db = self._make_db(rules=[])
@@ -444,6 +476,7 @@ class TestRunRulesForTrigger:
     def test_conditions_not_met_no_ledger_row(self):
         """A rule whose conditions fail must not write a ledger row."""
         import asyncio
+
         from app.services.runbook.rule_executor import _apply_rule
 
         db = self._make_db()
@@ -467,6 +500,7 @@ class TestRunRulesForTrigger:
 
     def test_conditions_met_writes_simulated_when_dry_run(self):
         import asyncio
+
         from app.services.runbook.rule_executor import _apply_rule
 
         db = self._make_db()
@@ -508,6 +542,7 @@ class TestRunRulesForTrigger:
 
     def test_deny_decision_writes_denied_status(self):
         import asyncio
+
         from app.services.runbook.rule_executor import _apply_rule
 
         db = self._make_db()
@@ -554,6 +589,7 @@ class TestRunRulesForTrigger:
         is asserted directly here instead of being mocked away.
         """
         import asyncio
+
         from app.services.runbook.rule_executor import _apply_rule
 
         db = self._make_db()
@@ -610,7 +646,7 @@ def _already_started_playbook_id() -> str:
 
 
 def _claim_db(existing_run_id: str | None = None, *, claim_broken: bool = False) -> AsyncMock:
-    """Session whose only interesting query is the at-most-once claim lookup."
+    """Session whose only interesting query is the at-most-once claim lookup."""
 
     def _execute(statement, *args, **kwargs):
         sql = str(statement)
@@ -926,11 +962,10 @@ class TestLinkedPlaybookStart:
 
 
 class TestLinkApprovalGatesToRunbookTasks:
-    "When a Rules DB succeeds for a playbook-ref rule whose gate needs approval,
-    the executor opens a Runbook task instead of starting the run."
+    """A blocked rule action opens exactly one analyst-facing Runbook task."""
 
     def test_gate_requiring_approval_opens_a_runbook_task(self):
-        "An analyst-facing task is the only artifact on a policy-gated start."
+        """The task names the blocked action, its level, and its subject."""
         db = AsyncMock()
 
         async def _execute(sql, *args, **kwargs):
@@ -973,10 +1008,12 @@ class TestLinkApprovalGatesToRunbookTasks:
         start.assert_not_awaited()
         ensure.assert_awaited_once()
         ensure_kwargs = ensure.await_args.kwargs
-        assert ensure_kwargs["rule_id"] == rule_id
-        assert ensure_kwargs["playbook_ref"] == "pb-isolate-host"
-        assert ensure_kwargs["subject_id"] == subject_id
-        assert ensure_kwargs["tenant_id"] == ensure_kwargs["assigned_tenant_id"]
+        # The gate task belongs to the blocked *action* on this alert; it is not
+        # keyed on the rule, because the analyst approves the action, not the rule.
+        assert ensure_kwargs["alert_id"] == subject_id
+        assert ensure_kwargs["action_name"] == "isolate_host"
+        assert ensure_kwargs["autonomy_level"] == "L3"
+        assert ensure_kwargs["tenant_id"]
         assert record.await_count == 1
         outcome = record.await_args_list[0].kwargs["input_payload"]["playbook"]
         assert outcome["started"] is False

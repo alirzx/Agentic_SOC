@@ -556,15 +556,6 @@ function PlaybookRow({
               disabled
             </span>
           )}
-          {(playbook.unsupported_step_types?.length ?? 0) > 0 && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-300"
-              title={`This engine has no handler for: ${playbook.unsupported_step_types?.join(', ')}. A run aborts at that step instead of skipping it.`}
-            >
-              {playbook.unsupported_step_types?.length} step type
-              {playbook.unsupported_step_types?.length === 1 ? '' : 's'} cannot run
-            </span>
-          )}
         </div>
         {playbook.description && (
           <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{playbook.description}</p>

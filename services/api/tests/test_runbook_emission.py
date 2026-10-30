@@ -24,19 +24,18 @@ import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
+from app.api.v1.deps import CurrentUser
+from app.api.v1.endpoints import alerts as alerts_module
+from app.api.v1.endpoints.alerts import AlertUpdateRequest, escalate_alert, update_alert
 
 # Wiring tests reuse the alert/user builders and the queued-result mock from the
 # tenant-isolation suite so both files describe the same endpoint contract
 # instead of drifting apart. pytest puts ``tests/`` on ``sys.path`` (rootless
 # test package), which is what makes this import resolve.
 from test_alerts_tenant_isolation import _alert, _mk_db, _user
-
-from app.api.v1.deps import CurrentUser
-from app.api.v1.endpoints import alerts as alerts_module
-from app.api.v1.endpoints.alerts import AlertUpdateRequest, escalate_alert, update_alert
 
 _REQUIRES_ENV = "AISOC_RUN_INTEGRATION"
 
@@ -105,12 +104,12 @@ async def test_escalate_alert_emits_the_previous_severity(monkeypatch: pytest.Mo
 
     user = _user()
     alert = _alert(user.tenant_id, severity="medium")
-    # Build a second row representing the UPDATE result so ``db.refresh``
-    # (which calls ``_refresh_copy``) copies the new severity onto the in-
-    # memory object. The UPDATE query itself returns None; the refresh pulls
-    # this queued row and mutates ``alert`` in place.
+    # ``_mk_db`` serves one queued payload per session call, in order:
+    #   SELECT → the alert, UPDATE → no row (None), refresh → the post-write row.
+    # The refresh copy is what mutates ``alert`` in place, so the response and
+    # the emitter both see the new severity.
     updated = _alert(user.tenant_id, severity="high")
-    db = _mk_db([alert, updated])
+    db = _mk_db([alert, None, updated])
 
     resp = await escalate_alert(alert_id=alert.id, current_user=user, db=db)
 
@@ -133,7 +132,7 @@ async def test_emitters_never_break_the_action_when_the_ledger_is_off(
     user: CurrentUser = _user()
     alert = _alert(user.tenant_id, severity="medium")
     updated = _alert(user.tenant_id, severity="high")
-    db = _mk_db([alert, updated])  # SELECT, then refresh copies the UPDATE result.
+    db = _mk_db([alert, None, updated])  # SELECT, UPDATE, then the refreshed row.
 
     # ``emit_alert_escalation`` is called unconditionally by the endpoint; with
     # the flag off ``record_event`` returns None and the response still builds.

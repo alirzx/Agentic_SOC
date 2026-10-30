@@ -114,6 +114,100 @@ Two defects were found and fixed while aligning the Runbook; keep them from retu
 2. **Confidence scale.** `alerts.confidence` is an int 0–100; gate thresholds are
    0.0–1.0. `normalize_confidence()` divides when the value exceeds 1. Passing 50
    straight through clamps to 1.0 and grants autonomy to everything.
+3. **Containers are never coerced.** `_coerce()` stringified a list to compare it with a
+   string field, which turned `in` into a substring test: `{"field": "rule_name", "op":
+   "in", "value": [93 names]}` matched every alert whose `rule_name` was `""`. The
+   operators now handle a mismatched type themselves, and `_op_in` is membership only
+   (a scalar `value` becomes a one-item list, a non-iterable side fails closed).
+   `contains` remains the substring operator; do not "fix" `in` back into it.
+
+## Rule packs
+
+`app/services/runbook/packs.py` holds checked-in rule bundles that are **imported per
+tenant**, not seeded. Nothing is written to a tenant's `automation_rules` until an
+operator adds it: not the vendor-neutral rules, not the detection-keyed ones. A rule an
+operator did not choose has no owner, and there was no way to tell an intended
+automation from an inherited one.
+
+| Pack | Rules | Type |
+| --- | --- | --- |
+| `core-defaults` | 17 | `RawPackRule` — the previous seeded set, carried verbatim from `app/services/runbook/default_rules.py` |
+| `windows-splunk` | 31 | `PackRule` — generated from ESCU detection names |
+
+`RawPackRule` carries the row as-is, so moving a rule into a pack never changes what it
+does — conditions, autonomy ceiling, `dry_run` and priority are identical to the seeded
+values. Four core rules ship `dry_run=False` (`Auto-enrich network alerts`, `Auto-close
+EICAR test files`, `Add TI context to case on indicator match`, `Tag noisy endpoint rules
+for tuning`); the console shows that per rule before it is added.
+
+- **Listing.** `GET /api/v1/runbook/automation-rules/packs` returns every rule of every
+  pack with `autonomy_level`, `dry_run` and `installed` (computed from the tenant's rule
+  names), so the UI can offer per-rule selection. Read-only.
+- **Matching (detection rules).** One condition per rule: `rule_name in [<detection
+  names>]`. `rule_name`
+  is populated from the notable's `search_name`, which for Splunk Security Content
+  (ESCU) equals the detection's `name:`. One `in` condition, never N `eq` conditions —
+  conditions are ANDed, so N `eq`s could never match.
+- **Shipped pack.** `windows-splunk`: 31 rules over 93 ESCU endpoint detections
+  (`isolate_host` ×2, `create_case` ×18, `add_alert_tag` ×11; autonomy L1 ×11, L2 ×18,
+  L3 ×2). Every rule is `dry_run=True`, so an import installs decisions, not execution.
+- **Import.** `POST /api/v1/runbook/automation-rules/packs/{id}/import` (`alerts:write`)
+  takes an optional `{"rule_names": [...]}` body to install a subset (empty installs the
+  whole pack), skips rules whose name already exists for the tenant, and reports names
+  that are not in the pack back under `unknown`. Conditions are validated before insert;
+  a malformed condition fails the import (500) instead of installing an inert rule.
+- **No docs link.** Packs carry `docs_ref: None`: the anchor the Splunk pack pointed at
+  never existed on the docs site, and a dead link on a governed action is worse than no
+  link. The console section is one click away in the app.
+- **Drift.** Upstream renames a detection → the rule stops matching. That is visible by
+  design: the pack reports `covered_detections` per pack.
+- **Tests.** `pytest tests/test_automation_rule_packs.py` asserts every rule's condition
+  validates, matches a subject built from its ESCU name, and — the regression that
+  matters — is rejected by a subject whose `rule_name` is empty.
+
+## Debugging: a rule that never fires
+
+In order, because each step makes the next one meaningless:
+
+1. **Does the tenant have any rules?** `GET /api/v1/runbook/automation-rules` lists the
+   rules the tenant created or imported and returns an empty list otherwise — nothing is
+   seeded on read. An empty list means the operator has not added anything yet: the
+   `core-defaults` and `windows-splunk` packs are opt-in. (The path is under `/runbook`
+   — `/api/v1/automation-rules` is not a route.)
+2. **Is the trigger one that is emitted?** `alert.created` is evaluated by
+   `app/workers/rule_evaluator.py` for every new alert (it claims rows whose
+   `automation_rules_evaluated_at` is NULL — fusion-created alerts included), and
+   `alert.updated` by the alert PATCH endpoint. Both call the same
+   `run_rules_for_trigger`. `case.created` and `manual` are stored and listed as
+   **(inert)**; nothing fires them.
+   *Is this alert already marked?* If `automation_rules_evaluated_at` is set, creation
+   evaluation was claimed. A claim whose evaluation died is not retried by design (a
+   duplicated containment action is worse than a missed passive rule); re-queue it with
+   `UPDATE alerts SET automation_rules_evaluated_at = NULL WHERE id = '<alert>';`.
+   *Is the worker running?* It is inert when `AISOC_RUNBOOK_ENABLED` is off or
+   `AISOC_RULE_EVALUATOR_ENABLED=false`, and it needs `DATABASE_URL`. Its log line is
+   `rule_evaluator pass` with `claimed`/`evaluated`/`failed`.
+3. **Is the rule enabled, and is its `subject_type` the one being triggered?** The
+   executor's query filters on both; `NULL`/`all` stay catch-all.
+4. **Do the conditions reference fields the executor actually puts in the subject?**
+   `alert_subject_fields()` is the single source of truth for both the live path and
+   the editor preview, so a field that is offered there is evaluated. A condition on a
+   field the alert row does not carry (e.g. `risk_score`, which exists only in the API
+   response) can never match.
+5. **Did the gate stop it?** A matching rule whose action is blocked writes a `denied`
+   or `recorded` ledger row and, for containment/case actions, one `approval_gate`
+   task. Check `GET /api/v1/runbook/alert/{id}` for the row rather than assuming
+   silence means no match.
+
+Run the focused suites before changing any of this:
+
+```bash
+cd services/api && poetry run python -m pytest tests/test_automation_rule_subject_fields.py \
+    tests/test_runbook_automation.py tests/test_runbook_rule_authoring.py -q
+```
+
+`test_automation_rule_subject_fields.py` is the guard that keeps `_ALLOWED_FIELDS`,
+`alert_subject_fields()` and the default rules in agreement.
 
 ## Data model
 
@@ -133,7 +227,8 @@ and had no API, no UI and no rows.
 
 ```bash
 cd services/api && poetry run python -m pytest tests/test_runbook_alignment.py \
-    tests/test_runbook_automation.py tests/test_runbook_gate.py -q
+    tests/test_runbook_automation.py tests/test_runbook_gate.py \
+    tests/test_automation_rule_packs.py -q
 cd services/agents && poetry run python -m pytest tests/test_outcome_feedback.py \
     tests/test_fused_alert_worker.py -q
 pnpm --filter @aisoc/web type-check

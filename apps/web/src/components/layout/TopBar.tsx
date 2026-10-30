@@ -32,7 +32,6 @@ const routeLabels: Record<string, { title: string; description: string }> = {
   '/marketplace': { title: 'Marketplace', description: 'Plugins, integrations, and content packs' },
   '/honeytokens': { title: 'Honeytokens', description: 'Deception assets and trip-wire alerts' },
   '/purple-team': { title: 'Purple Team', description: 'Adversary emulation and detection coverage' },
-  '/runbook': { title: 'Runbook', description: 'Operational governance ledger and lightweight automation rules' },
   '/connectors': { title: 'Connectors', description: 'Security tool integrations' },
   '/compliance': { title: 'Compliance', description: 'Frameworks, controls, and evidence' },
   '/sla': { title: 'SLA Tracking', description: 'Response time targets and breach risk' },

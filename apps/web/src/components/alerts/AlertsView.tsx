@@ -192,75 +192,63 @@ function AlertRow({
   onSelect: (id: string) => void;
 }) {
   return (
-    // Outer div allows a nested Link (Runbook) without invalid nested <a> tags.
-    <div
+    <Link
+      href={`/alerts/${alert.id}`}
+      onClick={(e) => {
+        // Modifier or middle-click → keep the native Link behaviour so
+        // analysts can open the alert in a new tab/window. Only a plain
+        // left-click is hijacked for in-pane selection.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+        e.preventDefault();
+        onSelect(alert.id);
+      }}
       aria-current={selected ? 'true' : undefined}
       className={clsx(
-        'flex items-center gap-2 border-b border-[#374151]/40 last:border-0 border-l-2 group',
+        'flex items-center gap-4 px-4 py-3 transition-colors border-b border-[#374151]/40 last:border-0 border-l-2',
         selected
           ? 'border-l-blue-500 bg-brand-500/5 hover:bg-brand-500/10'
           : 'border-l-transparent hover:bg-dark-20/20',
       )}
     >
-      <Link
-        href={`/alerts/${alert.id}`}
-        onClick={(e) => {
-          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
-          e.preventDefault();
-          onSelect(alert.id);
-        }}
-        className="flex items-center gap-4 flex-1 min-w-0 px-4 py-3 transition-colors"
-      >
-        <SeverityDot severity={alert.severity} />
+      <SeverityDot severity={alert.severity} />
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-gray-200 truncate hover:text-white">{alert.title}</p>
-            {alert.mitreAttack && alert.mitreAttack.length > 0 && (
-              <span className="text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded shrink-0">
-                {alert.mitreAttack[0].techniqueId}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-xs text-gray-600">{alert.source}</span>
-            {alert.assignee && (
-              <>
-                <span className="text-gray-700">·</span>
-                <span className="text-xs text-gray-600">{alert.assignee}</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {alert.confidenceLabel && <ConfidencePill label={alert.confidenceLabel} />}
-          {alert.funnelStage && alert.funnelStage !== 'ingested' && (
-            <span
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-300 bg-cyan-500/10 shrink-0"
-              title={`Funnel stage: ${alert.funnelStage}`}
-            >
-              {alert.funnelStage.replace(/_/g, ' ')}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-gray-200 truncate hover:text-white">{alert.title}</p>
+          {alert.mitreAttack && alert.mitreAttack.length > 0 && (
+            <span className="text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded shrink-0">
+              {alert.mitreAttack[0].techniqueId}
             </span>
           )}
-          <SeverityBadge severity={alert.severity} />
-          <StatusBadge status={alert.status} />
-          <span className="text-xs text-gray-600 w-24 text-right" suppressHydrationWarning>
-            {formatDistanceToNow(new Date(alert.createdAt), { addSuffix: true })}
-          </span>
         </div>
-      </Link>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-xs text-gray-600">{alert.source}</span>
+          {alert.assignee && (
+            <>
+              <span className="text-gray-700">·</span>
+              <span className="text-xs text-gray-600">{alert.assignee}</span>
+            </>
+          )}
+        </div>
+      </div>
 
-      {/* View Runbook — appears on row hover, links to /runbook with UUID pre-filled */}
-      <Link
-        href={`/runbook?type=alert&id=${alert.id}`}
-        title="Open Runbook ledger for this alert"
-        onClick={(e) => e.stopPropagation()}
-        className="opacity-0 group-hover:opacity-100 mr-3 shrink-0 text-[10px] text-slate-500 hover:text-blue-400 px-2 py-1 rounded border border-slate-700/40 hover:border-blue-500/40 transition-all whitespace-nowrap"
-      >
-        Runbook →
-      </Link>
-    </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {alert.confidenceLabel && <ConfidencePill label={alert.confidenceLabel} />}
+        {alert.funnelStage && alert.funnelStage !== 'ingested' && (
+          <span
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-300 bg-cyan-500/10 shrink-0"
+            title={`Funnel stage: ${alert.funnelStage}`}
+          >
+            {alert.funnelStage.replace(/_/g, ' ')}
+          </span>
+        )}
+        <SeverityBadge severity={alert.severity} />
+        <StatusBadge status={alert.status} />
+        <span className="text-xs text-gray-600 w-24 text-right" suppressHydrationWarning>
+          {formatDistanceToNow(new Date(alert.createdAt), { addSuffix: true })}
+        </span>
+      </div>
+    </Link>
   );
 }
 

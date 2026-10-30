@@ -44,7 +44,6 @@ from app.models.saved_hunt import SavedHunt
 from app.models.saved_view import SavedView
 from app.models.tenant import ApiKey, Tenant, User
 from app.models.threat_intel import ThreatActor, ThreatIntelFeed, ThreatIntelIOC
-from app.models.runbook_task import RunbookTask
 
 __all__ = [
     "Base",
@@ -98,7 +97,6 @@ __all__ = [
     "RemediationWhitelist",
     "ReportArtefact",
     "ReportTemplate",
-    "RunbookTask",
     "SavedHunt",
     "SavedView",
     "ThreatActor",

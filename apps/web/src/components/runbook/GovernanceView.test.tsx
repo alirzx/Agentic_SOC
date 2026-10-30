@@ -47,12 +47,12 @@ describe('GovernanceView', () => {
       expect(screen.getByText('Isolate host from network')).toBeInTheDocument(),
     );
 
-    const search = screen.getByLabelText(/search governed actions/i);
+    const search = screen.getByLabelText(/search governance actions/i);
 
     // By label.
     await userEvent.type(search, 'isolate');
     await waitFor(() => expect(screen.queryByText('Close alert')).not.toBeInTheDocument());
-    expect(screen.getByText('1 of 2 actions')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
 
     // By slug.
     await userEvent.clear(search);
@@ -69,6 +69,36 @@ describe('GovernanceView', () => {
     );
   });
 
+  it('blocks enabling an action whose connectors are missing and names them', async () => {
+    requestMock.mockResolvedValue([
+      entry({
+        name: 'lookup_ip',
+        label: 'Look up IP reputation',
+        category: 'read',
+        blast_radius: 'read',
+        required_connectors: ['splunk'],
+        available: false,
+        enabled: true,
+      }),
+    ]);
+
+    render(<GovernanceView />);
+
+    await waitFor(() => expect(screen.getByText('Look up IP reputation')).toBeInTheDocument());
+
+    // The badge tells the truth about why the row is inert…
+    expect(screen.getByText(/unavailable \(missing connector\)/i)).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: /disable look up ip reputation/i });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute('title', expect.stringContaining('splunk'));
+
+    // …and the expanded notice names the connector that would unlock it.
+    await userEvent.click(screen.getByRole('button', { name: /expand details/i }));
+    await waitFor(() => expect(screen.getByText(/needs an enabled/i)).toBeInTheDocument());
+    expect(screen.getByText('splunk')).toBeInTheDocument();
+  });
+
   it('keeps the category filter and search composed, and says when nothing matches', async () => {
     requestMock.mockResolvedValue([entry({})]);
 
@@ -76,11 +106,11 @@ describe('GovernanceView', () => {
 
     await waitFor(() => expect(screen.getByText('Close alert')).toBeInTheDocument());
 
-    await userEvent.type(screen.getByLabelText(/search governed actions/i), 'nothing-here');
+    await userEvent.type(screen.getByLabelText(/search governance actions/i), 'nothing-here');
 
     await waitFor(() =>
-      expect(screen.getByText(/No action matches/)).toBeInTheDocument(),
+      expect(screen.getByText(/No policies match/)).toBeInTheDocument(),
     );
-    expect(screen.getByRole('button', { name: /clear search/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument();
   });
 });

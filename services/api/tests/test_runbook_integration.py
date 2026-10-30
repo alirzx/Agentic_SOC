@@ -6,28 +6,36 @@ Comprehensive test suite covering:
 3. Database operations: feedback collection & task tracking
 4. Funnel stage gates: investigation evidence + ready_for_jira
 
-Run with: poetry run pytest services/api/tests/test_runbook_integration.py -v
+Needs a live, migrated Postgres, so it is gated like the rest of the
+integration suites:
+
+    AISOC_RUN_INTEGRATION=1 pytest -m integration tests/test_runbook_integration.py
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
+import os
 from datetime import datetime, timedelta
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import and_, select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.core.config import settings
 from app.models.alert import Alert
 from app.models.runbook_task import RunbookTask, RunbookTaskStatus
 from app.services.funnel_stages import has_investigation_evidence
 from app.workers.calibration_monitor import ConfidenceCalibrationMonitor
+from sqlalchemy import and_, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+_REQUIRES_ENV = "AISOC_RUN_INTEGRATION"
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not os.getenv(_REQUIRES_ENV),
+        reason=f"set {_REQUIRES_ENV}=1 to run the runbook integration suite against Postgres",
+    ),
+]
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -38,51 +46,58 @@ from app.workers.calibration_monitor import ConfidenceCalibrationMonitor
 @pytest.fixture(scope="function")
 async def test_db():
     """Create test database session using PostgreSQL."""
-    from app.db.database import AsyncSessionLocal, engine
-    from app.db.database import Base
+    from app.db.database import AsyncSessionLocal, Base, engine
     from sqlalchemy import text
-    
+
     # Create all tables if they don't exist
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
-    # Create session
+
+    from app.models.tenant import Tenant
+
+    # Create session. The tenant is created here (not in a separate fixture) so
+    # every cleanup statement below can be scoped to it: an unscoped DELETE
+    # would wipe the real alerts/cases/ledger of the configured database.
     async with AsyncSessionLocal() as session:
-        # Ensure every test starts from a clean runbook/alert state regardless of
-        # which tenant_id was used in earlier cases.
-        await session.execute(text("DELETE FROM runbook_tasks"))
-        await session.execute(text("DELETE FROM alerts"))
-        await session.execute(text("DELETE FROM cases"))
+        tenant_id = uuid4()
+        session.add(
+            Tenant(
+                id=tenant_id,
+                name="Test Tenant",
+                slug=f"test-tenant-{uuid4().hex[:8]}",
+                mssp_role="standalone",
+            )
+        )
         await session.commit()
+        session.tenant_id = tenant_id
+
+        await _purge_tenant(session, tenant_id)
         yield session
 
     try:
         async with AsyncSessionLocal() as session:
-            await session.execute(text("DELETE FROM runbook_tasks"))
-            await session.execute(text("DELETE FROM alerts"))
-            await session.execute(text("DELETE FROM cases"))
+            await _purge_tenant(session, tenant_id)
+            await session.execute(
+                text("DELETE FROM tenants WHERE id = :tid"), {"tid": str(tenant_id)}
+            )
             await session.commit()
     except Exception:
         pass  # Ignore cleanup errors
 
 
+async def _purge_tenant(session: AsyncSession, tenant_id: Any) -> None:
+    """Delete this fixture's own rows; never another tenant's."""
+    for table in ("runbook_tasks", "alerts", "cases"):
+        await session.execute(
+            text(f"DELETE FROM {table} WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+        )
+    await session.commit()
+
+
 @pytest.fixture
 async def test_tenant_id(test_db: AsyncSession):
-    """Create a test tenant and return its ID."""
-    from app.models.tenant import Tenant
-    from uuid import uuid4
-    
-    tenant_id = uuid4()
-    unique_slug = f"test-tenant-{uuid4().hex[:8]}"
-    tenant = Tenant(
-        id=tenant_id,
-        name="Test Tenant",
-        slug=unique_slug,
-        mssp_role="standalone",
-    )
-    test_db.add(tenant)
-    await test_db.commit()
-    return tenant_id
+    """The tenant created by the ``test_db`` fixture."""
+    return test_db.tenant_id
 
 
 @pytest.fixture
@@ -94,7 +109,7 @@ def test_alert_id():
 @pytest.fixture
 async def sample_alert(test_db: AsyncSession, test_tenant_id, test_alert_id):
     """Create a sample alert for testing.
-    
+
     Represents a real security alert with:
     - Initial ingestion confidence (0.65 - medium)
     - Title and narrative for investigation
@@ -105,7 +120,7 @@ async def sample_alert(test_db: AsyncSession, test_tenant_id, test_alert_id):
         tenant_id=test_tenant_id,
         title="Suspicious lateral movement detected",
         severity="medium",
-        confidence=0.65,
+        confidence=65,
         narrative="Process execution from unusual location. Investigation needed.",
         connector_type="fusion_engine",
         funnel_stage="ingested",
@@ -155,7 +170,7 @@ async def test_e2e_alert_ingestion(test_db: AsyncSession, test_tenant_id):
         tenant_id=test_tenant_id,
         title="Unauthorized admin access",
         severity="high",
-        confidence=0.72,
+        confidence=72,
         connector_type="iam_connector",
         funnel_stage="ingested",
         created_at=datetime.utcnow(),
@@ -178,7 +193,7 @@ async def test_e2e_lLM_triage_creates_approval_gate(
     test_db: AsyncSession, sample_alert: Alert
 ):
     """Test 1.2: LLM triage with 'needs_review' disposition creates approval_gate task.
-    
+
     Simulates: auto_triage agent returns needs_review → system creates manual_review task
     """
     # Simulate LLM triage response
@@ -245,7 +260,11 @@ async def test_e2e_investigation_completion_creates_case(
     from app.models.case import Case
 
     # Simulate investigation completed
-    sample_alert.ai_summary = "Confirmed: Unauthorized admin access from IP 192.0.2.1 at 23:45 UTC. Created rogue service account aisoc-admin with full permissions. Lateral movement vector identified."
+    sample_alert.ai_summary = (
+        "Confirmed: Unauthorized admin access from IP 192.0.2.1 at 23:45 UTC. "
+        "Created rogue service account aisoc-admin with full permissions. "
+        "Lateral movement vector identified."
+    )
     sample_alert.funnel_stage = "cased"
     test_db.add(sample_alert)
 
@@ -273,7 +292,7 @@ async def test_e2e_investigation_completion_creates_case(
 @pytest.mark.asyncio
 async def test_e2e_ready_for_jira_gate(test_db: AsyncSession, sample_alert: Alert):
     """Test 1.5: Alert passes ready_for_jira gate when evidence is sufficient.
-    
+
     Gate checks:
     - Summary length ≥ 100 chars
     - Narrative length ≥ 200 chars
@@ -314,7 +333,7 @@ async def test_calibration_monitor_ece_measurement(
     test_db: AsyncSession, test_tenant_id
 ):
     """Test 2.1: Calibration monitor correctly measures ECE from feedback_applied column.
-    
+
     Creates 10 tasks with varying confidence + feedback → measures ECE
     """
     # Create sample tasks with feedback
@@ -421,7 +440,7 @@ async def test_calibration_monitor_status_degraded(test_db: AsyncSession, test_t
 @pytest.mark.asyncio
 async def test_db_query_feedback_applied_count(test_db: AsyncSession, test_tenant_id):
     """Test 3.1: Query returns correct count of feedback_applied tasks.
-    
+
     This is the core operational query:
     SELECT COUNT(*) FROM runbook_tasks WHERE feedback_applied IS NOT NULL;
     """
@@ -583,7 +602,7 @@ async def test_integration_full_alert_lifecycle(
     test_db: AsyncSession, test_tenant_id
 ):
     """Test 5.1: Full alert lifecycle from ingestion to Jira.
-    
+
     Scenario:
     1. Alert ingested (confidence 0.68)
     2. Auto-triage determines needs_review
@@ -600,7 +619,7 @@ async def test_integration_full_alert_lifecycle(
         tenant_id=test_tenant_id,
         title="Suspicious activity detected",
         severity="high",
-        confidence=0.68,
+        confidence=68,
         funnel_stage="ingested",
         created_at=datetime.utcnow(),
     )
@@ -671,7 +690,7 @@ async def test_integration_confidence_calibration_feedback_loop(
     test_db: AsyncSession, test_tenant_id
 ):
     """Test 5.2: Confidence calibration improves with feedback.
-    
+
     Scenario:
     1. Create 20 alerts with initial confidence
     2. All reviewed + feedback_applied

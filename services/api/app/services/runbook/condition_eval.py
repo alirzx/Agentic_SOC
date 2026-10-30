@@ -88,9 +88,26 @@ def _op_ne(a: Any, b: Any) -> bool:
 
 
 def _op_in(a: Any, b: Any) -> bool:
-    if isinstance(a, str) and isinstance(b, (list, tuple, set)):
-        return any(str(item).casefold() == a.casefold() for item in b if item is not None)
-    return a in b
+    """Membership test.
+
+    ``in`` is *membership*, never substring matching — ``contains`` covers that.
+    A scalar ``value`` is treated as a one-item list, and a non-iterable right
+    side fails closed instead of falling back to ``a in b`` on a string, where an
+    empty field would match any non-empty value.
+    """
+    if b is None:
+        return False
+    if isinstance(b, str):
+        b = [b]
+    if isinstance(a, str):
+        try:
+            return any(str(item).casefold() == a.casefold() for item in b if item is not None)
+        except TypeError:
+            return False
+    try:
+        return a in b
+    except TypeError:
+        return False
 
 
 def _op_not_in(a: Any, b: Any) -> bool:
@@ -186,8 +203,17 @@ def _get_field(subject: dict[str, Any], field: str) -> Any:
 
 
 def _coerce(value: Any, target: Any) -> Any:
-    """Best-effort coerce ``value`` to the same type as ``target``."""
+    """Best-effort coerce ``value`` to the same type as ``target``.
+
+    Containers are never coerced. Stringifying ``["high", "critical"]`` to
+    compare against a string field turns the ``in`` operator into a substring
+    test, which made ``{"field": "rule_name", "op": "in", "value": [...]}``
+    match every alert whose ``rule_name`` was empty — including containment
+    rules. The operators handle a mismatched type on their own.
+    """
     if target is None or isinstance(value, type(target)):
+        return value
+    if isinstance(value, (list, tuple, set, dict)):
         return value
     try:
         if isinstance(target, int):

@@ -3,7 +3,7 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Copy, FileDown, FileUp, Info, Plus, Play, Pause, Search, Trash2, ChevronDown, ChevronUp, Shield, Pencil, Loader2 } from 'lucide-react';
+import { AlertTriangle, Copy, FileDown, FileUp, Info, Layers, Plus, Play, Pause, Search, Trash2, ChevronDown, ChevronUp, Shield, Pencil, Loader2 } from 'lucide-react';
 import { request } from '@/lib/api';
 import { RunbookModal } from '@/components/runbook/RunbookModal';
 
@@ -56,6 +56,42 @@ interface RulePreviewResult {
   status: string;
   action_slug: string;
   reason?: string | null;
+}
+
+/**
+ * One rule inside a pack, exactly as it would be installed.
+ *
+ * The list is shown in full so an operator picks the rules they want: a pack is
+ * a catalogue, not a switch. ``installed`` is computed server-side from the
+ * tenant's rule names, so re-opening the dialog shows what is still missing.
+ */
+interface RulePackRule {
+  name: string;
+  trigger_type: string;
+  action_slug: string;
+  autonomy_level: string;
+  dry_run: boolean;
+  priority: number;
+  installed: boolean;
+}
+
+/** A server-side rule pack: a named bundle of rules keyed to one detection source. */
+interface RulePack {
+  id: string;
+  label: string;
+  description: string;
+  source: string;
+  rule_count: number;
+  covered_detections: number;
+  docs_ref: string | null;
+  rules: RulePackRule[];
+}
+
+interface RulePackImportResult {
+  pack_id: string;
+  created: string[];
+  skipped: string[];
+  unknown?: string[];
 }
 
 interface RulePreviewResponse {
@@ -403,7 +439,10 @@ const RuleForm: FC<{
           throw new Error(`Failed to load playbooks: HTTP ${response.status}`);
         }
         const data = (await response.json()) as Array<{ id: string; name: string; description: string }>;
-        setPlaybookOptions(data);
+        // An unexpected shape must not blank the editor: `playbookOptions.find`
+        // runs during render, so a non-array turns a bad response into a crashed
+        // form. Drop the dropdown instead.
+        setPlaybookOptions(Array.isArray(data) ? data : []);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load playbooks';
         setPlaybookLoadError(message);
@@ -1260,6 +1299,15 @@ export const AutomationRulesView: FC = () => {
   const [search, setSearch] = useState('');
   const [actionOptions, setActionOptions] = useState<Array<{ value: string; label: string; group: string; available?: boolean }>>([]);
   const importRef = useRef<HTMLInputElement>(null);
+  const [packsOpen, setPacksOpen] = useState(false);
+  const [packs, setPacks] = useState<RulePack[]>([]);
+  const [packsLoading, setPacksLoading] = useState(false);
+  const [packsError, setPacksError] = useState<string | null>(null);
+  const [importingPackId, setImportingPackId] = useState<string | null>(null);
+  const [lastImport, setLastImport] = useState<RulePackImportResult | null>(null);
+  // Selected rule names per pack id. Defaults to every rule the tenant does not
+  // have yet, but nothing is written until "Add selected" is pressed.
+  const [packSelection, setPackSelection] = useState<Record<string, string[]>>({});
 
   // Fetch action catalog from API
   useEffect(() => {
@@ -1424,6 +1472,73 @@ export const AutomationRulesView: FC = () => {
     if (importRef.current) importRef.current.value = '';
   };
 
+  /**
+   * Packs live on the server so the detection names stay versioned with the
+   * rule definitions. Nothing is imported until the operator presses Import:
+   * a tenant without Splunk telemetry would only get rules that never fire.
+   */
+  const openPacks = useCallback(async () => {
+    setPacksOpen(true);
+    setPacksError(null);
+    setLastImport(null);
+    setPacksLoading(true);
+    try {
+      const data = await request<RulePack[]>('/api/v1/runbook/automation-rules/packs');
+      const loaded = Array.isArray(data) ? data : [];
+      setPacks(loaded);
+      // Pre-select the rules this tenant does not have yet, so "Add selected"
+      // is one click, but the write still needs that click.
+      const defaults: Record<string, string[]> = {};
+      for (const pack of loaded) {
+        defaults[pack.id] = (pack.rules ?? []).filter((r) => !r.installed).map((r) => r.name);
+      }
+      setPackSelection(defaults);
+    } catch (err) {
+      setPacksError(err instanceof Error ? err.message : 'Failed to load rule packs');
+    } finally {
+      setPacksLoading(false);
+    }
+  }, []);
+
+  const togglePackRule = (packId: string, ruleName: string) => {
+    setPackSelection((prev) => {
+      const current = prev[packId] ?? [];
+      const next = current.includes(ruleName)
+        ? current.filter((n) => n !== ruleName)
+        : [...current, ruleName];
+      return { ...prev, [packId]: next };
+    });
+  };
+
+  /** `ruleNames` is the explicit selection — the API installs only those. */
+  const handleAddPackRules = async (packId: string, ruleNames: string[]) => {
+    if (ruleNames.length === 0) return;
+    setImportingPackId(packId);
+    setPacksError(null);
+    try {
+      const result = await request<RulePackImportResult>(
+        `/api/v1/runbook/automation-rules/packs/${packId}/import`,
+        { method: 'POST', body: JSON.stringify({ rule_names: ruleNames }) },
+      );
+      setLastImport(result);
+      // Re-read the packs so the installed flags (and the selection) match what
+      // the server now holds, instead of trusting the client's guess.
+      const data = await request<RulePack[]>('/api/v1/runbook/automation-rules/packs');
+      const loaded = Array.isArray(data) ? data : [];
+      setPacks(loaded);
+      const next: Record<string, string[]> = {};
+      for (const pack of loaded) {
+        next[pack.id] = (pack.rules ?? []).filter((r) => !r.installed).map((r) => r.name);
+      }
+      setPackSelection(next);
+      await load();
+    } catch (err) {
+      setPacksError(err instanceof Error ? err.message : 'Failed to add the selected rules');
+    } finally {
+      setImportingPackId(null);
+    }
+  };
+
   const handleRuleTestOpen = async (rule: AutomationRule) => {
     try {
       const preview = await request<RulePreviewResponse>(`/api/v1/runbook/automation-rules/${rule.id}/test`, {
@@ -1491,6 +1606,15 @@ export const AutomationRulesView: FC = () => {
           >
             <FileUp className="h-3 w-3" />
             Import
+          </button>
+          <button
+            type="button"
+            onClick={openPacks}
+            title="Install a curated rule pack for a detection source (e.g. Splunk Windows correlation rules)"
+            className="flex items-center gap-1 px-2 py-1.5 text-[10px] text-slate-400 hover:text-slate-200 border border-slate-700/60 hover:border-slate-600 rounded transition-colors"
+          >
+            <Layers className="h-3 w-3" />
+            Packs
           </button>
           {rules.length > 0 && (
             <button
@@ -1568,6 +1692,143 @@ export const AutomationRulesView: FC = () => {
             actionOptions={actionOptions}
           />
         )}
+      </RunbookModal>
+
+      {/* Rule packs: a catalogue, not a switch. Every rule of every pack is
+          listed so an operator adds exactly the ones they want — the general
+          rules included, which used to be inserted automatically. */}
+      <RunbookModal
+        open={packsOpen}
+        onClose={() => setPacksOpen(false)}
+        title="Rule packs"
+        subtitle="Pick the rules you want. Nothing is added until you press Add, and each rule shows the autonomy and dry-run state it will be installed with."
+        size="lg"
+      >
+        <div className="space-y-3">
+          {packsLoading && <p className="text-xs text-slate-500">Loading packs…</p>}
+          {packsError && (
+            <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
+              {packsError}
+            </div>
+          )}
+          {!packsLoading && !packsError && packs.length === 0 && (
+            <p className="text-xs text-slate-500">No rule packs are available in this build.</p>
+          )}
+          {packs.map((pack) => {
+            const rules = pack.rules ?? [];
+            const selected = packSelection[pack.id] ?? [];
+            const missing = rules.filter((rule) => !rule.installed);
+            const busy = importingPackId === pack.id;
+            return (
+              <div
+                key={pack.id}
+                className="space-y-2 rounded border border-slate-800/60 bg-slate-900/40 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-200">{pack.label}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{pack.description}</p>
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      {missing.length} of {rules.length} rules not added
+                      {rules.length < pack.rule_count ? ` · ${pack.rule_count} in pack` : ''}
+                      {pack.covered_detections > 0 ? ` · ${pack.covered_detections} detection names` : ''}
+                      {` · ${pack.source}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAddPackRules(pack.id, missing.map((rule) => rule.name))}
+                    disabled={busy || missing.length === 0}
+                    aria-label={`Add all missing rules from ${pack.label}`}
+                    title="Add every rule in this pack that this workspace does not have yet"
+                    className="flex shrink-0 items-center gap-1 rounded border border-slate-700/60 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-600 hover:text-slate-100 disabled:opacity-40"
+                  >
+                    {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Add all missing
+                  </button>
+                </div>
+
+                {rules.length > 0 && (
+                  <div className="max-h-64 divide-y divide-slate-800/40 overflow-auto rounded border border-slate-800/40">
+                    {rules.map((rule) => {
+                      const checked = rule.installed || selected.includes(rule.name);
+                      return (
+                        <label
+                          key={rule.name}
+                          className={`flex items-start gap-2 px-2.5 py-2 text-[11px] ${
+                            rule.installed ? 'bg-slate-950/40 text-slate-500' : 'text-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            aria-label={rule.name}
+                            checked={checked}
+                            disabled={rule.installed || busy}
+                            onChange={() => togglePackRule(pack.id, rule.name)}
+                            className="mt-0.5 accent-blue-500"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{rule.name}</span>
+                            <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+                              <span className="font-mono text-slate-400">{rule.action_slug}</span>
+                              <span className="text-slate-600">·</span>
+                              <span>{TRIGGER_LABELS[rule.trigger_type] ?? rule.trigger_type}</span>
+                              <span className="text-slate-600">·</span>
+                              <span
+                                className={`rounded px-1 ${AUTONOMY_COLORS[rule.autonomy_level] ?? 'text-slate-400 bg-slate-500/10'}`}
+                                title={AUTONOMY_DESCRIPTIONS[rule.autonomy_level] ?? ''}
+                              >
+                                {rule.autonomy_level}
+                              </span>
+                              {rule.dry_run ? (
+                                <span className="rounded bg-blue-500/10 px-1 text-blue-300" title="Matches are recorded as decisions; nothing is executed.">
+                                  dry run
+                                </span>
+                              ) : (
+                                <span className="rounded bg-amber-500/10 px-1 text-amber-300" title="This rule can execute for real once its confidence gate passes.">
+                                  executes
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                          {rule.installed && (
+                            <span className="shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                              Added
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-slate-500">
+                    {selected.length} selected of {missing.length} not added
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleAddPackRules(pack.id, selected)}
+                    disabled={busy || selected.length === 0}
+                    className="flex items-center gap-1 rounded bg-blue-600/80 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-600 disabled:opacity-40"
+                  >
+                    {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Add selected ({selected.length})
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {lastImport && (
+            <div className="rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-300">
+              Added {lastImport.created.length} rule{lastImport.created.length === 1 ? '' : 's'}
+              {lastImport.skipped.length > 0 &&
+                ` · ${lastImport.skipped.length} already existed`}
+              {lastImport.unknown && lastImport.unknown.length > 0 &&
+                ` · ${lastImport.unknown.length} not in this pack`}
+            </div>
+          )}
+        </div>
       </RunbookModal>
 
       {/* Rule testing also opens in a modal — the same inline-at-top pattern. */}
@@ -1691,7 +1952,26 @@ export const AutomationRulesView: FC = () => {
           <p className="text-xs text-slate-600">
             Rules fire automatically on alert or case events, evaluate conditions,
             and record governed actions in the ledger — all in dry-run mode by default.
+            Nothing is installed for you: pick from the packs, or write a rule.
           </p>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={openPacks}
+              className="flex items-center gap-1.5 rounded border border-slate-700/60 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-600 hover:text-slate-100"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              Browse rule packs
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCloneBase(null); setCreating(true); }}
+              className="flex items-center gap-1.5 rounded border border-slate-700/60 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-600 hover:text-slate-100"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New rule
+            </button>
+          </div>
         </div>
       )}
 

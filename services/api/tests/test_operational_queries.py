@@ -8,6 +8,8 @@ Tests for running direct SQL queries in production to verify:
 5. Multi-tenant isolation
 
 Run with: poetry run pytest services/api/tests/test_operational_queries.py -v
+Needs a live, migrated Postgres and is therefore gated behind
+``AISOC_RUN_INTEGRATION=1``.
 
 OPERATORS: Run these queries in production to verify system health:
 
@@ -15,14 +17,14 @@ OPERATORS: Run these queries in production to verify system health:
   SELECT COUNT(*) FROM runbook_tasks WHERE feedback_applied IS NOT NULL;
 
   -- Check 2: Approval gate completion rate
-  SELECT 
+  SELECT
     COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
     COUNT(*) as total,
     ROUND(100.0 * COUNT(CASE WHEN status = 'completed' THEN 1 END) / COUNT(*), 1) as completion_rate
   FROM runbook_tasks WHERE task_type = 'approval_gate';
 
   -- Check 3: Investigation funnel
-  SELECT 
+  SELECT
     funnel_stage,
     COUNT(*) as count
   FROM alerts
@@ -31,7 +33,7 @@ OPERATORS: Run these queries in production to verify system health:
   ORDER BY count DESC;
 
   -- Check 4: Calibration scores
-  SELECT 
+  SELECT
     CASE WHEN confidence_at_submission < 0.25 THEN '0.0-0.25'
          WHEN confidence_at_submission < 0.50 THEN '0.25-0.5'
          WHEN confidence_at_submission < 0.75 THEN '0.5-0.75'
@@ -48,26 +50,33 @@ OPERATORS: Run these queries in production to verify system health:
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.models.alert import Alert
-from app.models.runbook_task import RunbookTask, RunbookTaskStatus
+from app.models.runbook_task import RunbookTask
+from sqlalchemy import case, func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+_REQUIRES_ENV = "AISOC_RUN_INTEGRATION"
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not os.getenv(_REQUIRES_ENV),
+        reason=f"set {_REQUIRES_ENV}=1 to run the operational queries against Postgres",
+    ),
+]
 
 
 @pytest.fixture(scope="function")
 async def test_db():
     """Test database using PostgreSQL."""
     from app.db.database import AsyncSessionLocal
-    from app.db.database import Base
     from app.models.tenant import Tenant
-    from sqlalchemy import text
-    
+
     # Use existing PostgreSQL connection
     async with AsyncSessionLocal() as session:
         # Create tenant with unique slug
@@ -82,9 +91,14 @@ async def test_db():
         session.add(tenant)
         await session.commit()
 
-        # Reset shared operational tables so queries only see the current test's data.
-        await session.execute(text("DELETE FROM runbook_tasks"))
-        await session.execute(text("DELETE FROM alerts"))
+        # Scoped to this fixture's own tenant: an unscoped DELETE would wipe the
+        # real alerts and ledger rows of whatever database DATABASE_URL points at.
+        await session.execute(
+            text("DELETE FROM runbook_tasks WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+        )
+        await session.execute(
+            text("DELETE FROM alerts WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+        )
         await session.commit()
 
         # Store tenant_id in session for later use
@@ -94,8 +108,15 @@ async def test_db():
 
         # Cleanup
         try:
-            await session.execute(text("DELETE FROM runbook_tasks"))
-            await session.execute(text("DELETE FROM alerts"))
+            await session.execute(
+                text("DELETE FROM runbook_tasks WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+            )
+            await session.execute(
+                text("DELETE FROM alerts WHERE tenant_id = :tid"), {"tid": str(tenant_id)}
+            )
+            await session.execute(
+                text("DELETE FROM tenants WHERE id = :tid"), {"tid": str(tenant_id)}
+            )
             await session.commit()
         except Exception:
             pass
@@ -114,10 +135,10 @@ async def test_tenant_id(test_db):
 @pytest.mark.asyncio
 async def test_op_check_1_feedback_count(test_db: AsyncSession, test_tenant_id):
     """Operational Check 1: Count tasks with feedback_applied.
-    
+
     Query:
     SELECT COUNT(*) FROM runbook_tasks WHERE feedback_applied IS NOT NULL;
-    
+
     Healthy if: count > 0 (indicates calibration monitor has data)
     Warning if: count < 5 (low volume, monitor may not have run yet)
     """
@@ -137,7 +158,6 @@ async def test_op_check_1_feedback_count(test_db: AsyncSession, test_tenant_id):
     await test_db.commit()
 
     # Run operational check query
-    from sqlalchemy import select
     result = await test_db.execute(
         select(func.count(RunbookTask.id)).where(
             RunbookTask.feedback_applied.isnot(None)
@@ -167,7 +187,6 @@ async def test_op_check_1_no_feedback_yet(test_db: AsyncSession, test_tenant_id)
         test_db.add(task)
     await test_db.commit()
 
-    from sqlalchemy import select
     result = await test_db.execute(
         select(func.count(RunbookTask.id)).where(
             RunbookTask.feedback_applied.isnot(None)
@@ -187,14 +206,14 @@ async def test_op_check_1_no_feedback_yet(test_db: AsyncSession, test_tenant_id)
 @pytest.mark.asyncio
 async def test_op_check_2_approval_gate_rate(test_db: AsyncSession, test_tenant_id):
     """Operational Check 2: Approval gate completion rate.
-    
+
     Query:
-    SELECT 
+    SELECT
       COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
       COUNT(*) as total,
       ROUND(100.0 * COUNT(...) / COUNT(*), 1) as completion_rate
     FROM runbook_tasks WHERE task_type = 'approval_gate';
-    
+
     Healthy if: completion_rate >= 70% (most approvals processed)
     Warning if: completion_rate < 50% (high pending backlog)
     """
@@ -217,7 +236,6 @@ async def test_op_check_2_approval_gate_rate(test_db: AsyncSession, test_tenant_
     await test_db.commit()
 
     # Run operational check query
-    from sqlalchemy import select, case
     result = await test_db.execute(
         select(
             func.count(case((RunbookTask.status == "completed", 1))).label("completed"),
@@ -255,7 +273,6 @@ async def test_op_check_2_high_pending_backlog(test_db: AsyncSession, test_tenan
         test_db.add(task)
     await test_db.commit()
 
-    from sqlalchemy import select, case
     result = await test_db.execute(
         select(
             func.count(case((RunbookTask.status == "completed", 1))).label("completed"),
@@ -279,16 +296,16 @@ async def test_op_check_2_high_pending_backlog(test_db: AsyncSession, test_tenan
 @pytest.mark.asyncio
 async def test_op_check_3_funnel_distribution(test_db: AsyncSession, test_tenant_id):
     """Operational Check 3: Alert distribution by funnel stage.
-    
+
     Query:
-    SELECT 
+    SELECT
       funnel_stage,
       COUNT(*) as count
     FROM alerts
     WHERE created_at > now() - interval '24 hours'
     GROUP BY funnel_stage
     ORDER BY count DESC;
-    
+
     Healthy if: investigating > ingested (good triage rate)
     Warning if: Most alerts stuck in 'ingested' (triage backlog)
     """
@@ -308,7 +325,7 @@ async def test_op_check_3_funnel_distribution(test_db: AsyncSession, test_tenant
                 tenant_id=test_tenant_id,
                 title=f"Alert {stage} {idx}",
                 severity="medium",
-                confidence=0.65,
+                confidence=65,
                 funnel_stage=stage,
                 created_at=datetime.utcnow() - timedelta(hours=2),
             )
@@ -316,7 +333,6 @@ async def test_op_check_3_funnel_distribution(test_db: AsyncSession, test_tenant
     await test_db.commit()
 
     # Run operational check query
-    from sqlalchemy import select
     result = await test_db.execute(
         select(
             Alert.funnel_stage,
@@ -325,7 +341,7 @@ async def test_op_check_3_funnel_distribution(test_db: AsyncSession, test_tenant
             Alert.created_at > datetime.utcnow() - timedelta(hours=24)
         ).group_by(Alert.funnel_stage).order_by(func.count(Alert.id).desc())
     )
-    stages = {stage: count for stage, count in result.all()}
+    stages = dict(result.all())
 
     # Verify distribution
     assert stages["investigating"] == 8  # Most alerts
@@ -344,14 +360,13 @@ async def test_op_check_3_stuck_in_ingested(test_db: AsyncSession, test_tenant_i
             tenant_id=test_tenant_id,
             title=f"Alert {idx}",
             severity="medium",
-            confidence=0.65,
+            confidence=65,
             funnel_stage=stage,
             created_at=datetime.utcnow() - timedelta(hours=2),
         )
         test_db.add(alert)
     await test_db.commit()
 
-    from sqlalchemy import select
     result = await test_db.execute(
         select(
             Alert.funnel_stage,
@@ -360,7 +375,7 @@ async def test_op_check_3_stuck_in_ingested(test_db: AsyncSession, test_tenant_i
             Alert.created_at > datetime.utcnow() - timedelta(hours=24)
         ).group_by(Alert.funnel_stage).order_by(func.count(Alert.id).desc())
     )
-    stages = {stage: count for stage, count in result.all()}
+    stages = dict(result.all())
 
     # Warning: 90% stuck in 'ingested'
     assert stages.get("ingested", 0) == 9
@@ -375,9 +390,9 @@ async def test_op_check_3_stuck_in_ingested(test_db: AsyncSession, test_tenant_i
 @pytest.mark.asyncio
 async def test_op_check_4_calibration_by_bin(test_db: AsyncSession, test_tenant_id):
     """Operational Check 4: Confidence calibration by bin.
-    
+
     Query:
-    SELECT 
+    SELECT
       CASE WHEN confidence_at_submission < 0.25 THEN '0.0-0.25'
            WHEN confidence_at_submission < 0.50 THEN '0.25-0.5'
            WHEN confidence_at_submission < 0.75 THEN '0.5-0.75'
@@ -390,7 +405,7 @@ async def test_op_check_4_calibration_by_bin(test_db: AsyncSession, test_tenant_
       AND completed_at > now() - interval '24 hours'
     GROUP BY confidence_bin
     ORDER BY confidence_bin;
-    
+
     Healthy if: accuracy increases with confidence bin
     Warning if: High confidence bins have low accuracy (overconfident)
     """
@@ -439,7 +454,6 @@ async def test_op_check_4_calibration_by_bin(test_db: AsyncSession, test_tenant_
     await test_db.commit()
 
     # Run operational check query
-    from sqlalchemy import select, case
     result = await test_db.execute(
         select(
             case(
@@ -449,7 +463,7 @@ async def test_op_check_4_calibration_by_bin(test_db: AsyncSession, test_tenant_
                 else_="0.75-1.0",
             ).label("bin"),
             func.count(RunbookTask.id).label("total"),
-            func.sum(case((RunbookTask.feedback_applied == True, 1), else_=0)).label("correct"),
+            func.sum(case((RunbookTask.feedback_applied.is_(True), 1), else_=0)).label("correct"),
         ).where(
             (RunbookTask.feedback_applied.isnot(None))
             & (RunbookTask.completed_at > datetime.utcnow() - timedelta(hours=24))
@@ -461,7 +475,7 @@ async def test_op_check_4_calibration_by_bin(test_db: AsyncSession, test_tenant_
     # Verify calibration: accuracy should generally increase with confidence
     assert bins["0.0-0.25"][0] == 5  # 5 tasks
     assert bins["0.75-1.0"][0] == 5  # 5 tasks
-    
+
     # Higher confidence bins should have better accuracy
     acc_low = bins["0.0-0.25"][1] / bins["0.0-0.25"][0]  # 60%
     acc_high = bins["0.75-1.0"][1] / bins["0.75-1.0"][0]  # 90%
@@ -476,7 +490,7 @@ async def test_op_check_4_calibration_by_bin(test_db: AsyncSession, test_tenant_
 @pytest.mark.asyncio
 async def test_op_check_5_tenant_isolation(test_db: AsyncSession):
     """Operational Check 5: Verify tenant data is not mixed.
-    
+
     Critical security check: ensure tasks/alerts for tenant A are not visible to tenant B
     """
     tenant_a = uuid4()
@@ -508,7 +522,6 @@ async def test_op_check_5_tenant_isolation(test_db: AsyncSession):
     await test_db.commit()
 
     # Query: tenant A should see only their 5 tasks
-    from sqlalchemy import select
     result_a = await test_db.execute(
         select(func.count(RunbookTask.id)).where(
             RunbookTask.tenant_id == tenant_a
@@ -538,12 +551,12 @@ async def test_op_check_5_tenant_isolation(test_db: AsyncSession):
 @pytest.mark.asyncio
 async def test_op_check_6_recent_completions(test_db: AsyncSession, test_tenant_id):
     """Operational Check 6: Tasks completed in last hour (recent activity).
-    
+
     Query:
-    SELECT COUNT(*) FROM runbook_tasks 
-    WHERE status = 'completed' 
+    SELECT COUNT(*) FROM runbook_tasks
+    WHERE status = 'completed'
       AND completed_at > now() - interval '1 hour';
-    
+
     Healthy if: count > 0 (indicates active operator engagement)
     Warning if: count = 0 for > 24 hours (no operator activity)
     """
@@ -575,7 +588,6 @@ async def test_op_check_6_recent_completions(test_db: AsyncSession, test_tenant_
     await test_db.commit()
 
     # Query: recent completions (last hour)
-    from sqlalchemy import select
     result = await test_db.execute(
         select(func.count(RunbookTask.id)).where(
             (RunbookTask.status == "completed")

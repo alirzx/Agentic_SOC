@@ -189,7 +189,11 @@ describe('AutomationRulesView', () => {
     expect(
       screen.getByText('Concurrent sign-ins from two countries'),
     ).toBeInTheDocument();
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/runbook/automation-rules/preview');
+    // The playbook list is fetched on mount too, so look for the preview call
+    // rather than assuming it is the first one.
+    expect(fetchMock.mock.calls.map(([url]) => url)).toContain(
+      '/api/v1/runbook/automation-rules/preview',
+    );
 
     vi.unstubAllGlobals();
   });
@@ -497,6 +501,97 @@ describe('AutomationRulesView', () => {
         '/api/v1/runbook/automation-rules/22222222-2222-4222-8222-222222222222/test',
         expect.objectContaining({ method: 'POST' }),
       );
+    });
+  });
+
+  it('lists every rule in a pack and adds only the selected ones', async () => {
+    requestMock.mockImplementation((url: string) => {
+      if (url === '/api/v1/runbook/automation-rules/packs') {
+        return Promise.resolve([
+          {
+            id: 'windows-splunk',
+            label: 'Windows · Splunk correlation rules',
+            description: 'Curated responses keyed to ESCU detection names.',
+            source: 'Splunk Security Content (ESCU)',
+            rule_count: 3,
+            covered_detections: 9,
+            docs_ref: null,
+            rules: [
+              {
+                name: 'rule one',
+                trigger_type: 'alert.created',
+                action_slug: 'isolate_host',
+                autonomy_level: 'L3',
+                dry_run: true,
+                priority: 120,
+                installed: false,
+              },
+              {
+                name: 'rule two',
+                trigger_type: 'alert.created',
+                action_slug: 'create_case',
+                autonomy_level: 'L2',
+                dry_run: true,
+                priority: 130,
+                installed: false,
+              },
+              {
+                name: 'rule three',
+                trigger_type: 'alert.created',
+                action_slug: 'add_alert_tag',
+                autonomy_level: 'L1',
+                dry_run: true,
+                priority: 140,
+                installed: true,
+              },
+            ],
+          },
+        ]);
+      }
+      if (url === '/api/v1/runbook/automation-rules/packs/windows-splunk/import') {
+        return Promise.resolve({
+          pack_id: 'windows-splunk',
+          created: ['rule one'],
+          skipped: [],
+          unknown: [],
+        });
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AutomationRulesView />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^packs$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Windows · Splunk correlation rules')).toBeInTheDocument();
+    });
+
+    // Nothing is installed on open; the un-added rules are pre-selected but the
+    // already-installed one is shown as such and cannot be re-added.
+    expect(screen.getByText(/2 of 3 rules not added/)).toBeInTheDocument();
+    expect(screen.getByLabelText('rule three')).toBeChecked();
+    expect(screen.getByLabelText('rule three')).toBeDisabled();
+
+    // No docs link: the anchor these rules pointed at never existed.
+    expect(screen.queryByText(/what these rules do/i)).not.toBeInTheDocument();
+
+    // Deselect one rule, then add the remaining selection.
+    await userEvent.click(screen.getByLabelText('rule two'));
+    await userEvent.click(screen.getByRole('button', { name: /add selected \(1\)/i }));
+
+    await waitFor(() => {
+      expect(requestMock).toHaveBeenCalledWith(
+        '/api/v1/runbook/automation-rules/packs/windows-splunk/import',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ rule_names: ['rule one'] }),
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/added 1 rule/i)).toBeInTheDocument();
     });
   });
 });

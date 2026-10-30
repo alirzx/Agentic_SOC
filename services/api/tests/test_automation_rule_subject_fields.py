@@ -1,52 +1,37 @@
 """Test that automation rule subject_fields includes all allowed fields."""
-import pytest
+
+from types import SimpleNamespace
+
 from app.services.runbook.condition_eval import _ALLOWED_FIELDS
+from app.services.runbook.rule_executor import alert_subject_fields
 
 
 def test_subject_fields_completeness_for_alerts():
     """
-    Regression test: alerts.py must populate subject_fields with all fields
-    that condition_eval._ALLOWED_FIELDS permits for alert conditions.
-    
+    Regression test: the executor's subject dict must carry every field
+    ``condition_eval._ALLOWED_FIELDS`` permits for alert conditions.
+
     This prevents silent rule match failures when conditions reference fields
-    that weren't included in subject_fields at the call site.
+    that were never put in subject_fields at the call site.
+
+    The dict is read from the real function rather than restated here: both
+    writers now go through it (the rule evaluator worker for ``alert.created``,
+    the alert PATCH endpoint for ``alert.updated``), and a hand-maintained copy
+    is exactly how the rule preview panel once drifted from the executor.
     """
-    # These fields are explicitly passed to run_rules_for_trigger in alerts.py
-    # for both alert.created and alert.updated triggers
-    subject_fields_passed = {
-        "severity",
-        "status",
-        "priority",
-        "confidence",
-        "confidence_label",
-        "funnel_stage",
-        "disposition",
-        "source",
-        "connector_type",
-        "category",
-        "title",
-        "description",
-        "tags",
-        "affected_ips",
-        "affected_hosts",
-        "affected_users",
-        "risk_score",
-        "mitre_tactics",
-        "mitre_techniques",
-        "rule_name",
-    }
-    
+    subject_fields_passed = set(alert_subject_fields(SimpleNamespace()).keys())
+
     # _ALLOWED_FIELDS defines which fields conditions may reference
     allowed = _ALLOWED_FIELDS
-    
+
     # Every allowed field must be present in subject_fields, or condition
     # evaluation will silently fail when a rule references that field.
     missing = allowed - subject_fields_passed
-    
+
     assert missing == set(), (
         f"subject_fields missing fields that conditions may reference: {missing}. "
-        f"Add them to alerts.py run_rules_for_trigger calls (alert.created and "
-        f"alert.updated triggers)."
+        f"Add them to rule_executor.alert_subject_fields(); the rule evaluator "
+        f"worker and the alert PATCH endpoint both pass its output through."
     )
 
 
@@ -74,7 +59,7 @@ def test_condition_eval_allowed_fields_are_reasonable():
         "mitre_techniques",
         "rule_name",
     }
-    
+
     # All expected fields should be in _ALLOWED_FIELDS
     missing = expected_fields - _ALLOWED_FIELDS
     assert missing == set(), (

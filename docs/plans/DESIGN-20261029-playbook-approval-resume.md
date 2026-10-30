@@ -1,6 +1,11 @@
 # Design — Resumable Playbook Runs (approval that actually continues)
 
-Status: **proposed, awaiting approval** · Date: 2026-10-29 · Owner: Runbook surface
+Status: **implemented** (Phase 12, 2026-10-29) — see `docs/plans/RUNBOOK-PROGRESS.md`
+§ Phase 12 for the shipped tasks, the answers to § 12's open questions, and the three
+defects found on the way (run-id mismatch, Run History field mismatch, parked runs lost
+on restart). § 12 is kept as written for the record; its decisions live in Phase 12.
+
+Date: 2026-10-29 · Owner: Runbook surface
 
 Related: `docs/plans/RUNBOOK-PROGRESS.md` Phase 11 (the fail-closed engine change this
 builds on), `apps/docs/docs/console/runbook.md` § "Relationship to Playbooks".

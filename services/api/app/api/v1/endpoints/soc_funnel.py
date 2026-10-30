@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.services import agentic_funnel
-from app.services.audit import emit_audit
 from app.services.case_fanout import fanout_create_case
 from app.services.exact_dedupe import dedupe_exact
 from app.services.funnel_stages import READY_FOR_JIRA, passes_jira_gate
@@ -20,40 +18,6 @@ from app.services.incident_report import build_incident_report
 from app.services.splunk_notable import reenrich_tenant_splunk_alerts
 
 router = APIRouter(prefix="/soc", tags=["soc-funnel"])
-
-logger = logging.getLogger(__name__)
-
-
-async def _audit_bulk_operation(
-    db: DBSession,
-    *,
-    user: AuthUser,
-    request: Request,
-    action: str,
-    changes: dict[str, Any],
-) -> None:
-    """Record a tenant-wide funnel operation in the immutable audit log.
-
-    Backfill, dedupe and re-enrich change or delete many rows at once. They are not
-    per-subject actions, so they belong in ``audit_log`` (append-only, hash-chained)
-    rather than the per-subject ``runbook_events`` ledger. Best-effort: an audit
-    outage must not turn a completed delete into a 500 — but it is logged loudly.
-    """
-    try:
-        await emit_audit(
-            db=db,
-            tenant_id=user.tenant_id,
-            actor_id=getattr(user, "user_id", None),
-            actor_email=getattr(user, "email", None),
-            action=action,
-            resource="soc_funnel",
-            resource_id=None,
-            changes=changes,
-            request=request,
-        )
-        await db.commit()
-    except Exception:  # noqa: BLE001
-        logger.warning("soc_funnel.audit_failed action=%s", action, exc_info=True)
 
 
 class BackfillResponse(BaseModel):
@@ -124,25 +88,10 @@ async def get_funnel_board(
 async def post_funnel_backfill(
     db: DBSession,
     user: AuthUser,
-    request: Request,
     hours: int = Query(24, ge=1, le=168),
 ) -> BackfillResponse:
     """Classify existing alerts: FP-tag noise, promote importants into Cases + tasks."""
     payload = await agentic_funnel.run_backfill(db, tenant_id=user.tenant_id, hours=hours)
-    await _audit_bulk_operation(
-        db,
-        user=user,
-        request=request,
-        action="soc_funnel:backfill",
-        changes={
-            "window_hours": hours,
-            "alerts_scanned": payload.get("alerts_scanned"),
-            "false_positive_tagged": payload.get("false_positive_tagged"),
-            "cases_created": payload.get("cases_created"),
-            "alerts_linked": payload.get("alerts_linked"),
-            "stages_updated": payload.get("stages_updated"),
-        },
-    )
     return BackfillResponse(**payload)
 
 
@@ -172,7 +121,6 @@ class ReenrichSplunkResponse(BaseModel):
 async def post_funnel_dedupe_exact(
     db: DBSession,
     user: AuthUser,
-    request: Request,
     dry_run: bool = Query(
         False,
         description="When true, report what would be deleted without writing.",
@@ -185,13 +133,6 @@ async def post_funnel_dedupe_exact(
     the same title+severity are treated as duplicates.
     """
     payload = await dedupe_exact(db, tenant_id=user.tenant_id, dry_run=dry_run)
-    await _audit_bulk_operation(
-        db,
-        user=user,
-        request=request,
-        action="soc_funnel:dedupe_exact",
-        changes={"dry_run": dry_run, **payload},
-    )
     return DedupeExactResponse(**payload)
 
 
@@ -203,7 +144,6 @@ async def post_funnel_dedupe_exact(
 async def post_funnel_reenrich_splunk(
     db: DBSession,
     user: AuthUser,
-    request: Request,
     limit: int = Query(500, ge=1, le=5000),
     force: bool = Query(
         False,
@@ -223,20 +163,6 @@ async def post_funnel_reenrich_splunk(
         limit=limit,
         force=force,
         dry_run=dry_run,
-    )
-    await _audit_bulk_operation(
-        db,
-        user=user,
-        request=request,
-        action="soc_funnel:reenrich_splunk",
-        changes={
-            "limit": limit,
-            "force": force,
-            "dry_run": dry_run,
-            "scanned": payload.get("scanned"),
-            "enriched": payload.get("enriched"),
-            "failed": payload.get("failed"),
-        },
     )
     return ReenrichSplunkResponse(**payload)
 

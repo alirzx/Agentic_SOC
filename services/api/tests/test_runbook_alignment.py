@@ -450,3 +450,40 @@ async def test_load_runbook_includes_triage_evidence_and_procedure() -> None:
     assert statuses["enrich"] == "skipped"
     assert statuses["investigate"] == "pending"
     assert "blocked" not in statuses.values()
+
+
+# ── route resolution ─────────────────────────────────────────────────────────
+#
+# The ledger lives at ``/runbook/{subject_type}/{subject_id}``, a two-segment
+# catch-all. Declared before the concrete routes it silently answered
+# ``GET /runbook/tasks/{id}`` and ``GET /runbook/automation-rules/{id}`` with
+# 400 "subject_type must be one of …", so the resource routes were dead.
+
+
+def _resolve_endpoint(method: str, path: str) -> str | None:
+    from starlette.routing import Match
+
+    for route in runbook_module.router.routes:
+        match, _ = route.matches(
+            {"type": "http", "path": path, "method": method, "headers": []}
+        )
+        if match == Match.FULL:
+            return getattr(route, "name", None)
+    return None
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "expected"),
+    [
+        ("GET", f"/runbook/tasks/{uuid.uuid4()}", "get_runbook_task"),
+        ("GET", f"/runbook/automation-rules/{uuid.uuid4()}", "get_automation_rule"),
+        ("PATCH", f"/runbook/automation-rules/{uuid.uuid4()}", "patch_automation_rule"),
+        ("DELETE", f"/runbook/automation-rules/{uuid.uuid4()}", "delete_automation_rule"),
+        ("GET", f"/runbook/alert/{uuid.uuid4()}", "get_runbook"),
+        ("GET", f"/runbook/case/{uuid.uuid4()}", "get_runbook"),
+        ("GET", "/runbook/tasks", "list_runbook_tasks"),
+        ("GET", "/runbook/detections", "runbook_detection_activity"),
+    ],
+)
+def test_ledger_catch_all_does_not_shadow_concrete_routes(method: str, path: str, expected: str) -> None:
+    assert _resolve_endpoint(method, path) == expected

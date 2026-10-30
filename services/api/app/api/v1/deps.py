@@ -38,7 +38,6 @@ from app.api.v1.dev_auth import (
     DEMO_USER_ROLE,
     is_dev_mode,
 )
-from app.core.config import runbook_enabled as runbook_feature_enabled
 from app.core.security import decode_token, has_permission, hash_api_key, session_is_expired
 from app.db.database import get_db
 from app.models.tenant import ApiKey, User
@@ -259,22 +258,6 @@ def require_permission(permission: str):
         return current_user
 
     return _check
-
-
-def require_runbook_enabled() -> None:
-    """Dependency: 404 every Runbook route while the feature flag is off.
-
-    404 rather than 403 because a disabled feature does not exist for this
-    deployment — the same answer the router gives for a path that was never
-    registered. The flag resolves from ``AISOC_RUNBOOK_ENABLED`` and defaults
-    to ON only in development-family environments (see
-    ``app.core.config.runbook_enabled``).
-    """
-    if not runbook_feature_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Runbook is not enabled on this deployment",
-        )
 
 
 # Type aliases
