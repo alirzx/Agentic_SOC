@@ -176,7 +176,11 @@ class Settings(BaseSettings):
     # exposed on the host. Empty disables proxying entirely (catalog and
     # test endpoints will return 503).
     CONNECTORS_SERVICE_URL: str = "http://connectors:8003"
+    # Catalog / schemas stay snappy; live ``test_connection`` (esp. Splunk)
+    # can take up to ~90s on the connectors side, so the test proxy uses
+    # CONNECTORS_TEST_TIMEOUT_SECONDS instead of this value.
     CONNECTORS_SERVICE_TIMEOUT_SECONDS: float = 15.0
+    CONNECTORS_TEST_TIMEOUT_SECONDS: float = 100.0
 
     # Public ingest base URL — surfaced in the wizard's "Reveal push URL"
     # response so operators get a copy-pasteable curl example. Empty

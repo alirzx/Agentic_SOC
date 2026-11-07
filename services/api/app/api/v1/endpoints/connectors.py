@@ -384,6 +384,12 @@ _CATALOG_TIMEOUT = httpx.Timeout(
     settings.CONNECTORS_SERVICE_TIMEOUT_SECONDS,
     connect=min(5.0, settings.CONNECTORS_SERVICE_TIMEOUT_SECONDS),
 )
+# Splunk (and similar appliance) ``test_connection`` uses ~90s httpx timeout
+# inside connectors; the API proxy must outlive that or the UI sees a false 503.
+_TEST_TIMEOUT = httpx.Timeout(
+    settings.CONNECTORS_TEST_TIMEOUT_SECONDS,
+    connect=min(10.0, settings.CONNECTORS_TEST_TIMEOUT_SECONDS),
+)
 
 
 def _connectors_service_url(path: str) -> str:
@@ -508,8 +514,22 @@ async def _proxy_test_connection(
         "connector_config": connector_config,
     }
     try:
-        async with httpx.AsyncClient(timeout=_CATALOG_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_TEST_TIMEOUT) as client:
             resp = await client.post(url, json=payload)
+    except httpx.TimeoutException as exc:
+        logger.warning(
+            "connectors_service.test.timeout err=%s timeout_s=%s",
+            type(exc).__name__,
+            settings.CONNECTORS_TEST_TIMEOUT_SECONDS,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=(
+                "connector test timed out waiting for the connectors service "
+                f"(limit {settings.CONNECTORS_TEST_TIMEOUT_SECONDS:.0f}s). "
+                "Check Splunk reachability / TLS from the connectors container."
+            ),
+        ) from exc
     except httpx.HTTPError as exc:
         logger.warning(
             "connectors_service.test.unreachable err=%s",
