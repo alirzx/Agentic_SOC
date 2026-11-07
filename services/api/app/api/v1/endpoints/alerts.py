@@ -669,8 +669,12 @@ async def list_alerts(
     confidence should only see alerts that actually carry the signal.
 
     `funnel_stage` / `disposition` power the SOC Funnel board filters.
+
+    Soft-deduped losers (``funnel_stage=deduplicated``) are hidden from the
+    default Alerts workbench — they belong on the SOC Funnel Deduplicated
+    column. Pass ``funnel_stage=deduplicated`` explicitly to inspect them.
     """
-    from app.services.funnel_stages import FUNNEL_STAGES, normalize_stage
+    from app.services.funnel_stages import DEDUPLICATED, FUNNEL_STAGES, normalize_stage
 
     filters = [Alert.tenant_id == current_user.tenant_id]
 
@@ -706,6 +710,9 @@ async def list_alerts(
                 detail=f"funnel_stage must be one of: {', '.join(FUNNEL_STAGES)}",
             )
         filters.append(Alert.funnel_stage == stage)
+    else:
+        # Default workbench: never surface soft-deduped copies.
+        filters.append(Alert.funnel_stage.is_distinct_from(DEDUPLICATED))
     if disposition is not None:
         filters.append(Alert.disposition == disposition.strip().lower())
 
@@ -735,7 +742,13 @@ async def get_alert_stats(
     """Get alert statistics for the dashboard."""
     from datetime import timedelta
 
-    tenant_filter = Alert.tenant_id == current_user.tenant_id
+    from app.services.funnel_stages import DEDUPLICATED
+
+    # Soft-deduped copies live in the Funnel Deduplicated column only.
+    tenant_filter = and_(
+        Alert.tenant_id == current_user.tenant_id,
+        Alert.funnel_stage.is_distinct_from(DEDUPLICATED),
+    )
 
     # Total count
     total_result = await db.execute(select(func.count()).select_from(Alert).where(tenant_filter))

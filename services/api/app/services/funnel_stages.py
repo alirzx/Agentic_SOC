@@ -2,7 +2,7 @@
 
 Tracks where each alert sits on the path:
 
-    ingested → triaged | suppressed → investigating → cased
+    ingested → triaged | suppressed | deduplicated → investigating → cased
              → ready_for_jira → jira_pushed
 
 Aligned with the Triage data-requirements doc:
@@ -23,6 +23,7 @@ from typing import Any
 INGESTED = "ingested"
 TRIAGED = "triaged"
 SUPPRESSED = "suppressed"
+DEDUPLICATED = "deduplicated"
 INVESTIGATING = "investigating"
 CASED = "cased"
 READY_FOR_JIRA = "ready_for_jira"
@@ -32,6 +33,7 @@ FUNNEL_STAGES: tuple[str, ...] = (
     INGESTED,
     TRIAGED,
     SUPPRESSED,
+    DEDUPLICATED,
     INVESTIGATING,
     CASED,
     READY_FOR_JIRA,
@@ -42,6 +44,7 @@ STAGE_LABELS: dict[str, str] = {
     INGESTED: "Ingested",
     TRIAGED: "Triaged",
     SUPPRESSED: "Suppressed",
+    DEDUPLICATED: "Deduplicated",
     INVESTIGATING: "Investigating",
     CASED: "Cased",
     READY_FOR_JIRA: "Ready for Jira",
@@ -52,6 +55,7 @@ BOARD_ORDER: tuple[str, ...] = (
     INGESTED,
     TRIAGED,
     SUPPRESSED,
+    DEDUPLICATED,
     INVESTIGATING,
     CASED,
     READY_FOR_JIRA,

@@ -1,16 +1,17 @@
-"""Purge display-identical duplicate alerts and cases within a tenant.
+"""Collapse display-identical duplicate alerts and cases within a tenant.
 
 Analyst-facing surfaces (SOC Funnel + Alerts) show many ESCU rows that look
 identical even when ``dedup_hash`` / ``source_event_ids`` differ. This module
 collapses those by **display fingerprint** (title, severity, rule, entities,
-disposition), keeps one canonical row, re-points case links, then DELETEs the
-rest.
+disposition), keeps one canonical alert, and soft-marks losers as
+``funnel_stage=deduplicated`` (visible in the Deduplicated board column).
 
-Cases from the agentic funnel that share title+severity are likewise merged.
+Cases from the agentic funnel that share title+severity are still hard-merged.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from typing import Any
@@ -58,8 +59,10 @@ def case_content_key(
 def alert_display_key(row: dict[str, Any]) -> str:
     """Fingerprint of what analysts see as 'the same alert'.
 
-    Ignores ``dedup_hash`` and ``source_event_ids`` — Splunk ESCU often mints a
-    new event id per poll while title/rule/entities stay identical.
+    Ignores ``dedup_hash``, ``source_event_ids``, and per-row entity lists —
+    Splunk ESCU re-fires the same rule across hosts / polls while title + rule
+    stay identical. Entities are unioned onto the canonical survivor instead
+    of keeping the key apart (see ``merge_alert_entities``).
     """
     title = (row.get("title") or "").strip().lower()
     severity = (row.get("severity") or "").strip().lower()
@@ -67,11 +70,40 @@ def alert_display_key(row: dict[str, Any]) -> str:
         (row.get("rule_id") or row.get("rule_name") or "").strip().lower()
     )
     disposition = (row.get("disposition") or "").strip().lower()
-    hosts = _json_stable(row.get("affected_hosts"))
-    ips = _json_stable(row.get("affected_ips"))
-    users = _json_stable(row.get("affected_users"))
-    # When entities are empty, title+severity+rule still collapses ESCU floods.
-    return f"display|{title}|{severity}|{rule}|{disposition}|{hosts}|{ips}|{users}"
+    return f"display|{title}|{severity}|{rule}|{disposition}"
+
+
+def merge_alert_entities(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Union hosts / ips / users across a duplicate group (preserve first-seen casing)."""
+
+    def collect(field: str) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for row in rows:
+            raw = row.get(field)
+            values: list[Any]
+            if raw is None:
+                values = []
+            elif isinstance(raw, list):
+                values = raw
+            else:
+                values = [raw]
+            for value in values:
+                text_value = str(value).strip()
+                if not text_value:
+                    continue
+                key = text_value.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(text_value)
+        return out
+
+    return {
+        "affected_hosts": collect("affected_hosts"),
+        "affected_ips": collect("affected_ips"),
+        "affected_users": collect("affected_users"),
+    }
 
 
 def pick_canonical_case(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -96,6 +128,7 @@ def pick_canonical_alert(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "triaged": 2,
         "ingested": 1,
         "suppressed": 0,
+        "deduplicated": -1,
     }
 
     def sort_key(row: dict[str, Any]) -> tuple:
@@ -107,23 +140,14 @@ def pick_canonical_alert(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return sorted(rows, key=sort_key)[0]
 
 
-def _json_stable(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, list):
-        parts = sorted({str(v).strip().lower() for v in value if str(v).strip()})
-        return "|".join(parts)
-    if isinstance(value, dict):
-        return str(sorted((str(k).lower(), str(v).lower()) for k, v in value.items()))
-    return str(value).strip().lower()
-
-
-async def _delete_alert_ids(
+async def _mark_alerts_deduplicated(
     db: AsyncSession,
     *,
     tenant_id: uuid.UUID,
     loser_ids: list[uuid.UUID],
+    canonical_id: uuid.UUID,
 ) -> None:
+    """Soft-collapse losers into the Deduplicated funnel column (keep the row)."""
     if not loser_ids:
         return
     for i in range(0, len(loser_ids), _DELETE_CHUNK):
@@ -146,10 +170,32 @@ async def _delete_alert_ids(
         await db.execute(
             text(
                 """
-                DELETE FROM alerts
-                 WHERE tenant_id = :tid AND id = ANY(CAST(:ids AS uuid[]))
+                UPDATE alerts
+                   SET funnel_stage = 'deduplicated',
+                       case_id = NULL,
+                       tags = COALESCE(tags, '[]'::jsonb) || CAST(:extra AS jsonb),
+                       updated_at = now()
+                 WHERE tenant_id = :tid
+                   AND id = ANY(CAST(:ids AS uuid[]))
+                   AND funnel_stage IS DISTINCT FROM 'deduplicated'
                 """
-            ).bindparams(tid=tenant_id, ids=ids)
+            ).bindparams(
+                tid=tenant_id,
+                ids=ids,
+                extra=json.dumps(
+                    ["deduplicated", f"deduplicated_into:{canonical_id}"]
+                ),
+            )
+        )
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET occurrence_count = COALESCE(occurrence_count, 1) + :n,
+                       updated_at = now()
+                 WHERE tenant_id = :tid AND id = :cid
+                """
+            ).bindparams(tid=tenant_id, cid=canonical_id, n=len(chunk))
         )
 
 
@@ -159,7 +205,13 @@ async def dedupe_exact_alerts(
     tenant_id: uuid.UUID,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Delete display-identical duplicate alert rows; keep one per group."""
+    """Soft-collapse display-identical alerts into the Deduplicated column.
+
+    Keeps one canonical row per display group in its current stage; marks the
+    rest ``funnel_stage=deduplicated`` (visible on the SOC Funnel board) and
+    bumps ``occurrence_count`` on the survivor. Rows already marked
+    ``deduplicated`` are left alone.
+    """
     rows = (
         await db.execute(
             text(
@@ -170,6 +222,7 @@ async def dedupe_exact_alerts(
                        created_at
                   FROM alerts
                  WHERE tenant_id = :tid
+                   AND COALESCE(funnel_stage, 'ingested') <> 'deduplicated'
                 """
             ).bindparams(tid=tenant_id)
         )
@@ -205,9 +258,8 @@ async def dedupe_exact_alerts(
                 continue
             groups.setdefault(dst, []).extend(groups.pop(src))
 
-    deleted: list[str] = []
+    collapsed: list[str] = []
     kept: list[str] = []
-    all_losers: list[uuid.UUID] = []
     for members in groups.values():
         # Deduplicate member ids if merge created overlaps
         by_id: dict[str, dict[str, Any]] = {str(m["id"]): m for m in members}
@@ -218,7 +270,7 @@ async def dedupe_exact_alerts(
         kept.append(str(canonical["id"]))
         losers = [m for m in unique if m["id"] != canonical["id"]]
         loser_ids = [m["id"] for m in losers]
-        deleted.extend(str(x) for x in loser_ids)
+        collapsed.extend(str(x) for x in loser_ids)
         if dry_run:
             continue
         if not canonical.get("case_id"):
@@ -233,10 +285,31 @@ async def dedupe_exact_alerts(
                         ).bindparams(cid=m["case_id"], id=canonical["id"], tid=tenant_id)
                     )
                     break
-        all_losers.extend(loser_ids)
-
-    if not dry_run and all_losers:
-        await _delete_alert_ids(db, tenant_id=tenant_id, loser_ids=all_losers)
+        merged = merge_alert_entities(unique)
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET affected_hosts = CAST(:hosts AS jsonb),
+                       affected_ips = CAST(:ips AS jsonb),
+                       affected_users = CAST(:users AS jsonb),
+                       updated_at = now()
+                 WHERE tenant_id = :tid AND id = :cid
+                """
+            ).bindparams(
+                tid=tenant_id,
+                cid=canonical["id"],
+                hosts=json.dumps(merged["affected_hosts"]),
+                ips=json.dumps(merged["affected_ips"]),
+                users=json.dumps(merged["affected_users"]),
+            )
+        )
+        await _mark_alerts_deduplicated(
+            db,
+            tenant_id=tenant_id,
+            loser_ids=loser_ids,
+            canonical_id=canonical["id"],
+        )
 
     return {
         "groups_collapsed": sum(
@@ -244,9 +317,11 @@ async def dedupe_exact_alerts(
             for m in groups.values()
             if len({str(x["id"]) for x in m}) >= 2
         ),
-        "alerts_deleted": len(deleted),
+        # Back-compat key for the existing UI ("alerts deleted"); now soft-marked.
+        "alerts_deleted": len(collapsed),
+        "alerts_deduplicated": len(collapsed),
         "alerts_kept": len(kept),
-        "deleted_ids": deleted[:50],
+        "deleted_ids": collapsed[:50],
         "dry_run": dry_run,
     }
 

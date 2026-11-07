@@ -436,13 +436,34 @@ def _is_platform_default_spl(spl: str) -> bool:
 
 
 def _is_replaceable_notable_search(spl: str) -> bool:
-    """True only when *no* operator SPL is configured (empty / whitespace).
+    """True when the configured SPL should yield to Mission Control default.
 
-    Non-empty ``custom_search`` is always honored; only a blank field falls
-    through to saved-search / platform default (index=notable with full
-    enrichment pipeline).
+    Honors a real operator query. Empty / whitespace falls through. Also
+    replaces the truncated ``index=notable | table _time source search_name…``
+    stubs that omit vendor identity fields — those make Sync look healthy
+    while fusion fingerprints only on weak title/host hashes.
     """
-    return not (spl or "").strip()
+    text = (spl or "").strip()
+    if not text:
+        return True
+    compact = " ".join(text.lower().split())
+    if compact in {"search index=notable", "index=notable"}:
+        return True
+    is_notable_table = compact.startswith("search index=notable | table ") or compact.startswith(
+        "index=notable | table "
+    )
+    if not is_notable_table:
+        return False
+    # Keep operator tables that still project a stable notable identity.
+    identity_markers = (
+        "notable_id",
+        "source_guid",
+        "source_event_id",
+        "event_id",
+        "detection_id",
+        "_cd",
+    )
+    return not any(marker in compact for marker in identity_markers)
 
 
 def _mitre_techniques_from_row(row: dict[str, Any]) -> list[str]:

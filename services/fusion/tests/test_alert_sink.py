@@ -286,8 +286,11 @@ async def test_durable_persist_clears_fusion_persist_failed_badge():
 
 
 @pytest.mark.asyncio
-async def test_display_duplicate_skips_insert_and_bumps_occurrence():
-    """Same title+rule+host with a new finding.uid must not mint another row."""
+async def test_display_duplicate_skips_insert_and_bumps_occurrence(monkeypatch):
+    """When AISOC_ALERT_DISPLAY_DEDUP is on, same title+rule+host collapses."""
+    from app.core import config as fusion_config
+
+    monkeypatch.setattr(fusion_config.settings, "alert_display_dedup_enabled", True)
     fused = _fused()
     existing = str(uuid.uuid4())
     pool = _StubPool(row={"id": fused.id})

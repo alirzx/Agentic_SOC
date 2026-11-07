@@ -30,6 +30,7 @@ const STAGE_ACCENT: Record<string, string> = {
   ingested: 'border-sky-500/40 bg-sky-500/5',
   triaged: 'border-cyan-500/40 bg-cyan-500/5',
   suppressed: 'border-gray-500/40 bg-gray-500/5',
+  deduplicated: 'border-violet-500/40 bg-violet-500/5',
   investigating: 'border-brand-500/40 bg-brand-500/5',
   cased: 'border-amber-500/40 bg-amber-500/5',
   ready_for_jira: 'border-orange-500/40 bg-orange-500/5',
@@ -184,8 +185,11 @@ export function SocFunnelBoardView() {
     try {
       const result = await socFunnelApi.backfill(hours);
       const synced = result.stages_updated ?? 0;
+      const deduped = Number(
+        result.dedupe?.alerts_deduplicated ?? result.dedupe?.alerts_deleted ?? 0,
+      );
       setBackfillMsg(
-        `Scanned ${result.alerts_scanned}: FP ${result.false_positive_tagged}, cases ${result.cases_created}, linked ${result.alerts_linked}, stages synced ${synced}`,
+        `Scanned ${result.alerts_scanned}: FP ${result.false_positive_tagged}, cases ${result.cases_created}, linked ${result.alerts_linked}, stages synced ${synced}, deduplicated ${deduped}`,
       );
       await mutate();
     } catch (err) {
@@ -200,9 +204,11 @@ export function SocFunnelBoardView() {
     setBackfillMsg(null);
     try {
       const result = await socFunnelApi.dedupeExact(false);
+      const alertMoved =
+        result.alerts.alerts_deduplicated ?? result.alerts.alerts_deleted ?? 0;
       setBackfillMsg(
-        `Removed duplicates — alerts: ${result.alerts.alerts_deleted} deleted ` +
-          `(${result.alerts.groups_collapsed} groups), cases: ${result.cases.cases_deleted} deleted ` +
+        `Deduplicated — alerts: ${alertMoved} moved to Deduplicated ` +
+          `(${result.alerts.groups_collapsed} groups), cases: ${result.cases.cases_deleted} merged ` +
           `(${result.cases.groups_collapsed} groups)`,
       );
       await mutate();
@@ -279,7 +285,7 @@ export function SocFunnelBoardView() {
             disabled={busy}
             onClick={() => void runDedupe()}
             className="text-xs px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-100 hover:bg-orange-500/25 disabled:opacity-50"
-            title="Delete alerts/cases that look identical (same title, rule, entities)"
+            title="Collapse same title+rule (+union entities) into Deduplicated; auto-runs on every board load"
           >
             {busy ? 'Running…' : 'Remove duplicates'}
           </button>

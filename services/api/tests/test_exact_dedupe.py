@@ -8,6 +8,7 @@ from uuid import uuid4
 from app.services.exact_dedupe import (
     alert_display_key,
     case_content_key,
+    merge_alert_entities,
     normalize_case_description,
     pick_canonical_alert,
     pick_canonical_case,
@@ -107,7 +108,7 @@ def test_alert_display_key_ignores_source_event_ids():
     assert alert_display_key(a) == alert_display_key(b)
 
 
-def test_alert_display_key_keeps_different_hosts_apart():
+def test_alert_display_key_collapses_same_rule_across_hosts():
     a = {
         "title": "ESCU - Access LSASS Memory for Dump Creation - Rule",
         "severity": "medium",
@@ -118,4 +119,15 @@ def test_alert_display_key_keeps_different_hosts_apart():
         "affected_users": [],
     }
     b = {**a, "affected_hosts": ["host-b"]}
-    assert alert_display_key(a) != alert_display_key(b)
+    assert alert_display_key(a) == alert_display_key(b)
+
+
+def test_merge_alert_entities_unions_hosts():
+    rows = [
+        {"affected_hosts": ["Host-A"], "affected_ips": ["1.1.1.1"], "affected_users": []},
+        {"affected_hosts": ["host-a", "Host-B"], "affected_ips": [], "affected_users": ["alice"]},
+    ]
+    merged = merge_alert_entities(rows)
+    assert merged["affected_hosts"] == ["Host-A", "Host-B"]
+    assert merged["affected_ips"] == ["1.1.1.1"]
+    assert merged["affected_users"] == ["alice"]
