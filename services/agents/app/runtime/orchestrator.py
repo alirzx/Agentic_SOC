@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 
-from app.privacy.context import PrivacyConfigurationError, privacy_context
+from app.privacy.context import PrivacyConfigurationError, async_privacy_context
 from app.privacy.tenant import resolve_tenant_for_llm
 
 from .contracts import AgentContext, AgentResult, hash_payload
@@ -87,8 +87,8 @@ class SocOrchestrator:
             tracker = None
             owns_tracker = False
         try:
-            scope = privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
-            with scope:
+            scope = async_privacy_context(privacy_tenant) if privacy_tenant is not None else contextlib.nullcontext()
+            async with scope:
                 return await self._run_pipeline(context)
         finally:
             if tracker is not None and owns_tracker:

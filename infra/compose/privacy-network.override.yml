@@ -1,0 +1,21 @@
+# Optional same-host network attachment for an independently managed Privacy
+# Gateway Compose project. Create the external network first and attach the
+# Gateway TLS endpoint through its own deployment override. This file does not
+# replace either project's existing private/default networks.
+#
+# Usage:
+#   docker network create aisoc-privacy
+#   docker compose -f docker-compose.yml \
+#     -f infra/compose/privacy-network.override.yml config --quiet
+services:
+  api:
+    networks:
+      - privacy_gateway
+  agents:
+    networks:
+      - privacy_gateway
+
+networks:
+  privacy_gateway:
+    external: true
+    name: ${AISOC_PRIVACY_EXTERNAL_NETWORK:-aisoc-privacy}

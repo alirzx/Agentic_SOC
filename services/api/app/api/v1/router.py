@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     agents,
+    agents_llm_proxy,
     airgap,
     alert_explain,
     alerts,
@@ -268,6 +269,7 @@ api_router.include_router(fusion.router)
 # (connector instance × capability) pairs the agent layer is allowed to
 # invoke. Read-only — actual invocation lives in the agents service.
 api_router.include_router(agents.router)
+api_router.include_router(agents_llm_proxy.router)
 
 # Universal capture push paths (Workstream 6 of AI Stack plan).
 # /inbox/templates + /inbox/tokens manage the per-tenant rotatable inbox

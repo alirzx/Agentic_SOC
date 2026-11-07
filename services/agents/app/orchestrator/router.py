@@ -61,7 +61,7 @@ from typing import Any
 import structlog
 
 from app.models.state import AgentStatus, InvestigationState
-from app.privacy.context import privacy_context
+from app.privacy.context import async_privacy_context
 from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm
 
 logger = structlog.get_logger()
@@ -638,7 +638,7 @@ class RouterOrchestrator:
         topology: str | None = None,
     ) -> tuple[InvestigationState, dict[str, Any]]:
         """Execute the selected topology inside the state's tenant session."""
-        with privacy_context(str(state.tenant_id)):
+        async with async_privacy_context(str(state.tenant_id)):
             return await self._run_bound(state, topology=topology)
 
     async def _run_bound(
@@ -736,7 +736,7 @@ class RouterOrchestrator:
         topology: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Keep tenant privacy bound for the full async-generator lifetime."""
-        with privacy_context(str(state.tenant_id)):
+        async with async_privacy_context(str(state.tenant_id)):
             async for event in self._stream_bound(state, topology=topology):
                 yield event
 

@@ -53,7 +53,7 @@ from app.llm.factory import llm_override
 from app.memory.outcomes import AI, HUMAN, lookup_prior, record_outcome, should_auto_suppress
 from app.memory.override_priors import lookup_human_override, should_suppress_from_override
 from app.models.state import AgentStatus, InvestigationState
-from app.privacy.context import PrivacyConfigurationError, privacy_context
+from app.privacy.context import PrivacyConfigurationError, async_privacy_context
 from app.privacy.tenant import normalize_tenant_uuid, resolve_tenant_for_llm
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
@@ -443,15 +443,13 @@ class FusedAlertTriageWorker:
                 if use_llm and cfg is not None:
                     # Route the LLM call through the tenant's BYOK key/model so
                     # auto-triage actually honours per-tenant credentials.
-                    with (
-                        privacy_context(str(state.tenant_id)),
-                        llm_override(
+                    async with async_privacy_context(str(state.tenant_id)):
+                        with llm_override(
                             api_key=cfg.api_key,
                             base_url=cfg.base_url,
                             model=cfg.model,
-                        ),
-                    ):
-                        state, tier = await self._llm_triage(state)
+                        ):
+                            state, tier = await self._llm_triage(state)
                 else:
                     state = await run_triage(state)
                     tier = "deterministic"

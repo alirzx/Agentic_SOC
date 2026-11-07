@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 
 import pytest
+from langchain_core.messages import HumanMessage
+
 from app.llm.contract import (
     LLMContractViolation,
     LLMInputContract,
@@ -65,3 +67,19 @@ def test_validate_messages_rejects_nested_json_string_with_class_uid(
     bad = "Context: " + json.dumps({"class_uid": 99})
     with pytest.raises(LLMContractViolation):
         validate_messages([{"role": "user", "content": bad}])
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"role": "user", "content": [{"type": "text", "text": "inspect this"}]},
+        ("user", [{"type": "text", "text": "inspect this"}]),
+        HumanMessage(content=[{"type": "text", "text": "inspect this"}]),
+    ],
+)
+def test_contract_rejects_multipart_content_instead_of_validating_a_stringified_copy(
+    contract_enforced,
+    message,
+) -> None:
+    with pytest.raises(LLMContractViolation, match="non-string message content"):
+        validate_messages([message])

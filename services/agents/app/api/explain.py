@@ -118,7 +118,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.rate_limit import RateLimitDecision, TokenBucketLimiter
-from app.privacy.context import PrivacyConfigurationError, privacy_context, privacy_enabled
+from app.privacy.context import PrivacyConfigurationError, async_privacy_context, privacy_enabled
 from app.privacy.tenant import resolve_request_tenant, resolve_tenant_for_llm
 from app.security.llm_resolver import LlmConfig, resolve_llm_config
 
@@ -627,7 +627,7 @@ async def _llm_summary(
         return payload["choices"][0]["message"]["content"].strip()
 
     except Exception as exc:
-        logger.warning("explain.llm_error", error=str(exc))
+        logger.warning("explain.llm_error", error_category=type(exc).__name__)
         return fallback
 
 
@@ -658,7 +658,7 @@ async def _stream_explanation(
         # so the drawer paints fast even on a cold network.
         async def _protected_summary() -> str:
             try:
-                with privacy_context(privacy_tenant_id or ""):
+                async with async_privacy_context(privacy_tenant_id or ""):
                     return await _llm_summary(alert, mitre_cards, fallback_summary, llm_config)
             except PrivacyConfigurationError:
                 return fallback_summary
@@ -699,7 +699,7 @@ async def _stream_explanation(
         yield _frame({"kind": "done", "alert_id": alert_id})
 
     except Exception as exc:  # noqa: BLE001 — frontend gets a structured error
-        logger.exception("explain.stream_failed", error=str(exc))
+        logger.warning("explain.stream_failed", error_category=type(exc).__name__)
         # Return a generic message to avoid exposing internal implementation details
         yield _frame({"kind": "error", "error": "An internal error occurred while generating the explanation."})
 
