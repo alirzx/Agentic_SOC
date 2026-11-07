@@ -242,9 +242,9 @@ class TestBuildRelatedEntities:
             )
         )
         by_kind = {e.kind: e for e in entities}
-        assert by_kind["host"].pivot == "/attack-graph?entity=host:h1"
-        assert by_kind["user"].pivot == "/attack-graph?entity=user:u1"
-        assert by_kind["ip"].pivot == "/attack-graph?entity=ip:1.2.3.4"
+        assert by_kind["host"].pivot == "/graph?entity=host:h1"
+        assert by_kind["user"].pivot == "/graph?entity=user:u1"
+        assert by_kind["ip"].pivot == "/graph?entity=ip:1.2.3.4"
 
 
 # ─── build_recommended_actions ───────────────────────────────────────────────
@@ -513,7 +513,7 @@ class TestPydanticContracts:
             kind="host",
             value="win-finance-07",
             label="primary",
-            pivot="/attack-graph?entity=host:win-finance-07",
+            pivot="/graph?entity=host:win-finance-07",
         )
         dump = e.model_dump(mode="json")
         assert set(dump) == {"group", "kind", "value", "label", "pivot"}

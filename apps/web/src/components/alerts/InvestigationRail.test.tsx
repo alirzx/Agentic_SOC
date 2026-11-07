@@ -126,7 +126,7 @@ const RELATED_ENTITIES: RelatedEntity[] = [
     type: 'user',
     value: 'alice@example.com',
     label: 'Alice (Finance)',
-    pivotPath: '/graph/user/alice%40example.com',
+    pivotPath: '/graph?entity=user:alice%40example.com',
   },
   {
     kind: 'principal',
@@ -137,7 +137,7 @@ const RELATED_ENTITIES: RelatedEntity[] = [
     kind: 'network',
     type: 'ip',
     value: '10.0.0.7',
-    pivotPath: '/graph/ip/10.0.0.7',
+    pivotPath: '/graph?entity=ip:10.0.0.7',
   },
   {
     kind: 'workflow',

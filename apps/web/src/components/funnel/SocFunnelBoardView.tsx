@@ -21,6 +21,23 @@ const STAGE_ACCENT: Record<string, string> = {
   jira_pushed: 'border-emerald-500/40 bg-emerald-500/5',
 };
 
+/** Stages where the primary object is the case, not the alert row. */
+const CASE_LINK_STAGES = new Set(['cased', 'ready_for_jira', 'jira_pushed']);
+
+function alertCardHref(stageId: string, alert: FunnelBoardAlert): string {
+  if (CASE_LINK_STAGES.has(stageId) && alert.case_id) {
+    return `/cases/${alert.case_id}`;
+  }
+  return `/alerts/${alert.id}`;
+}
+
+function stageListHref(stageId: string): string {
+  if (CASE_LINK_STAGES.has(stageId)) {
+    return '/cases';
+  }
+  return `/alerts?funnel_stage=${encodeURIComponent(stageId)}`;
+}
+
 function StageColumn({
   stage,
   alerts,
@@ -29,6 +46,7 @@ function StageColumn({
   alerts: FunnelBoardAlert[];
 }) {
   const listed = alerts.reduce((n, a) => n + (a.same_title_count ?? 1), 0);
+  const listHref = stageListHref(stage.id);
   return (
     <section
       className={clsx(
@@ -39,9 +57,13 @@ function StageColumn({
       <header className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-gray-100">{stage.label}</h2>
         <Link
-          href={`/alerts?funnel_stage=${encodeURIComponent(stage.id)}`}
+          href={listHref}
           className="text-xs font-mono text-gray-400 hover:text-brand-300"
-          title={`Open all ${stage.count} alerts in Alerts`}
+          title={
+            CASE_LINK_STAGES.has(stage.id)
+              ? `Open cases (${stage.count} alerts in this stage)`
+              : `Open all ${stage.count} alerts in Alerts`
+          }
         >
           {stage.count}
         </Link>
@@ -52,11 +74,14 @@ function StageColumn({
         ) : (
           alerts.map((alert) => {
             const copies = alert.same_title_count ?? 1;
+            const href = alertCardHref(stage.id, alert);
+            const opensCase = href.startsWith('/cases/');
             return (
               <li key={alert.id}>
                 <Link
-                  href={`/alerts/${alert.id}`}
+                  href={href}
                   className="block rounded-lg border border-[#374151]/50 bg-dark-20/40 px-2.5 py-2 hover:border-brand-500/40 transition-colors"
+                  title={opensCase ? 'Open case' : 'Open alert'}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs text-gray-200 line-clamp-2">{alert.title}</p>
@@ -72,6 +97,7 @@ function StageColumn({
                   <p className="mt-1 text-[10px] text-gray-500 font-mono uppercase tracking-wide">
                     {alert.severity}
                     {alert.disposition ? ` · ${alert.disposition}` : ''}
+                    {opensCase ? ' · case' : ''}
                   </p>
                 </Link>
               </li>
@@ -85,7 +111,7 @@ function StageColumn({
           {listed < stage.count ? ` · ${stage.count} alerts total` : ''}
           {' · '}
           <Link
-            href={`/alerts?funnel_stage=${encodeURIComponent(stage.id)}`}
+            href={listHref}
             className="text-gray-500 hover:text-brand-300 underline-offset-2 hover:underline"
           >
             view all

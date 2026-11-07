@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import cytoscape, {
   type Core,
@@ -32,6 +33,26 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+
+/** Resolve Investigation Rail / hunt pivot query (`entity` or `focus`) to a node id. */
+function resolveFocusNodeId(
+  graph: AttackGraph,
+  raw: string | null,
+): string | null {
+  if (!raw) return null;
+  const token = raw.trim();
+  if (!token) return null;
+  const exact = graph.nodes.find((n) => n.id === token);
+  if (exact) return exact.id;
+  const bare = token.includes(':') ? token.slice(token.indexOf(':') + 1) : token;
+  const byLabel = graph.nodes.find(
+    (n) =>
+      n.label.toLowerCase() === bare.toLowerCase() ||
+      n.id.toLowerCase() === token.toLowerCase() ||
+      n.id.toLowerCase().endsWith(`:${bare.toLowerCase()}`),
+  );
+  return byLabel?.id ?? null;
+}
 
 // Register fcose once on the client.
 if (typeof window !== 'undefined') {
@@ -107,9 +128,11 @@ const KIND_SHAPES: Record<GraphNodeKind, string> = {
 interface GraphCanvasProps {
   graph: AttackGraph;
   onSelect?: (node: GraphNode | null) => void;
+  /** Node id to select + center after layout (from `?entity=` / `?focus=`). */
+  focusNodeId?: string | null;
 }
 
-function GraphCanvas({ graph, onSelect }: GraphCanvasProps) {
+function GraphCanvas({ graph, onSelect, focusNodeId }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
 
@@ -216,12 +239,21 @@ function GraphCanvas({ graph, onSelect }: GraphCanvasProps) {
       if (evt.target === cy) onSelect?.(null);
     });
 
+    if (focusNodeId && cy.$id(focusNodeId).nonempty()) {
+      const node = cy.$id(focusNodeId);
+      cy.elements().unselect();
+      node.select();
+      cy.animate({ center: { eles: node }, zoom: Math.max(cy.zoom(), 1.2) }, { duration: 400 });
+      const original = graph.nodes.find((n) => n.id === focusNodeId);
+      onSelect?.(original ?? null);
+    }
+
     cyRef.current = cy;
     return () => {
       cy.destroy();
       cyRef.current = null;
     };
-  }, [graph, onSelect]);
+  }, [graph, onSelect, focusNodeId]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
@@ -332,13 +364,16 @@ function MitreHeatmap({ coverage }: { coverage: MitreCoverage }) {
 
 export function AttackGraphView() {
   const [selected, setSelected] = useState<GraphNode | null>(null);
+  const searchParams = useSearchParams();
+  const pivotToken =
+    searchParams.get('entity') || searchParams.get('focus') || searchParams.get('node');
 
   const graphState = useSWR<AttackGraph>(
     'attack-graph',
     async () => {
       try {
         return await graphApi.getOverview({ depth: 3 });
-      } catch (err) {
+      } catch {
         // Fall back to demo data so the UI is always alive.
         return DEMO_GRAPH;
       }
@@ -360,6 +395,10 @@ export function AttackGraphView() {
 
   const graph = graphState.data;
   const mitre = mitreState.data;
+  const focusNodeId = useMemo(
+    () => (graph ? resolveFocusNodeId(graph, pivotToken) : null),
+    [graph, pivotToken],
+  );
 
   return (
     <div className="space-y-6">
@@ -398,7 +437,11 @@ export function AttackGraphView() {
                 />
               </div>
             ) : graph && graph.nodes.length > 0 ? (
-              <GraphCanvas graph={graph} onSelect={setSelected} />
+              <GraphCanvas
+                graph={graph}
+                onSelect={setSelected}
+                focusNodeId={focusNodeId}
+              />
             ) : (
               <div className="p-6">
                 <EmptyState

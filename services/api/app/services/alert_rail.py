@@ -189,9 +189,8 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
     """Produce the rail's Related Entities list from an ``Alert`` row.
 
     The function is pure — no DB I/O, no clock reads. Same row →
-    same output. Pivot URLs use the same `?entity=…` query the
-    AttackGraphView already parses, so the rail "just works" when
-    the analyst clicks through.
+    same output. Pivot URLs use ``/graph?entity=…`` (the live Attack
+    Graph console route) so the rail never lands on a retired path.
     """
     bucket = _EntityBucket.empty()
     raw_event = alert.raw_event if isinstance(alert.raw_event, dict) else {}
@@ -206,21 +205,21 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             group="principal",
             kind="host",
             value=host,
-            pivot=f"/attack-graph?entity=host:{host}",
+            pivot=f"/graph?entity=host:{host}",
         )
     for user in _dedup_strs(alert.affected_users or ()):
         bucket.add(
             group="principal",
             kind="user",
             value=user,
-            pivot=f"/attack-graph?entity=user:{user}",
+            pivot=f"/graph?entity=user:{user}",
         )
     for asset in _dedup_strs(alert.affected_assets or ()):
         bucket.add(
             group="principal",
             kind="asset",
             value=asset,
-            pivot=f"/attack-graph?entity=asset:{asset}",
+            pivot=f"/graph?entity=asset:{asset}",
         )
 
     # ── Network ─────────────────────────────────────────────────────────
@@ -229,7 +228,7 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             group="network",
             kind="ip",
             value=ip,
-            pivot=f"/attack-graph?entity=ip:{ip}",
+            pivot=f"/graph?entity=ip:{ip}",
         )
     dst_port = _from_blob(raw_event, ("dest_port", "destination_port", "dport"))
     if dst_port:
@@ -247,7 +246,7 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             kind="ip",
             value=src_ip,
             label="source",
-            pivot=f"/attack-graph?entity=ip:{src_ip}",
+            pivot=f"/graph?entity=ip:{src_ip}",
         )
     dst_ip = _from_blob(raw_event, ("dst_ip", "destination_ip", "remote_ip", "dest_ip"))
     if dst_ip:
@@ -256,7 +255,7 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             kind="ip",
             value=dst_ip,
             label="destination",
-            pivot=f"/attack-graph?entity=ip:{dst_ip}",
+            pivot=f"/graph?entity=ip:{dst_ip}",
         )
     domain = _from_blob(raw_event, ("domain", "target_domain", "host_domain"))
     if domain:
@@ -264,7 +263,7 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             group="network",
             kind="domain",
             value=domain,
-            pivot=f"/attack-graph?entity=domain:{domain}",
+            pivot=f"/graph?entity=domain:{domain}",
         )
     url = _from_blob(raw_event, ("url", "request_url", "uri"))
     if url:

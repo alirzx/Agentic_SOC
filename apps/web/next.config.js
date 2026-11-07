@@ -101,6 +101,13 @@ const nextConfig = {
         destination: '/dashboard',
         permanent: true,
       },
+      // Investigation Rail used to emit /attack-graph?entity=…; the live
+      // console route is /graph. Keep query string (Next passes it through).
+      {
+        source: '/attack-graph',
+        destination: '/graph',
+        permanent: true,
+      },
     ];
   },
 
