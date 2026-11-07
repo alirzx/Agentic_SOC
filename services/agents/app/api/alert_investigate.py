@@ -137,30 +137,6 @@ def _findings_markdown(state: Any) -> str:
     return "\n\n".join(bits) if bits else "Investigation completed with no narrative report."
 
 
-@router.post("/investigate", response_model=AgentInvestigationOut)
-async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> AgentInvestigationOut:
-    """Run a full agent investigation for one alert and return the report."""
-    alert_id = _resolve_alert_id(req)
-    summary = _build_summary(req, alert_id)
-    run_id = str(uuid4())
-    started_at = datetime.now(UTC).isoformat()
-    gateway = validate_gateway_config()
-    model_name = gateway.get("model_investigation")
-    _runs[run_id] = {
-        "status": "running",
-        "alertId": alert_id,
-        "startedAt": started_at,
-        "model": model_name,
-    }
-    logger.info(
-        "alert_investigate.start",
-        run_id=run_id,
-        alert_id=alert_id,
-        llm_configured=gateway.get("llm_configured"),
-        model=model_name,
-        base_url=gateway.get("base_url_normalized_sanitized"),
-    )
-    tenant_owner: str | None = None
 async def _run_investigation(
     *,
     run_id: str,
@@ -172,15 +148,13 @@ async def _run_investigation(
     started_at: str,
 ) -> None:
     """Background worker — never raises into the request path."""
+    tenant_owner: str | None = None
     try:
-        tenant_id = await resolve_tenant_for_llm(trusted_workflow_tenant(request, req.tenant_id), allow_default=True)
         tenant_owner = tenant_id
         _runs[run_id]["_tenant_owner"] = tenant_owner
         state = await InvestigatorOrchestrator().run(
             case_id=alert_id,
             alert_summary=summary,
-            raw_alert=req.raw_alert or {"alert_id": alert_id},
-            tenant_id=tenant_id,
             raw_alert=raw_alert or {"alert_id": alert_id},
             tenant_id=tenant_id or "default",
         )
@@ -214,8 +188,6 @@ async def _run_investigation(
         completed_at = datetime.now(UTC).isoformat()
         logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error_category=type(exc).__name__)
         result = AgentInvestigationOut(
-        logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error=str(exc))
-        _runs[run_id] = AgentInvestigationOut(
             id=run_id,
             alertId=alert_id,
             status="failed",
@@ -231,9 +203,6 @@ async def _run_investigation(
             **result.model_dump(),
             **({"_tenant_owner": tenant_owner} if tenant_owner is not None else {}),
         }
-        raise HTTPException(status_code=502, detail="Investigation failed") from exc
-            error=str(exc),
-        ).model_dump()
 
 
 @router.post("/investigate", response_model=AgentInvestigationOut)

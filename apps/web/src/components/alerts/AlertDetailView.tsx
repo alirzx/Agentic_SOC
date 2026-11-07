@@ -23,6 +23,9 @@ import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { ExplainDrawer } from '@/components/alerts/ExplainDrawer';
 import { CreateCaseModal } from '@/components/alerts/CreateCaseModal';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { RunbookPage } from '@/components/runbook/RunbookPage';
+import { request } from '@/lib/api';
+import type { RunbookEnvelope } from '@/components/runbook/runbook.types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -954,6 +957,85 @@ function AnalystOverridePanel({
   );
 }
 
+// ─── Runbook Alert Panel ──────────────────────────────────────────────────────
+//
+// Wraps RunbookPage with an "Enrich LLM Payload" action button.
+// Shown when the alert has no llm_payload (common for simple-mode Splunk
+// connectors or custom SPL queries that don't produce the enriched payload).
+
+function RunbookAlertPanel({ alert, onMutate }: { alert: Alert; onMutate: () => void }) {
+  const [enriching, setEnriching] = useState(false);
+  const [enrichResult, setEnrichResult] = useState<{ status: string; source: string; caveats: string[] } | null>(null);
+
+  const handleEnrich = async () => {
+    setEnriching(true);
+    setEnrichResult(null);
+    try {
+      const result = await request<{ status: string; source: string; caveats: string[] }>(
+        `/api/v1/runbook/alerts/${alert.id}/enrich-payload`,
+        { method: 'POST' },
+      );
+      setEnrichResult(result);
+      onMutate();
+    } catch (err) {
+      setEnrichResult({ status: 'error', source: 'unknown', caveats: [err instanceof Error ? err.message : String(err)] });
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {!alert.llmPayload && (
+        <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5">
+          <div className="text-xs text-amber-300 leading-relaxed">
+            <span className="font-semibold">LLM payload missing.</span>
+            {' '}This alert was ingested without an enriched evidence envelope
+            {alert.connectorType === 'splunk' ? ' (simple query or custom SPL mode).' : '.'}
+            {' '}Build it now to enable AI investigation.
+          </div>
+          <button
+            type="button"
+            onClick={handleEnrich}
+            disabled={enriching}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded ring-1 ring-amber-500/30 transition-colors disabled:opacity-50"
+          >
+            {enriching ? (
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 border-2 border-amber-300/30 border-t-amber-300 rounded-full animate-spin" />
+                Enriching…
+              </span>
+            ) : (
+              '⚡ Build LLM Payload'
+            )}
+          </button>
+        </div>
+      )}
+
+      {enrichResult && (
+        <div className={`text-xs px-3 py-2 rounded border ${
+          enrichResult.status === 'ok'
+            ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
+            : 'text-red-300 bg-red-500/10 border-red-500/20'
+        }`}>
+          {enrichResult.status === 'ok'
+            ? `✓ Payload built from ${enrichResult.source === 'splunk_rest' ? 'Splunk REST API' : 'alert fields'}.`
+            : `✗ ${(enrichResult.caveats || []).join(', ') || 'Enrichment failed.'}`}
+          {(enrichResult.caveats || []).length > 0 && enrichResult.status === 'ok' && (
+            <span className="text-amber-400 ml-2">Caveats: {enrichResult.caveats.join(', ')}</span>
+          )}
+        </div>
+      )}
+
+      <RunbookPage
+        subjectType="alert"
+        subjectId={alert.id}
+        fetchRunbook={() => request<RunbookEnvelope>(`/api/v1/runbook/alert/${alert.id}`)}
+      />
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function AlertDetailView({
@@ -965,7 +1047,7 @@ export function AlertDetailView({
   title?: string;
   host?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'raw' | 'llm'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'runbook' | 'raw' | 'llm'>('overview');
   // Side drawer for the "Explain this alert" structured walkthrough
   // (`POST /api/v1/explain`). Kept local to the detail view because it
   // only makes sense while a single alert is on screen.
@@ -1124,7 +1206,7 @@ export function AlertDetailView({
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[#374151]">
-        {(['overview', 'timeline', 'raw'] as const).map((tab) => (
+        {(['overview', 'runbook', 'raw'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -1288,27 +1370,8 @@ export function AlertDetailView({
         </div>
       )}
 
-      {activeTab === 'timeline' && (
-        <Section title="Event Timeline">
-          <div className="space-y-4">
-            {[
-              { time: alert.createdAt, type: 'alert_created', title: 'Alert Created', desc: `Alert ingested from ${alert.source}` },
-              { time: alert.updatedAt, type: 'status_change', title: 'Status Updated', desc: `Status changed to ${alert.status}` },
-            ].map((event, i) => (
-              <div key={i} className="flex gap-4">
-                <div className="flex flex-col items-center">
-                  <div className="w-2 h-2 bg-brand-500 rounded-full mt-1.5 shrink-0" />
-                  {i < 1 && <div className="w-px flex-1 bg-dark-20 mt-1" />}
-                </div>
-                <div className="pb-4">
-                  <div className="text-sm font-medium text-gray-200">{event.title}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{event.desc}</div>
-                  <div className="text-xs text-gray-600 mt-1" suppressHydrationWarning>{formatAlertTime(event.time, 'MMM d, yyyy HH:mm:ss')}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
+      {activeTab === 'runbook' && (
+        <RunbookAlertPanel alert={alert} onMutate={mutate} />
       )}
 
       {activeTab === 'raw' && (

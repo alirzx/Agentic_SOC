@@ -162,8 +162,8 @@ class PlaybookStore:
         if pb is None:
             return None
         now = datetime.now(UTC).isoformat()
-        data["updated_at"] = now
-        updated = pb.model_copy(update=data)
+        payload = {**pb.model_dump(mode="python"), **data, "updated_at": now}
+        updated = Playbook.model_validate(payload)
         self._playbooks[playbook_id] = updated
         self._save()
         return updated

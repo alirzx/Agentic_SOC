@@ -485,7 +485,15 @@ class FusedAlertTriageWorker:
         self._attach_unified_risk(state, message=message, confidence=float(confidence or 0.0))
 
         _METRICS["triaged"] += 1
-        await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost_usd=cost_usd)
+        await self._record(
+            state,
+            tier=tier,
+            verdict=verdict,
+            confidence=confidence,
+            tokens=tokens,
+            cost_usd=cost_usd,
+            signature=fingerprint,
+        )
 
         # Wave 1 — write the durable outcome back as a per-signature prior so
         # autonomous closures compound (a later identical alert can suppress).
@@ -837,6 +845,7 @@ class FusedAlertTriageWorker:
         confidence: float,
         tokens: int = 0,
         cost_usd: float = 0.0,
+        signature: str | None = None,
     ) -> None:
         """Durably persist the triage outcome (issue #571).
 
@@ -874,6 +883,24 @@ class FusedAlertTriageWorker:
             tokens=tokens,
             cost_usd=cost_usd,
         )
+
+        # === Phase 2: Create Runbook Task for needs_review ===
+        if str(verdict).strip().lower() == "needs_review":
+            alert_id = (state.raw_alert or {}).get("id")
+            task_created = await ledger_module.create_task_for_needs_review(
+                alert_id=alert_id,
+                tenant_ref=str(state.tenant_id),
+                confidence=float(confidence or 0.0),
+                rationale=rationale,
+                signature=signature,
+            )
+            if task_created:
+                logger.info(
+                    "auto_triage_worker.task_created",
+                    alert_id=alert_id,
+                    task_type="manual_review",
+                    verdict=verdict,
+                )
 
     @staticmethod
     def get_metrics() -> dict[str, int]:

@@ -9,9 +9,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import re
 import os
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -64,7 +64,7 @@ _MISSION_CONTROL_PIPELINE = r"""
 | foreach *
     [ eval rule_specific_json=if(
         isnotnull('<<FIELD>>')
-        AND NOT match("<<FIELD>>", "^(_.*|date_.*|info_.*|orig_.*|annotations.*|risk_.*|all_risk_objects|tag.*|source.*|host|index|time|count|punct|linecount|splunk_server|timeendpos|timestartpos|eventtype|search_name|rule_.*|notable_.*|event_id|event_hash|drilldown_.*|contributing_events_search|entity|entity_type|normalized_risk_object|severity|urgency|status|status_label|owner|disposition|detection_type|security_domain|threat_object|threat_object_type|rule_specific_json)$"),
+        AND NOT match("<<FIELD>>", "^(_.*|date_.*|info_.*|orig_.*|annotations.*|risk_.*|all_risk_objects|tag.*|source.*|host|index|time|splunk_server|timeendpos|timestartpos|eventtype|search_name|rule_.*|notable_.*|event_id|event_hash|contributing_events_search|entity|entity_type|normalized_risk_object|severity|urgency|status|status_label|owner|disposition|detection_type|security_domain|threat_object|threat_object_type|rule_specific_json)$"),
         json_set_exact(rule_specific_json, "<<FIELD>>", '<<FIELD>>'),
         rule_specific_json) ]
 | eval search_name=coalesce(search_name, source)
@@ -254,6 +254,79 @@ _MISSION_CONTROL_PIPELINE = r"""
 """
 
 _DEFAULT_NOTABLE_SPL = f"search index={_DEFAULT_INDEX} {_MISSION_CONTROL_PIPELINE}"
+
+# Low-memory notable projection.
+#
+# The Mission Control pipeline above is the best payload the platform can build,
+# but it is expensive: ``| foreach *`` touches every field of every row, and the
+# ``| rest`` joins pull the saved-search + macro catalogs on each poll. On
+# instances holding tens of thousands of notables in the window Splunk answers
+# with a memory error and the poll returns nothing at all.
+#
+# This query is the fallback for exactly those instances. It is deliberately
+# dumb — one projection, no joins, no expansion — and the LLM payload is built
+# in Python from the returned columns instead (``_build_llm_payload``), with the
+# fidelity it lost recorded in ``_meta.caveats`` and surfaced on the Runbook.
+_SIMPLE_NOTABLE_SPL = (
+    "search index=notable | table _time source search_name severity host dvc "
+    "dest_port source_guid source_event_id _cd _raw"
+)
+
+# ``pipeline`` — always the full Mission Control pipeline (default, unchanged
+#               behaviour for every existing connector instance).
+# ``auto``     — cheap preflight count; fall to the simple query above the
+#               configured notable threshold.
+# ``simple``   — always the simple query.
+_QUERY_MODES = ("pipeline", "simple", "auto")
+_DEFAULT_PIPELINE_MAX_NOTABLES = 20_000
+
+# Default custom SPL auto-filled when the operator picks simple mode.
+# Richer than _SIMPLE_NOTABLE_SPL (which is the bare internal fallback) — this
+# one extracts the key fields that _build_llm_payload needs, gives each alert a
+# stable notable_id, and keeps annotation fields flat so the enrichment service
+# can read them without extra parsing.
+_DEFAULT_SIMPLE_CUSTOM_SPL = (
+    "search index=notable | extract"
+    " | eval notable_id=coalesce(source_event_id, source_guid, detection_id)"
+    " | table _time notable_id search_name detection_id detection_type"
+    " dvc dest dest_ip dest_port dest_nt_host dest_os dest_owner"
+    " dest_priority dest_category dest_bunit dest_country dest_city dest_mac"
+    " src src_ip src_port host user user_name severity urgency status owner disposition"
+    " security_domain transport is_prohibited orig_rule_title orig_rule_description"
+    " source_event_id source_guid annotations"
+    " annotations_mitre_attack annotations_analytic_story"
+    " annotations_kill_chain_phases annotations_cis20 annotations_nist"
+    " annotations_data_source annotations_type annotations_type_list"
+    " action EventID Image Path ProcessID ImageLoaded ScriptBlockText"
+    " entity entity_type risk_object risk_score normalized_risk_object"
+    " contributing_events_search app authentication_method signature signature_id"
+    " | sort 0 - _time"
+)
+
+# Fields the notable pipeline never puts into ``rule_specific_json`` — the Python
+# payload builder applies the same exclusion so both modes agree on what counts
+# as a rule-specific alert field.
+_ALERT_FIELD_EXCLUDE_RE = re.compile(
+    r"^(_.*|date_.*|info_.*|orig_.*|annotations.*|risk_.*|all_risk_objects|tag.*|source.*|host"
+    r"|index|time|splunk_server|timeendpos|timestartpos|eventtype|search_name|rule_.*|notable_.*"
+    r"|event_id|event_hash|contributing_events_search|entity|entity_type|normalized_risk_object"
+    r"|severity|urgency|status|status_label|owner|disposition|detection_type|security_domain"
+    r"|threat_object|threat_object_type|rule_specific_json|llm_payload|runbook_provenance)$"
+)
+
+# Annotations the payload carries, keyed by the flattened ``annotations_*``
+# column name the pipeline emits.
+_ANNOTATION_FIELDS: dict[str, str] = {
+    "mitre_attack": "annotations_mitre_attack",
+    "analytic_story": "annotations_analytic_story",
+    "kill_chain_phases": "annotations_kill_chain_phases",
+    "cve": "annotations_cve",
+    "cis20": "annotations_cis20",
+    "nist": "annotations_nist",
+    "data_source": "annotations_data_source",
+    "type": "annotations_type",
+    "type_list": "annotations_type_list",
+}
 _MITRE_TECH_RE = re.compile(r"\bT\d{4}(?:\.\d{3})?\b", re.IGNORECASE)
 
 # Default scheduler cadence for Splunk (30 minutes).
@@ -317,7 +390,7 @@ def _parse_stash_raw(raw_text: str) -> dict[str, str]:
     """Extract ``key=\"value\"`` pairs from an ES notable stash ``_raw`` line."""
     if not raw_text:
         return {}
-    return {key: value for key, value in _RAW_KV_RE.findall(raw_text)}
+    return dict(_RAW_KV_RE.findall(raw_text))
 
 
 def _enrich_notable_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -342,6 +415,24 @@ def mission_control_spl(filters: str = "", *, limit: int | None = None) -> str:
         # Insert head before the final sort to avoid processing the entire result set
         spl = spl.replace("| sort 0 - _time", f"| head {int(limit)} | sort 0 - _time")
     return spl
+
+
+# Per-poll rule enrichment budget. Two REST calls per distinct rule is cheap
+# for a handful of rules and pathological for a correlation-search estate, so
+# the connector enriches a small set and records that it skipped the rest.
+_MAX_RULE_ENRICH = 10
+_MAX_MACROS_PER_RULE = 8
+_MACRO_REF_RE = re.compile(r"`([a-zA-Z0-9_]+)(?:`|\()")
+
+
+def _is_platform_default_spl(spl: str) -> bool:
+    """True when the configured SPL is the shipped pipeline, not operator work.
+
+    ``custom_search`` is pre-filled with the platform default by the connector
+    schema, so treating every non-empty value as "operator authored" would make
+    ``query_mode`` unreachable on every freshly-created instance.
+    """
+    return " ".join((spl or "").split()) == " ".join(_DEFAULT_NOTABLE_SPL.split())
 
 
 def _is_replaceable_notable_search(spl: str) -> bool:
@@ -412,6 +503,39 @@ def _should_oneshot(spl: str) -> bool:
     return False
 
 
+def _epoch(value: Any) -> float | None:
+    """Parse a Splunk epoch-seconds value; anything unparseable is ``None``."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso(moment: float | None) -> str | None:
+    """ISO-8601 (UTC) for an epoch value, or ``None``."""
+    if moment is None:
+        return None
+    try:
+        return datetime.fromtimestamp(moment, tz=UTC).isoformat()
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _date_context(moment: float | None) -> dict[str, Any]:
+    """Hour / weekday / business-hours context, computed the same way the SPL does."""
+    if moment is None:
+        return {}
+    try:
+        stamp = datetime.fromtimestamp(moment, tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return {}
+    return {
+        "hour": stamp.hour,
+        "wday": stamp.strftime("%A"),
+        "is_business_hours": "yes" if 8 <= stamp.hour < 18 and stamp.weekday() < 5 else "no",
+    }
+
+
 def _stable_external_id(row: dict[str, Any]) -> str:
     """Replay-stable notable identity for checkpoint + ingest dedup.
 
@@ -462,7 +586,7 @@ def _time_sort_key(raw: str | None) -> float | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.timestamp()
 
 
@@ -520,6 +644,57 @@ class SplunkConnector(BaseConnector):
                     help_text="Dispatch a named saved search. Ignored when custom_search is set.",
                 ),
                 Field(
+                    "query_mode",
+                    "select",
+                    "Notable query mode",
+                    required=False,
+                    default="pipeline",
+                    options=[
+                        {"value": "pipeline", "label": "Full Mission Control pipeline (default)"},
+                        {"value": "auto", "label": "Auto — simple query above the notable threshold"},
+                        {"value": "simple", "label": "Simple query (low-memory / high-volume instances)"},
+                    ],
+                    help_text=(
+                        "The full pipeline enriches every notable but needs memory proportional "
+                        "to the window size. Instances whose notable index returns a memory error "
+                        "should use the simple query: fewer enrichments, LLM payload built in code."
+                    ),
+                ),
+                Field(
+                    "pipeline_max_notables",
+                    "number",
+                    "Auto-mode notable threshold",
+                    required=False,
+                    default=_DEFAULT_PIPELINE_MAX_NOTABLES,
+                    help_text=(
+                        "Only used when query_mode=auto. A cheap count runs first; above this "
+                        "many notables in the window the connector uses the simple query."
+                    ),
+                ),
+                Field(
+                    "fallback_to_simple_on_failure",
+                    "boolean",
+                    "Fall back to the simple query on pipeline failure",
+                    required=False,
+                    default=False,
+                    help_text=(
+                        "Off by default so an existing pipeline instance never silently changes "
+                        "the data it ingests. When on, a memory/timeout failure retries with the "
+                        "simple query and records that on the Runbook."
+                    ),
+                ),
+                Field(
+                    "enable_rule_enrichment",
+                    "boolean",
+                    "Enrich rule SPL and macros",
+                    required=False,
+                    default=True,
+                    help_text=(
+                        "Simple mode only: two small REST calls fetch the rule SPL and its macro "
+                        "definitions, recovering most of what the pipeline would have added."
+                    ),
+                ),
+                Field(
                     "custom_search",
                     "textarea",
                     "Custom SPL",
@@ -527,10 +702,9 @@ class SplunkConnector(BaseConnector):
                     default=_DEFAULT_NOTABLE_SPL,
                     help_text=(
                         "Ad-hoc SPL posted to /services/search/jobs on every poll. "
-                        "Whatever you save here is what runs — no silent rewrite. "
-                        "Leave blank to use a Saved Search Name or the platform default "
-                        "(index=notable with comprehensive enrichment, macro expansion, "
-                        "and LLM-ready payload generation). "
+                        "Leave blank to use a Saved Search Name or the platform default. "
+                        "When query_mode=simple the form pre-fills this with the recommended "
+                        "simple projection — edit as needed. "
                         "Use | rest … only for the ES rule catalog (definitions, not incidents)."
                     ),
                 ),
@@ -589,6 +763,10 @@ class SplunkConnector(BaseConnector):
         earliest_time: str = "-90d@d",
         ssl_verify: bool = False,
         page_size: int = _DEFAULT_PAGE_SIZE,
+        query_mode: str = "pipeline",
+        pipeline_max_notables: int | str = _DEFAULT_PIPELINE_MAX_NOTABLES,
+        fallback_to_simple_on_failure: bool = False,
+        enable_rule_enrichment: bool = True,
         **_ignored: Any,
     ):
         self._base_url = base_url.rstrip("/")
@@ -605,6 +783,23 @@ class SplunkConnector(BaseConnector):
             self._page_size = _DEFAULT_PAGE_SIZE
         self._checkpoint: dict[str, Any] | None = None
         self._next_checkpoint: dict[str, Any] | None = None
+
+        mode = str(query_mode or "pipeline").strip().lower()
+        if mode not in _QUERY_MODES:
+            logger.warning("splunk.unknown_query_mode", mode=mode[:32], fallback="pipeline")
+            mode = "pipeline"
+        self._query_mode = mode
+        try:
+            self._pipeline_max_notables = max(1, int(pipeline_max_notables))
+        except (TypeError, ValueError):
+            self._pipeline_max_notables = _DEFAULT_PIPELINE_MAX_NOTABLES
+        # Opt-in on purpose: an existing pipeline instance must keep ingesting
+        # exactly what it ingests today unless an operator flips this on.
+        self._fallback_to_simple = _coerce_bool(fallback_to_simple_on_failure, default=False)
+        self._enable_rule_enrichment = _coerce_bool(enable_rule_enrichment, default=True)
+        # Flow provenance for the current poll; attached to every normalized
+        # event so the Runbook can state which mode produced the alert.
+        self._poll_provenance: dict[str, Any] | None = None
 
     def set_checkpoint(self, checkpoint: dict[str, Any] | None) -> None:
         """Seed the poll with the last-accepted checkpoint (scheduler-owned)."""
@@ -692,7 +887,7 @@ class SplunkConnector(BaseConnector):
             lookback = max(int(since_seconds), 60) + 120
             return f"-{lookback}s"
         cp_ts = _time_sort_key(cp_time)
-        floor = datetime.now(timezone.utc) - timedelta(seconds=max(300, _MAX_CATCHUP_SECONDS))
+        floor = datetime.now(UTC) - timedelta(seconds=max(300, _MAX_CATCHUP_SECONDS))
         if cp_ts is not None and cp_ts < floor.timestamp():
             return floor.strftime("%Y-%m-%dT%H:%M:%S.000+00:00")
         return cp_time
@@ -711,16 +906,102 @@ class SplunkConnector(BaseConnector):
     async def _fetch_rows(self, client: httpx.AsyncClient, earliest: str) -> list[dict[str, Any]]:
         """Run the configured search and return result rows.
 
-        Precedence: non-empty ``custom_search`` (operator UI) → named saved
-        search → platform Mission Control default. Never rewrite a
-        non-empty custom SPL.
+        Precedence:
+
+        1. Operator-authored ``custom_search`` — never rewritten.
+        2. ``query_mode=simple`` (or ``auto`` above the notable threshold) — the
+           low-memory projection, with the LLM payload built in Python.
+        3. Named saved search / ``index=`` shorthand / platform default — the
+           full Mission Control pipeline (the historical behaviour).
+
+        Flow provenance is recorded per poll in ``self._poll_provenance`` and
+        attached to every normalized event, so the Runbook can say which mode
+        produced the alert instead of the mode being invisible.
         """
+        self._poll_provenance = None
+
         custom = self._custom_search
-        if custom and not _is_replaceable_notable_search(custom):
+        if custom and not _is_replaceable_notable_search(custom) and not _is_platform_default_spl(custom):
             search = _normalize_custom_spl(custom)
+            self._poll_provenance = {
+                "source": self.connector_id,
+                "query_mode": "custom",
+                "reason": "operator_configured",
+                "llm_payload_source": None,
+            }
             return await self._run_adhoc(
                 client, search, earliest, oneshot=_should_oneshot(search)
             )
+
+        mode, reason, volume = await self._select_query_mode(client, earliest)
+        if mode == "simple":
+            rows = await self._run_adhoc(client, _SIMPLE_NOTABLE_SPL, earliest, oneshot=False)
+            await self._attach_rule_context(client, rows)
+            self._poll_provenance = self._provenance(
+                mode="simple", reason=reason, volume=volume
+            )
+            return rows
+
+        try:
+            rows = await self._fetch_pipeline(client, earliest)
+        except Exception as exc:  # noqa: BLE001 — memory/timeout failures are the whole point
+            if not self._fallback_to_simple:
+                raise
+            detail = str(exc).replace("\r", " ").replace("\n", " ")[:200]
+            logger.warning(
+                "splunk.pipeline_failed_falling_back_to_simple",
+                error_type=type(exc).__name__,
+                error=detail,
+            )
+            rows = await self._run_adhoc(client, _SIMPLE_NOTABLE_SPL, earliest, oneshot=False)
+            await self._attach_rule_context(client, rows)
+            self._poll_provenance = self._provenance(
+                mode="simple",
+                reason="pipeline_failed",
+                volume=None,
+                extra={
+                    "fallback_from": "pipeline",
+                    "fallback_error": f"{type(exc).__name__}: {detail}",
+                },
+            )
+            return rows
+
+        self._poll_provenance = self._provenance(mode="pipeline", reason=reason, volume=volume)
+        return rows
+
+    def _provenance(
+        self,
+        *,
+        mode: str,
+        reason: str,
+        volume: int | None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build the per-poll provenance block attached to each event."""
+        from_query = mode == "pipeline"
+        caveats: list[str] = []
+        if not from_query:
+            caveats.append("simple_query_projection")
+            if not self._enable_rule_enrichment:
+                caveats.append("macros_not_expanded")
+        provenance: dict[str, Any] = {
+            "source": self.connector_id,
+            "query_mode": mode,
+            "reason": reason,
+            "notable_volume": volume,
+            "threshold": self._pipeline_max_notables if self._query_mode == "auto" else None,
+            "llm_payload_source": "query" if from_query else "code",
+            "caveats": caveats,
+        }
+        if extra:
+            provenance.update(extra)
+        return provenance
+
+    async def _fetch_pipeline(self, client: httpx.AsyncClient, earliest: str) -> list[dict[str, Any]]:
+        """The historical search precedence, unchanged.
+
+        Saved search → ``index=`` shorthand → platform Mission Control default.
+        """
         ss = self._saved_search
         if ss and not ss.startswith("index="):
             sid = await self._dispatch_saved(client, ss, earliest)
@@ -732,6 +1013,174 @@ class SplunkConnector(BaseConnector):
             index = ss[len("index=") :].strip()
             return await self._run_adhoc(client, f"search index={index}", earliest, oneshot=False)
         return await self._run_adhoc(client, mission_control_spl(), earliest, oneshot=False)
+
+    async def _select_query_mode(
+        self, client: httpx.AsyncClient, earliest: str
+    ) -> tuple[str, str, int | None]:
+        """Return ``(mode, reason, notable_volume)`` for this poll.
+
+        ``auto`` is the only mode that spends a search on deciding; ``simple``
+        and ``pipeline`` are operator choices and answer immediately.
+        """
+        if self._query_mode == "simple":
+            return "simple", "operator_configured", None
+        if self._query_mode != "auto":
+            return "pipeline", "operator_configured", None
+
+        volume = await self._preflight_count(client, earliest)
+        if volume is not None and volume > self._pipeline_max_notables:
+            return "simple", "volume_above_threshold", volume
+        return "pipeline", "auto_below_threshold", volume
+
+    def _notable_index(self) -> str:
+        """Index the notable search targets, honouring an ``index=`` shorthand."""
+        saved = self._saved_search
+        if saved.startswith("index="):
+            candidate = saved[len("index=") :].strip()
+            if candidate and candidate not in ("notable", _DEFAULT_INDEX):
+                return candidate
+        return _DEFAULT_INDEX
+
+    async def _preflight_count(self, client: httpx.AsyncClient, earliest: str) -> int | None:
+        """Cheap ``| stats count`` over the poll window (auto mode only).
+
+        Returns ``None`` when the count could not be determined. The caller then
+        keeps the pipeline — guessing "probably big" would silently downgrade
+        every instance whose count search is restricted by role or index ACL.
+        """
+        spl = f"search index={self._notable_index()} | stats count"
+        try:
+            rows = await self._run_adhoc(client, spl, earliest, oneshot=True)
+        except Exception as exc:  # noqa: BLE001 — a failed probe must not fail the poll
+            logger.info(
+                "splunk.preflight_count_failed",
+                error_type=type(exc).__name__,
+                error=str(exc).replace("\r", " ").replace("\n", " ")[:200],
+            )
+            return None
+        if not rows:
+            return 0
+        try:
+            return int(float(rows[0].get("count")))
+        except (TypeError, ValueError):
+            return None
+
+    async def _attach_rule_context(
+        self, client: httpx.AsyncClient, rows: list[dict[str, Any]]
+    ) -> None:
+        """Recover rule SPL + macros for a simple-mode poll (bounded).
+
+        The pipeline gets these through ``| rest`` joins; doing that per poll is
+        what breaks high-volume instances, so this fetches them for a small
+        number of distinct rules and records the skip otherwise.
+        """
+        if not rows:
+            return
+        if not self._enable_rule_enrichment:
+            return
+
+        names: list[str] = []
+        for row in rows:
+            name = _first_scalar(row.get("search_name") or row.get("source"))
+            if name and str(name) not in names:
+                names.append(str(name))
+
+        if len(names) > _MAX_RULE_ENRICH:
+            for row in rows:
+                row["_rule_context"] = {"skipped": "too_many_rules"}
+            return
+
+        cache: dict[str, dict[str, Any]] = {}
+        for name in names:
+            cache[name] = await self._fetch_rule_context(client, name)
+
+        for row in rows:
+            name = _first_scalar(row.get("search_name") or row.get("source"))
+            context = cache.get(str(name)) if name else None
+            if context:
+                row["_rule_context"] = context
+
+    async def _fetch_rule_context(self, client: httpx.AsyncClient, name: str) -> dict[str, Any]:
+        """Fetch one saved search's SPL (+ its macros) from the REST catalog."""
+        context: dict[str, Any] = {}
+        try:
+            resp = await client.get(
+                f"{self._base_url}/servicesNS/-/-/saved/searches/{quote(name, safe='')}",
+                headers=self._headers(),
+                params={"output_mode": "json"},
+            )
+            resp.raise_for_status()
+            entries = resp.json().get("entry") or []
+            content = (entries[0].get("content") if entries else None) or {}
+        except Exception as exc:  # noqa: BLE001 — enrichment is best-effort
+            logger.info(
+                "splunk.rule_context_failed",
+                rule=str(name).replace("\r", " ").replace("\n", " ")[:120],
+                error_type=type(exc).__name__,
+            )
+            return {}
+
+        spl = content.get("search")
+        if isinstance(spl, str) and spl.strip():
+            context["spl"] = spl
+            context["earliest"] = content.get("dispatch.earliest_time")
+            context["latest"] = content.get("dispatch.latest_time")
+            template = content.get("action.notable.param.rule_title")
+            if isinstance(template, str) and template.strip():
+                context["title_template"] = template
+            macros = self._macro_refs(spl)
+            if macros:
+                context["macros"] = await self._fetch_macros(client, macros)
+        return context
+
+    @staticmethod
+    def _macro_refs(spl: str) -> list[str]:
+        """Backtick macro references in a rule's SPL, de-duplicated and capped."""
+        seen: list[str] = []
+        for match in _MACRO_REF_RE.findall(spl or ""):
+            if match and match not in seen:
+                seen.append(match)
+            if len(seen) >= _MAX_MACROS_PER_RULE:
+                break
+        return seen
+
+    async def _fetch_macros(self, client: httpx.AsyncClient, names: list[str]) -> list[dict[str, Any]]:
+        """Fetch macro definitions; unreadable macros are reported, not guessed."""
+        out: list[dict[str, Any]] = []
+        for name in names:
+            try:
+                resp = await client.get(
+                    f"{self._base_url}/servicesNS/-/-/configs/conf-macros/{quote(name, safe='')}",
+                    headers=self._headers(),
+                    params={"output_mode": "json"},
+                )
+                resp.raise_for_status()
+                entries = resp.json().get("entry") or []
+                content = (entries[0].get("content") if entries else None) or {}
+                definition = content.get("definition")
+                if not isinstance(definition, str) or not definition.strip():
+                    definition = "(not found)"
+                out.append(
+                    {
+                        "name": name,
+                        "category": "filter" if name.endswith("_filter") else "other",
+                        "definition": definition,
+                        "description": content.get("description"),
+                        "is_active_filter": (
+                            "yes"
+                            if name.endswith("_filter") and definition not in ("search *", "(not found)")
+                            else "no"
+                        ),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 — one macro must not fail the poll
+                logger.info(
+                    "splunk.macro_fetch_failed",
+                    macro=str(name).replace("\r", " ").replace("\n", " ")[:120],
+                    error_type=type(exc).__name__,
+                )
+                out.append({"name": name, "category": "other", "definition": "(not found)"})
+        return out
 
     async def _dispatch_saved(
         self, client: httpx.AsyncClient, name: str, earliest: str
@@ -913,11 +1362,15 @@ class SplunkConnector(BaseConnector):
         host: str | None = None,
         notable_id: str | None = None,
     ) -> dict[str, Any] | None:
-        """Return the latest index=agentic* row for this ES rule (+ optional entity/id).
+        """Return the latest notable row for this ES rule (+ optional entity/id).
+
+        Clears per-poll provenance: a lookup is not a poll, and attaching the
+        previous poll's mode would misreport where this row came from.
 
         Optimized for re-enrich / hydrate: at most **two** oneshot searches
         over a 30-day window (not a full job + 90-day poll).
         """
+        self._poll_provenance = None
         # Lookups are small (head 5) — oneshot is fine and much faster than
         # create-job + poll, which was hanging the bulk re-enrich loop.
         lookup_earliest = "-30d"
@@ -974,6 +1427,163 @@ class SplunkConnector(BaseConnector):
             resp.raise_for_status()
             return list(resp.json().get("results", []))
 
+    def _annotations_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        """Normalise notable annotations into the payload's fixed key set."""
+        out: dict[str, Any] = dict.fromkeys(_ANNOTATION_FIELDS)
+        for key, column in _ANNOTATION_FIELDS.items():
+            value = row.get(column)
+            if value in (None, ""):
+                continue
+            out[key] = list(value) if isinstance(value, (list, tuple)) else str(value)
+
+        if not any(out.values()):
+            blob = row.get("annotations")
+            parsed: Any = blob
+            if isinstance(blob, str) and blob.strip().startswith("{"):
+                try:
+                    parsed = json.loads(blob)
+                except (TypeError, ValueError):
+                    parsed = None
+            if isinstance(parsed, dict):
+                for key, value in parsed.items():
+                    if key in out and value not in (None, ""):
+                        out[key] = value
+        return out
+
+    @staticmethod
+    def _time_window(row: dict[str, Any]) -> dict[str, Any]:
+        """The notable's declared search window, or an explicit ``unknown``."""
+        earliest = _epoch(row.get("info_min_time"))
+        latest = _epoch(row.get("info_max_time"))
+        search = _epoch(row.get("info_search_time"))
+        if earliest is not None and earliest > 0 and latest is not None and latest > 0:
+            return {
+                "earliest": _iso(earliest),
+                "latest": _iso(latest),
+                "search_time": _iso(search),
+                "source": "notable_info",
+            }
+        return {"earliest": None, "latest": None, "search_time": _iso(search), "source": "unknown"}
+
+    @staticmethod
+    def _event_datetime(row: dict[str, Any]) -> tuple[float | None, str]:
+        """Event time + where it came from (first event vs alert-time fallback)."""
+        first_time = _first_scalar(row.get("firstTime"))
+        if isinstance(first_time, str) and first_time.strip():
+            for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    parsed = datetime.strptime(first_time.strip(), fmt)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=UTC)
+                    return parsed.timestamp(), "first_event"
+                except ValueError:
+                    continue
+        return _epoch(row.get("_time")), "alert_time_fallback"
+
+    def _build_llm_payload(self, row: dict[str, Any]) -> dict[str, Any]:
+        """Assemble the LLM evidence payload from the returned columns.
+
+        Mirrors the shape ``_MISSION_CONTROL_PIPELINE`` emits so agents and the
+        alert workbench read one schema regardless of which mode produced the
+        row. Anything the simple projection cannot provide stays ``None`` and is
+        named in ``_meta.caveats`` — the builder never invents a value.
+        """
+        context = row.get("_rule_context") if isinstance(row.get("_rule_context"), dict) else {}
+        caveats: list[str] = ["simple_query_projection"]
+        if context.get("skipped"):
+            caveats.append("rule_enrichment_skipped")
+        if not context.get("spl"):
+            caveats.append("rule_spl_unavailable")
+
+        title_raw = _first_scalar(row.get("search_name") or row.get("orig_rule_title") or row.get("source"))
+        title = str(title_raw) if title_raw is not None else ""
+        template = context.get("title_template") or _first_scalar(row.get("orig_rule_title")) or title
+        description = _first_scalar(row.get("orig_rule_description"))
+
+        annotations = self._annotations_from_row(row)
+        if any(annotations.values()):
+            caveats.append("annotations_from_flattened_fields")
+
+        alert_fields = {
+            str(key): value
+            for key, value in row.items()
+            if value not in (None, "") and not _ALERT_FIELD_EXCLUDE_RE.match(str(key))
+        }
+
+        event_epoch, event_source = self._event_datetime(row)
+        window = self._time_window(row)
+        if window.get("earliest") is None and window.get("latest") is None:
+            caveats.append("time_window_unavailable")
+
+        return {
+            "alert_id": _first_scalar(
+                row.get("source_guid") or row.get("source_event_id") or row.get("notable_id")
+            ),
+            "alert_time": _iso(_epoch(row.get("_time"))),
+            "event_time": _iso(event_epoch),
+            "event_time_source": event_source,
+            "date_context": _date_context(event_epoch),
+            "rule_name": title,
+            "severity": _map_severity(row.get("severity") or row.get("urgency")),
+            "finding_count": row.get("count"),
+            "risk_score": row.get("risk_score"),
+            "risk_object": row.get("risk_object"),
+            "risk_object_type": row.get("risk_object_type"),
+            "entity": _first_scalar(row.get("entity") or row.get("dvc") or row.get("dest") or row.get("host")),
+            "entity_type": row.get("entity_type"),
+            "detection_type": row.get("detection_type"),
+            "security_domain": row.get("orig_security_domain") or row.get("security_domain"),
+            "investigation_type": row.get("investigation_type"),
+            "time_window": window,
+            "annotations": annotations,
+            "rule": {
+                "title": title,
+                "title_template": str(template) if template else None,
+                "description": str(description) if description else None,
+                "risk_message": row.get("risk_message"),
+                "next_steps": row.get("next_steps"),
+                "spl": context.get("spl"),
+                "spl_caveat": (
+                    "Saved-search definition fetched from the REST catalog; "
+                    "*_filter macros are not applied to the returned results."
+                    if context.get("spl")
+                    else "Not available: the simple query does not fetch the saved-search definition."
+                ),
+                "macro_definitions": context.get("macros") or [],
+            },
+            "investigation_hint": row.get("contributing_events_search"),
+            "alert_fields": alert_fields,
+            "_meta": {"provider": "splunk", "mode": "simple", "caveats": caveats},
+        }
+
+    def _attach_flow_metadata(self, row: dict[str, Any]) -> None:
+        """Attach the LLM payload and per-poll provenance to the row.
+
+        Both keys travel inside ``raw_event`` → OCSF ``raw_data`` → fusion's
+        ``_llm_payload`` lift, which is why neither needs a connector-side
+        schema change. Provenance is attached in every mode: it is a factual
+        record of how the data was acquired, and the Runbook renders it.
+        """
+        provenance = self._poll_provenance
+        mode = str((provenance or {}).get("query_mode") or "")
+
+        # A payload the query already produced is left exactly as it arrived —
+        # including its JSON-string form. ``raw_event`` is the historical record
+        # of what Splunk returned, and fusion's ``_llm_payload`` lift parses the
+        # string itself; re-encoding it here would rewrite that record.
+        existing = row.get("llm_payload")
+        has_payload = isinstance(existing, dict) or (
+            isinstance(existing, str) and existing.strip().startswith("{")
+        )
+        if not has_payload and mode == "simple":
+            # Only the simple projection has a known column set. An operator's
+            # free-form custom SPL is left alone rather than dressed up in a
+            # payload shape it may not honour.
+            row["llm_payload"] = self._build_llm_payload(row)
+
+        if provenance:
+            row["runbook_provenance"] = dict(provenance)
+
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         if isinstance(raw, dict) and "raw_event" in raw and raw.get("source") == self.connector_id:
             return raw
@@ -997,6 +1607,7 @@ class SplunkConnector(BaseConnector):
             }
 
         row = _enrich_notable_row(raw)
+        self._attach_flow_metadata(row)
         external_id = _stable_external_id(row)
         # Splunk multivalue fields (e.g. duplicated search_name) must be
         # unwrapped — otherwise title becomes a JSON/list string in Postgres

@@ -263,6 +263,116 @@ class Settings(BaseSettings):
     )
     HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
 
+    # ------------------------------------------------------------------
+    # Task 1.2 — Calibration monitor. Measures LLM confidence calibration
+    # via analyst feedback from Runbook. Logs ECE (Expected Calibration
+    # Error) metrics. When ECE exceeds threshold, the operator can manually
+    # disable auto-close. The monitor runs every 30 minutes (configurable
+    # via CALIBRATION_MONITOR_INTERVAL_SECONDS env var).
+    #
+    # ``CALIBRATION_MONITOR_ENABLED`` – Set false to disable (e.g. in
+    #                                     unit-test or dev environments).
+    #                                     Defaults to true in production.
+    # ------------------------------------------------------------------
+    CALIBRATION_MONITOR_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("CALIBRATION_MONITOR_ENABLED", "AISOC_CALIBRATION_MONITOR_ENABLED"),
+    )
+
+    # ------------------------------------------------------------------
+    # Runbook — creation-time automation-rule evaluator.
+    #
+    # The alerts that matter never pass through the alert API: fusion's
+    # ``AlertSink`` writes connector-ingested alerts straight to Postgres, so
+    # ``POST /api/v1/alerts`` and ``PATCH /api/v1/alerts/{id}`` never see them
+    # and a rule could only ever fire on a hand-submitted alert. The evaluator
+    # worker (``app/workers/rule_evaluator.py``) claims alerts whose
+    # ``automation_rules_evaluated_at`` is NULL and runs ``alert.created`` rules
+    # for them, which makes rule coverage independent of the write path.
+    #
+    # ``AISOC_RULE_EVALUATOR_ENABLED``          – set false to disable (unit-test
+    #                                            environments, or a deployment
+    #                                            that runs the evaluator
+    #                                            elsewhere). Defaults to true.
+    # ``AISOC_RULE_EVALUATOR_INTERVAL_SECONDS`` – claim cadence. 5s puts a
+    #                                            connector alert's rules a few
+    #                                            seconds behind ingest without
+    #                                            polling hard.
+    # ``AISOC_RULE_EVALUATOR_BATCH_SIZE``       – alerts claimed per pass.
+    #
+    # Inert unless the Runbook itself is enabled (``runbook_enabled()``): the
+    # ledger writer is a no-op when it is not, so there would be nothing to see.
+    # ------------------------------------------------------------------
+    RULE_EVALUATOR_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("AISOC_RULE_EVALUATOR_ENABLED", "RULE_EVALUATOR_ENABLED"),
+    )
+    RULE_EVALUATOR_INTERVAL_SECONDS: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "AISOC_RULE_EVALUATOR_INTERVAL_SECONDS", "RULE_EVALUATOR_INTERVAL_SECONDS"
+        ),
+    )
+    RULE_EVALUATOR_BATCH_SIZE: int = Field(
+        default=50,
+        validation_alias=AliasChoices("AISOC_RULE_EVALUATOR_BATCH_SIZE", "RULE_EVALUATOR_BATCH_SIZE"),
+    )
+
+    # ------------------------------------------------------------------
+    # Runbook (governed action ledger) — feature flag.
+    #
+    # ``None`` means "decide from the environment": ON in dev-class
+    # environments, OFF everywhere else. Shipping dark outside development is
+    # the conservative default — the ledger writes on hot paths (triage, funnel,
+    # ITSM) and an operator should opt in deliberately. ``runbook_enabled()``
+    # below is the single reader; endpoints depend on it via
+    # ``app.api.v1.deps.runbook_enabled``.
+    # ------------------------------------------------------------------
+    RUNBOOK_ENABLED: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("AISOC_RUNBOOK_ENABLED", "RUNBOOK_ENABLED"),
+    )
+
+    @field_validator("RUNBOOK_ENABLED", mode="before")
+    @classmethod
+    def _blank_runbook_flag_is_unset(cls, value: Any) -> Any:
+        """Treat ``AISOC_RUNBOOK_ENABLED=`` (set but empty) as unset.
+
+        Compose files and Fly secrets frequently carry an empty string for an
+        optional flag; without this it would be a boot-time validation error.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    # ------------------------------------------------------------------
+    # Agents service — internal calls.
+    #
+    # The API owns the analyst session; the agents service owns outcome memory
+    # (the per-evidence-signature priors that make triage improve). Analyst
+    # feedback therefore has to cross the service boundary. Calling it over
+    # HTTP keeps service ownership intact rather than letting the API write to
+    # another service's table.
+    #
+    # Authentication is the existing HMAC tenant header, not a user token:
+    # ``AISOC_AGENTS_TENANT_SIGNING_KEY`` must match the value the agents
+    # service verifies (``app.privacy.tenant``). When the key is unset the
+    # call is skipped entirely — an unsigned write is worse than a lost one.
+    #
+    # The base URL is deliberately NOT configured here: ``AGENTS_SERVICE_URL``
+    # / ``AGENTS_API_URL`` already resolve it for the other agents-proxying
+    # endpoints (``app.api.v1.endpoints.agents``), and a second setting would
+    # let the two disagree.
+    # ------------------------------------------------------------------
+    AGENTS_TENANT_SIGNING_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "AISOC_AGENTS_TENANT_SIGNING_KEY",
+            "AGENTS_TENANT_SIGNING_KEY",
+        ),
+    )
+    AGENTS_TIMEOUT_SECONDS: float = 3.0
+
     # Database
     # The default points at the bundled compose Postgres with its dev password.
     # In docker-compose.yml and .env.example the password is parameterised via
@@ -792,3 +902,18 @@ def enforce_secure_defaults(s: Settings | None = None) -> list[str]:
 
 
 settings = get_settings()
+
+
+def runbook_enabled() -> bool:
+    """Whether the Runbook feature is active in this process.
+
+    Explicit ``AISOC_RUNBOOK_ENABLED`` wins in both directions, so an operator
+    can turn it on in staging (or off in development) without a code change.
+    When unset, the answer follows the environment class: development-family
+    environments get it on so ``pnpm``-less local runs exercise the feature,
+    and every production-family environment gets it off until approved.
+    """
+    explicit = settings.RUNBOOK_ENABLED
+    if explicit is not None:
+        return bool(explicit)
+    return is_dev_env(settings.ENVIRONMENT)

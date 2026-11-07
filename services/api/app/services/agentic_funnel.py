@@ -26,6 +26,7 @@ from app.services.campaign_case import (
     infer_attack_theme,
     primary_campaign_key,
 )
+from app.services.runbook.emitters import emit_case_created
 
 logger = structlog.get_logger()
 
@@ -402,6 +403,10 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
     cases_created = 0
     linked = 0
     reportable: list[dict[str, Any]] = []
+    # New cases are collected here and written to the Runbook ledger AFTER the
+    # funnel's own commit: ``emit_case_created`` commits, and committing inside
+    # the loop would durably land half a backfill if a later alert failed.
+    created_cases: list[dict[str, Any]] = []
     skipped = 0
 
     for row in rows:
@@ -718,6 +723,15 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                         )
                     )
             cases_created += 1
+            created_cases.append(
+                {
+                    "case_id": case_id,
+                    "title": title,
+                    "severity": severity,
+                    "disposition": disposition,
+                    "alert_ids": [str(x) for x in sibling_ids],
+                }
+            )
         linked += len(sibling_ids)
         reportable.append(
             {
@@ -733,6 +747,21 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
 
     stage_sync = await sync_legacy_funnel_stages(db, tenant_id=tenant_id, since=since)
     await db.commit()
+
+    # Runbook: one "Case opened" row per case this run created. Each emission
+    # commits its own row; failures are swallowed by the emitter so a ledger
+    # problem never fails a backfill that already committed successfully.
+    for created in created_cases:
+        await emit_case_created(
+            db,
+            tenant_id=tenant_id,
+            case_id=created["case_id"],
+            case_title=str(created["title"]),
+            alert_ids=list(created["alert_ids"]),
+            actor_label="agentic-funnel-backfill",
+            severity=created["severity"],
+            disposition=created["disposition"],
+        )
     return {
         "window_hours": hours,
         "alerts_scanned": len(rows),
@@ -814,11 +843,70 @@ async def list_reportable(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int 
     }
 
 
+async def _open_runbook_tasks(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    since: datetime,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, int]]:
+    """Open Runbook tasks per alert and per funnel stage.
+
+    A stage column with 50 alerts is a number; the same column with "37 of them are
+    waiting on an analyst" is a diagnosis. The Runbook owns these rows, so this
+    reads them rather than duplicating the queue.
+
+    Degrades to empty maps when ``runbook_tasks`` is absent (a deployment that has
+    not run migration 064): a missing badge must never break the board.
+    """
+    try:
+        rows = (
+            await db.execute(
+                text(
+                    """
+                    SELECT t.alert_id::text AS alert_id,
+                           t.task_type,
+                           t.title,
+                           t.status,
+                           COALESCE(a.funnel_stage, 'ingested') AS stage
+                      FROM runbook_tasks t
+                      JOIN alerts a ON a.id = t.alert_id
+                     WHERE t.tenant_id = :tid
+                       AND t.status <> 'completed'
+                       AND a.created_at >= :since
+                     ORDER BY t.created_at
+                     LIMIT 500
+                    """
+                ).bindparams(tid=tenant_id, since=since)
+            )
+        ).mappings().all()
+    except Exception:  # noqa: BLE001 — the board must render even without this table
+        logger.warning("soc_funnel.open_tasks_unavailable", exc_info=True)
+        return {}, {}
+
+    by_alert: dict[str, list[dict[str, Any]]] = {}
+    by_stage: dict[str, int] = {}
+    for row in rows:
+        alert_id = str(row["alert_id"])
+        by_alert.setdefault(alert_id, []).append(
+            {
+                "task_type": row["task_type"],
+                "title": row["title"],
+                "status": row["status"],
+            }
+        )
+        stage = str(row["stage"] or "ingested")
+        by_stage[stage] = by_stage.get(stage, 0) + 1
+    return by_alert, by_stage
+
+
 async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 24) -> dict[str, Any]:
     """Stage counts + sample alerts for the SOC Funnel UI board."""
     from app.services.funnel_stages import BOARD_ORDER, STAGE_LABELS
 
     since = _window_since(hours)
+    tasks_by_alert, tasks_by_stage = await _open_runbook_tasks(
+        db, tenant_id=tenant_id, since=since
+    )
     counts_rows = (
         await db.execute(
             text(
@@ -837,6 +925,8 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             "id": stage,
             "label": STAGE_LABELS.get(stage, stage),
             "count": count_map.get(stage, 0),
+            # Alerts in this stage that are waiting on a human in the Runbook.
+            "open_tasks": tasks_by_stage.get(stage, 0),
         }
         for stage in BOARD_ORDER
     ]
@@ -888,6 +978,7 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 "case_id": str(row["case_id"]) if row.get("case_id") else None,
                 "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
                 "same_title_count": int(row.get("same_title_count") or 1),
+                "open_tasks": tasks_by_alert.get(str(row["id"]), []),
             }
         )
     total = sum(s["count"] for s in stages)

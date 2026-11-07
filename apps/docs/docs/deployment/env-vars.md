@@ -141,6 +141,23 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/SoorinSecurity/Agen
 | `AISOC_DEMO_BANNER` | `Demo data resets daily at 00:00 UTC. All write actions are disabled.` | Banner text rendered by the web app |
 | `AISOC_DISABLE_KAFKA` / `AISOC_DISABLE_CLICKHOUSE` / `AISOC_DISABLE_OPENSEARCH` / `AISOC_DISABLE_NEO4J` / `AISOC_DISABLE_QDRANT` | `false` | Skip the corresponding subsystem at boot — endpoints that need it return 503 |
 
+### Runbook
+
+Source: [`services/api/app/core/config.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/core/config.py)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_RUNBOOK_ENABLED` | _unset_ | Unset means "decide from the environment": ON in dev-class environments, OFF elsewhere. The ledger writes on hot paths (triage, funnel, ITSM), so shipping dark outside development is deliberate. An explicit `true`/`false` wins in both directions; an empty value is treated as unset. |
+| `CALIBRATION_MONITOR_ENABLED` | `true` | Starts the confidence-calibration worker ([`app/workers/calibration_monitor.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/workers/calibration_monitor.py)). It never starts in a dev-class `ENV`, whatever this is set to. |
+| `CALIBRATION_MONITOR_INTERVAL_SECONDS` | `1800` | How often the worker recalculates ECE from analyst feedback on Runbook tasks. |
+| `CALIBRATION_MONITOR_ECE_THRESHOLD` | `0.15` | Expected Calibration Error above which a warning is logged (`status: "warn"`). Nothing is disabled automatically — an operator decides. |
+| `CALIBRATION_MONITOR_MIN_SAMPLE_SIZE` | `20` | Graded tasks required before ECE is computed at all. Below this the worker reports `insufficient_data`. |
+| `AISOC_RULE_EVALUATOR_ENABLED` | `true` | Starts the creation-time automation-rule evaluator ([`app/workers/rule_evaluator.py`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/api/app/workers/rule_evaluator.py)). It claims every new alert once (`alerts.automation_rules_evaluated_at`), which is what makes rules fire for connector-ingested alerts that fusion writes straight to Postgres. Inert when `AISOC_RUNBOOK_ENABLED` is off or when `DATABASE_URL` is unset. |
+| `AISOC_RULE_EVALUATOR_INTERVAL_SECONDS` | `5` | Claim cadence. This is the rule-latency floor for a connector alert: ingest → fusion insert → at most this long before `alert.created` rules run. |
+| `AISOC_RULE_EVALUATOR_BATCH_SIZE` | `50` | Alerts claimed per pass. Raise it for a tenant whose alert rate exceeds `batch / interval` per second during bursts. |
+
+All four `CALIBRATION_MONITOR_*` values are read straight from the process environment at import time by the worker (they are not `Settings` fields), so they must be present in the API container's environment rather than in a `.env` file the app loads later. The three `AISOC_RULE_EVALUATOR_*` values *are* `Settings` fields (with unprefixed aliases), so they follow the normal precedence rules for the API service.
+
 ---
 
 ## Agents service (`services/agents`)
@@ -159,6 +176,8 @@ Source: [`services/agents/app/`](https://github.com/SoorinSecurity/Agentic_SOC/t
 | `REALTIME_INTERNAL_TOKEN` / `INTERNAL_TOKEN` | — | Shared secret matching the API/realtime services |
 | `PLAYBOOK_STORE_DIR` | `/data/playbooks` | Filesystem path for executable playbook DSL files |
 | `PLAYBOOK_PACK_ROOT` | `/data/playbook-packs` | Root directory for community playbook packs |
+| `AISOC_PLAYBOOK_RESUME` | `false` | Enables resumable playbook approvals: a run parked at an `approval` step creates a Runbook gate task, and `POST /api/v1/playbooks/runs/{id}/resume` accepts a decision. When off, parked runs create no task and the endpoint answers 503 — the pre-resume behaviour, which is honest but useless. Gates both halves, so they cannot disagree. |
+| `AISOC_AGENTS_TENANT_SIGNING_KEY` | — | HMAC key (≥32 bytes) the API signs its internal agents calls with. Without it, analyst feedback and playbook resumes are not sent (never sent unsigned). |
 | `ATTCK_DATA_PATH` | — | Path to a local MITRE ATT&CK STIX bundle (falls back to the bundled snapshot) |
 | `OTEL_SERVICE_NAME` | `aisoc-agents` | Service name in OTel traces |
 | `AISOC_VERSION` | `0.1.0` | Reported in OTel resource attributes |

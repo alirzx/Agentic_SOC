@@ -330,8 +330,6 @@ async def investigate_alert(
     try:
         async with httpx.AsyncClient(timeout=_INVESTIGATE_TIMEOUT_SECONDS) as client:
             resp = await client.post(url, json=payload, headers=_tenant_headers(current_user.tenant_id))
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload)
     except httpx.HTTPError as exc:
         logger.exception("agents.investigate.proxy_failed alert_id=%s", alert.id)
         raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
