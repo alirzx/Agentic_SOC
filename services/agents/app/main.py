@@ -24,6 +24,7 @@ from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
 from app.llm.factory import preflight_llm
 from app.playbook import PlaybookStore
+from app.privacy.context import validate_privacy_configuration
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
 from app.runtime.flags import enabled as agentic_enabled
 from app.runtime.shadow_consumer import AgenticShadowConsumer, shadow_consumer_enabled
@@ -37,6 +38,10 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Load resources on startup."""
+    # Privacy is a provider-egress security boundary. An explicitly enabled
+    # but incomplete remote configuration must stop startup, never degrade to
+    # an unprotected provider call.
+    validate_privacy_configuration()
     # Seed playbook store with default templates
     try:
         store = PlaybookStore.default()

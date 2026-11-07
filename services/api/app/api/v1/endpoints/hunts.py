@@ -38,6 +38,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.privacy_llm import safe_chat_post
 from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ Return ONLY valid JSON with this structure:
 No prose. Just JSON."""
 
 
-async def _generate_queries(hypothesis: str, mitre: str | None) -> dict[str, str] | None:
+async def _generate_queries(hypothesis: str, mitre: str | None, tenant_id: str) -> dict[str, str] | None:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
     if not api_key:
         return None
@@ -149,10 +150,10 @@ async def _generate_queries(hypothesis: str, mitre: str | None) -> dict[str, str
     enforce_airgap_for_url(completions_url)
     try:
         async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
+            resp = await safe_chat_post(client, 
                 completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
+                body={
                     "model": model,
                     "messages": [
                         {"role": "system", "content": _HUNT_SYSTEM},
@@ -161,6 +162,7 @@ async def _generate_queries(hypothesis: str, mitre: str | None) -> dict[str, str
                     "temperature": 0.2,
                     "response_format": {"type": "json_object"},
                 },
+                tenant_id=tenant_id,
             )
         resp.raise_for_status()
         return json.loads(resp.json()["choices"][0]["message"]["content"])
@@ -250,7 +252,7 @@ async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) ->
     # the deterministic query templates so hunt creation still succeeds offline
     # rather than surfacing a 500. Mirrors the phishing submit/retriage pattern.
     try:
-        queries = await _generate_queries(body.hypothesis, mitre) or _fallback_queries(body.hypothesis)
+        queries = await _generate_queries(body.hypothesis, mitre, tenant_id=str(user.tenant_id)) or _fallback_queries(body.hypothesis)
     except AirgapViolation:
         queries = _fallback_queries(body.hypothesis)
     hunt_id = uuid.uuid4()

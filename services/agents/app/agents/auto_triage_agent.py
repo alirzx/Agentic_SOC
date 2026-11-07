@@ -34,11 +34,10 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
-from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
+from app.context.auto_triage import compose_auto_triage_context
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
 from app.models.state import AgentStatus, InvestigationState
-from app.prompt_serialization import format_extra_fields_for_llm
 from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
 
 logger = structlog.get_logger()
@@ -132,12 +131,35 @@ You MUST respond with a JSON object and nothing else:
 
 Reasoning guidelines:
 - Consider the severity, IOC presence, MITRE technique IDs, and alert context.
-- Vendor risk_score > 0.7 with critical keywords strongly suggests true_positive.
+- First distinguish an event-based detection from a Risk-Based Alert (RBA).
+  An RBA risk_score is an accumulated vendor score, not a normalized
+  probability; its magnitude alone does not prove maliciousness. A threshold
+  search and alert_fields.orig_source may describe contributing detections
+  rather than the primary activity, and overlapping detections are not
+  independent confirmation. Correlate process GUIDs and event times when given.
+- Prefer event_time over alert_time. If event_time_source says the event time
+  fell back to alert creation time, treat business-hours status as unknown.
+  Use date_context only when it reflects an explicitly supplied work calendar.
+- rule.title, rule.title_template, rule.spl, and rule.macro_definitions describe
+  current rule configuration, not fire-time evidence. An active allowlist or
+  filter does not prove that the activity was authorized.
+- MITRE annotations may be strings or arrays. Use supplied values without
+  inventing missing tactics or techniques.
+- For Sysmon Event ID 10, SourceImage accessed TargetImage; that is not a
+  parent-child relationship. S-1-5-18 identifies the service context and does
+  not by itself prove that an attacker operated as SYSTEM.
+- investigation_hint is retrieval guidance, not evidence. Do not invent raw
+  events, contributing events, analyst labels, or fields absent from the input.
 - Scheduled scans and authorized penetration tests, when the rule correctly
   detected the behaviour, are benign_true_positive — NOT false_positive.
+- Require evidence of authorization before choosing an authorized-benign
+  verdict. Unknown authorization or insufficient underlying RBA evidence must
+  remain needs_review.
 - Reserve false_positive for cases where the rule misfired or its intended
   detection condition was not actually present.
 - Informational alerts with no IOCs and low risk lean benign.
+- Do not recommend destructive containment without authorization and asset-role
+  context.
 - Be conservative: when uncertain, prefer true_positive or needs_review over
   auto-closing, to avoid missing threats.
 - confidence should reflect how certain you are, not the severity of the threat.
@@ -170,39 +192,9 @@ def set_threshold(value: float) -> float:
     return AUTO_CLOSE_THRESHOLD
 
 
-def _build_alert_context(state: InvestigationState) -> str:
-    """Serialise the alert into a compact string the LLM can reason over."""
-    raw = state.raw_alert
-    parts = [
-        f"Alert Summary: {sanitize_text(state.alert_summary)}",
-        f"Severity (vendor): {sanitize_text(str(raw.get('severity', 'unknown')))}",
-        f"Risk Score (vendor): {sanitize_text(str(raw.get('risk_score', 'N/A')))}",
-    ]
-
-    ioc_fields = {
-        "src_ip": "Source IP",
-        "dst_ip": "Destination IP",
-        "domain": "Domain",
-        "file_hash": "File Hash",
-        "url": "URL",
-        "hostname": "Hostname",
-    }
-    present_iocs = {label: sanitize_text(str(raw[key])) for key, label in ioc_fields.items() if raw.get(key)}
-    if present_iocs:
-        parts.append("IOCs present: " + ", ".join(f"{k}={v}" for k, v in present_iocs.items()))
-    else:
-        parts.append("IOCs present: none")
-
-    techniques = raw.get("mitre_techniques", [])
-    if techniques:
-        parts.append(f"MITRE Techniques: {', '.join(sanitize_text(str(t)) for t in techniques)}")
-
-    extra_keys = {k for k in raw if k not in {"severity", "risk_score", "mitre_techniques", *ioc_fields}}
-    if extra_keys:
-        extras = {k: raw[k] for k in sorted(extra_keys)[:10]}
-        parts.append("Additional fields (summary, not raw JSON):\n" + format_extra_fields_for_llm(extras))
-
-    return wrap_untrusted("\n".join(parts), label="alert_telemetry")
+def _build_alert_context(state: InvestigationState, *, nonce: str | None = None) -> str:
+    """Compatibility wrapper around the dedicated Auto-Triage composer."""
+    return compose_auto_triage_context(state, nonce=nonce or make_nonce()).text
 
 
 def _parse_llm_response(text: str) -> dict[str, Any]:
@@ -260,7 +252,8 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     injection = scan_evidence_fields((str(k), v) for k, v in raw.items() if isinstance(v, str | int | float | list | dict))
     nonce = make_nonce()
 
-    alert_context = _build_alert_context(state)
+    composed_context = compose_auto_triage_context(state, nonce=nonce)
+    alert_context = composed_context.text
 
     llm = make_chat_model("triage", temperature=0.0, max_tokens=512)
 
@@ -279,10 +272,11 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         # Issue #571: do NOT swallow + return a null-verdict RUNNING state.
         # Raise a typed error so the caller falls back to deterministic triage
         # (or marks the alert needs_review) instead of completing with no verdict.
-        logger.error("Auto-triage LLM call failed", error=str(exc))
-        state.add_finding(f"Auto-triage LLM error: {exc}")
+        category = str(getattr(exc, "category", "") or type(exc).__name__)
+        logger.error("Auto-triage LLM call failed", error_category=category)
+        state.add_finding(f"Auto-triage LLM error category: {category}")
         _metrics["total_processed"] += 1
-        raise AutoTriageError(str(exc)) from exc
+        raise AutoTriageError(f"LLM execution failed: {category}") from exc
 
     elapsed_ms = round((time.monotonic() - t0) * 1000)
 
@@ -312,6 +306,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     ]
 
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
+    state.add_finding(f"Auto-triage evidence source: {composed_context.source}")
     state.add_finding(f"Auto-triage rationale: {rationale}")
 
     # Auto-close FP / benign / benign_true_positive (no active threat, no

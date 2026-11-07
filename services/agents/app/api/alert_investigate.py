@@ -21,11 +21,12 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.investigator import InvestigatorOrchestrator
 from app.llm.gateway_config import validate_gateway_config
+from app.privacy.tenant import require_run_owner, resolve_tenant_for_llm, trusted_workflow_tenant
 
 logger = structlog.get_logger()
 
@@ -136,6 +137,30 @@ def _findings_markdown(state: Any) -> str:
     return "\n\n".join(bits) if bits else "Investigation completed with no narrative report."
 
 
+@router.post("/investigate", response_model=AgentInvestigationOut)
+async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> AgentInvestigationOut:
+    """Run a full agent investigation for one alert and return the report."""
+    alert_id = _resolve_alert_id(req)
+    summary = _build_summary(req, alert_id)
+    run_id = str(uuid4())
+    started_at = datetime.now(UTC).isoformat()
+    gateway = validate_gateway_config()
+    model_name = gateway.get("model_investigation")
+    _runs[run_id] = {
+        "status": "running",
+        "alertId": alert_id,
+        "startedAt": started_at,
+        "model": model_name,
+    }
+    logger.info(
+        "alert_investigate.start",
+        run_id=run_id,
+        alert_id=alert_id,
+        llm_configured=gateway.get("llm_configured"),
+        model=model_name,
+        base_url=gateway.get("base_url_normalized_sanitized"),
+    )
+    tenant_owner: str | None = None
 async def _run_investigation(
     *,
     run_id: str,
@@ -148,9 +173,14 @@ async def _run_investigation(
 ) -> None:
     """Background worker — never raises into the request path."""
     try:
+        tenant_id = await resolve_tenant_for_llm(trusted_workflow_tenant(request, req.tenant_id), allow_default=True)
+        tenant_owner = tenant_id
+        _runs[run_id]["_tenant_owner"] = tenant_owner
         state = await InvestigatorOrchestrator().run(
             case_id=alert_id,
             alert_summary=summary,
+            raw_alert=req.raw_alert or {"alert_id": alert_id},
+            tenant_id=tenant_id,
             raw_alert=raw_alert or {"alert_id": alert_id},
             tenant_id=tenant_id or "default",
         )
@@ -163,15 +193,15 @@ async def _run_investigation(
             id=run_id,
             alertId=alert_id,
             status=status,
-            findings=_findings_markdown(state) if status != "failed" else state.error,
+            findings=_findings_markdown(state) if status != "failed" else "Investigation failed",
             recommendations=_map_recommendations(responder) if status != "failed" else [],
             actions=_map_actions(responder) if status != "failed" else [],
             startedAt=started_at,
             completedAt=completed_at,
             model=model_name,
-            error=state.error,
+            error="Investigation failed" if status == "failed" else None,
         )
-        _runs[run_id] = result.model_dump()
+        _runs[run_id] = {**result.model_dump(), "_tenant_owner": tenant_id}
         logger.info(
             "alert_investigate.done",
             run_id=run_id,
@@ -182,6 +212,8 @@ async def _run_investigation(
         )
     except Exception as exc:  # noqa: BLE001 — persist failure for the poller
         completed_at = datetime.now(UTC).isoformat()
+        logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error_category=type(exc).__name__)
+        result = AgentInvestigationOut(
         logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error=str(exc))
         _runs[run_id] = AgentInvestigationOut(
             id=run_id,
@@ -193,6 +225,13 @@ async def _run_investigation(
             startedAt=started_at,
             completedAt=completed_at,
             model=model_name,
+            error="Investigation failed",
+        )
+        _runs[run_id] = {
+            **result.model_dump(),
+            **({"_tenant_owner": tenant_owner} if tenant_owner is not None else {}),
+        }
+        raise HTTPException(status_code=502, detail="Investigation failed") from exc
             error=str(exc),
         ).model_dump()
 
@@ -242,11 +281,12 @@ async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationO
 
 
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)
-async def get_alert_investigation(run_id: str) -> AgentInvestigationOut:
+async def get_alert_investigation(run_id: str, request: Request) -> AgentInvestigationOut:
     """Poll a previously started alert investigation (in-memory status cache)."""
     run = _runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Investigation run not found")
+    await require_run_owner(request, run.get("_tenant_owner"))
     if "id" not in run:
         return AgentInvestigationOut(
             id=run_id,

@@ -19,9 +19,11 @@ from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException, status
+from app.api.v1.deps import AuthUser
 from pydantic import BaseModel, Field
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.privacy_llm import safe_chat_post
 from app.services.model_aliases import resolve_model_alias
 
 router = APIRouter(prefix="/translation", tags=["translation"])
@@ -107,7 +109,7 @@ def _user_prompt(req: TranslateRequest) -> str:
     )
 
 
-async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
+async def _llm_translate(req: TranslateRequest, tenant_id: str) -> dict[str, Any] | None:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
     if not api_key:
         return None
@@ -123,10 +125,10 @@ async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
         raise
     try:
         async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
+            resp = await safe_chat_post(client, 
                 completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
+                body={
                     "model": model,
                     "messages": [
                         {"role": "system", "content": _SYSTEM},
@@ -135,6 +137,7 @@ async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
                     "temperature": 0.1,
                     "response_format": {"type": "json_object"},
                 },
+                tenant_id=tenant_id,
             )
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
@@ -234,12 +237,12 @@ def _fallback_templates(req: TranslateRequest) -> dict[str, Any]:
     status_code=status.HTTP_200_OK,
     summary="Translate a detection rule across formats",
 )
-async def translate_rule(body: TranslateRequest) -> TranslateResponse:
+async def translate_rule(body: TranslateRequest, user: AuthUser) -> TranslateResponse:
     if not body.target_formats:
         raise HTTPException(status_code=400, detail="At least one target_format is required.")
 
     try:
-        payload = await _llm_translate(body)
+        payload = await _llm_translate(body, tenant_id=str(user.tenant_id))
     except AirgapViolation as exc:
         # Surface the misconfig clearly instead of silently falling back —
         # otherwise an operator who flipped on AISOC_AIRGAPPED would see

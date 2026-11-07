@@ -78,6 +78,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Required for both `pytest` and `python -m pytest` in the API service.
+pythonpath = ["."]
 markers = [
     "integration: marks tests as requiring a live Postgres + alembic-migrated schema (run explicitly with AISOC_RUN_INTEGRATION=1)",
 ]
