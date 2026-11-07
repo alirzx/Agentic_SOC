@@ -30,6 +30,14 @@ from app.services.campaign_case import (
 logger = structlog.get_logger()
 
 _SIBLING_CAP = 100
+# Max lookback for board / backfill / reportable (30 days). A 7d cap left
+# multi-day ingest floods stuck at ``ingested`` with no way to advance them.
+FUNNEL_MAX_WINDOW_HOURS = 720
+
+
+def _window_since(hours: int) -> datetime:
+    """Clamp ``hours`` into ``[1, FUNNEL_MAX_WINDOW_HOURS]`` and return UTC since."""
+    return datetime.now(UTC) - timedelta(hours=max(1, min(int(hours), FUNNEL_MAX_WINDOW_HOURS)))
 
 _ATTACK_HINTS = re.compile(
     r"password\s*spray|brute\s*force|credential|lateral|ransomware|"
@@ -373,7 +381,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
     Ends with a legacy ``funnel_stage`` sync so alerts created before the
     funnel column still land in Triaged / Suppressed / Cased / etc.
     """
-    since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 168)))
+    since = _window_since(hours)
     rows = (
         await db.execute(
             text(
@@ -740,7 +748,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
 
 async def list_reportable(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 24) -> dict[str, Any]:
     """Open/reportable cases + unresolved TPs for the SOC handover list."""
-    since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 168)))
+    since = _window_since(hours)
     cases = (
         await db.execute(
             text(
@@ -810,7 +818,7 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
     """Stage counts + sample alerts for the SOC Funnel UI board."""
     from app.services.funnel_stages import BOARD_ORDER, STAGE_LABELS
 
-    since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 168)))
+    since = _window_since(hours)
     counts_rows = (
         await db.execute(
             text(

@@ -173,7 +173,7 @@ export function SocFunnelBoardView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {[24, 48, 168].map((h) => (
+          {[24, 48, 168, 720].map((h) => (
             <button
               key={h}
               type="button"
@@ -185,7 +185,7 @@ export function SocFunnelBoardView() {
                   : 'border-[#374151] text-gray-400 hover:text-gray-200',
               )}
             >
-              {h === 168 ? '7d' : `${h}h`}
+              {h === 720 ? '30d' : h === 168 ? '7d' : `${h}h`}
             </button>
           ))}
           <button

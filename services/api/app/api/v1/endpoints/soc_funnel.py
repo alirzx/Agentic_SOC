@@ -11,6 +11,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.services import agentic_funnel
+from app.services.agentic_funnel import FUNNEL_MAX_WINDOW_HOURS
 from app.services.case_fanout import fanout_create_case
 from app.services.exact_dedupe import dedupe_exact
 from app.services.funnel_stages import READY_FOR_JIRA, passes_jira_gate
@@ -66,7 +67,7 @@ class PushItsmResponse(BaseModel):
 async def get_reportable(
     db: DBSession,
     user: AuthUser,
-    hours: int = Query(24, ge=1, le=168),
+    hours: int = Query(24, ge=1, le=FUNNEL_MAX_WINDOW_HOURS),
 ) -> ReportableResponse:
     """What the SOC should escalate / report from the last N hours."""
     payload = await agentic_funnel.list_reportable(db, tenant_id=user.tenant_id, hours=hours)
@@ -77,18 +78,18 @@ async def get_reportable(
 async def get_funnel_board(
     db: DBSession,
     user: AuthUser,
-    hours: int = Query(24, ge=1, le=168),
+    hours: int = Query(24, ge=1, le=FUNNEL_MAX_WINDOW_HOURS),
 ) -> FunnelBoardResponse:
     """Live counts per funnel stage for UI tracking (ingested → jira_pushed)."""
     payload = await agentic_funnel.funnel_board(db, tenant_id=user.tenant_id, hours=hours)
     return FunnelBoardResponse(**payload)
 
 
-@router.post("/funnel/backfill", response_model=BackfillResponse, summary="Run 24h agentic funnel backfill")
+@router.post("/funnel/backfill", response_model=BackfillResponse, summary="Run agentic funnel backfill")
 async def post_funnel_backfill(
     db: DBSession,
     user: AuthUser,
-    hours: int = Query(24, ge=1, le=168),
+    hours: int = Query(24, ge=1, le=FUNNEL_MAX_WINDOW_HOURS),
 ) -> BackfillResponse:
     """Classify existing alerts: FP-tag noise, promote importants into Cases + tasks."""
     payload = await agentic_funnel.run_backfill(db, tenant_id=user.tenant_id, hours=hours)

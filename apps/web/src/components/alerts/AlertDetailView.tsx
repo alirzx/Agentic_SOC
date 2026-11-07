@@ -463,8 +463,20 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
 function AIInvestigation({ alertId }: { alertId: string }) {
   const [investigation, setInvestigation] = useState<AgentInvestigation | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const startInvestigation = async () => {
     setIsRunning(true);
+    setElapsedSec(0);
+    const tick = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
+    // Optimistic running card so the panel is not blank while POST round-trips.
+    setInvestigation({
+      id: 'pending',
+      alertId,
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      recommendations: [],
+      actions: [],
+    });
     try {
       const started = await agentsApi.investigate(alertId);
       setInvestigation(started);
@@ -474,11 +486,11 @@ function AIInvestigation({ alertId }: { alertId: string }) {
         }
         return;
       }
-      // Agents returns running immediately; poll until the LLM finishes.
-      const deadline = Date.now() + 180_000;
+      // Live LLM path: recon+forensic+responder+report often takes 90–180s.
+      const deadline = Date.now() + 300_000;
       let latest = started;
       while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 2500));
         latest = await agentsApi.getInvestigation(started.id);
         setInvestigation(latest);
         if (latest.status === 'completed' || latest.status === 'failed') {
@@ -488,15 +500,17 @@ function AIInvestigation({ alertId }: { alertId: string }) {
       if (latest.status === 'failed') {
         toast.error(latest.error || 'Investigation failed');
       } else if (latest.status !== 'completed') {
-        toast.error('Investigation timed out — try again in a moment.');
+        toast.error('Investigation still running on the agent — refresh in a minute.');
       }
     } catch (err) {
+      setInvestigation(null);
       toast.error(
         err instanceof Error
           ? err.message
           : 'Investigation failed — no demo report is shown.',
       );
     } finally {
+      window.clearInterval(tick);
       setIsRunning(false);
     }
   };
@@ -511,14 +525,7 @@ function AIInvestigation({ alertId }: { alertId: string }) {
           disabled={isRunning}
           className="bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isRunning ? (
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Investigating...
-            </span>
-          ) : (
-            'Start AI Investigation'
-          )}
+          Start AI Investigation
         </button>
       </div>
     );
@@ -535,14 +542,27 @@ function AIInvestigation({ alertId }: { alertId: string }) {
             'bg-red-500'
           )} />
           <span className="text-xs text-gray-400 capitalize">{investigation.status}</span>
+          {investigation.status === 'running' && (
+            <span className="text-xs text-gray-600">
+              · LLM usually 1–3 min{elapsedSec > 0 ? ` · ${elapsedSec}s` : ''}
+            </span>
+          )}
         </div>
         <button
           onClick={startInvestigation}
-          className="text-xs text-brand-400 hover:text-brand-300"
+          disabled={isRunning}
+          className="text-xs text-brand-400 hover:text-brand-300 disabled:opacity-50"
         >
           Re-investigate
         </button>
       </div>
+
+      {investigation.status === 'running' && !investigation.findings && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+          <span className="w-3 h-3 border-2 border-brand-500/30 border-t-brand-400 rounded-full animate-spin" />
+          Running recon → forensic → responder → report…
+        </div>
+      )}
 
       {/* Findings */}
       {investigation.findings && (
