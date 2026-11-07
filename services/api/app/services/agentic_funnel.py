@@ -488,19 +488,19 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                            AND case_id IS NULL
                            AND COALESCE(disposition, '') NOT IN ('false_positive','benign','benign_true_positive')
                            AND (
-                                 (:host::text IS NOT NULL AND (
-                                     COALESCE(affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[:host::text])
-                                  OR COALESCE(raw_event->>'hostname', '') = :host
-                                  OR COALESCE(raw_event->>'dvc', '') = :host
+                                 (CAST(:host AS text) IS NOT NULL AND (
+                                     COALESCE(affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:host AS text)])
+                                  OR COALESCE(raw_event->>'hostname', '') = CAST(:host AS text)
+                                  OR COALESCE(raw_event->>'dvc', '') = CAST(:host AS text)
                                  ))
-                              OR (:ip::text IS NOT NULL AND (
-                                     COALESCE(affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[:ip::text])
-                                  OR COALESCE(raw_event->>'src_ip', '') = :ip
-                                  OR COALESCE(raw_event->>'src', '') = :ip
+                              OR (CAST(:ip AS text) IS NOT NULL AND (
+                                     COALESCE(affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:ip AS text)])
+                                  OR COALESCE(raw_event->>'src_ip', '') = CAST(:ip AS text)
+                                  OR COALESCE(raw_event->>'src', '') = CAST(:ip AS text)
                                  ))
-                              OR (:usr::text IS NOT NULL AND (
-                                     COALESCE(affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[:usr::text])
-                                  OR COALESCE(raw_event->>'username', '') = :usr
+                              OR (CAST(:usr AS text) IS NOT NULL AND (
+                                     COALESCE(affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:usr AS text)])
+                                  OR COALESCE(raw_event->>'username', '') = CAST(:usr AS text)
                                  ))
                            )
                          ORDER BY created_at DESC
@@ -567,18 +567,18 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                                  SELECT 1 FROM alerts a
                                   WHERE a.case_id = c.id AND a.tenant_id = :tid
                                     AND (
-                                          (:host::text IS NOT NULL AND (
-                                              COALESCE(a.affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[:host::text])
-                                           OR COALESCE(a.raw_event->>'hostname', '') = :host
-                                           OR COALESCE(a.raw_event->>'dvc', '') = :host
+                                          (CAST(:host AS text) IS NOT NULL AND (
+                                              COALESCE(a.affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:host AS text)])
+                                           OR COALESCE(a.raw_event->>'hostname', '') = CAST(:host AS text)
+                                           OR COALESCE(a.raw_event->>'dvc', '') = CAST(:host AS text)
                                           ))
-                                       OR (:ip::text IS NOT NULL AND (
-                                              COALESCE(a.affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[:ip::text])
-                                           OR COALESCE(a.raw_event->>'src_ip', '') = :ip
+                                       OR (CAST(:ip AS text) IS NOT NULL AND (
+                                              COALESCE(a.affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:ip AS text)])
+                                           OR COALESCE(a.raw_event->>'src_ip', '') = CAST(:ip AS text)
                                           ))
-                                       OR (:usr::text IS NOT NULL AND (
-                                              COALESCE(a.affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[:usr::text])
-                                           OR COALESCE(a.raw_event->>'username', '') = :usr
+                                       OR (CAST(:usr AS text) IS NOT NULL AND (
+                                              COALESCE(a.affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:usr AS text)])
+                                           OR COALESCE(a.raw_event->>'username', '') = CAST(:usr AS text)
                                           ))
                                     )
                            )

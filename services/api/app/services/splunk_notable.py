@@ -134,14 +134,31 @@ def _has_wide_annotation_fields(raw: dict[str, Any]) -> bool:
     return _annotation_present(_unwrap_splunk_stash(raw))
 
 
-def needs_hydrate(alert: Alert) -> bool:
+# Interactive Investigation Rail must never wait on a slow Splunk lookup.
+# Bulk re-enrich keeps the longer budget via hydrate_alert(timeout=...).
+_INTERACTIVE_HYDRATE_TIMEOUT_S = 2.5
+_MISS_COOLDOWN_S = 900  # 15 minutes — don't re-hammer Splunk on every click
+
+
+def needs_hydrate(alert: Alert, *, respect_miss_cooldown: bool = False) -> bool:
     """True when the row is missing Mission Control / wide annotation fields."""
     if not _is_splunk_alert(alert):
         return False
     raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
     extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
+    if respect_miss_cooldown:
+        last_miss = extra.get("splunk_wide_reenrich_last_miss_at")
+        if isinstance(last_miss, str) and last_miss.strip():
+            try:
+                miss_at = datetime.fromisoformat(last_miss.replace("Z", "+00:00"))
+                age = (datetime.now(UTC) - miss_at.astimezone(UTC)).total_seconds()
+                if age < _MISS_COOLDOWN_S:
+                    return False
+            except ValueError:
+                pass
     # Always retry until wide annotations land — a prior failed attempt must not
-    # permanently skip (lookup used to fail on src-only entities).
+    # permanently skip (lookup used to fail on src-only entities). Cooldown above
+    # only applies to the interactive detail path so the rail stays snappy.
     if not _has_wide_annotation_fields(raw):
         return True
     stash = _unwrap_splunk_stash(raw)
@@ -402,9 +419,16 @@ async def hydrate_alert(
     *,
     force: bool = False,
     commit: bool = True,
+    timeout: float | None = None,
+    respect_miss_cooldown: bool = False,
 ) -> Alert:
-    """Fetch the live Splunk notable and persist it onto ``alert`` when stubby."""
-    if not force and not needs_hydrate(alert):
+    """Fetch the live Splunk notable and persist it onto ``alert`` when stubby.
+
+    ``timeout`` caps the Splunk round-trip (default 40s for bulk re-enrich).
+    The Investigation Rail passes a short timeout so a slow Splunk never
+    wedges ``GET /alerts/{id}``.
+    """
+    if not force and not needs_hydrate(alert, respect_miss_cooldown=respect_miss_cooldown):
         return alert
     raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
     stash = _unwrap_splunk_stash(raw)
@@ -435,12 +459,14 @@ async def hydrate_alert(
     )
     if not notable_id and isinstance(raw.get("finding"), dict):
         notable_id = str(raw["finding"].get("uid") or "")
+    budget = float(timeout) if timeout is not None else 40.0
     envelope = await fetch_notable(
         db,
         alert.tenant_id,
         title,
         entity or None,
         notable_id=notable_id or None,
+        timeout=budget,
     )
     if envelope is None:
         # Do not permanently burn the attempt when Splunk returned nothing —
@@ -458,6 +484,32 @@ async def hydrate_alert(
         await db.commit()
         await db.refresh(alert)
     return alert
+
+
+async def hydrate_alert_for_detail(db: AsyncSession, alert: Alert) -> Alert:
+    """Best-effort Splunk hydrate for interactive detail / Investigation Rail.
+
+    Never raises; never waits longer than ``_INTERACTIVE_HYDRATE_TIMEOUT_S``.
+    The rail must render the stored Postgres row even when Splunk is down.
+    """
+    try:
+        return await hydrate_alert(
+            db,
+            alert,
+            timeout=_INTERACTIVE_HYDRATE_TIMEOUT_S,
+            respect_miss_cooldown=True,
+        )
+    except Exception:  # noqa: BLE001 — detail view must never 500 on hydrate
+        logger.warning(
+            "splunk_notable.interactive_hydrate_failed alert=%s",
+            str(getattr(alert, "id", "")).replace("\r", " ").replace("\n", " ")[:64],
+            exc_info=True,
+        )
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return alert
 
 
 async def reenrich_tenant_splunk_alerts(
@@ -639,6 +691,8 @@ async def fetch_notable(
     title: str,
     host: str | None,
     notable_id: str | None = None,
+    *,
+    timeout: float = 40.0,
 ) -> dict[str, Any] | None:
     """Ask the connectors service for the matching index=agentic* notable row."""
     if not (title or "").strip() and not (notable_id or "").strip():
@@ -667,8 +721,13 @@ async def fetch_notable(
         "notable_id": notable_id,
     }
     try:
-        # Keep under the bulk re-enrich per-alert wait_for (45s).
-        async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=5.0)) as client:
+        # Bulk re-enrich uses ~40s; interactive detail uses a short budget so
+        # the Investigation Rail never stalls on a hung Splunk search.
+        budget = max(0.5, float(timeout))
+        connect_budget = min(5.0, budget)
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(budget, connect=connect_budget)
+        ) as client:
             resp = await client.post(url, json=payload)
     except httpx.TimeoutException as exc:
         logger.warning(

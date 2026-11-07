@@ -83,6 +83,17 @@ def test_needs_hydrate_false_when_wide_annotations_present():
     assert needs_hydrate(alert) is False
 
 
+def test_needs_hydrate_respects_recent_miss_cooldown_for_interactive():
+    """Investigation Rail must not re-call Splunk every click after a miss."""
+    alert = _alert(
+        enrichment_data={
+            "splunk_wide_reenrich_last_miss_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    assert needs_hydrate(alert) is True
+    assert needs_hydrate(alert, respect_miss_cooldown=True) is False
+
+
 def test_extract_mitre_from_annotations_mitre_attack_field():
     ids = extract_mitre_ids({"annotations_mitre_attack": "T1110.003"})
     assert ids == ["T1110.003"]

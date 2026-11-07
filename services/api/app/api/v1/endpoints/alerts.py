@@ -33,7 +33,11 @@ from app.services.event_sanitiser import (
 )
 from app.services.narrative_loader import build_narrative
 from app.services.narrative_projection import project_alert_to_narrative_inputs
-from app.services.splunk_notable import hydrate_alert, iocs_from_raw, mitre_attack_rows
+from app.services.splunk_notable import (
+    hydrate_alert_for_detail,
+    iocs_from_raw,
+    mitre_attack_rows,
+)
 from app.services.timestamp_bounds import coerce_with_bounds, now_utc
 
 logger = logging.getLogger(__name__)
@@ -1023,7 +1027,7 @@ async def lookup_alert(
         )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    alert = await hydrate_alert(db, alert)
+    alert = await hydrate_alert_for_detail(db, alert)
     return await _build_alert_detail(db, alert)
 
 
@@ -1070,7 +1074,8 @@ async def get_alert(
         )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    alert = await hydrate_alert(db, alert)
+    # Never block the Investigation Rail on a slow/hung Splunk lookup.
+    alert = await hydrate_alert_for_detail(db, alert)
     return await _build_alert_detail(db, alert)
 
 

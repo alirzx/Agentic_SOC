@@ -301,7 +301,7 @@ async def investigate_alert(
 
     from sqlalchemy import update
 
-    from app.services.funnel_stages import INVESTIGATING, READY_FOR_JIRA, TRIAGED
+    from app.services.funnel_stages import INVESTIGATING
 
     result = await db.execute(
         select(Alert).where(Alert.id == alert_uuid, Alert.tenant_id == current_user.tenant_id)
@@ -325,9 +325,13 @@ async def investigate_alert(
         "tenant_id": str(current_user.tenant_id),
     }
     url = f"{_AGENTS_URL}{path}"
+    # Agents returns status=running immediately; the console polls
+    # GET /investigations/{id}. Keep this proxy snappy so Next.js never 500s.
     try:
         async with httpx.AsyncClient(timeout=_INVESTIGATE_TIMEOUT_SECONDS) as client:
             resp = await client.post(url, json=payload, headers=_tenant_headers(current_user.tenant_id))
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, json=payload)
     except httpx.HTTPError as exc:
         logger.exception("agents.investigate.proxy_failed alert_id=%s", alert.id)
         raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
@@ -336,29 +340,14 @@ async def investigate_alert(
         detail = resp.text[:500] if resp.text else f"agents returned {resp.status_code}"
         raise HTTPException(status_code=resp.status_code, detail=detail)
 
-    out = AgentInvestigationOut.model_validate(resp.json())
-    # After a successful investigation, park at ready_for_jira when already
-    # cased/TP; otherwise leave at investigating so the board reflects work.
-    next_stage = READY_FOR_JIRA if alert.case_id or (alert.disposition or "") in {
-        "true_positive",
-        "escalate",
-        "likely_tp",
-    } else INVESTIGATING
-    if out.status == "failed":
-        next_stage = TRIAGED
-    await db.execute(
-        update(Alert)
-        .where(Alert.id == alert.id, Alert.tenant_id == current_user.tenant_id)
-        .values(funnel_stage=next_stage)
-    )
-    await db.commit()
-    return out
+    return AgentInvestigationOut.model_validate(resp.json())
 
 
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)
 async def get_alert_investigation(
     run_id: str,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    db: DBSession,
 ) -> AgentInvestigationOut:
     """Poll a previously started alert investigation via the agents service."""
     safe_run_id = re.sub(r"[^A-Za-z0-9_\-]", "", run_id)
@@ -373,4 +362,33 @@ async def get_alert_investigation(
         raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
-    return AgentInvestigationOut.model_validate(resp.json())
+    out = AgentInvestigationOut.model_validate(resp.json())
+    # Advance funnel stage once the background run finishes.
+    if out.status in {"completed", "failed"} and out.alertId:
+        from sqlalchemy import update
+
+        from app.services.funnel_stages import INVESTIGATING, READY_FOR_JIRA, TRIAGED
+
+        try:
+            alert_uuid = UUID(out.alertId.strip())
+        except ValueError:
+            return out
+        result = await db.execute(
+            select(Alert).where(Alert.id == alert_uuid, Alert.tenant_id == current_user.tenant_id)
+        )
+        alert = result.scalar_one_or_none()
+        if alert is None:
+            return out
+        next_stage = (
+            READY_FOR_JIRA
+            if out.status == "completed"
+            and (alert.case_id or (alert.disposition or "") in {"true_positive", "escalate", "likely_tp"})
+            else (TRIAGED if out.status == "failed" else INVESTIGATING)
+        )
+        await db.execute(
+            update(Alert)
+            .where(Alert.id == alert.id, Alert.tenant_id == current_user.tenant_id)
+            .values(funnel_stage=next_stage)
+        )
+        await db.commit()
+    return out
