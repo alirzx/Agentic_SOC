@@ -466,8 +466,30 @@ function AIInvestigation({ alertId }: { alertId: string }) {
   const startInvestigation = async () => {
     setIsRunning(true);
     try {
-      const result = await agentsApi.investigate(alertId);
-      setInvestigation(result);
+      const started = await agentsApi.investigate(alertId);
+      setInvestigation(started);
+      if (started.status === 'completed' || started.status === 'failed') {
+        if (started.status === 'failed') {
+          toast.error(started.error || 'Investigation failed');
+        }
+        return;
+      }
+      // Agents returns running immediately; poll until the LLM finishes.
+      const deadline = Date.now() + 180_000;
+      let latest = started;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2000));
+        latest = await agentsApi.getInvestigation(started.id);
+        setInvestigation(latest);
+        if (latest.status === 'completed' || latest.status === 'failed') {
+          break;
+        }
+      }
+      if (latest.status === 'failed') {
+        toast.error(latest.error || 'Investigation failed');
+      } else if (latest.status !== 'completed') {
+        toast.error('Investigation timed out — try again in a moment.');
+      }
     } catch (err) {
       toast.error(
         err instanceof Error

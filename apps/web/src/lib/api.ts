@@ -3396,6 +3396,8 @@ export interface AgentInvestigation {
   actions?: Array<{ type: string; target: string; status: string }>;
   startedAt: string;
   completedAt?: string;
+  model?: string;
+  error?: string;
 }
 
 export const agentsApi = {

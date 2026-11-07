@@ -29,6 +29,12 @@ const OSQUERY_TLS_HOST = process.env.OSQUERY_TLS_URL || 'http://localhost:8090';
 
 const nextConfig = {
   reactStrictMode: true,
+  // AI Investigation / funnel backfill can exceed the default Next rewrite
+  // proxy budget (~30s). Without this the browser sees a 500/502 while the
+  // agents service is still working and the UI stuck on "Investigating…".
+  experimental: {
+    proxyTimeout: 180_000,
+  },
   transpilePackages: ['@aisoc/ui', '@aisoc/types', '@aisoc/report-card'],
   // pnpm monorepo: anchor Turbopack at the repository root so it can resolve
   // the hoisted `next` package via apps/web/node_modules/next (symlink into

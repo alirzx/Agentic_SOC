@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **SOC Funnel backfill 500 — alerts stuck at Ingested.** Sibling/campaign
+  SQL used `:host::text` which SQLAlchemy cannot bind (the `::` cast eats
+  the parameter). Switched to `CAST(:host AS text)` so **Run backfill**
+  classifies dispositions, creates campaign cases, and advances stages.
+- **Investigate AI looked broken (500 / hung "Investigating…").** Cold LLM
+  runs (~60s+) exceeded the Next.js rewrite proxy budget, so the browser
+  saw a 500 while agents was still working. Investigation now starts in the
+  background (`status=running`), the UI polls `/investigations/{id}`, and
+  `experimental.proxyTimeout` is raised to 180s as defence-in-depth.
 - **Investigation Rail stuck on Loading / alert detail 500.**
   `GET /api/v1/alerts/{id}` awaited a live Splunk notable hydrate for up to
   40s whenever wide MITRE annotations were missing. With Splunk slow or a

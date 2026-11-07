@@ -1,8 +1,11 @@
 """Alert-scoped AI Investigation — powers Alert Detail "Start AI Investigation".
 
-``POST /api/v1/agents/investigate`` runs the Pillar-1 InvestigatorOrchestrator
-(recon → forensic → responder → report) synchronously and returns the shape the
-web console expects. Every step is recorded in the case ledger.
+``POST /api/v1/agents/investigate`` starts the Pillar-1 InvestigatorOrchestrator
+(recon → forensic → responder → report) in the background and returns
+``status=running`` immediately. Poll ``GET /api/v1/agents/investigations/{id}``
+for the finished report. This keeps Next.js / browser proxies from timing out
+on cold LLM runs (~60s+) and surfacing a false 500 while the agent is still
+working.
 
 Live LLM calls go through :func:`app.llm.factory.make_chat_model` (roles
 ``recon`` / ``investigation`` / ``report``), so pointing ``OPENAI_BASE_URL`` at
@@ -12,6 +15,7 @@ to drive this path — no code change per provider.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -132,35 +136,23 @@ def _findings_markdown(state: Any) -> str:
     return "\n\n".join(bits) if bits else "Investigation completed with no narrative report."
 
 
-@router.post("/investigate", response_model=AgentInvestigationOut)
-async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationOut:
-    """Run a full agent investigation for one alert and return the report."""
-    alert_id = _resolve_alert_id(req)
-    summary = _build_summary(req, alert_id)
-    run_id = str(uuid4())
-    started_at = datetime.now(UTC).isoformat()
-    gateway = validate_gateway_config()
-    model_name = gateway.get("model_investigation")
-    _runs[run_id] = {
-        "status": "running",
-        "alertId": alert_id,
-        "startedAt": started_at,
-        "model": model_name,
-    }
-    logger.info(
-        "alert_investigate.start",
-        run_id=run_id,
-        alert_id=alert_id,
-        llm_configured=gateway.get("llm_configured"),
-        model=model_name,
-        base_url=gateway.get("base_url_normalized_sanitized"),
-    )
+async def _run_investigation(
+    *,
+    run_id: str,
+    alert_id: str,
+    summary: str,
+    raw_alert: dict[str, Any],
+    tenant_id: str,
+    model_name: str | None,
+    started_at: str,
+) -> None:
+    """Background worker — never raises into the request path."""
     try:
         state = await InvestigatorOrchestrator().run(
             case_id=alert_id,
             alert_summary=summary,
-            raw_alert=req.raw_alert or {"alert_id": alert_id},
-            tenant_id=req.tenant_id or "default",
+            raw_alert=raw_alert or {"alert_id": alert_id},
+            tenant_id=tenant_id or "default",
         )
         completed_at = datetime.now(UTC).isoformat()
         status = state.status if state.status in ("completed", "failed", "running") else "completed"
@@ -188,11 +180,10 @@ async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationO
             findings_len=len(result.findings or ""),
             recommendations=len(result.recommendations or []),
         )
-        return result
-    except Exception as exc:  # noqa: BLE001 — surface failure to the console
+    except Exception as exc:  # noqa: BLE001 — persist failure for the poller
         completed_at = datetime.now(UTC).isoformat()
         logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error=str(exc))
-        result = AgentInvestigationOut(
+        _runs[run_id] = AgentInvestigationOut(
             id=run_id,
             alertId=alert_id,
             status="failed",
@@ -203,9 +194,51 @@ async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationO
             completedAt=completed_at,
             model=model_name,
             error=str(exc),
+        ).model_dump()
+
+
+@router.post("/investigate", response_model=AgentInvestigationOut)
+async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationOut:
+    """Start an agent investigation; poll ``/investigations/{id}`` for the report."""
+    alert_id = _resolve_alert_id(req)
+    summary = _build_summary(req, alert_id)
+    run_id = str(uuid4())
+    started_at = datetime.now(UTC).isoformat()
+    gateway = validate_gateway_config()
+    model_name = gateway.get("model_investigation")
+    pending = AgentInvestigationOut(
+        id=run_id,
+        alertId=alert_id,
+        status="running",
+        findings=None,
+        recommendations=[],
+        actions=[],
+        startedAt=started_at,
+        completedAt=None,
+        model=model_name,
+        error=None,
+    )
+    _runs[run_id] = pending.model_dump()
+    logger.info(
+        "alert_investigate.start",
+        run_id=run_id,
+        alert_id=alert_id,
+        llm_configured=gateway.get("llm_configured"),
+        model=model_name,
+        base_url=gateway.get("base_url_normalized_sanitized"),
+    )
+    asyncio.create_task(
+        _run_investigation(
+            run_id=run_id,
+            alert_id=alert_id,
+            summary=summary,
+            raw_alert=req.raw_alert or {"alert_id": alert_id},
+            tenant_id=req.tenant_id or "default",
+            model_name=model_name,
+            started_at=started_at,
         )
-        _runs[run_id] = result.model_dump()
-        raise HTTPException(status_code=502, detail=f"Investigation failed: {exc}") from exc
+    )
+    return pending
 
 
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)
