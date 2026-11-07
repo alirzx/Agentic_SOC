@@ -59,8 +59,10 @@ def case_content_key(
 def alert_display_key(row: dict[str, Any]) -> str:
     """Fingerprint of what analysts see as 'the same alert'.
 
-    Ignores ``dedup_hash`` and ``source_event_ids`` — Splunk ESCU often mints a
-    new event id per poll while title/rule/entities stay identical.
+    Ignores ``dedup_hash``, ``source_event_ids``, and per-row entity lists —
+    Splunk ESCU re-fires the same rule across hosts / polls while title + rule
+    stay identical. Entities are unioned onto the canonical survivor instead
+    of keeping the key apart (see ``merge_alert_entities``).
     """
     title = (row.get("title") or "").strip().lower()
     severity = (row.get("severity") or "").strip().lower()
@@ -68,11 +70,40 @@ def alert_display_key(row: dict[str, Any]) -> str:
         (row.get("rule_id") or row.get("rule_name") or "").strip().lower()
     )
     disposition = (row.get("disposition") or "").strip().lower()
-    hosts = _json_stable(row.get("affected_hosts"))
-    ips = _json_stable(row.get("affected_ips"))
-    users = _json_stable(row.get("affected_users"))
-    # When entities are empty, title+severity+rule still collapses ESCU floods.
-    return f"display|{title}|{severity}|{rule}|{disposition}|{hosts}|{ips}|{users}"
+    return f"display|{title}|{severity}|{rule}|{disposition}"
+
+
+def merge_alert_entities(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Union hosts / ips / users across a duplicate group (preserve first-seen casing)."""
+
+    def collect(field: str) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for row in rows:
+            raw = row.get(field)
+            values: list[Any]
+            if raw is None:
+                values = []
+            elif isinstance(raw, list):
+                values = raw
+            else:
+                values = [raw]
+            for value in values:
+                text_value = str(value).strip()
+                if not text_value:
+                    continue
+                key = text_value.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(text_value)
+        return out
+
+    return {
+        "affected_hosts": collect("affected_hosts"),
+        "affected_ips": collect("affected_ips"),
+        "affected_users": collect("affected_users"),
+    }
 
 
 def pick_canonical_case(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -107,17 +138,6 @@ def pick_canonical_alert(rows: list[dict[str, Any]]) -> dict[str, Any]:
         return (-has_case, -stage, created or 0)
 
     return sorted(rows, key=sort_key)[0]
-
-
-def _json_stable(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, list):
-        parts = sorted({str(v).strip().lower() for v in value if str(v).strip()})
-        return "|".join(parts)
-    if isinstance(value, dict):
-        return str(sorted((str(k).lower(), str(v).lower()) for k, v in value.items()))
-    return str(value).strip().lower()
 
 
 async def _mark_alerts_deduplicated(
@@ -265,6 +285,25 @@ async def dedupe_exact_alerts(
                         ).bindparams(cid=m["case_id"], id=canonical["id"], tid=tenant_id)
                     )
                     break
+        merged = merge_alert_entities(unique)
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET affected_hosts = CAST(:hosts AS jsonb),
+                       affected_ips = CAST(:ips AS jsonb),
+                       affected_users = CAST(:users AS jsonb),
+                       updated_at = now()
+                 WHERE tenant_id = :tid AND id = :cid
+                """
+            ).bindparams(
+                tid=tenant_id,
+                cid=canonical["id"],
+                hosts=json.dumps(merged["affected_hosts"]),
+                ips=json.dumps(merged["affected_ips"]),
+                users=json.dumps(merged["affected_users"]),
+            )
+        )
         await _mark_alerts_deduplicated(
             db,
             tenant_id=tenant_id,

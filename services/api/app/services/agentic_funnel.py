@@ -34,7 +34,9 @@ _SIBLING_CAP = 100
 # Max lookback for board / backfill / reportable (30 days). A 7d cap left
 # multi-day ingest floods stuck at ``ingested`` with no way to advance them.
 FUNNEL_MAX_WINDOW_HOURS = 720
-_AUTO_DEDUPE_INTERVAL_S = 45.0
+# Soft display-dedupe runs on every board load (and backfill). Throttle keeps
+# concurrent UI refreshes from re-scanning the whole alerts table too often.
+_AUTO_DEDUPE_INTERVAL_S = 15.0
 _last_auto_dedupe_monotonic: dict[str, float] = {}
 
 
@@ -738,10 +740,9 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
     stage_sync = await sync_legacy_funnel_stages(db, tenant_id=tenant_id, since=since)
     # Soft display-dedupe into the Deduplicated column so analysts never need
     # the manual "Remove duplicates" click after a large Splunk wave.
-    from app.services.exact_dedupe import dedupe_exact_alerts
+    from app.services.exact_dedupe import dedupe_exact
 
-    dedupe = await dedupe_exact_alerts(db, tenant_id=tenant_id, dry_run=False)
-    await db.commit()
+    dedupe = await dedupe_exact(db, tenant_id=tenant_id, dry_run=False)
     return {
         "window_hours": hours,
         "alerts_scanned": len(rows),
@@ -826,7 +827,6 @@ async def list_reportable(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int 
 
 async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 24) -> dict[str, Any]:
     """Stage counts + sample alerts for the SOC Funnel UI board."""
-    from app.services.exact_dedupe import dedupe_exact_alerts
     from app.services.funnel_stages import BOARD_ORDER, STAGE_LABELS
 
     # Soft-dedupe on a short throttle so the Deduplicated column stays current
@@ -837,8 +837,9 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
     if now_mono - last >= _AUTO_DEDUPE_INTERVAL_S:
         _last_auto_dedupe_monotonic[tid_key] = now_mono
         try:
-            await dedupe_exact_alerts(db, tenant_id=tenant_id, dry_run=False)
-            await db.commit()
+            from app.services.exact_dedupe import dedupe_exact
+
+            await dedupe_exact(db, tenant_id=tenant_id, dry_run=False)
         except Exception as exc:  # noqa: BLE001 — board must still render
             logger.warning(
                 "funnel_board.auto_dedupe_failed",

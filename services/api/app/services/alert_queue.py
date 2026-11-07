@@ -317,10 +317,14 @@ async def build_queue(
     targets = await load_sla_targets(db, tenant_id)
     sla_expr = sla_due_at_expression(targets)
 
+    from app.services.funnel_stages import DEDUPLICATED
+
     base_filters = [
         Alert.tenant_id == tenant_id,
         Alert.status.notin_(QUEUE_CLOSED_STATUSES),
         or_(Alert.snoozed_until.is_(None), Alert.snoozed_until <= now),
+        # Soft-deduped losers stay on the Funnel Deduplicated column only.
+        Alert.funnel_stage.is_distinct_from(DEDUPLICATED),
     ]
     if period_delta is not None:
         base_filters.append(Alert.first_seen >= (now - period_delta))

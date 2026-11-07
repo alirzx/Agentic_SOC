@@ -271,6 +271,8 @@ _LIST_ALERTS_DEFAULTS: dict[str, Any] = {
     "search": None,
     "min_confidence": None,
     "confidence_label": None,
+    "funnel_stage": None,
+    "disposition": None,
 }
 
 
