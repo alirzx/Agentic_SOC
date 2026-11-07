@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Investigation Rail stuck on Loading / alert detail 500.**
+  `GET /api/v1/alerts/{id}` awaited a live Splunk notable hydrate for up to
+  40s whenever wide MITRE annotations were missing. With Splunk slow or a
+  bulk re-enrich running, the rail never painted. Interactive hydrate is now
+  capped at 2.5s, respects a 15-minute miss cooldown, and never raises — the
+  stored Postgres row always renders.
 - **SOC Funnel filled with ×N same-title ESCU rows after Splunk catch-up.**
   Fingerprint-by-`finding.uid` correctly treats each Splunk notable as distinct,
   but ESCU re-fires often mint a new uid for the same title+host. Funnel groups
