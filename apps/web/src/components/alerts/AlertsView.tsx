@@ -258,6 +258,7 @@ const FUNNEL_STAGE_QUERY = new Set<string>([
   'ingested',
   'triaged',
   'suppressed',
+  'deduplicated',
   'investigating',
   'cased',
   'ready_for_jira',

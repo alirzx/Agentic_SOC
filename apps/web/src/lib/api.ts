@@ -641,6 +641,7 @@ export type FunnelStage =
   | 'ingested'
   | 'triaged'
   | 'suppressed'
+  | 'deduplicated'
   | 'investigating'
   | 'cased'
   | 'ready_for_jira'
@@ -948,11 +949,16 @@ export const socFunnelApi = {
       skipped: number;
       stage_sync?: Record<string, number>;
       stages_updated?: number;
+      dedupe?: {
+        alerts_deduplicated?: number;
+        alerts_deleted?: number;
+        groups_collapsed?: number;
+      };
     }>('/api/v1/soc/funnel/backfill', {
       method: 'POST',
       params: { hours: String(hours) },
     }),
-  /** Collapse display-identical duplicate alerts/cases for this tenant. */
+  /** Soft-collapse display-identical alerts into Deduplicated; merge cases. */
   dedupeExact: (dryRun = false) =>
     request<{
       cases: {
@@ -964,6 +970,7 @@ export const socFunnelApi = {
       alerts: {
         groups_collapsed: number;
         alerts_deleted: number;
+        alerts_deduplicated?: number;
         alerts_kept: number;
         dry_run: boolean;
       };

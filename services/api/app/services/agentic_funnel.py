@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -33,6 +34,8 @@ _SIBLING_CAP = 100
 # Max lookback for board / backfill / reportable (30 days). A 7d cap left
 # multi-day ingest floods stuck at ``ingested`` with no way to advance them.
 FUNNEL_MAX_WINDOW_HOURS = 720
+_AUTO_DEDUPE_INTERVAL_S = 45.0
+_last_auto_dedupe_monotonic: dict[str, float] = {}
 
 
 def _window_since(hours: int) -> datetime:
@@ -220,6 +223,7 @@ async def sync_legacy_funnel_stages(
                    AND created_at >= :since
                    AND case_id IS NULL
                    AND funnel_stage IS DISTINCT FROM 'suppressed'
+                   AND funnel_stage IS DISTINCT FROM 'deduplicated'
                    AND (
                          disposition IN ('false_positive','benign','benign_true_positive')
                       OR tags @> '["false_positive"]'::jsonb
@@ -732,6 +736,11 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         )
 
     stage_sync = await sync_legacy_funnel_stages(db, tenant_id=tenant_id, since=since)
+    # Soft display-dedupe into the Deduplicated column so analysts never need
+    # the manual "Remove duplicates" click after a large Splunk wave.
+    from app.services.exact_dedupe import dedupe_exact_alerts
+
+    dedupe = await dedupe_exact_alerts(db, tenant_id=tenant_id, dry_run=False)
     await db.commit()
     return {
         "window_hours": hours,
@@ -743,6 +752,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         "reportable": reportable,
         "stage_sync": stage_sync,
         "stages_updated": int(sum(stage_sync.values())),
+        "dedupe": dedupe,
     }
 
 
@@ -816,7 +826,25 @@ async def list_reportable(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int 
 
 async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 24) -> dict[str, Any]:
     """Stage counts + sample alerts for the SOC Funnel UI board."""
+    from app.services.exact_dedupe import dedupe_exact_alerts
     from app.services.funnel_stages import BOARD_ORDER, STAGE_LABELS
+
+    # Soft-dedupe on a short throttle so the Deduplicated column stays current
+    # without a manual "Remove duplicates" click after every Splunk wave.
+    tid_key = str(tenant_id)
+    now_mono = time.monotonic()
+    last = _last_auto_dedupe_monotonic.get(tid_key, 0.0)
+    if now_mono - last >= _AUTO_DEDUPE_INTERVAL_S:
+        _last_auto_dedupe_monotonic[tid_key] = now_mono
+        try:
+            await dedupe_exact_alerts(db, tenant_id=tenant_id, dry_run=False)
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — board must still render
+            logger.warning(
+                "funnel_board.auto_dedupe_failed",
+                error=str(exc).replace("\r", " ").replace("\n", " ")[:300],
+            )
+            await db.rollback()
 
     since = _window_since(hours)
     counts_rows = (

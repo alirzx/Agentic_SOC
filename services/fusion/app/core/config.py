@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     # Phase 3.1 spine bridge — persist fused (non-duplicate) alerts to the
     # Postgres alert store (app/services/alert_sink.py). Fail-soft by design.
     alert_sink_enabled: bool = Field(default=True, alias="AISOC_ALERT_SINK_ENABLED")
+    # Title+rule+host collapse at persist time. OFF by default: the Funnel board
+    # already groups by title for display, and this gate swallowed distinct
+    # Splunk notables (unique finding.uid) so Sync looked healthy while /alerts
+    # never gained new rows. Opt in only for extreme noise environments.
+    alert_display_dedup_enabled: bool = Field(
+        default=False,
+        alias="AISOC_ALERT_DISPLAY_DEDUP",
+    )
 
     # Phase A1 — archive every normalized OCSF event into the ClickHouse event
     # lake (app/services/lake_writer.py). Independent of promotion: an event

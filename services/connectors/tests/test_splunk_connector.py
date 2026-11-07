@@ -41,14 +41,18 @@ def test_mission_control_spl_tables_extracted_fields():
 
 
 def test_custom_search_is_never_silently_replaced():
-    """Operator Custom SPL (including index=notable) must not be treated as blank."""
+    """Operator Custom SPL with identity fields must not be treated as blank."""
     notable = (
         "search index=notable "
         "| table _time source search_name severity urgency host dvc dest "
         "dest_port transport src src_ip source_guid source_event_id event_id _cd _raw"
     )
+    truncated = (
+        "search index=notable | table _time source search_name severity host dvc dest_port"
+    )
     assert _is_replaceable_notable_search("")
     assert _is_replaceable_notable_search("   ")
+    assert _is_replaceable_notable_search(truncated)
     assert not _is_replaceable_notable_search(notable)
     assert not _is_replaceable_notable_search(
         "search index=notable | extract | eval notable_id=coalesce(source_event_id, source_guid, detection_id) | table _time"

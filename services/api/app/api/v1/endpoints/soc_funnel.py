@@ -31,6 +31,7 @@ class BackfillResponse(BaseModel):
     reportable: list[dict[str, Any]] = Field(default_factory=list)
     stage_sync: dict[str, int] = Field(default_factory=dict)
     stages_updated: int = 0
+    dedupe: dict[str, Any] = Field(default_factory=dict)
 
 
 class ReportableResponse(BaseModel):
@@ -117,7 +118,7 @@ class ReenrichSplunkResponse(BaseModel):
 @router.post(
     "/funnel/dedupe-exact",
     response_model=DedupeExactResponse,
-    summary="Delete exact-duplicate alerts and cases",
+    summary="Soft-dedupe alerts into Deduplicated; merge duplicate cases",
 )
 async def post_funnel_dedupe_exact(
     db: DBSession,
@@ -129,9 +130,9 @@ async def post_funnel_dedupe_exact(
 ) -> DedupeExactResponse:
     """Collapse exact duplicate alerts/cases for the caller's tenant.
 
-    Keeps one canonical row per group (richest / oldest), re-links alerts onto
-    the surviving case, then deletes the rest. Agentic funnel cases that share
-    the same title+severity are treated as duplicates.
+    Keeps one canonical alert per display group; soft-marks the rest as
+    ``funnel_stage=deduplicated`` (Deduplicated column). Duplicate agentic
+    cases that share title+severity are still hard-merged.
     """
     payload = await dedupe_exact(db, tenant_id=user.tenant_id, dry_run=dry_run)
     return DedupeExactResponse(**payload)

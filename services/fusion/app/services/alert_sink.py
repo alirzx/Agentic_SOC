@@ -30,6 +30,7 @@ from uuid import UUID
 import asyncpg
 import structlog
 
+from app.core.config import settings
 from app.models.alert import FusedAlert
 
 logger = structlog.get_logger()
@@ -195,35 +196,32 @@ class AlertSink:
 
         alert = fused.alert
         hosts = [alert.hostname] if alert.hostname else []
-        # Splunk ESCU often mints a *new* finding.uid for the same title+host
-        # on every correlation cycle. Fingerprint-by-event-id correctly treats
-        # those as distinct events, but the SOC Funnel collapses by display
-        # key — without this gate the board fills with ×N copies until an
-        # operator runs Remove duplicates. Prefer bumping occurrence_count.
-        display_hit = await self.lookup_display_duplicate(
-            alert.tenant_id,
-            title=alert.title[:500],
-            severity=alert.severity.value,
-            rule_id=alert.rule_id,
-            rule_name=alert.rule_name,
-            hosts=hosts,
-        )
-        if display_hit:
-            await self.touch_duplicate(
+        # Optional title+rule+host collapse. Default OFF — Funnel already
+        # groups by title in the UI, and this gate hid brand-new Splunk
+        # notables behind "Events ingested" while /alerts stayed stale.
+        if settings.alert_display_dedup_enabled:
+            display_hit = await self.lookup_display_duplicate(
                 alert.tenant_id,
-                alert.fingerprint(),
-                event_time=alert.event_time,
-                original_id=display_hit,
+                title=alert.title[:500],
+                severity=alert.severity.value,
+                rule_id=alert.rule_id,
+                rule_name=alert.rule_name,
+                hosts=hosts,
             )
-            # touch_duplicate keys on dedup_hash OR id; fingerprint differs so
-            # pass original_id so last_seen / occurrence_count still advance.
-            await self._clear_persist_failed(alert.connector_id)
-            logger.info(
-                "alert_sink.display_dedup",
-                existing_id=display_hit,
-                title=alert.title[:120],
-            )
-            return PersistResult(PersistOutcome.DUPLICATE, display_hit)
+            if display_hit:
+                await self.touch_duplicate(
+                    alert.tenant_id,
+                    alert.fingerprint(),
+                    event_time=alert.event_time,
+                    original_id=display_hit,
+                )
+                await self._clear_persist_failed(alert.connector_id)
+                logger.info(
+                    "alert_sink.display_dedup",
+                    existing_id=display_hit,
+                    title=alert.title[:120],
+                )
+                return PersistResult(PersistOutcome.DUPLICATE, display_hit)
         try:
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(
