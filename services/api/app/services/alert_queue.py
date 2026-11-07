@@ -470,10 +470,19 @@ async def claim_alert(
         )
 
     now = datetime.now(UTC)
+    claim_values: dict = {
+        "assigned_to_id": user_id,
+        "assigned_at": now,
+        "updated_at": now,
+    }
+    # First claim also stamps first_seen_at so MTTD can be derived without
+    # a separate SLA event writer (hybrid metrics use this column).
+    if alert.first_seen_at is None:
+        claim_values["first_seen_at"] = now
     update_result = await db.execute(
         update(Alert)
         .where(Alert.id == alert_id, Alert.assigned_to_id.is_(None))
-        .values(assigned_to_id=user_id, assigned_at=now, updated_at=now)
+        .values(**claim_values)
         .returning(Alert.assigned_to_id)
     )
     winner = update_result.scalar_one_or_none()
@@ -489,6 +498,35 @@ async def claim_alert(
             await db.refresh(alert)
             return alert
         raise AlertAlreadyClaimedError(alert_id=alert_id, owner_id=actual_owner)
+
+    # Best-effort SLA lifecycle events (detected + acknowledged). Failures
+    # must not roll back the claim — metrics can still fall back to timestamps.
+    try:
+        from app.services.sla import ensure_sla_event
+
+        detected_at = alert.first_seen or alert.created_at or alert.event_time
+        await ensure_sla_event(
+            db,
+            tenant_id=tenant_id,
+            alert_id=alert_id,
+            severity=alert.severity,
+            event_type="detected",
+            occurred_at=detected_at,
+            metadata={"source": "claim"},
+        )
+        await ensure_sla_event(
+            db,
+            tenant_id=tenant_id,
+            alert_id=alert_id,
+            severity=alert.severity,
+            event_type="acknowledged",
+            occurred_at=now,
+            actor_id=user_id,
+            metadata={"source": "claim"},
+        )
+    except Exception:  # noqa: BLE001 — never fail a claim on SLA side-effects
+        # Metrics still derive from assigned_at / first_seen_at on the alert row.
+        pass
 
     await db.commit()
     await db.refresh(alert)

@@ -1106,23 +1106,80 @@ async def update_alert(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
     updates: dict = {}
+    now = datetime.now(UTC)
     if request.status is not None:
         updates["status"] = request.status
-        if request.status in ("resolved", "false_positive", "closed"):
-            updates["resolved_at"] = datetime.now(UTC)
+        if request.status in ("resolved", "false_positive", "fp", "closed"):
+            updates["resolved_at"] = now
     if request.priority is not None:
         updates["priority"] = request.priority
     if request.tags is not None:
         updates["tags"] = request.tags
     if request.assigned_to_id is not None:
         updates["assigned_to_id"] = request.assigned_to_id
-        updates["assigned_at"] = datetime.now(UTC)
+        updates["assigned_at"] = now
+        if alert.first_seen_at is None:
+            updates["first_seen_at"] = now
     if request.case_id is not None:
         updates["case_id"] = request.case_id
 
     if updates:
-        updates["updated_at"] = datetime.now(UTC)
+        updates["updated_at"] = now
         await db.execute(update(Alert).where(Alert.id == alert_id).values(**updates))
+        # Best-effort SLA lifecycle events from status / assignment changes.
+        try:
+            from app.services.sla import ensure_sla_event
+
+            detected_at = alert.first_seen or alert.created_at or alert.event_time
+            await ensure_sla_event(
+                db,
+                tenant_id=current_user.tenant_id,
+                alert_id=alert_id,
+                severity=alert.severity,
+                event_type="detected",
+                occurred_at=detected_at,
+                metadata={"source": "alert_update"},
+            )
+            if request.assigned_to_id is not None or request.status in (
+                "in_progress",
+                "triaging",
+                "acknowledged",
+            ):
+                await ensure_sla_event(
+                    db,
+                    tenant_id=current_user.tenant_id,
+                    alert_id=alert_id,
+                    severity=alert.severity,
+                    event_type="acknowledged",
+                    occurred_at=now,
+                    actor_id=current_user.user_id,
+                    metadata={"source": "alert_update"},
+                )
+            new_status = (request.status or "").strip().lower()
+            if new_status in {"resolved", "false_positive", "fp"}:
+                await ensure_sla_event(
+                    db,
+                    tenant_id=current_user.tenant_id,
+                    alert_id=alert_id,
+                    severity=alert.severity,
+                    event_type="resolved",
+                    occurred_at=now,
+                    actor_id=current_user.user_id,
+                    metadata={"source": "alert_update", "status": new_status},
+                )
+            if new_status in {"closed", "false_positive", "fp"}:
+                await ensure_sla_event(
+                    db,
+                    tenant_id=current_user.tenant_id,
+                    alert_id=alert_id,
+                    severity=alert.severity,
+                    event_type="closed",
+                    occurred_at=now,
+                    actor_id=current_user.user_id,
+                    metadata={"source": "alert_update", "status": new_status},
+                )
+        except Exception:  # noqa: BLE001 — never fail alert updates on SLA side-effects
+            logger.exception("sla event write failed for alert %s", alert_id)
         await db.commit()
         await db.refresh(alert)
 
