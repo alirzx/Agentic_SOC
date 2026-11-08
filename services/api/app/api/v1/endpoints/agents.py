@@ -330,15 +330,12 @@ async def investigate_alert(
     try:
         async with httpx.AsyncClient(timeout=_INVESTIGATE_TIMEOUT_SECONDS) as client:
             resp = await client.post(url, json=payload, headers=_tenant_headers(current_user.tenant_id))
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload)
     except httpx.HTTPError as exc:
         logger.exception("agents.investigate.proxy_failed alert_id=%s", alert.id)
-        raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
+        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
 
     if resp.status_code >= 400:
-        detail = resp.text[:500] if resp.text else f"agents returned {resp.status_code}"
-        raise HTTPException(status_code=resp.status_code, detail=detail)
+        raise HTTPException(status_code=resp.status_code, detail="Agents investigation request failed")
 
     return AgentInvestigationOut.model_validate(resp.json())
 
@@ -361,7 +358,7 @@ async def get_alert_investigation(
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
     if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
+        raise HTTPException(status_code=resp.status_code, detail="Agents investigation status unavailable")
     out = AgentInvestigationOut.model_validate(resp.json())
     # Advance funnel stage once the background run finishes.
     if out.status in {"completed", "failed"} and out.alertId:
