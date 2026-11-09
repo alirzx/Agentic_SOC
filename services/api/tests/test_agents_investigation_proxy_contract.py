@@ -13,8 +13,16 @@ def _route(name: str) -> ast.AsyncFunctionDef:
 
 
 def _client_posts(route: ast.AsyncFunctionDef) -> list[ast.Call]:
-    return [n for n in ast.walk(route) if isinstance(n, ast.Call)
-            and isinstance(n.func, ast.Attribute) and n.func.attr == "post"]
+    # ast.walk includes @router.post(...) decorators. Count outbound client
+    # calls only, otherwise the route declaration is mistaken for a network POST.
+    return [
+        n for n in ast.walk(route)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "post"
+        and isinstance(n.func.value, ast.Name)
+        and n.func.value.id == "client"
+    ]
 
 
 def test_investigation_is_sent_once_with_signed_tenant():
@@ -32,8 +40,15 @@ def test_investigation_is_sent_once_with_signed_tenant():
 
 def test_investigation_poll_forwards_signed_tenant():
     route = _route("get_alert_investigation")
-    gets = [n for n in ast.walk(route) if isinstance(n, ast.Call)
-            and isinstance(n.func, ast.Attribute) and n.func.attr == "get"]
+    # Likewise skip @router.get(...) when counting outbound polling calls.
+    gets = [
+        n for n in ast.walk(route)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "get"
+        and isinstance(n.func.value, ast.Name)
+        and n.func.value.id == "client"
+    ]
     assert len(gets) == 1
     headers = next((kw.value for kw in gets[0].keywords if kw.arg == "headers"), None)
     assert isinstance(headers, ast.Call)
