@@ -17,55 +17,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install poetry==1.8.2 && \
-    poetry config virtualenvs.create false
+# Select ONE trusted Python package mirror for both pip and Poetry.
+# Liara is default; override PYPI_INDEX_URL with Chabokan if required.
+ARG PYPI_INDEX_URL=https://package-mirror.liara.ir/repository/pypi/simple/
+ENV PIP_INDEX_URL=${PYPI_INDEX_URL} \
+    PIP_DEFAULT_TIMEOUT=40 \
+    PIP_RETRIES=2 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_NO_INTERACTION=1
+
+RUN python -m pip install --no-cache-dir "poetry==2.5.1"
 
 COPY pyproject.toml poetry.lock* ./
 
-# Run poetry without swallowing errors. If resolution fails (transient
-# registry timeout, proxy hiccup, etc.) we fall through to a pip install
-# that mirrors pyproject.toml so the image still ships a working api
-# service. The fallback list MUST stay in lockstep with
-# services/api/pyproject.toml — missing a dep there means the image
-# builds but crashes on import.
-RUN set -eux; \
-    if poetry install --no-interaction --no-ansi --without dev --no-root; then \
-        echo "[api] poetry install succeeded"; \
-    else \
-        echo "[api] poetry install failed; using pip fallback"; \
-        pip install --no-cache-dir \
-            "fastapi>=0.111,<0.112" \
-            "uvicorn[standard]>=0.29,<0.30" \
-            "pydantic[email]>=2.7,<2.14" \
-            "pydantic-settings>=2.2,<3" \
-            "sqlalchemy[asyncio]>=2.0.30,<3" \
-            "asyncpg>=0.29,<0.32" \
-            "alembic>=1.13,<2" \
-            "redis[hiredis]>=5.0.4,<8.0.0" \
-            "httpx>=0.27,<0.29" \
-            "python-jose[cryptography]>=3.3,<4" \
-            "PyJWT>=2.8,<3" \
-            "cryptography>=42,<43" \
-            "bcrypt>=4.1,<5" \
-            "python-multipart>=0.0.9,<0.1" \
-            "tenacity>=8.3,<10" \
-            "structlog>=24.1,<25" \
-            "prometheus-client>=0.20,<0.26" \
-            "opentelemetry-sdk>=1.24,<2" \
-            "opentelemetry-instrumentation-fastapi>=0.45b0" \
-            "opentelemetry-instrumentation-sqlalchemy>=0.45b0" \
-            "clickhouse-driver>=0.2.8,<0.3" \
-            "sqlglot>=23,<27" \
-            "boto3>=1.34,<2" \
-            "neo4j>=5.19,<7" \
-            "pysigma>=0.11,<0.12" \
-            "pysigma-backend-opensearch>=1.0,<2" \
-            "yara-python>=4.5,<5" \
-            "pyyaml>=6.0.1,<7" \
-            "strawberry-graphql[fastapi]>=0.236,<0.237" \
-            "webauthn>=2.2,<3" \
-            "weasyprint>=62,<63" ; \
-    fi
+# Resolve from the selected mirror. Source changes alter Poetry's lock hash:
+# refresh only INSIDE the build, then install the resolved package set.
+# Fail rather than silently installing a drifting/incomplete pip fallback.
+RUN poetry source add --priority=primary build-index "${PYPI_INDEX_URL}" \
+    && poetry lock \
+    && poetry install --only main --no-root --no-ansi \
+    && python -m pip check
 
 COPY . .
 
