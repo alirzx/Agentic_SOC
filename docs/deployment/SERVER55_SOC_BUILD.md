@@ -90,3 +90,31 @@ bash scripts/server55_soc_build.sh apt-probe
 Only proceed when both GET probes pass. If security mirror is unreachable, select another trusted mirror **that actually serves** `/debian-security/dists/trixie-security/InRelease` and rerun; do not proceed with the partial APT indexes. The Docker build prints `apt-cache policy libssl-dev libssl3t64` for further troubleshooting; if an exact-version mismatch persists after a fully successful APT update, review the mirror sync state and base image digest before changing package requirements.
 
 After a successful probe, build the blocked API and Agents first, then the remaining app images using the helper. Do not rebuild or update running DLP containers as part of this fix.
+
+## Poetry application isolation: packaging/virtualenv conflict (2026-11-09)
+
+After Debian APT and Liara PyPI connectivity were fixed, the API build reached dependency installation but `python -m pip check` reported:
+
+```
+virtualenv 21.15.6 has requirement packaging>=26.3, but you have packaging 24.2
+```
+
+This is a **build-tool versus runtime environment collision**, not a failed Python dependency resolution: Poetry 2.5.1 and its own `virtualenv` requirement had been installed in the system interpreter, while `POETRY_VIRTUALENVS_CREATE=false` made the API install runtime dependencies in that *same* interpreter, downgrading `packaging`.
+
+All four Python images now set `POETRY_VIRTUALENVS_CREATE=true` and `POETRY_VIRTUALENVS_IN_PROJECT=true`. Poetry still bootstraps using the configured Liara mirror, but creates an isolated `/app/.venv` for application dependencies. The integrity check is now `/app/.venv/bin/python -m pip check`, and the runtime `PATH` begins with `/app/.venv/bin`. Poetry itself remains outside that project virtualenv. Neither the private Gateway nor any Docker data volume is affected.
+
+```bash
+cd /home/api/Agentic_SOC
+bash scripts/server55_soc_build.sh preflight
+# API had already passed OS mirror and PyPI resolution; rebuild first.
+docker compose --project-directory "$PWD" -p aisoc-demo \
+  -f infra/compose/docker-compose.demo.yml \
+  -f infra/compose/privacy-network.override.yml \
+  -f infra/compose/privacy-ca.override.yml \
+  -f "$HOME/soc-deploy/runtime-security.override.yml" build api
+# If this succeeds, build agents, fusion and connectors, then web/realtime/ingest:
+bash scripts/server55_soc_build.sh build
+bash scripts/server55_soc_build.sh smoke
+```
+
+Do not remove `pip check`, force a newer `packaging` in the application, or pin/downgrade Poetry's `virtualenv` solely to make an unsafe shared environment pass. If `/app/.venv/bin/python -m pip check` reveals another conflict, that is now a true **application** dependency consistency issue and should be resolved using its Poetry constraints and lockfile. Create and commit the missing API/Fusion/Connectors lockfiles in a separate reviewed reproducibility task.

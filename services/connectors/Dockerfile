@@ -8,7 +8,8 @@ ARG PYPI_INDEX_URL=https://package-mirror.liara.ir/repository/pypi/simple/
 ENV PIP_INDEX_URL=${PYPI_INDEX_URL} \
     PIP_DEFAULT_TIMEOUT=40 \
     PIP_RETRIES=2 \
-    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_VIRTUALENVS_CREATE=true \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1
 
 RUN python -m pip install --no-cache-dir "poetry==2.5.1"
@@ -21,7 +22,10 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry source add --priority=primary build-index "${PYPI_INDEX_URL}" \
     && poetry lock \
     && poetry install --only main --no-root --no-ansi \
-    && python -m pip check
+    && /app/.venv/bin/python -m pip check
+
+# Runtime uses the isolated application environment, never Poetry tool packages.
+ENV PATH="/app/.venv/bin:${PATH}"
 
 COPY app/ ./app/
 
