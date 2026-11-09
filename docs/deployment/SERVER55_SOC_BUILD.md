@@ -50,17 +50,17 @@ After successful image build and disposable-container DLP smoke, validate author
 
 Python mirrors do **not** provide Debian operating-system packages. The two images based on `python:3.11-slim` install OS libraries via signed Debian APT repositories. The base image currently uses Debian 13 `trixie`; the previous build failed reaching `deb.debian.org` over HTTP port 80.
 
-The Dockerfiles now select a regional Debian archive over HTTPS by default and the official Debian HTTPS security archive. Mirror selection is configurable without changing any credentials or runtime Compose service configuration. Debian APT signature verification remains enforced. The regional archive is listed by Debian's mirror service, but its HTTPS availability from Server 55 must be tested.
+The Dockerfiles select the previously working regional Debian archive over HTTPS and an independently mirrored, signed Debian Security repository (Dogado) over HTTPS by default. That security mirror has a current `trixie-security` index, but **reachability from Server 55 is not yet confirmed**. Mirror selection is configurable without changing any credentials or runtime Compose service configuration. Debian APT signature verification remains enforced. The regional archive is listed by Debian's mirror service, but its HTTPS availability from Server 55 must be tested.
 
 ```bash
 cd /home/api/Agentic_SOC
 # Use GET, not HEAD. Check BOTH releases and refuse invalid/empty responses.
 curl -fLsS --max-time 15 -o /dev/null https://archive.debian.petiak.ir/debian/dists/trixie/InRelease
-curl -fLsS --max-time 15 -o /dev/null https://deb.debian.org/debian-security/dists/trixie-security/InRelease
+curl -fLsS --max-time 15 -o /dev/null https://mirror.dogado.de/debian-security/dists/trixie-security/InRelease
 
 # If a reachable trusted Debian mirror differs, override WITHOUT changing tracked files:
 export APT_DEBIAN_MIRROR=https://archive.debian.petiak.ir/debian
-export APT_SECURITY_MIRROR=https://deb.debian.org/debian-security
+export APT_SECURITY_MIRROR=https://mirror.dogado.de/debian-security
 
 # Build the previously blocked API first:
 docker compose --project-directory "$PWD" -p aisoc-demo \
@@ -75,3 +75,18 @@ If either preflight request fails, select another **trusted, reachable HTTPS mir
 A fresh `python:3.11-slim` tag might eventually move beyond Debian trixie. The Dockerfile currently assumes the standard `/etc/apt/sources.list.d/debian.sources` layout and must be revised if the base image layout changes; pinning the base image by digest after acceptance is recommended.
 
 The CLI warning that `--progress` is a global Compose flag is harmless. For detailed logs use `docker compose --progress plain ... build api`, or simply run the build helper's `build` stage.
+
+## OpenSSL APT version skew: root cause and safe recovery
+
+On 2026-11-09, `deb.debian.org/debian-security` timed out in the Docker build. APT printed a warning but continued with only the regional `trixie`/updates indexes. The base Python Trixie image already contained `libssl3t64` at `3.5.7-1~deb13u3`, while the available `libssl-dev` candidate required `3.5.7-1~deb13u2`. This was **both** a network problem and a resulting OS package-version mismatch, not a Python/Poetry dependency conflict.
+
+The Dockerfiles now use `APT::Update::Error-Mode=any`, so missing Debian Security metadata fails the build immediately; they do not disable GPG signature checks, remove `trixie-security`, pin a stale OpenSSL version, or downgrade system libraries. The security URL is selected with `APT_SECURITY_MIRROR`; default `https://mirror.dogado.de/debian-security`. The Debian security index is publicly available, but always confirm access from this server:
+
+```bash
+cd /home/api/Agentic_SOC
+bash scripts/server55_soc_build.sh apt-probe
+```
+
+Only proceed when both GET probes pass. If security mirror is unreachable, select another trusted mirror **that actually serves** `/debian-security/dists/trixie-security/InRelease` and rerun; do not proceed with the partial APT indexes. The Docker build prints `apt-cache policy libssl-dev libssl3t64` for further troubleshooting; if an exact-version mismatch persists after a fully successful APT update, review the mirror sync state and base image digest before changing package requirements.
+
+After a successful probe, build the blocked API and Agents first, then the remaining app images using the helper. Do not rebuild or update running DLP containers as part of this fix.

@@ -10,7 +10,7 @@ WORKDIR /app
 # The official Debian mirror directory lists regional alternatives. Check GET
 # reachability from the Docker host before building.
 ARG APT_DEBIAN_MIRROR=https://archive.debian.petiak.ir/debian
-ARG APT_SECURITY_MIRROR=https://deb.debian.org/debian-security
+ARG APT_SECURITY_MIRROR=https://mirror.dogado.de/debian-security
 RUN set -eux; \
     case "$APT_DEBIAN_MIRROR:$APT_SECURITY_MIRROR" in \
       https://*:https://*) ;; \
@@ -20,9 +20,13 @@ RUN set -eux; \
       -e "s|http://deb.debian.org/debian-security|$APT_SECURITY_MIRROR|g" \
       -e "s|http://deb.debian.org/debian|$APT_DEBIAN_MIRROR|g" \
       /etc/apt/sources.list.d/debian.sources; \
-    apt-get -o Acquire::Retries=1 \
+    # Missing signed security indexes must abort the build instead of \
+    # falling through to an inconsistent OpenSSL/libpq dependency solver. \
+    apt-get -o APT::Update::Error-Mode=any \
+      -o Acquire::Retries=1 \
       -o Acquire::http::Timeout=25 \
       -o Acquire::https::Timeout=25 update; \
+    apt-cache policy libssl-dev libssl3t64; \
     apt-get install -y --no-install-recommends \
     build-essential; \
     rm -rf /var/lib/apt/lists/*

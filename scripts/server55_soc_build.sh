@@ -48,6 +48,23 @@ print("PASS: 11 services; HTTPS, private CA, tenant signature and remote privacy
   echo "PASS: existing Compose project verified"
 }
 
+# Check both Debian Release metadata endpoints before beginning a full build.
+# APT still verifies Debian's GPG signatures inside the Docker image.
+apt_probe() {
+  command -v curl >/dev/null || { echo 'FAIL: curl required for apt-probe' >&2; return 1; }
+  local archive="${APT_DEBIAN_MIRROR:-https://archive.debian.petiak.ir/debian}"
+  local security="${APT_SECURITY_MIRROR:-https://mirror.dogado.de/debian-security}"
+  local entry url
+  for entry in "$archive|trixie" "$security|trixie-security"; do
+    url="${entry%%|*}/dists/${entry##*|}/InRelease"
+    [[ "$url" == https://* ]] || { echo 'FAIL: Debian repository URL must be HTTPS' >&2; return 1; }
+    echo "Checking Debian repository: $url"
+    curl --fail --location --silent --show-error --retry 1 --max-time 18 --output /dev/null "$url" ||
+      { echo "FAIL: Debian repository unreachable: $url" >&2; return 1; }
+  done
+  echo "PASS: both Debian release endpoints reachable; APT will validate signatures"
+}
+
 snapshot() {
   local stamp manifest service container image
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -68,6 +85,7 @@ snapshot() {
 
 build() {
   preflight
+  apt_probe
   snapshot
   for service in "${APPS[@]}"; do
     echo "Building $service (running containers stay untouched)"
@@ -101,10 +119,11 @@ print("PASS: verified TLS, health, readiness, authenticated policies")
 
 case "${1:-}" in
   preflight) preflight ;;
+  apt-probe) apt_probe ;;
   snapshot) snapshot ;;
   build) build ;;
   smoke) smoke ;;
   status) "${C[@]}" ps -a ;;
   images) "${C[@]}" images ;;
-  *) echo "Usage: bash scripts/server55_soc_build.sh preflight|snapshot|build|smoke|status|images"; exit 2 ;;
+  *) echo "Usage: bash scripts/server55_soc_build.sh preflight|apt-probe|snapshot|build|smoke|status|images"; exit 2 ;;
 esac
