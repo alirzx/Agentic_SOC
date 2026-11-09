@@ -6,16 +6,33 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Debian APT mirrors are independent of Python's Liara/Chabokan PyPI indexes.
+# Debian signed Release metadata remains validated by APT; do not use trusted=yes.
+# The official Debian mirror directory lists regional alternatives. Check GET
+# reachability from the Docker host before building.
+ARG APT_DEBIAN_MIRROR=https://archive.debian.petiak.ir/debian
+ARG APT_SECURITY_MIRROR=https://deb.debian.org/debian-security
+RUN set -eux; \
+    case "$APT_DEBIAN_MIRROR:$APT_SECURITY_MIRROR" in \
+      https://*:https://*) ;; \
+      *) echo "APT mirrors must use HTTPS" >&2; exit 1 ;; \
+    esac; \
+    sed -i \
+      -e "s|http://deb.debian.org/debian-security|$APT_SECURITY_MIRROR|g" \
+      -e "s|http://deb.debian.org/debian|$APT_DEBIAN_MIRROR|g" \
+      /etc/apt/sources.list.d/debian.sources; \
+    apt-get -o Acquire::Retries=1 \
+      -o Acquire::http::Timeout=25 \
+      -o Acquire::https::Timeout=25 update; \
+    apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
-    # WeasyPrint (WS-G2 exec digest PDF) — Pango/Cairo text + rendering stack
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libcairo2 \
     libgdk-pixbuf-2.0-0 \
-    shared-mime-info \
-    && rm -rf /var/lib/apt/lists/*
+    shared-mime-info; \
+    rm -rf /var/lib/apt/lists/*
 
 # Select ONE trusted Python package mirror for both pip and Poetry.
 # Liara is default; override PYPI_INDEX_URL with Chabokan if required.

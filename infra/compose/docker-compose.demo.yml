@@ -140,6 +140,8 @@ services:
       context: services/api
       args:
         PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple/}
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-https://archive.debian.petiak.ir/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://deb.debian.org/debian-security}
     container_name: aisoc-demo-api
     # `missing` lets `pnpm aisoc:demo --rebuild` use locally built images
     # without being clobbered by a registry pull. Compose still pulls when
@@ -214,6 +216,8 @@ services:
       context: services/agents
       args:
         PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple/}
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-https://archive.debian.petiak.ir/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://deb.debian.org/debian-security}
     container_name: aisoc-demo-agents
     pull_policy: missing
     depends_on:

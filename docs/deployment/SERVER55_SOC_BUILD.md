@@ -45,3 +45,33 @@ The web Dockerfile installs pnpm itself using the configured npm mirror. Realtim
 The source tree is based on a demo Compose whose DB/Redis/secret defaults need a separate migration and hardening plan. Merely setting `ENV=production` does not make a deployment production-certified. Previously exposed temporary SLA SSH credentials require revocation/rotation.
 
 After successful image build and disposable-container DLP smoke, validate authorized and unauthorized Tenant Context/Encode/Decode, confirm strict fail-closed model egress, and only then plan a **selective** `up -d --no-deps --no-build` application cutover with tested rollback tags. Never run `docker compose down -v`, seed/bootstrap, unreviewed migrations, or volume pruning. Preserve the standalone DLP production Compose, Redis TLS volume, and legacy services during the rollback window.
+
+## Debian APT mirror preflight (API and Agents)
+
+Python mirrors do **not** provide Debian operating-system packages. The two images based on `python:3.11-slim` install OS libraries via signed Debian APT repositories. The base image currently uses Debian 13 `trixie`; the previous build failed reaching `deb.debian.org` over HTTP port 80.
+
+The Dockerfiles now select a regional Debian archive over HTTPS by default and the official Debian HTTPS security archive. Mirror selection is configurable without changing any credentials or runtime Compose service configuration. Debian APT signature verification remains enforced. The regional archive is listed by Debian's mirror service, but its HTTPS availability from Server 55 must be tested.
+
+```bash
+cd /home/api/Agentic_SOC
+# Use GET, not HEAD. Check BOTH releases and refuse invalid/empty responses.
+curl -fLsS --max-time 15 -o /dev/null https://archive.debian.petiak.ir/debian/dists/trixie/InRelease
+curl -fLsS --max-time 15 -o /dev/null https://deb.debian.org/debian-security/dists/trixie-security/InRelease
+
+# If a reachable trusted Debian mirror differs, override WITHOUT changing tracked files:
+export APT_DEBIAN_MIRROR=https://archive.debian.petiak.ir/debian
+export APT_SECURITY_MIRROR=https://deb.debian.org/debian-security
+
+# Build the previously blocked API first:
+docker compose --project-directory "$PWD" -p aisoc-demo \
+  -f infra/compose/docker-compose.demo.yml \
+  -f infra/compose/privacy-network.override.yml \
+  -f infra/compose/privacy-ca.override.yml \
+  -f "$HOME/soc-deploy/runtime-security.override.yml" build api agents
+```
+
+If either preflight request fails, select another **trusted, reachable HTTPS mirror that actually serves the matching signed trixie/trixie-security repository** before attempting the build. Do not disable signature checks or switch to `http://` merely to bypass connectivity issues.
+
+A fresh `python:3.11-slim` tag might eventually move beyond Debian trixie. The Dockerfile currently assumes the standard `/etc/apt/sources.list.d/debian.sources` layout and must be revised if the base image layout changes; pinning the base image by digest after acceptance is recommended.
+
+The CLI warning that `--progress` is a global Compose flag is harmless. For detailed logs use `docker compose --progress plain ... build api`, or simply run the build helper's `build` stage.
