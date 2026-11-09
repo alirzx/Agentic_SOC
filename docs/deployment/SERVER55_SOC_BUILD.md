@@ -118,3 +118,49 @@ bash scripts/server55_soc_build.sh smoke
 ```
 
 Do not remove `pip check`, force a newer `packaging` in the application, or pin/downgrade Poetry's `virtualenv` solely to make an unsafe shared environment pass. If `/app/.venv/bin/python -m pip check` reveals another conflict, that is now a true **application** dependency consistency issue and should be resolved using its Poetry constraints and lockfile. Create and commit the missing API/Fusion/Connectors lockfiles in a separate reviewed reproducibility task.
+
+
+## Privacy/LLM probe execution inside the Agents image
+
+Agents code lives in `/app/app`; operational scripts live in `/app/scripts`.
+The Agents Dockerfile sets `PYTHONPATH=/app` and verifies both CLI help entrypoints
+during image build. Use `python -m scripts.<module>` with `--workdir /app`
+for Compose one-off runs. **Never run a production LLM call with privacy disabled.**
+
+Set `AISOC_PRIVACY_TEST_TENANT_ID` to the existing canonical UUID
+authorized for the SOC DLP client. The test uses a fake *local* model, but the
+real HTTPS DLP for context, encode, decode and cleanup. No external provider
+is contacted:
+
+```bash
+cd /home/api/Agentic_SOC
+SOC_COMPOSE=(
+  docker compose --project-directory "$PWD" -p aisoc-demo
+  -f infra/compose/docker-compose.demo.yml
+  -f infra/compose/privacy-network.override.yml
+  -f infra/compose/privacy-ca.override.yml
+  -f "$HOME/soc-deploy/runtime-security.override.yml"
+)
+"${SOC_COMPOSE[@]}" config --quiet
+"${SOC_COMPOSE[@]}" build agents
+"${SOC_COMPOSE[@]}" run --rm --no-deps --workdir /app \
+  -e AISOC_PRIVACY_TEST_TENANT_ID \
+  --entrypoint python agents -m scripts.check_protected_llm_flow
+```
+
+After this succeeds, stop any active investigations and selectively recreate
+only `agents` with `--no-deps --no-build --force-recreate`. Run
+`docker exec -e AISOC_PRIVACY_TEST_TENANT_ID="$AISOC_PRIVACY_TEST_TENANT_ID"
+aisoc-demo-agents python -m scripts.check_protected_llm_flow` to verify the
+new running image. Existing infrastructure volumes and DLP Compose are untouched.
+
+A **separate**, explicitly authorized real-LLM Auto-Triage test is
+`python -m scripts.privacy_provider_probe --privacy on --allow-provider-call`
+with the same tenant variable. It contacts the configured LLM provider, so run
+only after checking model routing, budget and operator approval. This probe
+does not exercise Kafka consumer offsets, tenant BYOK resolution or the full
+API→Agents Investigation route.
+
+If a script fails with `ModuleNotFoundError: app` despite this build gate,
+inspect `PYTHONPATH` and Python working directory on that exact image;
+do not reinstall Poetry dependencies or modify CA / DLP credentials.

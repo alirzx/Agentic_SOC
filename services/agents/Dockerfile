@@ -54,7 +54,8 @@ RUN poetry source add --priority=primary build-index "${PYPI_INDEX_URL}" \
     && /app/.venv/bin/python -m pip check
 
 # Runtime uses the isolated application environment, never Poetry tool packages.
-ENV PATH="/app/.venv/bin:${PATH}"
+ENV PATH="/app/.venv/bin:${PATH}" \
+    PYTHONPATH="/app"
 
 # Smoke-import the modules the orchestrator pulls in at module load time.
 # Catches "image built but broken" cases at build time instead of runtime.
@@ -72,6 +73,12 @@ COPY app/scripts/privacy_provider_probe.py ./scripts/privacy_provider_probe.py
 # dependency. Keep this after COPY so the build validates the real import path.
 RUN python -c "from app.security.credential_vault import CredentialVault"
 RUN python -c "from app.privacy.rest_client import PrivacyGatewayRESTClient"
+
+# Execute the real CLI entrypoint, not just an import from WORKDIR.
+# This catches the historical ModuleNotFoundError for direct /app/scripts/*.py
+# invocation without contacting DLP, Redis, Kafka, or any LLM provider.
+RUN python /app/scripts/check_protected_llm_flow.py --help > /dev/null \
+    && python /app/scripts/privacy_provider_probe.py --help > /dev/null
 
 EXPOSE 8084
 
