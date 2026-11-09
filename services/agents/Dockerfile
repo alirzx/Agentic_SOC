@@ -65,6 +65,8 @@ RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, re
 
 COPY app/ ./app/
 COPY scripts/check_remote_privacy_gateway.py ./scripts/check_remote_privacy_gateway.py
+COPY scripts/check_protected_llm_flow.py ./scripts/check_protected_llm_flow.py
+COPY app/scripts/privacy_provider_probe.py ./scripts/privacy_provider_probe.py
 
 # Import the application module that first exposed the missing direct
 # dependency. Keep this after COPY so the build validates the real import path.

@@ -83,6 +83,11 @@ _LONG_URL_PATH_SEGMENT_RE = re.compile(r"(?<=/)[A-Za-z0-9_-]{24,}(?=/|[?#]|$)")
 
 def human_trace_enabled() -> bool:
     """Return whether sensitive payload tracing is explicitly enabled."""
+    # Payload-bearing debug traces must never bypass mandatory DLP policy.
+    if any(os.getenv(k, "").strip().lower() in {"production", "prod"} for k in ("ENV", "ENVIRONMENT", "AISOC_ENV", "APP_ENV")):
+        return False
+    if os.getenv("AISOC_LLM_PRIVACY_REQUIRED", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        return False
     return os.getenv(HUMAN_TRACE_ENABLED_ENV, "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -236,4 +241,42 @@ def emit_human_trace(
             fields["chunk_index"] = chunk_index
         logger.info(TRACE_EVENT_NAMES[stage], **fields)
     except Exception:  # noqa: BLE001 — diagnostics must never affect LLM behavior
+        return
+
+
+# Operational events contain explicitly allowlisted metadata, never model content.
+boundary_logger = structlog.get_logger("aisoc.llm_boundary")
+
+
+def emit_boundary_audit(
+    stage: str, *, gateway: Any, model: str, path: str,
+    provider_called: bool | None = None, cache_hit: bool = False,
+    chunk_index: int | None = None,
+) -> None:
+    """Correlate LLM boundary with privacy.remote.operation safely."""
+    if os.getenv("AISOC_LLM_BOUNDARY_AUDIT_ENABLED", "1").lower() in {"0", "false", "no", "off"}:
+        return
+    if stage not in TRACE_EVENT_NAMES:
+        return
+    try:
+        trace_id = getattr(gateway, "context_trace_id", None)
+        if not isinstance(trace_id, str) or not re.fullmatch(r"[a-f0-9]{16}", trace_id):
+            trace_id = None
+        policy = getattr(gateway, "policy_version", None)
+        fields: dict[str, Any] = {
+            "stage": stage,
+            "path": path if path in {"ainvoke", "astream", "http", "cache"} else "unknown",
+            "model": _scrub_text(model)[:128],
+            "privacy_enabled": gateway is not None,
+            "privacy_backend": "remote" if getattr(gateway, "is_remote", False) else ("local" if gateway else "disabled"),
+            "context_trace_id": trace_id,
+            "policy_version": _scrub_text(policy)[:80] if isinstance(policy, str) else None,
+            "cache_hit": bool(cache_hit),
+        }
+        if provider_called is not None:
+            fields["provider_called"] = bool(provider_called)
+        if chunk_index is not None:
+            fields["chunk_index"] = int(chunk_index)
+        boundary_logger.info("llm.boundary.stage", **fields)
+    except Exception:  # noqa: BLE001 - never let telemetry affect requests
         return
