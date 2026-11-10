@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -27,6 +28,13 @@ def _stable_hash(payload: Any) -> str:
     except (TypeError, ValueError):
         encoded = str(payload).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _may_store_plaintext_llm_audit() -> bool:
+    """Prohibit raw prompt/response persistence with production or mandatory DLP."""
+    prod = any(os.getenv(k, "").strip().lower() in {"production", "prod"} for k in ("ENV", "ENVIRONMENT", "AISOC_ENV", "APP_ENV"))
+    required = os.getenv("AISOC_LLM_PRIVACY_REQUIRED", "0").strip().lower() in {"1", "true", "yes", "on"}
+    return not (prod or required)
 
 
 class StepKind(str, Enum):
@@ -162,16 +170,17 @@ class InvestigatorState(BaseModel):
         model: str | None = None,
         purpose: str = "",
     ) -> str:
-        """Record the literal prompt sent to an LLM. Returns the input hash so
-        the response event can reference it."""
+        """Record pre-DLP prompt provenance without sensitive content in production."""
         meta: dict[str, Any] = {"model": model, "purpose": purpose}
-        # Truncate the visible content but always preserve the full hash
-        if isinstance(prompt, str):
-            meta["prompt"] = prompt[:8000]
-            input_hash = _stable_hash(prompt)
+        input_hash = _stable_hash(prompt)
+        if _may_store_plaintext_llm_audit():
+            if isinstance(prompt, str):
+                meta["prompt"] = prompt[:8000]
+            else:
+                meta["messages"] = prompt
         else:
-            meta["messages"] = prompt
-            input_hash = _stable_hash(prompt)
+            meta["payload_logged"] = False
+            meta["message_count"] = len(prompt) if isinstance(prompt, list) else 1
         self.audit_log.append(
             AuditEntry(
                 kind=StepKind.LLM_PROMPT,
@@ -194,15 +203,18 @@ class InvestigatorState(BaseModel):
         latency_ms: int = 0,
         cost_usd: float = 0.0,
     ) -> str:
-        """Record the literal LLM response. Returns the output hash."""
+        """Record response provenance without retaining plaintext in protected runs."""
         output_hash = _stable_hash(response)
         meta = {
-            "response": response[:8000],
             "model": model,
             "tokens_used": tokens_used,
             "cost_usd": cost_usd,
             "prompt_hash": prompt_hash,
         }
+        if _may_store_plaintext_llm_audit():
+            meta["response"] = response[:8000]
+        else:
+            meta["payload_logged"] = False
         self.audit_log.append(
             AuditEntry(
                 kind=StepKind.LLM_RESPONSE,

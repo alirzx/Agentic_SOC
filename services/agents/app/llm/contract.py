@@ -43,6 +43,7 @@ from app.llm.human_trace import (
     LOCAL_RESPONSE,
     PROVIDER_INPUT,
     PROVIDER_RESPONSE,
+    emit_boundary_audit,
     emit_human_trace,
 )
 from app.llm.response_cache import ResponseCache
@@ -113,6 +114,11 @@ def _trace(
     cache_hit: bool = False,
     chunk_index: int | None = None,
 ) -> None:
+    emit_boundary_audit(
+        stage, gateway=gateway, model=model, path=path,
+        provider_called=provider_called, cache_hit=cache_hit,
+        chunk_index=chunk_index,
+    )
     emit_human_trace(
         stage,
         payload,

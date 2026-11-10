@@ -2,6 +2,9 @@
 # Multi-stage build for production. Build context = monorepo root.
 
 FROM node:20-alpine AS base
+# Install pnpm itself through Liara, not only workspace packages.
+ARG NPM_CONFIG_REGISTRY=https://package-mirror.liara.ir/repository/npm/
+ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 RUN apk add --no-cache libc6-compat
 RUN npm install -g pnpm@8
 
@@ -77,8 +80,7 @@ ENV NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=${NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD}
 
 # Optional registry mirror (Iranian Liara default for demo VM builds).
 # Override: docker build --build-arg NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
-ARG NPM_CONFIG_REGISTRY=https://package-mirror.liara.ir/repository/npm/
-ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
+# Inherited from the base stage.
 # Use pnpm's default symlinked node_modules — same layout as local dev,
 # so tsup/tsc bin shims resolve correctly inside each workspace package.
 RUN pnpm config set registry "${NPM_CONFIG_REGISTRY}" \

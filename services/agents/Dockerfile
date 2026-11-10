@@ -5,54 +5,57 @@ WORKDIR /app
 # System deps occasionally needed by transitive packages (qdrant fastembed,
 # weasyprint, etc.). Keep the list small; expand only when poetry resolution
 # proves a missing system library is required.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Debian APT mirrors are independent of Python's Liara/Chabokan PyPI indexes.
+# Debian signed Release metadata remains validated by APT; do not use trusted=yes.
+# The official Debian mirror directory lists regional alternatives. Check GET
+# reachability from the Docker host before building.
+ARG APT_DEBIAN_MIRROR=https://archive.debian.petiak.ir/debian
+ARG APT_SECURITY_MIRROR=https://mirror.dogado.de/debian-security
+RUN set -eux; \
+    case "$APT_DEBIAN_MIRROR:$APT_SECURITY_MIRROR" in \
+      https://*:https://*) ;; \
+      *) echo "APT mirrors must use HTTPS" >&2; exit 1 ;; \
+    esac; \
+    sed -i \
+      -e "s|http://deb.debian.org/debian-security|$APT_SECURITY_MIRROR|g" \
+      -e "s|http://deb.debian.org/debian|$APT_DEBIAN_MIRROR|g" \
+      /etc/apt/sources.list.d/debian.sources; \
+    # Missing signed security indexes must abort the build instead of \
+    # falling through to an inconsistent OpenSSL/libpq dependency solver. \
+    apt-get -o APT::Update::Error-Mode=any \
+      -o Acquire::Retries=1 \
+      -o Acquire::http::Timeout=25 \
+      -o Acquire::https::Timeout=25 update; \
+    apt-cache policy libssl-dev libssl3t64; \
+    apt-get install -y --no-install-recommends \
+    build-essential; \
+    rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir poetry==1.7.1 \
-    && poetry config virtualenvs.create false
+# Select ONE trusted Python package mirror for both pip and Poetry.
+# Liara is default; override PYPI_INDEX_URL with Chabokan if required.
+ARG PYPI_INDEX_URL=https://package-mirror.liara.ir/repository/pypi/simple/
+ENV PIP_INDEX_URL=${PYPI_INDEX_URL} \
+    PIP_DEFAULT_TIMEOUT=40 \
+    PIP_RETRIES=2 \
+    POETRY_VIRTUALENVS_CREATE=true \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_NO_INTERACTION=1
+
+RUN python -m pip install --no-cache-dir "poetry==2.5.1"
 
 COPY pyproject.toml poetry.lock* ./
 
-# Run poetry without swallowing errors. If resolution fails for any reason
-# (network blip, transient registry timeout, etc.) we fall through to a
-# complete pip install that mirrors pyproject.toml so the image still ships
-# a working agents service. The previous fallback omitted opentelemetry-*
-# and a handful of other deps, producing images that crashed on import.
-RUN set -eux; \
-    if poetry install --no-interaction --no-ansi --without dev --no-root; then \
-        echo "[agents] poetry install succeeded"; \
-    else \
-        echo "[agents] poetry install failed; using pip fallback"; \
-        pip install --no-cache-dir \
-            "fastapi>=0.109,<0.142" \
-            "uvicorn[standard]>=0.27,<0.53" \
-            "pydantic>=2.5,<3" \
-            "pydantic-settings>=2.1,<3" \
-            "langchain>=0.3,<0.4" \
-            "langchain-core>=0.3,<0.4" \
-            "langchain-openai>=0.2,<0.4" \
-            "langchain-community>=0.3,<0.4" \
-            "langgraph>=0.2.40,<1.1" \
-            "openai>=1.12,<3" \
-            "redis[hiredis]>=5.0.1,<9" \
-            "httpx>=0.26,<0.29" \
-            "structlog>=24,<25" \
-            "prometheus-client>=0.19,<0.27" \
-            "python-dateutil>=2.8,<3" \
-            "aiokafka>=0.10,<0.15" \
-            "qdrant-client[fastembed]>=1.9,<2" \
-            "markdown>=3.5,<4" \
-            "opentelemetry-sdk>=1.24,<2" \
-            "opentelemetry-instrumentation-fastapi>=0.45b0" \
-            "opentelemetry-instrumentation-httpx>=0.45b0" \
-            "asyncpg>=0.29,<0.32" \
-            "sqlalchemy[asyncio]>=2.0.25,<3" \
-            "apscheduler>=3.10.4,<4" \
-            "pyyaml>=6.0.1,<7" \
-            "jsonschema>=4.21,<5" \
-            "cryptography>=46,<51" ; \
-    fi
+# Resolve from the selected mirror. Source changes alter Poetry's lock hash:
+# refresh only INSIDE the build, then install the resolved package set.
+# Fail rather than silently installing a drifting/incomplete pip fallback.
+RUN poetry source add --priority=primary build-index "${PYPI_INDEX_URL}" \
+    && poetry lock \
+    && poetry install --only main --no-root --no-ansi \
+    && /app/.venv/bin/python -m pip check
+
+# Runtime uses the isolated application environment, never Poetry tool packages.
+ENV PATH="/app/.venv/bin:${PATH}" \
+    PYTHONPATH="/app"
 
 # Smoke-import the modules the orchestrator pulls in at module load time.
 # Catches "image built but broken" cases at build time instead of runtime.
@@ -63,11 +66,19 @@ RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, re
 
 COPY app/ ./app/
 COPY scripts/check_remote_privacy_gateway.py ./scripts/check_remote_privacy_gateway.py
+COPY scripts/check_protected_llm_flow.py ./scripts/check_protected_llm_flow.py
+COPY app/scripts/privacy_provider_probe.py ./scripts/privacy_provider_probe.py
 
 # Import the application module that first exposed the missing direct
 # dependency. Keep this after COPY so the build validates the real import path.
 RUN python -c "from app.security.credential_vault import CredentialVault"
 RUN python -c "from app.privacy.rest_client import PrivacyGatewayRESTClient"
+
+# Execute the real CLI entrypoint, not just an import from WORKDIR.
+# This catches the historical ModuleNotFoundError for direct /app/scripts/*.py
+# invocation without contacting DLP, Redis, Kafka, or any LLM provider.
+RUN python /app/scripts/check_protected_llm_flow.py --help > /dev/null \
+    && python /app/scripts/privacy_provider_probe.py --help > /dev/null
 
 EXPOSE 8084
 

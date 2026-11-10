@@ -6,6 +6,7 @@ PUT  /api/v1/sla/config/{severity}  — Update SLA target for a severity
 GET  /api/v1/sla/kpi-targets        — Tenant 2026 KPI bar targets (defaults + overrides)
 PUT  /api/v1/sla/kpi-targets        — Patch KPI bar targets (deep-merge ``kpi_bar`` in tenant settings)
 POST /api/v1/sla/events             — Record a lifecycle event for an alert
+POST /api/v1/sla/backfill           — Materialize events from existing alert timestamps
 """
 
 from __future__ import annotations
@@ -141,8 +142,23 @@ async def get_sla_config(
     db: TenantDBSession,
 ) -> list[SLAConfigOut]:
     """Return per-severity SLA configuration for the tenant."""
+    await sla_service.ensure_tenant_sla_config(db, current_user.tenant_id)
     rows = await db.execute(select(TenantSLAConfig).where(TenantSLAConfig.tenant_id == current_user.tenant_id))
     return rows.scalars().all()  # type: ignore[return-value]
+
+
+@router.post("/backfill")
+async def backfill_sla_events(
+    current_user: Annotated[AuthUser, Depends(require_permission("sla:write"))],
+    db: TenantDBSession,
+    days: int = Query(default=30, ge=1, le=365, description="Look-back window in days"),
+):
+    """Materialize ``alert_sla_events`` from existing alert timestamps (idempotent)."""
+    await sla_service.ensure_tenant_sla_config(db, current_user.tenant_id)
+    written = await sla_service.backfill_sla_events_from_alerts(
+        db, current_user.tenant_id, days=days
+    )
+    return {"ok": True, "days": days, **written}
 
 
 @router.put("/config/{severity}", response_model=SLAConfigOut)
@@ -208,7 +224,7 @@ async def record_sla_event(
         severity=body.severity,
         event_type=body.event_type,
         occurred_at=body.occurred_at or datetime.utcnow(),
-        actor_id=current_user.id,
+        actor_id=current_user.user_id,
         # ORM attr is `metadata_` (DB column is still `metadata`) — `metadata`
         # itself is reserved on Declarative `Base`.
         metadata_=body.metadata,

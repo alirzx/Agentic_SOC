@@ -6,6 +6,8 @@ import argparse
 import asyncio
 import json
 import os
+import uuid
+from copy import deepcopy
 from urllib.parse import urlparse
 
 from app.agents.auto_triage_agent import run_auto_triage
@@ -15,6 +17,8 @@ from app.privacy.context import (
     async_privacy_context,
     load_privacy_token_key,
     privacy_backend_name,
+    privacy_required,
+    production_environment,
 )
 from app.privacy.gateway import PrivacyGateway
 from app.workers.fused_alert_consumer import build_state
@@ -66,6 +70,8 @@ def _arguments() -> argparse.Namespace:
         description="REAL NETWORK CALL: run synthetic fused-alert auto-triage through the configured provider."
     )
     parser.add_argument("--privacy", choices=("on", "off"), required=True)
+    parser.add_argument("--tenant-id", default=os.getenv("AISOC_PRIVACY_TEST_TENANT_ID"))
+    parser.add_argument("--allow-provider-call", action="store_true")
     return parser.parse_args()
 
 
@@ -80,12 +86,26 @@ def _safe_route(url: str | None) -> str:
     return f"{parsed.scheme}://{host}/...{suffix}"
 
 
-async def _run(privacy_mode: str) -> int:
-    os.environ["AISOC_LLM_PRIVACY_ENABLED"] = "1" if privacy_mode == "on" else "0"
+async def _run(privacy_mode: str, tenant_id: str | None, allow_provider_call: bool) -> int:
+    if not allow_provider_call:
+        raise SystemExit("Explicit --allow-provider-call is required")
+    if privacy_mode == "off" and (production_environment() or privacy_required()):
+        raise SystemExit("Refusing unprotected provider egress")
+    if not tenant_id:
+        raise SystemExit("Authorized --tenant-id or AISOC_PRIVACY_TEST_TENANT_ID required")
+    try:
+        canonical = str(uuid.UUID(tenant_id))
+    except (ValueError, TypeError) as exc:
+        raise SystemExit("Invalid tenant UUID") from exc
+    if canonical != tenant_id:
+        raise SystemExit("Tenant UUID must be canonical")
     if not os.getenv("OPENAI_API_KEY", "").strip():
         raise SystemExit("OPENAI_API_KEY is required. The value is never printed.")
-
-    state = build_state(_FUSED_MESSAGE)
+    os.environ["AISOC_LLM_PRIVACY_ENABLED"] = "1" if privacy_mode == "on" else "0"
+    message = deepcopy(_FUSED_MESSAGE)
+    message["tenant_id"] = canonical
+    message["alert"]["tenant_id"] = canonical
+    state = build_state(message, canonical_tenant_id=canonical)
     if state is None:
         raise SystemExit("Synthetic fused message did not build an InvestigationState.")
 
@@ -102,7 +122,7 @@ async def _run(privacy_mode: str) -> int:
         print("PROVIDER_SAFE_PREVIEW")
         print(json.dumps(preview, indent=2, sort_keys=True, default=str))
     elif privacy_mode == "on":
-        print("PROVIDER_SAFE_PREVIEW: use controlled HUMAN TRACE for Remote mode")
+        print("PROVIDER_SAFE_PREVIEW: use payload-free llm.boundary.stage logging in Remote mode")
 
     try:
         async with async_privacy_context(str(state.tenant_id)):
@@ -128,7 +148,8 @@ async def _run(privacy_mode: str) -> int:
 
 
 def main() -> int:
-    return asyncio.run(_run(_arguments().privacy))
+    args = _arguments()
+    return asyncio.run(_run(args.privacy, args.tenant_id, args.allow_provider_call))
 
 
 if __name__ == "__main__":

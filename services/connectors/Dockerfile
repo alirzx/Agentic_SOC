@@ -2,37 +2,30 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir poetry==1.7.1 && \
-    poetry config virtualenvs.create false
+# Select ONE trusted Python package mirror for both pip and Poetry.
+# Liara is default; override PYPI_INDEX_URL with Chabokan if required.
+ARG PYPI_INDEX_URL=https://package-mirror.liara.ir/repository/pypi/simple/
+ENV PIP_INDEX_URL=${PYPI_INDEX_URL} \
+    PIP_DEFAULT_TIMEOUT=40 \
+    PIP_RETRIES=2 \
+    POETRY_VIRTUALENVS_CREATE=true \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_NO_INTERACTION=1
+
+RUN python -m pip install --no-cache-dir "poetry==2.5.1"
 
 COPY pyproject.toml poetry.lock* ./
 
-# Run poetry without swallowing errors. Falls back to a complete pip
-# install mirroring pyproject.toml so a transient registry timeout
-# doesn't fail the whole image build. The previous fallback used
-# ``2>/dev/null ||`` which hid the real reason poetry failed and shipped
-# an incomplete dep set (missing cryptography, sqlalchemy, asyncpg,
-# apscheduler — half the connector platform). Keep the fallback
-# list in lockstep with services/connectors/pyproject.toml.
-RUN set -eux; \
-    if poetry install --no-interaction --no-ansi --without dev --no-root; then \
-        echo "[connectors] poetry install succeeded"; \
-    else \
-        echo "[connectors] poetry install failed; using pip fallback"; \
-        pip install --no-cache-dir \
-            "fastapi>=0.109,<0.110" \
-            "uvicorn[standard]>=0.27,<0.28" \
-            "httpx>=0.26,<0.27" \
-            "pydantic>=2.5,<3" \
-            "pydantic-settings>=2.1,<3" \
-            "structlog>=24.1,<25" \
-            "boto3>=1.34,<2" \
-            "apscheduler>=3.10,<4" \
-            "sqlalchemy[asyncio]>=2.0,<3" \
-            "greenlet>=3.0,<4" \
-            "asyncpg>=0.29,<0.30" \
-            "cryptography>=42,<49" ; \
-    fi
+# Resolve from the selected mirror. Source changes alter Poetry's lock hash:
+# refresh only INSIDE the build, then install the resolved package set.
+# Fail rather than silently installing a drifting/incomplete pip fallback.
+RUN poetry source add --priority=primary build-index "${PYPI_INDEX_URL}" \
+    && poetry lock \
+    && poetry install --only main --no-root --no-ansi \
+    && /app/.venv/bin/python -m pip check
+
+# Runtime uses the isolated application environment, never Poetry tool packages.
+ENV PATH="/app/.venv/bin:${PATH}"
 
 COPY app/ ./app/
 

@@ -138,6 +138,10 @@ services:
     # Paths are relative to `--project-directory` (repo root), not this file.
     build:
       context: services/api
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple/}
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-https://archive.debian.petiak.ir/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://mirror.dogado.de/debian-security}
     container_name: aisoc-demo-api
     # `missing` lets `pnpm aisoc:demo --rebuild` use locally built images
     # without being clobbered by a registry pull. Compose still pulls when
@@ -210,6 +214,10 @@ services:
     image: ghcr.io/beenuar/aisoc-agents:${AISOC_TAG:-latest}
     build:
       context: services/agents
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple/}
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-https://archive.debian.petiak.ir/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://mirror.dogado.de/debian-security}
     container_name: aisoc-demo-agents
     pull_policy: missing
     depends_on:
@@ -261,6 +269,8 @@ services:
     image: ghcr.io/beenuar/aisoc-realtime:${AISOC_TAG:-latest}
     build:
       context: services/realtime
+      args:
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://package-mirror.liara.ir/repository/npm/}
     container_name: aisoc-demo-realtime
     pull_policy: missing
     depends_on:
@@ -316,6 +326,8 @@ services:
     image: ghcr.io/beenuar/aisoc-fusion:${AISOC_TAG:-latest}
     build:
       context: services/fusion
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple/}
     container_name: aisoc-demo-fusion
     pull_policy: missing
     depends_on:
@@ -343,6 +355,8 @@ services:
     image: ghcr.io/beenuar/aisoc-connectors:${AISOC_TAG:-latest}
     build:
       context: services/connectors
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple/}
     container_name: aisoc-demo-connectors
     pull_policy: missing
     depends_on:

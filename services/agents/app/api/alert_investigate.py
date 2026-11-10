@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.investigator import InvestigatorOrchestrator
+from app.privacy.context import PrivacyConfigurationError
 from app.llm.gateway_config import validate_gateway_config
 from app.privacy.tenant import require_run_owner, resolve_tenant_for_llm, trusted_workflow_tenant
 
@@ -33,6 +34,7 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1/agents", tags=["agents-investigate"])
 
 _runs: dict[str, dict[str, Any]] = {}
+_background_tasks: set[asyncio.Task[None]] = set()
 
 
 class AlertInvestigateRequest(BaseModel):
@@ -147,16 +149,13 @@ async def _run_investigation(
     model_name: str | None,
     started_at: str,
 ) -> None:
-    """Background worker — never raises into the request path."""
-    tenant_owner: str | None = None
+    """Persist background investigation output for the authenticated tenant."""
     try:
-        tenant_owner = tenant_id
-        _runs[run_id]["_tenant_owner"] = tenant_owner
         state = await InvestigatorOrchestrator().run(
             case_id=alert_id,
             alert_summary=summary,
             raw_alert=raw_alert or {"alert_id": alert_id},
-            tenant_id=tenant_id or "default",
+            tenant_id=tenant_id,
         )
         completed_at = datetime.now(UTC).isoformat()
         status = state.status if state.status in ("completed", "failed", "running") else "completed"
@@ -184,7 +183,7 @@ async def _run_investigation(
             findings_len=len(result.findings or ""),
             recommendations=len(result.recommendations or []),
         )
-    except Exception as exc:  # noqa: BLE001 — persist failure for the poller
+    except Exception as exc:  # noqa: BLE001 - persist a sanitized failure for polling
         completed_at = datetime.now(UTC).isoformat()
         logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error_category=type(exc).__name__)
         result = AgentInvestigationOut(
@@ -206,14 +205,25 @@ async def _run_investigation(
 
 
 @router.post("/investigate", response_model=AgentInvestigationOut)
-async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationOut:
-    """Start an agent investigation; poll ``/investigations/{id}`` for the report."""
+async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> AgentInvestigationOut:
+    """Start a tenant-bound background investigation; poll for its result."""
     alert_id = _resolve_alert_id(req)
     summary = _build_summary(req, alert_id)
-    run_id = str(uuid4())
-    started_at = datetime.now(UTC).isoformat()
+
+    # Body tenant_id is never proof of identity when privacy protection is enabled.
+    try:
+        trusted_ref = trusted_workflow_tenant(request, req.tenant_id)
+    except PrivacyConfigurationError as exc:
+        raise HTTPException(status_code=403, detail="Trusted tenant required") from exc
+    try:
+        tenant_id = await resolve_tenant_for_llm(trusted_ref, allow_default=True)
+    except PrivacyConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="Tenant resolution unavailable") from exc
+
     gateway = validate_gateway_config()
     model_name = gateway.get("model_investigation")
+    run_id = str(uuid4())
+    started_at = datetime.now(UTC).isoformat()
     pending = AgentInvestigationOut(
         id=run_id,
         alertId=alert_id,
@@ -226,7 +236,7 @@ async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationO
         model=model_name,
         error=None,
     )
-    _runs[run_id] = pending.model_dump()
+    _runs[run_id] = {**pending.model_dump(), "_tenant_owner": tenant_id}
     logger.info(
         "alert_investigate.start",
         run_id=run_id,
@@ -235,23 +245,25 @@ async def investigate_alert(req: AlertInvestigateRequest) -> AgentInvestigationO
         model=model_name,
         base_url=gateway.get("base_url_normalized_sanitized"),
     )
-    asyncio.create_task(
+    task = asyncio.create_task(
         _run_investigation(
             run_id=run_id,
             alert_id=alert_id,
             summary=summary,
             raw_alert=req.raw_alert or {"alert_id": alert_id},
-            tenant_id=req.tenant_id or "default",
+            tenant_id=tenant_id,
             model_name=model_name,
             started_at=started_at,
         )
     )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return pending
 
 
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)
 async def get_alert_investigation(run_id: str, request: Request) -> AgentInvestigationOut:
-    """Poll a previously started alert investigation (in-memory status cache)."""
+    """Poll run status only for the authenticated tenant owner."""
     run = _runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Investigation run not found")

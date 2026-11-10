@@ -412,37 +412,39 @@ function KpiBarSection({
   );
 }
 
-const MOCK_SLA_METRICS: SLAMetrics = {
+const EMPTY_SLA_METRICS: SLAMetrics = {
   period_days: 30,
-  computed_at: '2026-05-06T12:00:00Z',
-  overall: { total_alerts: 847, total_breaches: 23, breach_rate: 2.7, mttd_avg: 24.4, mttr_avg: 42.5, mttc_avg: 112.0 },
+  computed_at: new Date(0).toISOString(),
+  overall: {
+    total_alerts: 0,
+    total_breaches: 0,
+    breach_rate: 0,
+    mttd_avg: null,
+    mttr_avg: null,
+    mttc_avg: null,
+  },
   per_severity: {
-    critical: { total: 42, breaches: 3, breach_rate: 7.1, mttd_avg: 8.2, mttr_avg: 18.5, mttc_avg: 35.1, mttd_target: 15, mttr_target: 30, mttc_target: 60 },
-    high: { total: 186, breaches: 8, breach_rate: 4.3, mttd_avg: 15.4, mttr_avg: 38.2, mttc_avg: 72.6, mttd_target: 30, mttr_target: 60, mttc_target: 120 },
-    medium: { total: 312, breaches: 9, breach_rate: 2.9, mttd_avg: 28.7, mttr_avg: 65.3, mttc_avg: 124.8, mttd_target: 60, mttr_target: 120, mttc_target: 240 },
-    low: { total: 307, breaches: 3, breach_rate: 1.0, mttd_avg: 45.2, mttr_avg: 98.6, mttc_avg: 215.4, mttd_target: 120, mttr_target: 240, mttc_target: 480 },
+    critical: { total: 0, breaches: 0, breach_rate: 0, mttd_avg: null, mttr_avg: null, mttc_avg: null, mttd_target: 15, mttr_target: 60, mttc_target: 120 },
+    high: { total: 0, breaches: 0, breach_rate: 0, mttd_avg: null, mttr_avg: null, mttc_avg: null, mttd_target: 30, mttr_target: 120, mttc_target: 240 },
+    medium: { total: 0, breaches: 0, breach_rate: 0, mttd_avg: null, mttr_avg: null, mttc_avg: null, mttd_target: 60, mttr_target: 240, mttc_target: 480 },
+    low: { total: 0, breaches: 0, breach_rate: 0, mttd_avg: null, mttr_avg: null, mttc_avg: null, mttd_target: 120, mttr_target: 480, mttc_target: 1440 },
+    info: { total: 0, breaches: 0, breach_rate: 0, mttd_avg: null, mttr_avg: null, mttc_avg: null, mttd_target: 480, mttr_target: 1440, mttc_target: 2880 },
   },
   kpi_bar: null,
 };
-
-const MOCK_SLA_CONFIGS: SLAConfig[] = [
-  { id: 'sla-1', severity: 'critical', mttd_target: 15, mttr_target: 30, mttc_target: 60 },
-  { id: 'sla-2', severity: 'high', mttd_target: 30, mttr_target: 60, mttc_target: 120 },
-  { id: 'sla-3', severity: 'medium', mttd_target: 60, mttr_target: 120, mttc_target: 240 },
-  { id: 'sla-4', severity: 'low', mttd_target: 120, mttr_target: 240, mttc_target: 480 },
-];
 
 export function SLADashboard() {
   const [days, setDays] = useState(30);
   const [editConfig, setEditConfig] = useState<SLAConfig | null>(null);
   const [editKpiTargets, setEditKpiTargets] = useState<KpiBarTargets | null>(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
-  const { data: rawMetrics, error: metricsError } = useSWR<SLAMetrics>(
+  const { data: rawMetrics, error: metricsError, isLoading: metricsLoading } = useSWR<SLAMetrics>(
     `/api/v1/sla/metrics?days=${days}`,
     fetcher,
     {
       refreshInterval: 60_000,
-      fallbackData: MOCK_SLA_METRICS,
       shouldRetryOnError: false,
       errorRetryCount: 0,
       revalidateOnFocus: false,
@@ -453,14 +455,38 @@ export function SLADashboard() {
     rawMetrics &&
     typeof rawMetrics.overall?.total_alerts === 'number' &&
     typeof rawMetrics.per_severity === 'object';
-  const metrics = isValidMetrics ? rawMetrics : MOCK_SLA_METRICS;
+  const metrics = isValidMetrics ? rawMetrics : (metricsLoading ? null : EMPTY_SLA_METRICS);
 
   const { data: configs } = useSWR<SLAConfig[]>('/api/v1/sla/config', fetcher, {
-    fallbackData: MOCK_SLA_CONFIGS,
     shouldRetryOnError: false,
     errorRetryCount: 0,
     revalidateOnFocus: false,
   });
+
+  async function runBackfill(): Promise<void> {
+    setBackfillBusy(true);
+    setBackfillMsg(null);
+    try {
+      const res = await fetch(`/api/v1/sla/backfill?days=${days}`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as {
+        alerts_scanned?: number;
+        detected?: number;
+        acknowledged?: number;
+        resolved?: number;
+        closed?: number;
+      };
+      setBackfillMsg(
+        `Backfilled ${body.alerts_scanned ?? 0} alerts → detected ${body.detected ?? 0}, ack ${body.acknowledged ?? 0}, resolved ${body.resolved ?? 0}, closed ${body.closed ?? 0}`
+      );
+      await mutate(`/api/v1/sla/metrics?days=${days}`);
+      await mutate('/api/v1/sla/config');
+    } catch (err) {
+      setBackfillMsg(err instanceof Error ? err.message : 'Backfill failed');
+    } finally {
+      setBackfillBusy(false);
+    }
+  }
 
   const configBySeverity = (configs ?? []).reduce<Record<string, SLAConfig>>(
     (acc, c) => ({ ...acc, [c.severity]: c }),
@@ -470,29 +496,50 @@ export function SLADashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-white">SLA Tracking</h1>
           <p className="text-gray-400 text-sm mt-1">
             MTTD / MTTR / MTTC metrics vs configured targets
           </p>
         </div>
-        <select
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
-          className="bg-dark-20 border border-gray-600 text-white text-sm rounded px-3 py-1.5"
-        >
-          {[7, 14, 30, 60, 90].map((d) => (
-            <option key={d} value={d}>
-              Last {d} days
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className="bg-dark-20 border border-gray-600 text-white text-sm rounded px-3 py-1.5"
+          >
+            {[7, 14, 30, 60, 90].map((d) => (
+              <option key={d} value={d}>
+                Last {d} days
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void runBackfill()}
+            disabled={backfillBusy}
+            className="text-sm rounded px-3 py-1.5 border border-brand-600/50 text-brand-300 hover:bg-brand-900/30 disabled:opacity-50"
+          >
+            {backfillBusy ? 'Backfilling…' : 'Sync from alerts'}
+          </button>
+        </div>
       </div>
 
       {metricsError && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-          SLA API unreachable — showing demo metrics so you can explore the dashboard.
+          SLA API unreachable — metrics unavailable until the API responds.
+        </div>
+      )}
+      {backfillMsg && (
+        <div className="rounded-md border border-brand-500/30 bg-brand-500/5 px-4 py-2 text-xs text-brand-100">
+          {backfillMsg}
+        </div>
+      )}
+      {!metricsError && metrics && metrics.overall.total_alerts === 0 && (
+        <div className="rounded-md border border-gray-600/40 bg-dark-20 px-4 py-2 text-xs text-gray-300">
+          No alerts in this window yet. Metrics are computed from live alert timestamps
+          (and optional SLA lifecycle events). Connect a source or widen the date range.
         </div>
       )}
 
