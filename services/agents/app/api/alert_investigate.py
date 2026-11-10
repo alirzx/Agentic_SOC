@@ -185,13 +185,8 @@ async def _run_investigation(
         )
     except Exception as exc:  # noqa: BLE001 - persist a sanitized failure for polling
         completed_at = datetime.now(UTC).isoformat()
-        logger.error(
-            "alert_investigate.failed",
-            run_id=run_id,
-            alert_id=alert_id,
-            error_category=type(exc).__name__,
-        )
-        failed = AgentInvestigationOut(
+        logger.error("alert_investigate.failed", run_id=run_id, alert_id=alert_id, error_category=type(exc).__name__)
+        result = AgentInvestigationOut(
             id=run_id,
             alertId=alert_id,
             status="failed",
@@ -203,7 +198,10 @@ async def _run_investigation(
             model=model_name,
             error="Investigation failed",
         )
-        _runs[run_id] = {**failed.model_dump(), "_tenant_owner": tenant_id}
+        _runs[run_id] = {
+            **result.model_dump(),
+            **({"_tenant_owner": tenant_owner} if tenant_owner is not None else {}),
+        }
 
 
 @router.post("/investigate", response_model=AgentInvestigationOut)

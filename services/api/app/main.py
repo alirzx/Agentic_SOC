@@ -31,8 +31,10 @@ from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.demo_mode import DemoModeMiddleware
 from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
+from app.workers.calibration_monitor import run_forever as run_calibration_monitor
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
+from app.workers.rule_evaluator import run_forever as run_rule_evaluator
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 
 _metrics_bearer = HTTPBearer(auto_error=False)
@@ -50,6 +52,12 @@ _WEEKLY_DIGEST_LOCK_TTL_SECONDS = 5400
 # Hunt sweep can execute multiple saved hunts + case opens in one tick; 5m
 # covers slow sweeps while still recovering quickly after replica loss.
 _HUNT_SCHEDULER_LOCK_TTL_SECONDS = 300
+# Calibration monitor measures ECE every 30 minutes; a 5m lease covers network
+# transients without creating duplicate measurements.
+_CALIBRATION_MONITOR_LOCK_TTL_SECONDS = 300
+# Rule evaluator claims alerts continuously; the claim itself is atomic, so the
+# lease only has to outlive a slow batch and recover fast after replica loss.
+_RULE_EVALUATOR_LOCK_TTL_SECONDS = 60
 
 
 async def _run_guarded_scheduler_worker(
@@ -398,6 +406,43 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:
             logger.warning("hunt_scheduler worker failed to start", error=str(exc))
 
+    # Runbook: creation-time automation-rule evaluator. Rules were only
+    # evaluated from the alert API, which fusion-created (connector) alerts
+    # never touch; this worker claims everything the alert API did not.
+    rule_evaluator_task: asyncio.Task | None = None
+    if settings.RULE_EVALUATOR_ENABLED:
+        try:
+            rule_evaluator_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="rule_evaluator",
+                    ttl_seconds=_RULE_EVALUATOR_LOCK_TTL_SECONDS,
+                    worker=run_rule_evaluator,
+                ),
+                name="rule_evaluator_worker",
+            )
+            logger.info("rule_evaluator worker started")
+        except Exception as exc:
+            logger.warning("rule_evaluator worker failed to start", error=str(exc))
+
+    # Task 1.2: Calibration monitor. Measures LLM confidence calibration
+    # via analyst feedback and logs ECE metrics. Disabled by default in
+    # test/dev environments (CALIBRATION_MONITOR_ENABLED).
+    calibration_monitor_task: asyncio.Task | None = None
+    calibration_monitor_enabled = getattr(settings, "CALIBRATION_MONITOR_ENABLED", True)
+    if calibration_monitor_enabled and not is_dev_env(settings.ENV):
+        try:
+            calibration_monitor_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="calibration_monitor",
+                    ttl_seconds=_CALIBRATION_MONITOR_LOCK_TTL_SECONDS,
+                    worker=run_calibration_monitor,
+                ),
+                name="calibration_monitor_worker",
+            )
+            logger.info("calibration_monitor worker started")
+        except Exception as exc:
+            logger.warning("calibration_monitor worker failed to start", error=str(exc))
+
     # Phase 2.6 — flip /readyz to 200. All lifespan-managed
     # dependencies have been touched at this point (DB, Redis,
     # Neo4j, schedulers); the load balancer can route traffic
@@ -438,6 +483,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("hunt_scheduler worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("hunt_scheduler worker shutdown error", error=type(exc).__name__)
+
+    if calibration_monitor_task is not None and not calibration_monitor_task.done():
+        calibration_monitor_task.cancel()
+        try:
+            await calibration_monitor_task
+        except asyncio.CancelledError:
+            logger.debug("calibration_monitor worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("calibration_monitor worker shutdown error", error=type(exc).__name__)
+
+    if rule_evaluator_task is not None and not rule_evaluator_task.done():
+        rule_evaluator_task.cancel()
+        try:
+            await rule_evaluator_task
+        except asyncio.CancelledError:
+            logger.debug("rule_evaluator worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("rule_evaluator worker shutdown error", error=type(exc).__name__)
 
     if demo_bootstrap_task is not None and not demo_bootstrap_task.done():
         demo_bootstrap_task.cancel()

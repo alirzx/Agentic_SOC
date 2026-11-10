@@ -31,7 +31,7 @@
  * fragment the form/state coupling for no real reuse benefit.
  */
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
@@ -47,6 +47,25 @@ import {
   type OAuthAppView,
   type TroubleshootResponse,
 } from '@/lib/api';
+
+// Default simple-mode SPL for Splunk connectors — auto-filled when the
+// operator switches query_mode to "simple".
+const SPLUNK_SIMPLE_DEFAULT_SPL =
+  'search index=notable | extract' +
+  ' | eval notable_id=coalesce(source_event_id, source_guid, detection_id)' +
+  ' | table _time notable_id search_name detection_id detection_type' +
+  ' dvc dest dest_ip dest_port dest_nt_host dest_os dest_owner' +
+  ' dest_priority dest_category dest_bunit dest_country dest_city dest_mac' +
+  ' src src_ip src_port host user user_name severity urgency status owner disposition' +
+  ' security_domain transport is_prohibited orig_rule_title orig_rule_description' +
+  ' source_event_id source_guid annotations' +
+  ' annotations_mitre_attack annotations_analytic_story' +
+  ' annotations_kill_chain_phases annotations_cis20 annotations_nist' +
+  ' annotations_data_source annotations_type annotations_type_list' +
+  ' action EventID Image Path ProcessID ImageLoaded ScriptBlockText' +
+  ' entity entity_type risk_object risk_score normalized_risk_object' +
+  ' contributing_events_search app authentication_method signature signature_id' +
+  ' | sort 0 - _time';
 
 // ─── Field rendering helpers ────────────────────────────────────────────────
 
@@ -947,8 +966,28 @@ function ConfigStep({
   testResult,
   isEditMode = false,
 }: ConfigStepProps) {
-  const updateField = (name: string, next: string | number | boolean) => {
-    setValues({ ...values, [name]: next });
+  const isSplunk = entry.connector_id === 'splunk';
+
+  const updateField = useCallback((name: string, next: string | number | boolean) => {
+    // Build the base update then apply Splunk-specific cross-field logic.
+    const updated: Record<string, string | number | boolean> = { ...values, [name]: next };
+    if (isSplunk && name === 'query_mode' && next === 'simple') {
+      const current = String(values.custom_search ?? '').trim();
+      const pipelineDefault = String(
+        entry.fields.find((f) => f.name === 'custom_search')?.default ?? '',
+      ).trim();
+      if (!current || current === pipelineDefault) {
+        updated.custom_search = SPLUNK_SIMPLE_DEFAULT_SPL;
+      }
+    }
+    setValues(updated);
+  }, [isSplunk, values, entry.fields, setValues]);
+
+  const currentQueryMode = isSplunk ? String(values.query_mode ?? 'pipeline') : null;
+  const queryModeBadge: Record<string, { label: string; color: string }> = {
+    pipeline: { label: 'Pipeline mode', color: 'text-blue-400 bg-blue-500/10' },
+    simple: { label: 'Simple mode — LLM payload built in code', color: 'text-amber-400 bg-amber-500/10' },
+    auto: { label: 'Auto mode — switches at threshold', color: 'text-purple-400 bg-purple-500/10' },
   };
 
   // Names of secret-typed fields, passed to the troubleshooter so the LLM
@@ -1025,6 +1064,12 @@ function ConfigStep({
       ) : (
         entry.fields.map((f) => (
           <div key={f.name}>
+            {/* For Splunk's custom_search field, show the current query-mode badge above it */}
+            {isSplunk && f.name === 'custom_search' && currentQueryMode && (
+              <div className={`mb-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${queryModeBadge[currentQueryMode]?.color ?? 'text-slate-400 bg-slate-500/10'}`}>
+                {queryModeBadge[currentQueryMode]?.label ?? currentQueryMode}
+              </div>
+            )}
             <label className="block text-xs font-semibold text-gray-300 mb-1">
               {f.label}
               {f.required && !(isEditMode && f.type === 'secret') && (

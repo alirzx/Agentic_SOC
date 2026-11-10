@@ -47,6 +47,7 @@ class LedgerPersistError(RuntimeError):
 
 
 _POOL: asyncpg.Pool | None = None
+_KAFKA_PRODUCER: Any | None = None
 
 
 def _normalise_dsn(url: str) -> str:
@@ -546,3 +547,150 @@ async def record_suppression(
     except Exception as exc:  # noqa: BLE001 — metric write is best-effort
         logger.debug("ledger.record_suppression_failed", signature=signature, error=str(exc))
         return False
+
+
+async def create_task_for_needs_review(
+    *,
+    alert_id: str | None,
+    tenant_ref: str,
+    confidence: float,
+    rationale: str,
+    signature: str | None = None,
+) -> bool:
+    """Create a manual_review runbook task when LLM confidence is below threshold.
+
+    Called from persist_auto_triage when verdict == 'needs_review'.
+    Best-effort: no DB / unknown tenant / SQL error => returns False, never raises.
+
+    ``signature`` is the evidence fingerprint the verdict was computed for. The
+    task carries it so analyst feedback can update the *same* outcome prior
+    instead of requiring the analysts to re-derive a fingerprint.
+    """
+    pool = await get_pool()
+    if pool is None:
+        return False
+
+    alert_uuid = _coerce_uuid(alert_id)
+    if alert_uuid is None:
+        return False
+
+    try:
+        async with pool.acquire() as conn:
+            tenant_id = await _resolve_tenant_id(conn, tenant_ref)
+            if tenant_id is None:
+                return False
+
+            task_id = await conn.fetchval(
+                """
+                INSERT INTO runbook_tasks
+                  (id, tenant_id, alert_id, task_type, title, description, status,
+                   created_by, created_at, signature)
+                VALUES
+                  (uuid_generate_v4(), $1, $2, 'manual_review',
+                   'Verify Alert Triage (Low AI Confidence)',
+                   $3,
+                   'pending', 'system', now(), $4)
+                RETURNING id
+                """,
+                tenant_id,
+                alert_uuid,
+                f"AI confidence ({confidence:.1%}) below threshold. Reasoning: {rationale[:500]}",
+                (signature or None),
+            )
+        logger.info(
+            "ledger.task_created_needs_review",
+            alert_id=str(alert_id),
+            confidence=confidence,
+            has_signature=bool(signature),
+        )
+        # Publish Kafka event for realtime WebSocket fan-out. Best-effort:
+        # don't retry or raise if Kafka is down.
+        await _publish_runbook_task_event(
+            task_id=str(task_id),
+            tenant_id=tenant_id,
+            alert_id=alert_uuid,
+            task_type="manual_review",
+            title="Verify Alert Triage (Low AI Confidence)",
+            status="pending",
+            confidence=confidence,
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001 — task creation is best-effort
+        logger.warning(
+            "ledger.task_creation_failed",
+            alert_id=str(alert_id),
+            task_type="manual_review",
+            error=str(exc),
+        )
+        return False
+
+
+async def _ensure_kafka_producer() -> Any | None:
+    """Lazily initialize Kafka producer for runbook task events.
+
+    Returns None if Kafka is not configured (KAFKA_BOOTSTRAP_SERVERS env var missing)
+    or if producer initialization fails. Best-effort: no-op if producer unavailable.
+    """
+    global _KAFKA_PRODUCER
+    if _KAFKA_PRODUCER is not None:
+        return _KAFKA_PRODUCER
+
+    bootstrap_servers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "").strip()
+    if not bootstrap_servers:
+        return None
+
+    try:
+        from aiokafka import AIOKafkaProducer  # noqa: PLC0415 — optional dep, runtime only
+
+        _KAFKA_PRODUCER = AIOKafkaProducer(
+            bootstrap_servers=bootstrap_servers,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        )
+        await _KAFKA_PRODUCER.start()
+        logger.info("ledger.kafka_producer_started", bootstrap=bootstrap_servers)
+        return _KAFKA_PRODUCER
+    except Exception as exc:  # noqa: BLE001 — producer init is best-effort
+        logger.warning("ledger.kafka_producer_init_failed", error=str(exc))
+        _KAFKA_PRODUCER = None
+        return None
+
+
+async def _publish_runbook_task_event(
+    *,
+    task_id: str,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
+    task_type: str,
+    title: str,
+    status: str,
+    confidence: float,
+) -> None:
+    """Publish runbook task creation event to Kafka for realtime WebSocket fan-out.
+
+    Best-effort: no-op if Kafka is unavailable.
+    """
+    producer = await _ensure_kafka_producer()
+    if producer is None:
+        return
+
+    try:
+        event = {
+            "type": "runbook.task_created",
+            "task_id": task_id,
+            "tenant_id": str(tenant_id),
+            "alert_id": str(alert_id),
+            "task_type": task_type,
+            "title": title,
+            "status": status,
+            "confidence": confidence,
+            "timestamp": datetime.now(tz=None).isoformat(),
+        }
+        topic = os.environ.get("KAFKA_TOPIC_RUNBOOK", "aisoc.runbook.task_updates")
+        await producer.send(topic, value=event)
+        logger.debug("ledger.runbook_task_event_published", task_id=task_id, tenant_id=str(tenant_id))
+    except Exception as exc:  # noqa: BLE001 — Kafka publish is best-effort
+        logger.warning(
+            "ledger.runbook_task_event_publish_failed",
+            task_id=task_id,
+            error=str(exc),
+        )

@@ -42,6 +42,25 @@ async def set_rls_context(session: AsyncSession, tenant_id: uuid.UUID) -> None:
     )
 
 
+async def set_session_rls_context(session: AsyncSession, tenant_id: uuid.UUID) -> None:
+    """Emit SET (not SET LOCAL) to scope a long-lived session to one tenant.
+
+    Request sessions use :func:`set_rls_context`, whose ``set_config(..., TRUE)``
+    is transaction-local — correct for a request that touches one tenant and then
+    ends, but wrong for a background worker that commits mid-work: the setting
+    reverts with the commit and every RLS-protected read afterwards silently
+    returns nothing. ``automation_rules`` and ``runbook_tasks`` have no
+    NULL-tenant escape in their policy, so that failure mode is invisible.
+
+    A worker owns its session and evaluates one tenant at a time, so a
+    session-scoped setting is both safe and what it actually wants.
+    """
+    await session.execute(
+        text("SELECT set_config('app.current_tenant_id', :tid, FALSE)"),
+        {"tid": str(tenant_id)},
+    )
+
+
 async def get_tenant_db(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> AsyncGenerator[AsyncSession, None]:

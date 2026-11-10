@@ -123,6 +123,7 @@ def _alert(tenant_id: uuid.UUID, **overrides: Any) -> Alert:
         "snoozed_by_id": None,
         "raw_event": {},
         "enrichment_data": {},
+        "iocs": [],
         "tags": [],
         "idempotency_key": None,
         "event_time": now,
@@ -210,7 +211,49 @@ def _mk_db(rows: list[Any]) -> MagicMock:
     db.execute = AsyncMock(side_effect=_execute)
     db.add = MagicMock(side_effect=_add)
     db.commit = AsyncMock()
-    db.refresh = AsyncMock()
+
+    def _apply_insert_defaults(obj: Any) -> None:
+        """Values Postgres fills in on INSERT that an in-memory row lacks.
+
+        A real ``refresh()`` re-reads the row, so ``created_at`` (server
+        default ``now()``) and ``iocs`` (column default ``[]``) come back
+        populated. Without them the response model rejects the object, which
+        looks like an endpoint bug when it is a mock gap.
+        """
+        now = datetime.now(UTC)
+        if getattr(obj, "created_at", None) is None:
+            obj.created_at = now
+        if getattr(obj, "updated_at", None) is None:
+            obj.updated_at = now
+        if getattr(obj, "iocs", None) is None:
+            obj.iocs = []
+
+    async def _refresh(obj: Any) -> None:
+        """Mirror what a real session does: copy column values from the
+        last-row-returned onto the ORM instance so tests that read
+        ``alert.severity`` after ``db.refresh(alert)`` see the write.
+        """
+        try:
+            last = next(iterator)
+        except StopIteration:
+            # No queued payload — the in-memory object is the source of truth.
+            _apply_insert_defaults(obj)
+            return
+        if isinstance(last, list):
+            _apply_insert_defaults(obj)
+            return
+        if last is not None:
+            for k, v in last.__dict__.items():
+                skipped = k.startswith("_") or k == "__sa_instance_state__"
+                if not skipped:
+                    setattr(obj, k, v)
+        _apply_insert_defaults(obj)
+
+    # Stash a reference to the iterator so that refresh can pull the row the
+    # UPDATE statement's execute() will have enqueued next.
+    _refresh._iterator = iterator
+
+    db.refresh = AsyncMock(side_effect=_refresh)
     db.rollback = AsyncMock()
     return db
 
@@ -374,7 +417,7 @@ async def test_get_alert_cross_tenant_returns_404() -> None:
     # SELECT scoped by (id, tenant=A) returns nothing.
     db = _mk_db([None])
     with pytest.raises(HTTPException) as exc:
-        await get_alert(alert_id=tenant_b_alert.id, current_user=tenant_a, db=db)
+        await get_alert(alert_id=tenant_b_alert.id, current_user=tenant_a, db=db, title=None, host=None)
     assert exc.value.status_code == 404
     _assert_tenant_scoped(db.executed, tenant_a.tenant_id)
 
@@ -385,7 +428,7 @@ async def test_get_alert_missing_returns_404() -> None:
     user = _user()
     db = _mk_db([None])
     with pytest.raises(HTTPException) as exc:
-        await get_alert(alert_id=uuid.uuid4(), current_user=user, db=db)
+        await get_alert(alert_id=uuid.uuid4(), current_user=user, db=db, title=None, host=None)
     assert exc.value.status_code == 404
 
 
@@ -401,7 +444,7 @@ async def test_get_alert_same_tenant_returns_row(monkeypatch: pytest.MonkeyPatch
     fake_envelope = MagicMock(related_entities=[], mini_timeline=[], recommended_actions=[])
     monkeypatch.setattr(alerts_module, "build_rail_envelope", AsyncMock(return_value=fake_envelope))
 
-    result = await get_alert(alert_id=alert.id, current_user=user, db=db)
+    result = await get_alert(alert_id=alert.id, current_user=user, db=db, title=None, host=None)
     assert result.id == alert.id
     assert result.tenant_id == user.tenant_id
     _assert_tenant_scoped(db.executed, user.tenant_id)
@@ -426,6 +469,7 @@ async def test_get_alert_resolves_stale_rba_id_by_title(
         current_user=user,
         db=db,
         title=live.title,
+        host=None,
     )
     assert result.id == live.id
     _assert_tenant_scoped(db.executed, user.tenant_id)
