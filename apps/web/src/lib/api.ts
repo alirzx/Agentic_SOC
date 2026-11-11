@@ -654,6 +654,10 @@ export interface Alert {
   severity: AlertSeverity;
   status: AlertStatus;
   source: string;
+  /** Connector instance UUID when the alert was fused from a live connector. */
+  connectorId?: string;
+  /** Operator-facing connector instance name (e.g. "Splunk SIEM 107 payload"). */
+  connectorName?: string;
   sourceRef?: string;
   tenantId: string;
   riskScore: number;
@@ -837,8 +841,11 @@ function normalizeAlert(raw: unknown): Alert {
     status: ((r.status as string) ?? 'new') as AlertStatus,
     source:
       pickStr('source', 'source') ??
+      pickStr('connector_name', 'connectorName') ??
       pickStr('connector_type', 'connectorType') ??
       'unknown',
+    connectorId: pickStr('connector_id', 'connectorId'),
+    connectorName: pickStr('connector_name', 'connectorName'),
     sourceRef: pickStr('source_ref', 'sourceRef'),
     tenantId: pickStr('tenant_id', 'tenantId') ?? '',
     riskScore,

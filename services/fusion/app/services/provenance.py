@@ -36,7 +36,12 @@ def _product_label(ocsf: dict[str, Any]) -> str | None:
     vendor = product.get("vendor_name")
     name = product.get("name")
     parts = [p for p in (vendor, name) if isinstance(p, str) and p]
-    return " ".join(parts) or None
+    if not parts:
+        return None
+    # Avoid "splunk splunk" when vendor_name and name are identical.
+    if len(parts) == 2 and parts[0].lower() == parts[1].lower():
+        return parts[0]
+    return " ".join(parts)
 
 
 def extract_provenance(

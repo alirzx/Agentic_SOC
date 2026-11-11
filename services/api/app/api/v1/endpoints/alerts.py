@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.rls import TenantDBSession
 from app.models.alert import Alert
+from app.models.connector import Connector
 from app.services.alert_queue import (
     AlertAlreadyClaimedError,
     AlertNotFoundError,
@@ -83,6 +84,14 @@ class AlertResponse(BaseModel):
     mitre_tactics: list
     mitre_techniques: list
     connector_type: str | None
+    # Instance provenance — ``connector_id`` is the UUID written by fusion;
+    # ``connector_name`` is the operator-facing instance label (e.g.
+    # "Splunk SIEM 107 payload") joined from ``connectors.name``. ``source``
+    # is the display string the console already renders; prefer the instance
+    # name so two Splunk instances are distinguishable.
+    connector_id: uuid.UUID | None = None
+    connector_name: str | None = None
+    source: str | None = None
     ai_score: float | None
     ai_summary: str | None
     ai_recommendations: list
@@ -109,6 +118,73 @@ class AlertResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+def _alert_source_label(
+    *,
+    connector_name: str | None,
+    connector_type: str | None,
+) -> str:
+    """Human-facing origin label for list/detail/workbench rows."""
+    name = (connector_name or "").strip()
+    if name:
+        return name
+    ctype = (connector_type or "").strip()
+    if not ctype:
+        return "unknown"
+    # Collapse accidental "splunk splunk" product-label duplicates.
+    parts = ctype.split()
+    if len(parts) == 2 and parts[0].lower() == parts[1].lower():
+        return parts[0]
+    return ctype
+
+
+async def _connector_names_by_id(
+    db: TenantDBSession | DBSession,
+    connector_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, str]:
+    if not connector_ids:
+        return {}
+    result = await db.execute(
+        select(Connector.id, Connector.name).where(Connector.id.in_(connector_ids))
+    )
+    return {row.id: row.name for row in result.all()}
+
+
+def _to_alert_response(
+    alert: Alert,
+    connector_names: dict[uuid.UUID, str] | None = None,
+) -> AlertResponse:
+    names = connector_names or {}
+    connector_name = names.get(alert.connector_id) if alert.connector_id else None
+    payload = AlertResponse.model_validate(alert)
+    return payload.model_copy(
+        update={
+            "connector_id": alert.connector_id,
+            "connector_name": connector_name,
+            "source": _alert_source_label(
+                connector_name=connector_name,
+                connector_type=alert.connector_type,
+            ),
+        }
+    )
+
+
+async def _alert_responses(
+    db: TenantDBSession | DBSession,
+    alerts: list[Alert],
+) -> list[AlertResponse]:
+    connector_ids = {a.connector_id for a in alerts if a.connector_id is not None}
+    names = await _connector_names_by_id(db, connector_ids)
+    return [_to_alert_response(a, names) for a in alerts]
+
+
+async def _single_alert_response(
+    db: TenantDBSession | DBSession,
+    alert: Alert,
+) -> AlertResponse:
+    responses = await _alert_responses(db, [alert])
+    return responses[0]
 
 
 class AlertDetailResponse(AlertResponse):
@@ -641,7 +717,7 @@ async def submit_alert(
     # ``alert.created`` evaluation, so an alert from fusion's AlertSink (which
     # never reaches this endpoint) is treated exactly like one submitted here.
 
-    return AlertResponse.model_validate(alert)
+    return await _single_alert_response(db, alert)
 
 
 @router.get("", response_model=AlertListResponse)
@@ -723,10 +799,11 @@ async def list_alerts(
     # Fetch
     offset = (page - 1) * page_size
     result = await db.execute(select(Alert).where(and_(*filters)).order_by(Alert.created_at.desc()).offset(offset).limit(page_size))
-    alerts = result.scalars().all()
+    alerts = list(result.scalars().all())
+    items = await _alert_responses(db, alerts)
 
     return AlertListResponse(
-        items=[AlertResponse.model_validate(a) for a in alerts],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
@@ -1027,7 +1104,8 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
     extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
     techniques = [str(t) for t in (alert.mitre_techniques or []) if t]
     mitre_attack = extra.get("mitre_attack") if isinstance(extra.get("mitre_attack"), list) else None
-    payload = AlertDetailResponse.model_validate(alert)
+    base = await _single_alert_response(db, alert)
+    payload = AlertDetailResponse.model_validate(base.model_dump())
     return payload.model_copy(
         update={
             "narrative": alert.narrative,
@@ -1240,7 +1318,7 @@ async def update_alert(
         except Exception:  # noqa: BLE001
             pass
 
-    return AlertResponse.model_validate(alert)
+    return await _single_alert_response(db, alert)
 
 
 @router.post("/{alert_id}/escalate", response_model=AlertResponse)
@@ -1273,7 +1351,7 @@ async def escalate_alert(
         previous_severity=previous_severity,
     )
 
-    return AlertResponse.model_validate(alert)
+    return await _single_alert_response(db, alert)
 
 
 @router.post("/{alert_id}/claim", response_model=AlertResponse)
@@ -1300,7 +1378,7 @@ async def claim_alert_endpoint(
     except AlertAlreadyClaimedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    return AlertResponse.model_validate(alert)
+    return await _single_alert_response(db, alert)
 
 
 @router.post("/{alert_id}/snooze", response_model=AlertResponse)
@@ -1350,4 +1428,4 @@ async def snooze_alert(
     await db.commit()
     await db.refresh(alert)
 
-    return AlertResponse.model_validate(alert)
+    return await _single_alert_response(db, alert)
