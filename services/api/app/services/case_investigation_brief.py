@@ -39,6 +39,8 @@ class AlertBriefItem(BaseModel):
     funnel_stage: str | None = None
     summary: str | None = None
     confidence: int | None = None
+    explanation_markdown: str | None = None
+    suggested_next_steps: list[str] = Field(default_factory=list)
 
 
 class EvidenceHighlight(BaseModel):
@@ -71,6 +73,8 @@ class CaseInvestigationBrief(BaseModel):
     alerts: list[AlertBriefItem] = Field(default_factory=list)
     mitre_techniques: list[str] = Field(default_factory=list)
     next_step: str | None = None
+    # Full Ambient Copilot explain Markdown for the primary linked alert.
+    alert_explanation: str | None = None
 
 
 @dataclass
@@ -84,6 +88,9 @@ class BriefAlertRow:
     narrative: str | None
     confidence: int | None
     mitre_techniques: list[str] = field(default_factory=list)
+    explanation_markdown: str | None = None
+    explanation_meaning: str | None = None
+    suggested_next_steps: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -226,11 +233,16 @@ def build_brief_from_rows(inputs: BriefInputs, *, now: datetime | None = None) -
             if body.strip():
                 evidence.append(EvidenceHighlight(kind=kind, text=body.strip()[:280], source="evidence_chain"))
     for alert in inputs.alerts:
-        blob = (alert.ai_summary or alert.narrative or "").strip()
+        blob = (
+            alert.explanation_meaning
+            or alert.ai_summary
+            or alert.narrative
+            or ""
+        ).strip()
         if blob:
             evidence.append(
                 EvidenceHighlight(
-                    kind="alert_report",
+                    kind="alert_explanation" if alert.explanation_meaning else "alert_report",
                     text=blob[:280],
                     source=alert.title[:80],
                 )
@@ -258,14 +270,43 @@ def build_brief_from_rows(inputs: BriefInputs, *, now: datetime | None = None) -
             severity=a.severity,
             disposition=a.disposition,
             funnel_stage=a.funnel_stage,
-            summary=((a.ai_summary or a.narrative or "")[:220] or None),
+            summary=(
+                (
+                    a.explanation_meaning
+                    or a.ai_summary
+                    or a.narrative
+                    or ""
+                )[:220]
+                or None
+            ),
             confidence=a.confidence,
+            explanation_markdown=a.explanation_markdown,
+            suggested_next_steps=list(a.suggested_next_steps or [])[:12],
         )
         for a in inputs.alerts[:20]
     ]
 
+    primary_explanation = next(
+        (a.explanation_markdown for a in inputs.alerts if (a.explanation_markdown or "").strip()),
+        None,
+    )
+    suggested_from_explain: list[str] = []
+    for alert in inputs.alerts:
+        for step in alert.suggested_next_steps or []:
+            cleaned = str(step).strip()
+            if cleaned and cleaned not in suggested_from_explain:
+                suggested_from_explain.append(cleaned)
+            if len(suggested_from_explain) >= 6:
+                break
+        if len(suggested_from_explain) >= 6:
+            break
+
     next_step: str | None
-    if outcome == "incident" and not pushed:
+    if suggested_from_explain:
+        next_step = "Suggested next steps (from alert explanation):\n" + "\n".join(
+            f"- {s}" for s in suggested_from_explain
+        )
+    elif outcome == "incident" and not pushed:
         next_step = "Review evidence, confirm incident, then Promote → Jira if ITSM handoff is required."
     elif outcome == "false_positive":
         next_step = "Close/resolve the case and feed the FP into detection tuning / override memory."
@@ -294,6 +335,7 @@ def build_brief_from_rows(inputs: BriefInputs, *, now: datetime | None = None) -
         alerts=alert_items,
         mitre_techniques=mitre[:25],
         next_step=next_step,
+        alert_explanation=primary_explanation,
     )
 
 
@@ -369,8 +411,22 @@ def render_case_report_markdown(brief: CaseInvestigationBrief) -> str:
             )
             if alert.summary:
                 lines.append(f"  - Report: {alert.summary}")
+            if alert.suggested_next_steps:
+                lines.append("  - Suggested next steps:")
+                for step in alert.suggested_next_steps[:8]:
+                    lines.append(f"    - {step}")
     else:
         lines.append("_No linked alerts._")
+    if (brief.alert_explanation or "").strip():
+        lines.extend(
+            [
+                "",
+                "## Alert explanation",
+                "",
+                brief.alert_explanation.strip(),
+                "",
+            ]
+        )
     if brief.mitre_techniques:
         lines.extend(["", "## MITRE ATT&CK", ""])
         lines.append(", ".join(f"`{t}`" for t in brief.mitre_techniques))
@@ -380,9 +436,9 @@ def render_case_report_markdown(brief: CaseInvestigationBrief) -> str:
         [
             "",
             "---",
-            "_Auto-generated by AiSOC from case triage, linked alert reports, "
-            "and investigation state. Re-run Investigate with agent for a "
-            "deeper agent-authored report._",
+            "_Auto-generated by AiSOC from case triage, Ambient Copilot alert "
+            "explanations, linked alert reports, and investigation state. "
+            "Re-run Investigate with agent for a deeper agent-authored report._",
             "",
         ]
     )
@@ -431,7 +487,8 @@ async def build_case_investigation_brief(
             text(
                 """
                 SELECT id, title, severity, disposition, funnel_stage,
-                       ai_summary, narrative, confidence, mitre_techniques
+                       ai_summary, narrative, confidence, mitre_techniques,
+                       enrichment_data
                   FROM alerts
                  WHERE case_id = :cid
                  ORDER BY created_at DESC
@@ -441,20 +498,44 @@ async def build_case_investigation_brief(
         )
     ).mappings().all()
 
-    alerts = [
-        BriefAlertRow(
-            id=r["id"],
-            title=str(r["title"] or ""),
-            severity=str(r["severity"] or "medium"),
-            disposition=r.get("disposition"),
-            funnel_stage=r.get("funnel_stage"),
-            ai_summary=r.get("ai_summary"),
-            narrative=r.get("narrative"),
-            confidence=r.get("confidence"),
-            mitre_techniques=_as_str_list(r.get("mitre_techniques")),
+    alerts = []
+    for r in alert_rows:
+        expl_md: str | None = None
+        expl_meaning: str | None = None
+        expl_steps: list[str] = []
+        enrichment = r.get("enrichment_data")
+        if isinstance(enrichment, dict):
+            stored = enrichment.get("contextual_explanation")
+            if isinstance(stored, dict):
+                md = stored.get("markdown")
+                if isinstance(md, str) and md.strip():
+                    expl_md = md.strip()
+                meaning = stored.get("meaning")
+                if isinstance(meaning, str) and meaning.strip():
+                    expl_meaning = meaning.strip()
+                steps = stored.get("suggested_next_steps")
+                if isinstance(steps, list):
+                    expl_steps = [
+                        str(s).strip()[:400]
+                        for s in steps
+                        if str(s).strip()
+                    ][:12]
+        alerts.append(
+            BriefAlertRow(
+                id=r["id"],
+                title=str(r["title"] or ""),
+                severity=str(r["severity"] or "medium"),
+                disposition=r.get("disposition"),
+                funnel_stage=r.get("funnel_stage"),
+                ai_summary=r.get("ai_summary"),
+                narrative=r.get("narrative"),
+                confidence=r.get("confidence"),
+                mitre_techniques=_as_str_list(r.get("mitre_techniques")),
+                explanation_markdown=expl_md,
+                explanation_meaning=expl_meaning,
+                suggested_next_steps=expl_steps,
+            )
         )
-        for r in alert_rows
-    ]
 
     task_rows = (
         await db.execute(

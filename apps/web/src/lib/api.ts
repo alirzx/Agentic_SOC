@@ -1208,6 +1208,22 @@ export const alertsApi = {
       method: 'POST',
       signal,
     }),
+
+  /**
+   * Persist Ambient Copilot "Explain this alert" Markdown so Case Report
+   * and Investigate agents can reuse the same analyst grounding.
+   */
+  saveExplanation: (
+    alertId: string,
+    payload: { markdown: string; model?: string | null },
+  ) =>
+    request<unknown>(`/api/v1/alerts/${alertId}/explanation`, {
+      method: 'POST',
+      body: JSON.stringify({
+        markdown: payload.markdown,
+        model: payload.model ?? undefined,
+      }),
+    }),
 };
 
 // ─── Investigation Queue (W7) ───────────────────────────────────────────────

@@ -219,6 +219,15 @@ class AlertDetailResponse(AlertResponse):
     mitre_attack: list[dict] = []
     source_ref: str | None = None
     risk_score: int | None = None
+    # Ambient Copilot "Explain this alert" — persisted for Case Report + Investigate.
+    contextual_explanation: dict | None = None
+
+
+class AlertExplanationSaveRequest(BaseModel):
+    """Persist Ambient Copilot explain Markdown for later reuse."""
+
+    markdown: str
+    model: str | None = None
 
 
 class AlertSnoozeRequest(BaseModel):
@@ -1106,6 +1115,11 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
     mitre_attack = extra.get("mitre_attack") if isinstance(extra.get("mitre_attack"), list) else None
     base = await _single_alert_response(db, alert)
     payload = AlertDetailResponse.model_validate(base.model_dump())
+    stored_explanation = (
+        extra.get("contextual_explanation")
+        if isinstance(extra.get("contextual_explanation"), dict)
+        else None
+    )
     return payload.model_copy(
         update={
             "narrative": alert.narrative,
@@ -1120,6 +1134,7 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
             or getattr(alert, "rule_id", None)
             or ((alert.source_event_ids or [None])[0] if getattr(alert, "source_event_ids", None) else None),
             "risk_score": alert.priority,
+            "contextual_explanation": stored_explanation,
         }
     )
 
@@ -1198,6 +1213,46 @@ async def get_alert(
     # Never block the Investigation Rail on a slow/hung Splunk lookup.
     alert = await hydrate_alert_for_detail(db, alert)
     return await _build_alert_detail(db, alert)
+
+
+@router.post("/{alert_id}/explanation", response_model=AlertResponse)
+async def save_alert_explanation(
+    alert_id: uuid.UUID,
+    body: AlertExplanationSaveRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    db: DBSession,
+) -> AlertResponse:
+    """Persist Ambient Copilot explain output for Case Report + Investigate."""
+    from app.services.alert_contextual_explanation import (
+        build_explanation_record,
+        merge_explanation_into_enrichment,
+    )
+
+    markdown = (body.markdown or "").strip()
+    if len(markdown) < 40:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="markdown too short")
+    if len(markdown) > 24_000:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="markdown too long")
+
+    result = await db.execute(
+        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+
+    record = build_explanation_record(markdown, model=body.model, source="contextual_explain")
+    new_enrichment = merge_explanation_into_enrichment(alert.enrichment_data, record)
+    values: dict = {
+        "enrichment_data": new_enrichment,
+        "updated_at": datetime.now(UTC),
+    }
+    if not (alert.ai_summary or "").strip() and record.get("meaning"):
+        values["ai_summary"] = str(record["meaning"])[:2_000]
+    await db.execute(update(Alert).where(Alert.id == alert_id).values(**values))
+    await db.commit()
+    await db.refresh(alert)
+    return await _single_alert_response(db, alert)
 
 
 @router.patch("/{alert_id}", response_model=AlertResponse)

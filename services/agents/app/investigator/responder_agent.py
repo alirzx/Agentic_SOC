@@ -23,6 +23,7 @@ from app.llm.factory import make_chat_model, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
+from .explanation_prompt import format_explanation_guidance
 from .prompt_sanitizer import (
     sanitize_iterable_of_strings,
     sanitize_text,
@@ -81,6 +82,16 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
         f"Threat actors: {safe_actors}\n\n"
         f"Timeline (last 5):\n{timeline_blob}"
     )
+    explanation_append = format_explanation_guidance(
+        state.raw_alert if isinstance(state.raw_alert, dict) else None
+    )
+    if explanation_append:
+        # Prefer Suggested next steps when proposing containment actions.
+        prompt = (
+            f"{prompt}\n\n{explanation_append}\n\n"
+            "Prioritise the Suggested next steps above when building "
+            "recommended_actions and containment_steps."
+        )
     bundle_append = format_bundle_prompt_append(state.context_bundle)
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"

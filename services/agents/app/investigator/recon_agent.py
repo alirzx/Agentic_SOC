@@ -23,6 +23,7 @@ from app.llm.factory import make_chat_model, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
+from .explanation_prompt import format_explanation_guidance
 from .prompt_sanitizer import sanitize_text
 from .state import InvestigatorState, ReconFindings, StepKind
 from .tools import enrich_ioc, extract_iocs, map_to_mitre, sha256_of
@@ -75,6 +76,11 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
             max_depth=3,
         )
     prompt = f"Alert summary:\n{safe_summary}\n\nStructured alert summary:\n{raw_alert_blob}"
+    explanation_append = format_explanation_guidance(
+        state.raw_alert if isinstance(state.raw_alert, dict) else None
+    )
+    if explanation_append:
+        prompt = f"{prompt}\n\n{explanation_append}"
     bundle_append = format_bundle_prompt_append(state.context_bundle)
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"

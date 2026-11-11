@@ -36,6 +36,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
 import {
+  alertsApi,
   contextualApi,
   type ContextualActionDescriptor,
   type ContextualActionsCatalogue,
@@ -150,6 +151,10 @@ export function ContextualActions({
       setErrorMsg(null);
       setStreaming(true);
 
+      let accumulated = '';
+      let streamModel: string | null = null;
+      let streamHadError = false;
+
       try {
         const response = await contextualApi.stream(
           {
@@ -194,13 +199,18 @@ export function ContextualActions({
             }
 
             if (frame.error) {
+              streamHadError = true;
               setErrorMsg(frame.error);
               continue;
             }
             if (frame.title && !headerFrame) {
               setHeaderFrame(frame);
             }
+            if (typeof frame.model === 'string' && frame.model.trim()) {
+              streamModel = frame.model.trim();
+            }
             if (typeof frame.delta === 'string') {
+              accumulated += frame.delta;
               setContent((prev) => prev + frame.delta);
             }
             if (frame.done) {
@@ -215,11 +225,32 @@ export function ContextualActions({
           try {
             const frame = JSON.parse(trailing) as ContextualStreamFrame;
             if (typeof frame.delta === 'string') {
+              accumulated += frame.delta;
               setContent((prev) => prev + frame.delta);
+            }
+            if (typeof frame.model === 'string' && frame.model.trim()) {
+              streamModel = frame.model.trim();
             }
             if (frame.done) setDoneFrame(frame);
           } catch {
             /* ignore */
+          }
+        }
+
+        // Persist Explain output for Case Report + Investigate agents.
+        if (
+          !streamHadError &&
+          page === 'alerts' &&
+          descriptor.key === 'explain' &&
+          accumulated.trim().length >= 40
+        ) {
+          try {
+            await alertsApi.saveExplanation(entityId, {
+              markdown: accumulated,
+              model: streamModel,
+            });
+          } catch {
+            // Persistence is best-effort — the panel already shows the stream.
           }
         }
       } catch (err) {

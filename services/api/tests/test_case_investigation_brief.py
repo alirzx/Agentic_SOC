@@ -88,3 +88,58 @@ def test_build_brief_includes_alerts_evidence_and_actions():
     assert "ESCU - Detect Password Spray" in md
     assert "Source IP 203.0.113.9" in md
     assert "## Next step" in md
+
+
+def test_brief_prefers_alert_explanation_for_report_and_next_steps():
+    case_id = uuid4()
+    alert_id = uuid4()
+    explanation = (
+        "## What this alert means\n\n"
+        "This is a Splunk ESCU detection-rule hit, not a confirmed compromise.\n\n"
+        "## Suggested next steps\n\n"
+        "- Pivot on the querying host\n"
+        "- Check EDR process tree\n"
+    )
+    inputs = BriefInputs(
+        case=BriefCaseRow(
+            id=case_id,
+            case_number="INC-99",
+            title="DNS sinkhole hit",
+            description=None,
+            severity="medium",
+            status="investigating",
+            tags={},
+            mitre_techniques=[],
+            evidence_chain=[],
+            alert_ids=[str(alert_id)],
+        ),
+        alerts=[
+            BriefAlertRow(
+                id=alert_id,
+                title="ESCU - DNS Query to Sinkhole",
+                severity="medium",
+                disposition=None,
+                funnel_stage="new",
+                ai_summary="Short legacy summary",
+                narrative=None,
+                confidence=55,
+                mitre_techniques=[],
+                explanation_markdown=explanation,
+                explanation_meaning=(
+                    "This is a Splunk ESCU detection-rule hit, not a confirmed compromise."
+                ),
+                suggested_next_steps=[
+                    "Pivot on the querying host",
+                    "Check EDR process tree",
+                ],
+            )
+        ],
+    )
+    brief = build_brief_from_rows(inputs)
+    assert brief.alert_explanation and "What this alert means" in brief.alert_explanation
+    assert "Pivot on the querying host" in (brief.next_step or "")
+    assert brief.alerts[0].summary and "Splunk ESCU" in brief.alerts[0].summary
+    md = render_case_report_markdown(brief)
+    assert "## Alert explanation" in md
+    assert "not a confirmed compromise" in md
+    assert "Suggested next steps" in md

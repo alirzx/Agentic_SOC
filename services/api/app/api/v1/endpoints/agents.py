@@ -25,6 +25,12 @@ from app.api.v1.endpoints.connectors import _fetch_catalog, _safe_log_val
 from app.models.alert import Alert
 from app.models.connector import Connector
 from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers
+from app.services.alert_contextual_explanation import (
+    build_explanation_record,
+    explanation_for_agents,
+    get_stored_explanation,
+    merge_explanation_into_enrichment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +39,7 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 _AGENTS_URL = (os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL") or "http://agents:8084").rstrip("/")
 _SAFE_PROXY_PATH_RE = re.compile(r"^/[A-Za-z0-9_\-./%]*$")
 _INVESTIGATE_TIMEOUT_SECONDS = float(os.getenv("AISOC_ALERT_INVESTIGATE_TIMEOUT", "180"))
+_EXPLAIN_TIMEOUT_SECONDS = float(os.getenv("AISOC_ALERT_EXPLAIN_TIMEOUT", "90"))
 
 
 def _tenant_headers(tenant_id: UUID) -> dict[str, str]:
@@ -172,7 +179,11 @@ def _validate_agents_path(path: str) -> str:
 
 def _build_alert_summary(alert: Alert) -> str:
     parts = [alert.title]
-    if alert.description:
+    stored = get_stored_explanation(alert)
+    meaning = stored.get("meaning") if isinstance(stored, dict) else None
+    if isinstance(meaning, str) and meaning.strip():
+        parts.append(meaning.strip()[:800])
+    elif alert.description:
         parts.append(alert.description)
     elif alert.narrative:
         parts.append(alert.narrative)
@@ -181,7 +192,7 @@ def _build_alert_summary(alert: Alert) -> str:
 
 
 def _build_raw_alert(alert: Alert) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "id": str(alert.id),
         "title": alert.title,
         "description": alert.description,
@@ -191,6 +202,7 @@ def _build_raw_alert(alert: Alert) -> dict[str, Any]:
         "mitre_tactics": alert.mitre_tactics or [],
         "mitre_techniques": alert.mitre_techniques or [],
         "connector_type": alert.connector_type,
+        "connector_id": str(alert.connector_id) if alert.connector_id else None,
         "rule_id": alert.rule_id,
         "rule_name": alert.rule_name,
         "narrative": alert.narrative,
@@ -203,6 +215,94 @@ def _build_raw_alert(alert: Alert) -> dict[str, Any]:
         # raw_event -> raw_data -> raw_event.
         "llm_payload": alert.llm_payload or None,
     }
+    explanation = explanation_for_agents(alert)
+    if explanation:
+        payload["contextual_explanation"] = explanation
+        steps = explanation.get("suggested_next_steps") or []
+        if steps:
+            payload["suggested_next_steps"] = steps
+    return payload
+
+
+def _entity_snapshot_for_explain(alert: Alert) -> dict[str, Any]:
+    return {
+        "title": alert.title,
+        "description": alert.description,
+        "severity": alert.severity,
+        "status": alert.status,
+        "source": alert.connector_type,
+        "rule_id": alert.rule_id,
+        "rule_name": alert.rule_name,
+        "narrative": alert.narrative,
+        "mitre_techniques": alert.mitre_techniques or [],
+        "affected_hosts": alert.affected_hosts or [],
+        "affected_ips": alert.affected_ips or [],
+        "affected_users": alert.affected_users or [],
+        "tags": alert.tags or [],
+    }
+
+
+async def _ensure_contextual_explanation(
+    db: DBSession,
+    alert: Alert,
+    *,
+    tenant_id: UUID,
+) -> Alert:
+    """Reuse a stored Explain result, or generate one before Investigate.
+
+    Best-effort: a failed/timeout explain must never block investigation.
+    """
+    if get_stored_explanation(alert):
+        return alert
+    url = f"{_AGENTS_URL}/api/v1/contextual/action"
+    body = {
+        "page": "alerts",
+        "action": "explain",
+        "entity_id": str(alert.id),
+        "entity": _entity_snapshot_for_explain(alert),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=_EXPLAIN_TIMEOUT_SECONDS) as client:
+            resp = await client.post(url, json=body, headers=_tenant_headers(tenant_id))
+    except Exception:  # noqa: BLE001 — investigate must continue
+        logger.warning(
+            "agents.explain_preflight_failed alert_id=%s",
+            str(alert.id).replace("\r", "").replace("\n", " ")[:64],
+            exc_info=True,
+        )
+        return alert
+    if resp.status_code >= 400:
+        logger.warning(
+            "agents.explain_preflight_rejected alert_id=%s status=%s",
+            str(alert.id).replace("\r", "").replace("\n", " ")[:64],
+            resp.status_code,
+        )
+        return alert
+    try:
+        data = resp.json()
+    except ValueError:
+        return alert
+    markdown = data.get("content") if isinstance(data, dict) else None
+    if not isinstance(markdown, str) or not markdown.strip():
+        return alert
+    record = build_explanation_record(
+        markdown,
+        model=str(data.get("model") or "") or None,
+        source="investigate_preflight",
+    )
+    from sqlalchemy import update
+
+    new_enrichment = merge_explanation_into_enrichment(alert.enrichment_data, record)
+    values: dict[str, Any] = {"enrichment_data": new_enrichment}
+    # Seed ai_summary from "What this alert means" when empty — powers case report.
+    if not (alert.ai_summary or "").strip() and record.get("meaning"):
+        values["ai_summary"] = str(record["meaning"])[:2_000]
+    await db.execute(
+        update(Alert).where(Alert.id == alert.id, Alert.tenant_id == tenant_id).values(**values)
+    )
+    await db.commit()
+    await db.refresh(alert)
+    return alert
 
 
 # -------------------------------------------------------------------- endpoints
@@ -316,6 +416,13 @@ async def investigate_alert(
         .values(funnel_stage=INVESTIGATING)
     )
     await db.commit()
+    await db.refresh(alert)
+
+    # Ground Investigate in the same Ambient Copilot explanation the operator
+    # sees on "Explain this alert" (generate once if missing).
+    alert = await _ensure_contextual_explanation(
+        db, alert, tenant_id=current_user.tenant_id
+    )
 
     path = _validate_agents_path("/api/v1/agents/investigate")
     payload = {
