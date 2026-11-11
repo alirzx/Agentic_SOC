@@ -138,3 +138,5 @@ services/api/marketplace/
 schemas/graph-schema-current.yaml
 
 docs/ahmadi/
+.tmp_deploy*
+.tmp_patch*
