@@ -279,6 +279,33 @@ export const AUTH_USER_KEY = 'aisoc.responder.user';
 export const SESSION_COOKIE = 'aisoc.session';
 const SESSION_MAX_SECONDS = 24 * 60 * 60;
 
+/**
+ * Headers for browser ``fetch`` streams that bypass {@link request}.
+ *
+ * Next rewrites `/api/v1/contextual/*` (and similar) through the API's
+ * authenticated agents proxy. Raw stream helpers historically sent only
+ * ``X-Tenant-Id``, which the proxy correctly rejects with 401.
+ */
+function browserStreamHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Tenant-Id': getActiveTenantId(),
+    ...extra,
+  };
+  if (typeof window === 'undefined') {
+    return headers;
+  }
+  try {
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  } catch {
+    /* localStorage unavailable */
+  }
+  return headers;
+}
+
 function readJwtExp(token: string): number | null {
   try {
     const payload = token.split('.')[1];
@@ -2155,7 +2182,7 @@ export const casesApi = {
   /** Trigger a browser download of the PDF report. */
   downloadReportPdf: async (caseId: string, runId: string): Promise<void> => {
     const resp = await fetch(`${API_BASE}/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`, {
-      headers: { 'X-Tenant-Id': TENANT_ID },
+      headers: browserStreamHeaders(),
     });
     if (!resp.ok) {
       const err = await resp.text().catch(() => resp.statusText);
@@ -3446,10 +3473,7 @@ export const agentsApi = {
   streamInvestigation: (alertId: string, signal?: AbortSignal) =>
     fetch(`${AGENTS_BASE}/api/v1/agents/investigate/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: browserStreamHeaders(),
       body: JSON.stringify({ alertId }),
       signal,
     }),
@@ -3467,14 +3491,11 @@ export const agentsApi = {
   ) =>
     fetch(`${AGENTS_BASE}/api/v1/explain`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: browserStreamHeaders(),
       body: JSON.stringify({
         alert: payload.alert,
         alert_id: payload.alertId,
-        tenant_id: TENANT_ID,
+        tenant_id: getActiveTenantId(),
       }),
       signal,
     }),
@@ -4749,10 +4770,7 @@ export const copilotApi = {
   streamChat: (req: CopilotChatRequest, signal?: AbortSignal) =>
     fetch(`${API_BASE}/api/v1/copilot/chat/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: browserStreamHeaders(),
       body: JSON.stringify(req),
       signal,
     }),
@@ -4861,10 +4879,7 @@ export const contextualApi = {
   stream: (req: ContextualActionRequest, signal?: AbortSignal) =>
     fetch(`${AGENTS_BASE}/api/v1/contextual/action/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: browserStreamHeaders(),
       body: JSON.stringify(req),
       signal,
     }),

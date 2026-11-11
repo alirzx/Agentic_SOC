@@ -47,8 +47,12 @@ def _agents_base_url() -> str:
 
 
 def sign_tenant(tenant_id: str, key: str) -> str:
-    """Return the HMAC-SHA256 tenant signature the agents service expects."""
-    message = _SIGNATURE_VERSION + b":" + str(tenant_id).strip().encode()
+    """Return the HMAC-SHA256 tenant signature the agents service expects.
+
+    Wire format must match ``services/agents/app/privacy/tenant.py`` and
+    ``app.services.agents_tenant_auth`` (NUL separator, not colon).
+    """
+    message = _SIGNATURE_VERSION + b"\x00" + str(tenant_id).strip().encode()
     return hmac.new(key.encode(), message, hashlib.sha256).hexdigest()
 
 

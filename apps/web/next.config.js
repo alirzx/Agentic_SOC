@@ -65,11 +65,11 @@ const nextConfig = {
   // call a different origin directly (skipping the Next proxy).
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
-    NEXT_PUBLIC_AGENTS_URL:
-      process.env.NEXT_PUBLIC_AGENTS_URL ||
-      process.env.AGENTS_URL ||
-      process.env.AGENTS_SERVICE_URL ||
-      '',
+    // Never fall back to AGENTS_URL / AGENTS_SERVICE_URL — those are Docker
+    // DNS names (`http://agents:8084`) that browsers cannot reach. Leave
+    // empty so the client uses same-origin paths and Next rewrites proxy
+    // `/api/v1/contextual/*` through the authenticated API.
+    NEXT_PUBLIC_AGENTS_URL: process.env.NEXT_PUBLIC_AGENTS_URL || '',
     NEXT_PUBLIC_ACTIONS_URL: process.env.NEXT_PUBLIC_ACTIONS_URL || '',
     NEXT_PUBLIC_FUSION_URL: process.env.NEXT_PUBLIC_FUSION_URL || '',
     NEXT_PUBLIC_THREATINTEL_URL: process.env.NEXT_PUBLIC_THREATINTEL_URL || '',
