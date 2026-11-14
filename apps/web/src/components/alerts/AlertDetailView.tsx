@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -1162,56 +1162,95 @@ type Tier2StepView = {
   has_result?: boolean;
 };
 
+const TIER2_PLACEHOLDER_STEPS: Tier2StepView[] = [
+  { action_name: 'tier2_extract_ips', label: '1. استخراج src_ip / dest_ip', status: 'pending', summary: 'در انتظار اولین اجرا…' },
+  { action_name: 'tier2_find_related', label: '2. جست‌وجوی هشدارهای ۲۴ساعت (dest_ip)', status: 'pending', summary: 'در انتظار اولین اجرا…' },
+  { action_name: 'tier2_aggregate_case', label: '3. تجمیع در یک Case', status: 'pending', summary: 'در انتظار اولین اجرا…' },
+  { action_name: 'tier2_investigate', label: '4. Investigate روی Case', status: 'pending', summary: 'در انتظار اولین اجرا…' },
+  { action_name: 'tier2_case_report', label: '5. گزارش کیس (هشدارهای مرتبط)', status: 'pending', summary: 'در انتظار اولین اجرا…' },
+];
+
+function tier2StatusTone(status: string): string {
+  if (status === 'executed' || status === 'recorded') {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+  }
+  if (status === 'skipped') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  }
+  if (status === 'failed') {
+    return 'border-red-500/30 bg-red-500/10 text-red-300';
+  }
+  return 'border-slate-700/50 bg-slate-900/40 text-slate-400';
+}
+
+function tier2StatusLabel(status: string): string {
+  if (status === 'executed' || status === 'recorded') return 'نتیجه دارد';
+  if (status === 'skipped') return 'نتیجه خالی / رد شد';
+  if (status === 'failed') return 'خطا';
+  return 'در انتظار اجرا';
+}
+
 function Tier2RunbookPanel({
   alertId,
-  refreshKey,
-  onRan,
+  onLedgerChanged,
 }: {
   alertId: string;
-  refreshKey: number;
-  onRan?: () => void;
+  onLedgerChanged?: () => void;
 }) {
-  const [steps, setSteps] = useState<Tier2StepView[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [steps, setSteps] = useState<Tier2StepView[]>(TIER2_PLACEHOLDER_STEPS);
+  const [booting, setBooting] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const loadSteps = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // GET auto=true runs Tier-2 once server-side if ledger has no steps yet.
-      const data = await request<{
-        steps: Tier2StepView[];
-        ran?: boolean;
-        auto_ran?: boolean;
-      }>(`/api/v1/runbook/alerts/${alertId}/tier2-steps?auto=true`);
-      setSteps(data.steps || []);
-      if (data.auto_ran) {
-        onRan?.();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [alertId, onRan]);
+  const onLedgerChangedRef = useRef(onLedgerChanged);
+  onLedgerChangedRef.current = onLedgerChanged;
 
   useEffect(() => {
-    void loadSteps();
-  }, [loadSteps, refreshKey]);
+    let cancelled = false;
+    setBooting(true);
+    setError(null);
+    void (async () => {
+      try {
+        const data = await request<{
+          steps: Tier2StepView[];
+          auto_ran?: boolean;
+        }>(`/api/v1/runbook/alerts/${alertId}/tier2-steps?auto=true`);
+        if (cancelled) return;
+        setSteps(data.steps?.length ? data.steps : TIER2_PLACEHOLDER_STEPS);
+        if (data.auto_ran) {
+          // Soft refresh of the ledger timeline only — do not mutate the alert
+          // (mutate causes the whole detail page to jump).
+          onLedgerChangedRef.current?.();
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setBooting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [alertId]);
 
   const runPivot = async () => {
     setRunning(true);
     setError(null);
     try {
-      // Manual re-run — once=false appends a fresh ledger set.
-      await request(`/api/v1/runbook/alerts/${alertId}/tier2-pivot?once=false`, {
-        method: 'POST',
-      });
+      const data = await request<{ steps?: Tier2StepView[] }>(
+        `/api/v1/runbook/alerts/${alertId}/tier2-pivot?once=false`,
+        { method: 'POST' },
+      );
+      if (data.steps?.length) {
+        setSteps(data.steps);
+      } else {
+        const refresh = await request<{ steps: Tier2StepView[] }>(
+          `/api/v1/runbook/alerts/${alertId}/tier2-steps?auto=false`,
+        );
+        setSteps(refresh.steps?.length ? refresh.steps : TIER2_PLACEHOLDER_STEPS);
+      }
       toast.success('مراحل Tier-2 دوباره در Runbook ثبت شد');
-      await loadSteps();
-      onRan?.();
+      onLedgerChangedRef.current?.();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -1221,26 +1260,6 @@ function Tier2RunbookPanel({
     }
   };
 
-  const statusTone = (status: string): string => {
-    if (status === 'executed' || status === 'recorded') {
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-    }
-    if (status === 'skipped') {
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
-    }
-    if (status === 'failed') {
-      return 'border-red-500/30 bg-red-500/10 text-red-300';
-    }
-    return 'border-slate-700/50 bg-slate-900/40 text-slate-400';
-  };
-
-  const statusLabel = (status: string): string => {
-    if (status === 'executed' || status === 'recorded') return 'نتیجه دارد';
-    if (status === 'skipped') return 'نتیجه خالی / رد شد';
-    if (status === 'failed') return 'خطا';
-    return 'در انتظار اجرا';
-  };
-
   return (
     <div className="rounded-lg border border-slate-800/70 bg-slate-950/40 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
@@ -1248,53 +1267,45 @@ function Tier2RunbookPanel({
           <h3 className="text-sm font-semibold text-slate-200">Tier-2 Investigate · Runbook</h3>
           <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
             استخراج IP → هشدارهای ۲۴ساعت → Case → Investigate → گزارش کیس.
-            اولین بار به‌صورت خودکار اجرا و در Runbook ذخیره می‌شود؛ دکمه فقط برای اجرای مجدد است.
+            اولین بار به‌صورت خودکار اجرا و ذخیره می‌شود؛ دکمه فقط برای اجرای مجدد است.
           </p>
         </div>
         <button
           type="button"
           onClick={() => void runPivot()}
-          disabled={running || loading}
+          disabled={running || booting}
           className="shrink-0 px-3 py-1.5 text-xs font-medium rounded bg-brand-600/80 hover:bg-brand-500 text-white disabled:opacity-50"
         >
-          {running || loading ? 'در حال اجرا…' : 'اجرای مجدد Tier-2'}
+          {running ? 'در حال اجرا…' : booting ? 'در حال آماده‌سازی…' : 'اجرای مجدد Tier-2'}
         </button>
       </div>
       {error && (
         <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">{error}</p>
       )}
-      {loading ? (
-        <p className="text-xs text-slate-500">بارگذاری مراحل…</p>
-      ) : (
-        <ol className="space-y-2">
-          {(steps.length
-            ? steps
-            : [
-                { action_name: 'tier2_extract_ips', label: '1. استخراج src_ip / dest_ip', status: 'pending', summary: 'هنوز اجرا نشده' },
-                { action_name: 'tier2_find_related', label: '2. جست‌وجوی هشدارهای ۲۴ساعت (dest_ip)', status: 'pending', summary: 'هنوز اجرا نشده' },
-                { action_name: 'tier2_aggregate_case', label: '3. تجمیع در یک Case', status: 'pending', summary: 'هنوز اجرا نشده' },
-                { action_name: 'tier2_investigate', label: '4. Investigate روی Case', status: 'pending', summary: 'هنوز اجرا نشده' },
-                { action_name: 'tier2_case_report', label: '5. گزارش کیس (هشدارهای مرتبط)', status: 'pending', summary: 'هنوز اجرا نشده' },
-              ]
-          ).map((step) => (
-            <li
-              key={step.action_name}
-              className={`rounded-lg border px-3 py-2.5 text-xs ${statusTone(step.status)}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-slate-100">{step.label}</span>
-                <span className="text-[10px] uppercase tracking-wide opacity-90">{statusLabel(step.status)}</span>
-              </div>
-              <p className="mt-1.5 text-slate-300/90 leading-relaxed">{step.summary}</p>
-              {step.detail ? (
-                <pre className="mt-2 text-[10px] text-slate-400 bg-black/20 rounded p-2 overflow-x-auto whitespace-pre-wrap">
-                  {step.detail}
-                </pre>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-      )}
+      {booting && steps.every((s) => s.status === 'pending') ? (
+        <p className="text-xs text-slate-500">در حال اجرای خودکار Tier-2 و بارگذاری نتایج…</p>
+      ) : null}
+      <ol className="space-y-2">
+        {steps.map((step) => (
+          <li
+            key={step.action_name}
+            className={`rounded-lg border px-3 py-2.5 text-xs ${tier2StatusTone(step.status)}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-slate-100">{step.label}</span>
+              <span className="text-[10px] uppercase tracking-wide opacity-90">
+                {tier2StatusLabel(step.status)}
+              </span>
+            </div>
+            <p className="mt-1.5 text-slate-300/90 leading-relaxed">{step.summary}</p>
+            {step.detail ? (
+              <pre className="mt-2 text-[10px] text-slate-400 bg-black/20 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                {step.detail}
+              </pre>
+            ) : null}
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
@@ -1302,8 +1313,11 @@ function Tier2RunbookPanel({
 function RunbookAlertPanel({ alert, onMutate }: { alert: Alert; onMutate: () => void }) {
   const [enriching, setEnriching] = useState(false);
   const [enrichResult, setEnrichResult] = useState<{ status: string; source: string; caveats: string[] } | null>(null);
-  const [tier2Refresh, setTier2Refresh] = useState(0);
   const [runbookKey, setRunbookKey] = useState(0);
+
+  const handleLedgerChanged = useCallback(() => {
+    setRunbookKey((n) => n + 1);
+  }, []);
 
   const handleEnrich = async () => {
     setEnriching(true);
@@ -1315,7 +1329,6 @@ function RunbookAlertPanel({ alert, onMutate }: { alert: Alert; onMutate: () => 
       );
       setEnrichResult(result);
       onMutate();
-      setTier2Refresh((n) => n + 1);
       setRunbookKey((n) => n + 1);
     } catch (err) {
       setEnrichResult({ status: 'error', source: 'unknown', caveats: [err instanceof Error ? err.message : String(err)] });
@@ -1328,11 +1341,7 @@ function RunbookAlertPanel({ alert, onMutate }: { alert: Alert; onMutate: () => 
     <div className="space-y-3">
       <Tier2RunbookPanel
         alertId={alert.id}
-        refreshKey={tier2Refresh}
-        onRan={() => {
-          onMutate();
-          setRunbookKey((n) => n + 1);
-        }}
+        onLedgerChanged={handleLedgerChanged}
       />
 
       {!alert.llmPayload && (
@@ -1429,23 +1438,6 @@ export function AlertDetailView({
       revalidateOnFocus: false,
     },
   );
-
-  // Auto-run Tier-2 once as soon as the alert opens (persists to Runbook ledger).
-  useEffect(() => {
-    if (!alert?.id) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        await request(`/api/v1/runbook/alerts/${alert.id}/tier2-steps?auto=true`);
-      } catch {
-        /* best-effort — Runbook tab will retry */
-      }
-      if (cancelled) return;
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [alert?.id]);
 
   const handleStatusChange = async (newStatus: Alert['status']) => {
     try {
