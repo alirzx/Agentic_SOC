@@ -642,6 +642,16 @@ function AIInvestigation({ alertId }: { alertId: string }) {
     try {
       const started = await agentsApi.investigate(alertId);
       setInvestigation(started);
+      const relatedCount = started.pivot?.related_count ?? Math.max(0, (started.relatedAlertIds?.length ?? 1) - 1);
+      if (started.caseId && relatedCount > 0) {
+        toast.success(
+          `Tier-2: ${relatedCount} هشدار مرتبط (۲۴ساعت) در کیس جمع شد — Investigate روی کیس اجرا می‌شود`,
+        );
+      } else if (started.pivot?.dest_ips?.length || started.pivot?.src_ips?.length) {
+        toast(
+          `Tier-2 IP: src=${(started.pivot.src_ips || []).join(',') || '—'} · dest=${(started.pivot.dest_ips || []).join(',') || '—'}`,
+        );
+      }
       if (started.status === 'completed' || started.status === 'failed') {
         if (started.status === 'failed') {
           toast.error(started.error || 'Investigation failed');
@@ -698,8 +708,11 @@ function AIInvestigation({ alertId }: { alertId: string }) {
   if (!investigation) {
     return (
       <div className="text-center py-8">
-        <p className="text-sm text-gray-400 mb-1">Agent investigation</p>
-        <p className="text-xs text-gray-600 mb-4">Run the agent on this alert to produce a markdown report, MITRE mapping, and a list of recommended actions. Every step is recorded in the case ledger.</p>
+        <p className="text-sm text-gray-400 mb-1">Agent investigation · Tier-2 Runbook</p>
+        <p className="text-xs text-gray-600 mb-4">
+          اول src_ip / dest_ip چک می‌شود؛ هشدارهای ۲۴ساعت اخیر روی همان dest_ip در یک کیس جمع
+          می‌شوند و Investigate روی کل کیس اجرا می‌گردد.
+        </p>
         <button
           onClick={startInvestigation}
           disabled={isRunning}

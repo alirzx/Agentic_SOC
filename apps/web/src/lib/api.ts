@@ -3558,6 +3558,16 @@ export interface AgentInvestigation {
   completedAt?: string;
   model?: string;
   error?: string;
+  /** Tier-2 Investigate: case opened/extended from 24h IP siblings. */
+  caseId?: string;
+  relatedAlertIds?: string[];
+  pivot?: {
+    src_ips?: string[];
+    dest_ips?: string[];
+    related_count?: number;
+    case_id?: string | null;
+    notes?: string[];
+  };
 }
 
 export const agentsApi = {

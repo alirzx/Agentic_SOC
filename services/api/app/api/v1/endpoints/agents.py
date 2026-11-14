@@ -107,6 +107,10 @@ class AgentInvestigationOut(BaseModel):
     completedAt: str | None = None
     model: str | None = None
     error: str | None = None
+    # Tier-2 Investigate preflight (IP pivot → case aggregation).
+    caseId: str | None = None
+    relatedAlertIds: list[str] | None = None
+    pivot: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------- helpers
@@ -424,12 +428,39 @@ async def investigate_alert(
         db, alert, tenant_id=current_user.tenant_id
     )
 
+    # Tier-2 Runbook step: resolve src/dest IP → 24h related alerts → one Case.
+    from app.services.tier2_ip_pivot import run_tier2_investigate_preflight
+
+    pivot_result, related_summaries = await run_tier2_investigate_preflight(
+        db, alert=alert, tenant_id=current_user.tenant_id, hours=24
+    )
+    await db.refresh(alert)
+
+    raw_alert = _build_raw_alert(alert)
+    raw_alert["tier2_ip_pivot"] = pivot_result.to_dict()
+    raw_alert["related_alerts"] = related_summaries
+    if pivot_result.case_id:
+        raw_alert["case_id"] = pivot_result.case_id
+
+    summary = _build_alert_summary(alert)
+    if pivot_result.dest_ips or pivot_result.src_ips:
+        summary = (
+            f"{summary}\n"
+            f"[Tier-2] src_ip={', '.join(pivot_result.src_ips) or '—'}; "
+            f"dest_ip={', '.join(pivot_result.dest_ips) or '—'}; "
+            f"related_24h={max(0, len(pivot_result.related_alert_ids) - 1)}; "
+            f"case={pivot_result.case_id or '—'}"
+        )
+
     path = _validate_agents_path("/api/v1/agents/investigate")
     payload = {
         "alertId": str(alert.id),
-        "alert_summary": _build_alert_summary(alert),
-        "raw_alert": _build_raw_alert(alert),
+        "alert_summary": summary,
+        "raw_alert": raw_alert,
         "tenant_id": str(current_user.tenant_id),
+        # When Tier-2 opened/extended a case, investigate against that case so
+        # the agent pulls all linked alerts via fetch_related_alerts.
+        "case_id": pivot_result.case_id,
     }
     url = f"{_AGENTS_URL}{path}"
     # Agents returns status=running immediately; the console polls
@@ -444,7 +475,11 @@ async def investigate_alert(
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail="Agents investigation request failed")
 
-    return AgentInvestigationOut.model_validate(resp.json())
+    out = AgentInvestigationOut.model_validate(resp.json())
+    out.caseId = pivot_result.case_id
+    out.relatedAlertIds = pivot_result.related_alert_ids
+    out.pivot = pivot_result.to_dict()
+    return out
 
 
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)

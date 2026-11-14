@@ -172,6 +172,22 @@ def build_brief_from_rows(inputs: BriefInputs, *, now: datetime | None = None) -
     )
     disp_counts = dict(Counter((d or "unset").strip().lower() or "unset" for d in dispositions))
 
+    tags = case.tags if isinstance(case.tags, dict) else {}
+    if tags.get("tier2_ip_pivot"):
+        dest = tags.get("pivot_dest_ips") if isinstance(tags.get("pivot_dest_ips"), list) else []
+        src = tags.get("pivot_src_ips") if isinstance(tags.get("pivot_src_ips"), list) else []
+        actions_preamble = ActionItem(
+            kind="investigate",
+            label="Tier-2 IP pivot (24h)",
+            detail=(
+                f"dest_ip={', '.join(str(x) for x in dest[:4]) or '—'}; "
+                f"src_ip={', '.join(str(x) for x in src[:4]) or '—'}; "
+                f"linked alerts={len(inputs.alerts)}"
+            ),
+        )
+    else:
+        actions_preamble = None
+
     stages = {(a.funnel_stage or "").lower() for a in inputs.alerts}
     ready = "ready_for_jira" in stages
     pushed = inputs.has_external_ref or "jira_pushed" in stages
@@ -184,6 +200,8 @@ def build_brief_from_rows(inputs: BriefInputs, *, now: datetime | None = None) -
             detail=f"Severity {case.severity}; {len(inputs.alerts)} linked alert(s).",
         )
     )
+    if actions_preamble is not None:
+        actions.append(actions_preamble)
     triaged = [a for a in inputs.alerts if a.disposition]
     if triaged:
         actions.append(
@@ -449,8 +467,31 @@ def render_case_report_markdown(brief: CaseInvestigationBrief) -> str:
             "",
         ]
     )
-    # Persian customer handoff (Soorin SOC template).
+    # Persian customer handoff (Soorin SOC template) — case = all linked alerts.
     primary = brief.alerts[0] if brief.alerts else None
+    linked_lines = [
+        f"- {a.title} (severity={a.severity}, disposition={a.disposition or 'unset'})"
+        for a in brief.alerts[:20]
+    ]
+    pivot_bits = [
+        a.detail
+        for a in brief.what_we_did
+        if a.label.startswith("Tier-2 IP pivot") and a.detail
+    ]
+    meaning_parts = [
+        (brief.alert_explanation or "").strip()
+        or (primary.summary if primary else "")
+        or brief.outcome_rationale,
+    ]
+    if pivot_bits:
+        meaning_parts.append("تجمیع Tier-2 بر اساس IP: " + pivot_bits[0])
+    if linked_lines:
+        meaning_parts.append(
+            "هشدارهای مرتبط داخل این کیس:\n" + "\n".join(linked_lines)
+        )
+    fa_steps: list[str] = list(primary.suggested_next_steps) if primary else []
+    if brief.next_step and brief.next_step not in fa_steps:
+        fa_steps.append(brief.next_step[:350])
     fa_inp = {
         "id": brief.case_id,
         "title": brief.title,
@@ -459,11 +500,13 @@ def render_case_report_markdown(brief: CaseInvestigationBrief) -> str:
         "description": brief.outcome_rationale,
         "ai_summary": (primary.summary if primary else None) or brief.outcome_rationale,
         "contextual_explanation": {
-            "meaning": (brief.alert_explanation or "").strip()
-            or (primary.summary if primary else "")
-            or brief.outcome_rationale,
-            "suggested_next_steps": list(primary.suggested_next_steps) if primary else [],
+            "meaning": "\n\n".join(p for p in meaning_parts if p).strip(),
+            "suggested_next_steps": fa_steps[:8],
         },
+        "investigation_markdown": (
+            "## Executive Summary\n\n"
+            + "\n\n".join(p for p in meaning_parts if p).strip()
+        ),
         "mitre_techniques": list(brief.mitre_techniques or []),
         "created_at": brief.generated_at,
         "project_name": "",

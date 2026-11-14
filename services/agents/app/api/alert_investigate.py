@@ -45,6 +45,10 @@ class AlertInvestigateRequest(BaseModel):
     alert_summary: str = ""
     raw_alert: dict[str, Any] = Field(default_factory=dict)
     tenant_id: str = "default"
+    # When API Tier-2 preflight aggregated siblings into a case, investigate
+    # against that case_id so related alerts are loaded from the case.
+    case_id: str | None = None
+    caseId: str | None = None
 
 
 class AgentActionOut(BaseModel):
@@ -64,6 +68,9 @@ class AgentInvestigationOut(BaseModel):
     completedAt: str | None = None
     model: str | None = None
     error: str | None = None
+    caseId: str | None = None
+    relatedAlertIds: list[str] | None = None
+    pivot: dict[str, Any] | None = None
 
 
 def _resolve_alert_id(req: AlertInvestigateRequest) -> str:
@@ -148,11 +155,14 @@ async def _run_investigation(
     tenant_id: str,
     model_name: str | None,
     started_at: str,
+    investigation_case_id: str | None = None,
 ) -> None:
     """Persist background investigation output for the authenticated tenant."""
     try:
+        # Prefer the Tier-2 aggregated case so fetch_related_alerts loads siblings.
+        orchestrator_case_id = (investigation_case_id or "").strip() or alert_id
         state = await InvestigatorOrchestrator().run(
-            case_id=alert_id,
+            case_id=orchestrator_case_id,
             alert_summary=summary,
             raw_alert=raw_alert or {"alert_id": alert_id},
             tenant_id=tenant_id,
@@ -224,6 +234,12 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
     model_name = gateway.get("model_investigation")
     run_id = str(uuid4())
     started_at = datetime.now(UTC).isoformat()
+    case_id = (req.case_id or req.caseId or "").strip() or None
+    raw = req.raw_alert or {"alert_id": alert_id}
+    pivot = raw.get("tier2_ip_pivot") if isinstance(raw.get("tier2_ip_pivot"), dict) else None
+    related_ids = None
+    if isinstance(pivot, dict) and isinstance(pivot.get("related_alert_ids"), list):
+        related_ids = [str(x) for x in pivot["related_alert_ids"] if x]
     pending = AgentInvestigationOut(
         id=run_id,
         alertId=alert_id,
@@ -235,12 +251,16 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
         completedAt=None,
         model=model_name,
         error=None,
+        caseId=case_id,
+        relatedAlertIds=related_ids,
+        pivot=pivot,
     )
     _runs[run_id] = {**pending.model_dump(), "_tenant_owner": tenant_id}
     logger.info(
         "alert_investigate.start",
         run_id=run_id,
         alert_id=alert_id,
+        case_id=case_id,
         llm_configured=gateway.get("llm_configured"),
         model=model_name,
         base_url=gateway.get("base_url_normalized_sanitized"),
@@ -250,10 +270,11 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
             run_id=run_id,
             alert_id=alert_id,
             summary=summary,
-            raw_alert=req.raw_alert or {"alert_id": alert_id},
+            raw_alert=raw,
             tenant_id=tenant_id,
             model_name=model_name,
             started_at=started_at,
+            investigation_case_id=case_id,
         )
     )
     _background_tasks.add(task)
