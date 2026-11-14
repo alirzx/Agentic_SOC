@@ -1163,11 +1163,11 @@ type Tier2StepView = {
 };
 
 const TIER2_PLACEHOLDER_STEPS: Tier2StepView[] = [
-  { action_name: 'tier2_extract_ips', label: '1. استخراج src_ip / dest_ip', status: 'pending', summary: 'در انتظار اولین اجرا…' },
-  { action_name: 'tier2_find_related', label: '2. جست‌وجوی هشدارهای ۲۴ساعت (dest_ip)', status: 'pending', summary: 'در انتظار اولین اجرا…' },
-  { action_name: 'tier2_aggregate_case', label: '3. تجمیع در یک Case', status: 'pending', summary: 'در انتظار اولین اجرا…' },
-  { action_name: 'tier2_investigate', label: '4. Investigate روی Case', status: 'pending', summary: 'در انتظار اولین اجرا…' },
-  { action_name: 'tier2_case_report', label: '5. گزارش کیس (هشدارهای مرتبط)', status: 'pending', summary: 'در انتظار اولین اجرا…' },
+  { action_name: 'tier2_extract_ips', label: '1. Extract src_ip / dest_ip', status: 'pending', summary: 'Waiting for first run…' },
+  { action_name: 'tier2_find_related', label: '2. Find related alerts (24h / dest_ip)', status: 'pending', summary: 'Waiting for first run…' },
+  { action_name: 'tier2_aggregate_case', label: '3. Aggregate into one Case', status: 'pending', summary: 'Waiting for first run…' },
+  { action_name: 'tier2_investigate', label: '4. Investigate on Case', status: 'pending', summary: 'Waiting for first run…' },
+  { action_name: 'tier2_case_report', label: '5. Case report scope', status: 'pending', summary: 'Waiting for first run…' },
 ];
 
 function tier2StatusTone(status: string): string {
@@ -1184,10 +1184,10 @@ function tier2StatusTone(status: string): string {
 }
 
 function tier2StatusLabel(status: string): string {
-  if (status === 'executed' || status === 'recorded') return 'نتیجه دارد';
-  if (status === 'skipped') return 'نتیجه خالی / رد شد';
-  if (status === 'failed') return 'خطا';
-  return 'در انتظار اجرا';
+  if (status === 'executed' || status === 'recorded') return 'Has result';
+  if (status === 'skipped') return 'Empty / skipped';
+  if (status === 'failed') return 'Failed';
+  return 'Pending';
 }
 
 function Tier2RunbookPanel({
@@ -1210,15 +1210,31 @@ function Tier2RunbookPanel({
     setError(null);
     void (async () => {
       try {
-        const data = await request<{
+        // Auto-run once on the server (persists to alert enrichment even if
+        // AISOC_RUNBOOK_ENABLED is off).
+        let data = await request<{
           steps: Tier2StepView[];
+          ran?: boolean;
           auto_ran?: boolean;
         }>(`/api/v1/runbook/alerts/${alertId}/tier2-steps?auto=true`);
         if (cancelled) return;
+        const stillPending =
+          !data.ran &&
+          (data.steps || []).every((s) => (s.status || 'pending') === 'pending');
+        if (stillPending) {
+          // Fallback POST once if GET auto-run could not persist (older API / race).
+          data = await request<{
+            steps: Tier2StepView[];
+            ran?: boolean;
+            auto_ran?: boolean;
+            status?: string;
+          }>(`/api/v1/runbook/alerts/${alertId}/tier2-pivot?once=true`, {
+            method: 'POST',
+          });
+        }
+        if (cancelled) return;
         setSteps(data.steps?.length ? data.steps : TIER2_PLACEHOLDER_STEPS);
-        if (data.auto_ran) {
-          // Soft refresh of the ledger timeline only — do not mutate the alert
-          // (mutate causes the whole detail page to jump).
+        if (data.auto_ran || data.ran) {
           onLedgerChangedRef.current?.();
         }
       } catch (err) {
@@ -1249,7 +1265,7 @@ function Tier2RunbookPanel({
         );
         setSteps(refresh.steps?.length ? refresh.steps : TIER2_PLACEHOLDER_STEPS);
       }
-      toast.success('مراحل Tier-2 دوباره در Runbook ثبت شد');
+      toast.success('Tier-2 steps re-run and saved');
       onLedgerChangedRef.current?.();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1266,8 +1282,8 @@ function Tier2RunbookPanel({
         <div>
           <h3 className="text-sm font-semibold text-slate-200">Tier-2 Investigate · Runbook</h3>
           <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
-            استخراج IP → هشدارهای ۲۴ساعت → Case → Investigate → گزارش کیس.
-            اولین بار به‌صورت خودکار اجرا و ذخیره می‌شود؛ دکمه فقط برای اجرای مجدد است.
+            Extract IPs → related alerts (24h) → Case → Investigate → Case report.
+            Runs automatically once and is saved; use the button only to re-run.
           </p>
         </div>
         <button
@@ -1276,14 +1292,14 @@ function Tier2RunbookPanel({
           disabled={running || booting}
           className="shrink-0 px-3 py-1.5 text-xs font-medium rounded bg-brand-600/80 hover:bg-brand-500 text-white disabled:opacity-50"
         >
-          {running ? 'در حال اجرا…' : booting ? 'در حال آماده‌سازی…' : 'اجرای مجدد Tier-2'}
+          {running ? 'Running…' : booting ? 'Preparing…' : 'Re-run Tier-2'}
         </button>
       </div>
       {error && (
         <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">{error}</p>
       )}
       {booting && steps.every((s) => s.status === 'pending') ? (
-        <p className="text-xs text-slate-500">در حال اجرای خودکار Tier-2 و بارگذاری نتایج…</p>
+        <p className="text-xs text-slate-500">Auto-running Tier-2 and loading results…</p>
       ) : null}
       <ol className="space-y-2">
         {steps.map((step) => (

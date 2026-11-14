@@ -38,28 +38,23 @@ _DEFAULT_HOURS = 24
 TIER2_RUNBOOK_STEPS: tuple[dict[str, str], ...] = (
     {
         "action_name": "tier2_extract_ips",
-        "label": "1. استخراج src_ip / dest_ip",
-        "label_en": "Extract src_ip / dest_ip",
+        "label": "1. Extract src_ip / dest_ip",
     },
     {
         "action_name": "tier2_find_related",
-        "label": "2. جست‌وجوی هشدارهای ۲۴ساعت (dest_ip)",
-        "label_en": "Find related alerts (24h)",
+        "label": "2. Find related alerts (24h / dest_ip)",
     },
     {
         "action_name": "tier2_aggregate_case",
-        "label": "3. تجمیع در یک Case",
-        "label_en": "Aggregate into one Case",
+        "label": "3. Aggregate into one Case",
     },
     {
         "action_name": "tier2_investigate",
-        "label": "4. Investigate روی Case",
-        "label_en": "Investigate on Case",
+        "label": "4. Investigate on Case",
     },
     {
         "action_name": "tier2_case_report",
-        "label": "5. گزارش کیس (هشدارهای مرتبط)",
-        "label_en": "Case report scope",
+        "label": "5. Case report scope",
     },
 )
 _IP_RE = re.compile(
@@ -559,6 +554,93 @@ async def _emit_tier2_step(
     )
 
 
+async def persist_tier2_snapshot(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
+    steps: list[dict[str, Any]],
+    pivot: dict[str, Any] | None = None,
+) -> None:
+    """Always persist Tier-2 outcomes on the alert (works even if Runbook ledger is off)."""
+    snapshot = {
+        "tier2_runbook": {
+            "ran_at": datetime.now(UTC).isoformat(),
+            "steps": steps,
+            "pivot": pivot or {},
+        }
+    }
+    await db.execute(
+        text(
+            """
+            UPDATE alerts
+               SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb)
+                                   || CAST(:payload AS jsonb),
+                   updated_at = NOW()
+             WHERE id = :id AND tenant_id = :tid
+            """
+        ).bindparams(
+            id=alert_id,
+            tid=tenant_id,
+            payload=json.dumps(snapshot),
+        )
+    )
+
+
+def load_tier2_snapshot_from_alert(alert: Any) -> dict[str, Any] | None:
+    enrichment = getattr(alert, "enrichment_data", None) if not isinstance(alert, dict) else alert.get("enrichment_data")
+    if not isinstance(enrichment, dict):
+        return None
+    snap = enrichment.get("tier2_runbook")
+    return snap if isinstance(snap, dict) else None
+
+
+
+async def persist_tier2_snapshot(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
+    steps: list[dict[str, Any]],
+    pivot: dict[str, Any] | None = None,
+) -> None:
+    """Always persist Tier-2 outcomes on the alert (works even if Runbook ledger is off)."""
+    snapshot = {
+        "tier2_runbook": {
+            "ran_at": datetime.now(UTC).isoformat(),
+            "steps": steps,
+            "pivot": pivot or {},
+        }
+    }
+    await db.execute(
+        text(
+            """
+            UPDATE alerts
+               SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb)
+                                   || CAST(:payload AS jsonb),
+                   updated_at = NOW()
+             WHERE id = :id AND tenant_id = :tid
+            """
+        ).bindparams(
+            id=alert_id,
+            tid=tenant_id,
+            payload=json.dumps(snapshot),
+        )
+    )
+
+
+def load_tier2_snapshot_from_alert(alert: Any) -> dict[str, Any] | None:
+    enrichment = (
+        getattr(alert, "enrichment_data", None)
+        if not isinstance(alert, dict)
+        else alert.get("enrichment_data")
+    )
+    if not isinstance(enrichment, dict):
+        return None
+    snap = enrichment.get("tier2_runbook")
+    return snap if isinstance(snap, dict) else None
+
+
 async def emit_tier2_runbook_steps(
     db: AsyncSession,
     *,
@@ -577,20 +659,21 @@ async def emit_tier2_runbook_steps(
     """Emit all five Tier-2 steps with explicit hit/miss outcomes for the UI."""
     steps_out: list[dict[str, Any]] = []
     related_count = max(0, len(related_ids) - 1)
+    label_by_action = {item["action_name"]: item["label"] for item in TIER2_RUNBOOK_STEPS}
 
-    # 1) Extract IPs
     if ips.all_ips:
         s1_status = "recorded"
         s1_summary = (
-            f"نتیجه: src_ip=[{', '.join(ips.src_ips) or '—'}] · "
+            f"Result: src_ip=[{', '.join(ips.src_ips) or '—'}] · "
             f"dest_ip=[{', '.join(ips.dest_ips) or '—'}]"
         )
     else:
         s1_status = "skipped"
         s1_summary = (
-            "نتیجه: خالی — هیچ src_ip/dest_ip از llm_payload، raw_event، "
-            "affected_ips یا IOC استخراج نشد"
+            "Result: empty — no src_ip/dest_ip found in llm_payload, raw_event, "
+            "affected_ips, or IOCs"
         )
+    s1_detail = json.dumps({"src_ips": ips.src_ips, "dest_ips": ips.dest_ips})
     await _emit_tier2_step(
         db,
         tenant_id=tenant_id,
@@ -599,28 +682,42 @@ async def emit_tier2_runbook_steps(
         action_name="tier2_extract_ips",
         summary=s1_summary,
         status=s1_status,
-        detail=json.dumps({"src_ips": ips.src_ips, "dest_ips": ips.dest_ips}, ensure_ascii=False),
+        detail=s1_detail,
         output_payload={"src_ips": ips.src_ips, "dest_ips": ips.dest_ips},
     )
-    steps_out.append({"action_name": "tier2_extract_ips", "status": s1_status, "summary": s1_summary})
+    steps_out.append(
+        {
+            "action_name": "tier2_extract_ips",
+            "label": label_by_action["tier2_extract_ips"],
+            "status": s1_status,
+            "summary": s1_summary,
+            "detail": s1_detail,
+        }
+    )
 
-    # 2) Find related 24h
     if not ips.all_ips:
         s2_status = "skipped"
-        s2_summary = "نتیجه: رد شد — بدون IP قابل جست‌وجو نیست"
+        s2_summary = "Result: skipped — no IP available to search"
     elif related_count > 0:
         s2_status = "recorded"
-        titles = [str(s.get("title") or s.get("id")) for s in related_summaries if str(s.get("id")) != str(alert_id)]
+        titles = [
+            str(s.get("title") or s.get("id"))
+            for s in related_summaries
+            if str(s.get("id")) != str(alert_id)
+        ]
         s2_summary = (
-            f"نتیجه: {related_count} هشدار مرتبط در {hours}ساعت "
-            f"(dest اولویت، سپس src) — نمونه: {', '.join(titles[:3]) or '—'}"
+            f"Result: {related_count} related alert(s) in {hours}h "
+            f"(dest preferred, then src) — e.g. {', '.join(titles[:3]) or '—'}"
         )
     else:
         s2_status = "skipped"
         s2_summary = (
-            f"نتیجه: خالی — در {hours}ساعت گذشته هشدار دیگری با همین "
-            f"dest_ip/src_ip پیدا نشد"
+            f"Result: empty — no other alerts with the same dest_ip/src_ip "
+            f"in the last {hours}h"
         )
+    s2_detail = json.dumps(
+        {"related_alert_ids": [str(x) for x in related_ids], "related_count": related_count}
+    )
     await _emit_tier2_step(
         db,
         tenant_id=tenant_id,
@@ -629,29 +726,41 @@ async def emit_tier2_runbook_steps(
         action_name="tier2_find_related",
         summary=s2_summary,
         status=s2_status,
-        detail=json.dumps(
-            {"related_alert_ids": [str(x) for x in related_ids], "related_count": related_count},
-            ensure_ascii=False,
-        ),
+        detail=s2_detail,
         output_payload={
             "related_alert_ids": [str(x) for x in related_ids],
             "related_count": related_count,
             "related_alerts": related_summaries[:20],
         },
     )
-    steps_out.append({"action_name": "tier2_find_related", "status": s2_status, "summary": s2_summary})
+    steps_out.append(
+        {
+            "action_name": "tier2_find_related",
+            "label": label_by_action["tier2_find_related"],
+            "status": s2_status,
+            "summary": s2_summary,
+            "detail": s2_detail,
+        }
+    )
 
-    # 3) Aggregate case
     if related_count > 0 and case_id is not None:
         s3_status = "executed"
-        verb = "ایجاد شد" if created else ("گسترش یافت" if extended else "به‌روز شد")
-        s3_summary = f"نتیجه: Case `{case_id}` {verb} — {len(related_ids)} هشدار لینک شد"
+        verb = "created" if created else ("extended" if extended else "updated")
+        s3_summary = f"Result: Case `{case_id}` {verb} — {len(related_ids)} alert(s) linked"
     elif case_id is not None and related_count == 0:
         s3_status = "skipped"
-        s3_summary = f"نتیجه: تجمیع جدید لازم نبود — Case موجود `{case_id}` (بدون sibling)"
+        s3_summary = f"Result: no new aggregation — existing Case `{case_id}` (no siblings)"
     else:
         s3_status = "skipped"
-        s3_summary = "نتیجه: Case ساخته نشد — هشدار مرتبطی برای تجمیع نبود"
+        s3_summary = "Result: Case not created — no related alerts to aggregate"
+    s3_detail = json.dumps(
+        {
+            "case_id": str(case_id) if case_id else None,
+            "created": created,
+            "extended": extended,
+            "alert_ids": [str(x) for x in related_ids],
+        }
+    )
     await _emit_tier2_step(
         db,
         tenant_id=tenant_id,
@@ -660,35 +769,37 @@ async def emit_tier2_runbook_steps(
         action_name="tier2_aggregate_case",
         summary=s3_summary,
         status=s3_status,
-        detail=json.dumps(
-            {
-                "case_id": str(case_id) if case_id else None,
-                "created": created,
-                "extended": extended,
-                "alert_ids": [str(x) for x in related_ids],
-            },
-            ensure_ascii=False,
-        ),
+        detail=s3_detail,
         output_payload={
             "case_id": str(case_id) if case_id else None,
             "created": created,
             "extended": extended,
         },
     )
-    steps_out.append({"action_name": "tier2_aggregate_case", "status": s3_status, "summary": s3_summary})
+    steps_out.append(
+        {
+            "action_name": "tier2_aggregate_case",
+            "label": label_by_action["tier2_aggregate_case"],
+            "status": s3_status,
+            "summary": s3_summary,
+            "detail": s3_detail,
+        }
+    )
 
-    # 4) Investigate on case
     if investigate_queued and case_id is not None and related_count > 0:
         s4_status = "recorded"
         s4_summary = (
-            f"نتیجه: Investigate روی Case `{case_id}` با {len(related_ids)} هشدار لینک‌شده صف شد"
+            f"Result: Investigate queued on Case `{case_id}` "
+            f"with {len(related_ids)} linked alert(s)"
         )
     elif investigate_queued:
         s4_status = "recorded"
-        s4_summary = "نتیجه: Investigate روی همین هشدار اجرا می‌شود (بدون sibling)"
+        s4_summary = "Result: Investigate will run on this alert alone (no siblings)"
     else:
         s4_status = "skipped"
-        s4_summary = "نتیجه: Investigate هنوز اجرا نشده — از Overview → Start AI Investigation بزنید"
+        s4_summary = (
+            "Result: Investigate not started yet — use Overview → Start AI Investigation"
+        )
     await _emit_tier2_step(
         db,
         tenant_id=tenant_id,
@@ -702,21 +813,28 @@ async def emit_tier2_runbook_steps(
             "investigate_queued": investigate_queued,
         },
     )
-    steps_out.append({"action_name": "tier2_investigate", "status": s4_status, "summary": s4_summary})
+    steps_out.append(
+        {
+            "action_name": "tier2_investigate",
+            "label": label_by_action["tier2_investigate"],
+            "status": s4_status,
+            "summary": s4_summary,
+            "detail": None,
+        }
+    )
 
-    # 5) Case report scope
     if case_id is not None and related_count > 0:
         s5_status = "recorded"
         s5_summary = (
-            f"نتیجه: گزارش کیس شامل {len(related_ids)} هشدار مرتبط است "
+            f"Result: Case report includes {len(related_ids)} related alert(s) "
             f"(GET /cases/{case_id}/report.md)"
         )
     elif case_id is not None:
         s5_status = "skipped"
-        s5_summary = f"نتیجه: گزارش کیس فقط همین هشدار را دارد (Case `{case_id}`)"
+        s5_summary = f"Result: Case report covers only this alert (Case `{case_id}`)"
     else:
         s5_status = "skipped"
-        s5_summary = "نتیجه: گزارش کیس چند‌هشداری آماده نیست — Case ساخته نشد"
+        s5_summary = "Result: multi-alert Case report not ready — Case was not created"
     await _emit_tier2_step(
         db,
         tenant_id=tenant_id,
@@ -730,7 +848,29 @@ async def emit_tier2_runbook_steps(
             "linked_alert_count": len(related_ids),
         },
     )
-    steps_out.append({"action_name": "tier2_case_report", "status": s5_status, "summary": s5_summary})
+    steps_out.append(
+        {
+            "action_name": "tier2_case_report",
+            "label": label_by_action["tier2_case_report"],
+            "status": s5_status,
+            "summary": s5_summary,
+            "detail": None,
+        }
+    )
+
+    await persist_tier2_snapshot(
+        db,
+        tenant_id=tenant_id,
+        alert_id=alert_id,
+        steps=steps_out,
+        pivot={
+            "src_ips": ips.src_ips,
+            "dest_ips": ips.dest_ips,
+            "related_alert_ids": [str(x) for x in related_ids],
+            "case_id": str(case_id) if case_id else None,
+            "run_token": run_token,
+        },
+    )
     return steps_out
 
 

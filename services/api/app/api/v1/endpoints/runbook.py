@@ -389,6 +389,22 @@ async def _tier2_already_ran(
     tenant_id: uuid.UUID,
     alert_id: uuid.UUID,
 ) -> bool:
+    # Prefer alert enrichment snapshot — works even when AISOC_RUNBOOK_ENABLED is off.
+    snap = (
+        await db.execute(
+            text(
+                """
+                SELECT 1 FROM alerts
+                 WHERE tenant_id = :tid
+                   AND id = :sid
+                   AND enrichment_data ? 'tier2_runbook'
+                 LIMIT 1
+                """
+            ).bindparams(tid=tenant_id, sid=alert_id)
+        )
+    ).fetchone()
+    if snap is not None:
+        return True
     row = (
         await db.execute(
             text(
@@ -414,13 +430,44 @@ async def _build_tier2_steps_response(
 ) -> dict[str, Any]:
     from app.services.tier2_ip_pivot import TIER2_RUNBOOK_STEPS
 
+    latest: dict[str, Any] = {}
+    # 1) Alert enrichment snapshot (authoritative when Runbook ledger is disabled).
+    snap_row = (
+        await db.execute(
+            text(
+                """
+                SELECT enrichment_data->'tier2_runbook' AS snap
+                  FROM alerts
+                 WHERE tenant_id = :tid AND id = :sid
+                 LIMIT 1
+                """
+            ).bindparams(tid=tenant_id, sid=alert_id)
+        )
+    ).mappings().first()
+    snap = snap_row["snap"] if snap_row else None
+    if isinstance(snap, dict):
+        for step in snap.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            name = str(step.get("action_name") or "")
+            if not name.startswith("tier2_"):
+                continue
+            latest[name] = {
+                "action_name": name,
+                "status": step.get("status") or "recorded",
+                "summary": step.get("summary") or "",
+                "detail": step.get("detail"),
+                "occurred_at": snap.get("ran_at"),
+                "seq": None,
+            }
+
+    # 2) Ledger rows override / fill gaps when Runbook is enabled.
     envelope = await load_runbook(
         db,
         tenant_id=tenant_id,
         subject_type="alert",
         subject_id=alert_id,
     )
-    latest: dict[str, Any] = {}
     for step in envelope.steps:
         name = step.action_name or ""
         if name.startswith("tier2_"):
@@ -432,6 +479,7 @@ async def _build_tier2_steps_response(
                 "occurred_at": step.occurred_at.isoformat() if step.occurred_at else None,
                 "seq": step.seq,
             }
+
     steps = []
     for item in TIER2_RUNBOOK_STEPS:
         hit = latest.get(item["action_name"])
@@ -439,7 +487,7 @@ async def _build_tier2_steps_response(
             {
                 **item,
                 "status": hit["status"] if hit else "pending",
-                "summary": hit["summary"] if hit else "هنوز اجرا نشده",
+                "summary": hit["summary"] if hit else "Not run yet",
                 "detail": hit.get("detail") if hit else None,
                 "occurred_at": hit.get("occurred_at") if hit else None,
                 "has_result": bool(hit and hit["status"] in {"recorded", "executed"}),

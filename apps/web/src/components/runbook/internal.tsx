@@ -328,11 +328,11 @@ export const RunbookTimeline: FC<{ steps: RunbookStep[] }> = ({ steps }) => (
 );
 
 const TIER2_ACTION_LABELS: Record<string, string> = {
-  tier2_extract_ips: "Tier-2 · استخراج IP",
-  tier2_find_related: "Tier-2 · هشدارهای ۲۴ساعت",
-  tier2_aggregate_case: "Tier-2 · تجمیع Case",
+  tier2_extract_ips: "Tier-2 · Extract IPs",
+  tier2_find_related: "Tier-2 · Related alerts (24h)",
+  tier2_aggregate_case: "Tier-2 · Aggregate Case",
   tier2_investigate: "Tier-2 · Investigate",
-  tier2_case_report: "Tier-2 · گزارش کیس",
+  tier2_case_report: "Tier-2 · Case report",
 };
 
 function kindLabel(kind: string | null | undefined): string {
