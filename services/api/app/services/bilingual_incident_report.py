@@ -1,15 +1,15 @@
-"""Concise Persian incident handoff report for true-positive alerts.
+"""Persian incident handoff report for true-positive alerts.
 
 Matches the Soorin SOC customer-handoff shape (Report_sample):
 
 * گزارش رخداد سایبری
-* هدر قابل‌پرشدن توسط تحلیل‌گر (مخاطب / پروژه / کارشناس / تایید)
-* عنوان / شدت / وضعیت
-* شرح رویداد · جزئیات رویداد · اقدامات پیشنهادی
+* Analyst-filled header (audience / project / analyst / approval)
+* Title / severity / status
+* شرح رویداد · جزئیات رویداد · اقدامات انجام‌شده · اقدامات پیشنهادی
 
-Content is distilled from Explain + AI Investigation + curated llm_payload.
-Empty or noise sections (pending runbook, empty IOC lists, full English
-investigation dump, ``None`` payload fields) are omitted on purpose.
+Content is distilled from Explain + AI Investigation + llm_payload + Runbook
++ Tier-2 snapshot. Empty/noise sections are omitted; narrative is richer than
+a one-liner but still avoids dumping the full English investigation.
 """
 
 from __future__ import annotations
@@ -56,6 +56,9 @@ _LLM_EVIDENCE_KEYS: tuple[str, ...] = (
     "dest",
     "host",
     "hostname",
+    "machine",
+    "computer",
+    "dvc",
     "user",
     "username",
     "http_method",
@@ -63,9 +66,16 @@ _LLM_EVIDENCE_KEYS: tuple[str, ...] = (
     "user_agent",
     "process",
     "cmdline",
+    "file_name",
     "file_path",
+    "path",
     "sha256",
+    "sha1",
+    "md5",
     "hash",
+    "infection",
+    "verdict",
+    "action",
     "orig_rule_description",
     "orig_rule_title",
     "search_name",
@@ -93,7 +103,7 @@ def _is_blank(value: Any) -> bool:
 def _bullets(items: list[str], *, limit: int = 10) -> list[str]:
     out: list[str] = []
     for item in items:
-        cleaned = _clean(item, limit=350)
+        cleaned = _clean(item, limit=450)
         if cleaned and cleaned not in out:
             out.append(cleaned)
         if len(out) >= limit:
@@ -123,12 +133,29 @@ def _dedupe_source(connector: str, rule: str) -> str:
         return r
     if not r:
         return c
-    # Avoid "splunk splunk" / repeated tokens.
+
+    def _collapse_dup_tokens(text: str) -> str:
+        parts = [p for p in re.split(r"[\s/|_-]+", text) if p]
+        out: list[str] = []
+        seen: set[str] = set()
+        for part in parts:
+            key = part.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(part)
+        return " ".join(out)
+
+    c = _collapse_dup_tokens(c)
+    r = _collapse_dup_tokens(r)
     c_tokens = {t.lower() for t in re.split(r"[\s/|_-]+", c) if t}
     r_tokens = {t.lower() for t in re.split(r"[\s/|_-]+", r) if t}
     if c.lower() == r.lower() or r_tokens <= c_tokens:
         return c
     if c_tokens <= r_tokens:
+        return r
+    # Prefer rule title when connector is a short product name already inside rule.
+    if len(c_tokens) <= 2 and any(tok in r.lower() for tok in c_tokens):
         return r
     return f"{c} / {r}"
 
@@ -144,19 +171,30 @@ def _first_paragraph(text: str, *, limit: int = 1_200) -> str:
     return _clean(text, limit=limit)
 
 
+def _extract_section(inv: str, heading: str, *, limit: int = 2_400) -> str:
+    pattern = rf"##\s*{re.escape(heading)}\s*(.+?)(?=\n##\s|\Z)"
+    match = re.search(pattern, inv or "", flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return ""
+    body = match.group(1).strip()
+    # Keep up to two prose paragraphs; drop tables.
+    paras: list[str] = []
+    for block in re.split(r"\n\s*\n", body):
+        para = _clean(block, limit=limit)
+        if not para or para.startswith("|") or para.startswith("#"):
+            continue
+        paras.append(para)
+        if len(paras) >= 2:
+            break
+    return "\n\n".join(paras)
+
+
 def _extract_investigation_summary(inv: str) -> str:
     """Prefer Executive Summary body from AI Investigation markdown."""
-    text = inv or ""
-    match = re.search(
-        r"##\s*Executive Summary\s*(.+?)(?=\n##\s|\Z)",
-        text,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if match:
-        body = _first_paragraph(match.group(1), limit=1_800)
-        if body:
-            return body
-    return _first_paragraph(text, limit=1_200)
+    section = _extract_section(inv, "Executive Summary", limit=2_200)
+    if section:
+        return section
+    return _first_paragraph(inv, limit=1_400)
 
 
 def _extract_explanation(alert_like: dict[str, Any]) -> dict[str, Any]:
@@ -183,7 +221,7 @@ def _extract_handoff_meta(enrichment: dict[str, Any] | None) -> dict[str, str]:
     return meta
 
 
-def summarize_llm_payload(payload: Any, *, max_items: int = 12) -> list[str]:
+def summarize_llm_payload(payload: Any, *, max_items: int = 14) -> list[str]:
     """Keep only useful evidence fields; drop None/empty noise."""
     if not isinstance(payload, dict) or not payload:
         return []
@@ -194,7 +232,7 @@ def summarize_llm_payload(payload: Any, *, max_items: int = 12) -> list[str]:
         value = payload.get(key)
         if _is_blank(value):
             continue
-        rendered = _clean(value, limit=220)
+        rendered = _clean(value, limit=260)
         if not rendered:
             continue
         lines.append(f"{key}: `{rendered}`")
@@ -210,15 +248,19 @@ def format_runbook_steps(steps: list[dict[str, Any]], *, limit: int = 12) -> lis
         if not isinstance(step, dict):
             continue
         status = _clean(step.get("status"), limit=40).lower()
-        if status in {"pending", "skipped", ""}:
-            # Procedure placeholders are not useful in the customer report.
+        if status in {"pending", ""}:
             if not _clean(step.get("summary"), limit=20):
                 continue
-        summary = _clean(step.get("summary"), limit=220)
+        summary = _clean(step.get("summary"), limit=280)
         if not summary:
             continue
-        stage = _clean(step.get("stage_label") or step.get("stage"), limit=40) or "گام"
-        out.append(f"{stage}: {summary}")
+        # Skip "empty / not run yet" Tier-2 placeholders in customer report.
+        if "not run yet" in summary.lower() or "هنوز اجرا نشده" in summary:
+            continue
+        stage = _clean(step.get("stage_label") or step.get("stage") or step.get("action_name"), limit=60) or "گام"
+        label = _clean(step.get("action_name"), limit=60)
+        prefix = stage if not label or label == stage else f"{stage} · {label}"
+        out.append(f"{prefix}: {summary}")
         if len(out) >= limit:
             break
     return out
@@ -233,7 +275,7 @@ def build_alert_report_inputs(
     handoff_meta: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Normalize an Alert ORM / dict into report inputs."""
-    del runbook_procedure  # intentionally unused in concise FA report
+    del runbook_procedure  # not rendered as empty pending checklist
     if hasattr(alert, "title"):
         enrichment = getattr(alert, "enrichment_data", None) or {}
         if not isinstance(enrichment, dict):
@@ -245,6 +287,7 @@ def build_alert_report_inputs(
         iocs: list[Any] = []
         if isinstance(enrichment.get("iocs"), list):
             iocs = enrichment["iocs"]
+        tier2 = enrichment.get("tier2_runbook") if isinstance(enrichment.get("tier2_runbook"), dict) else {}
         stored_meta = _extract_handoff_meta(enrichment)
         if handoff_meta:
             for key in _HANDOFF_KEYS:
@@ -284,6 +327,8 @@ def build_alert_report_inputs(
             "investigation_markdown": inv,
             "llm_payload": getattr(alert, "llm_payload", None) or None,
             "runbook_steps": list(runbook_steps or []),
+            "tier2_runbook": tier2,
+            "enrichment_data": enrichment,
             **stored_meta,
         }
     data = dict(alert)
@@ -296,32 +341,50 @@ def build_alert_report_inputs(
 
 
 def _compose_sharh(inp: dict[str, Any]) -> str:
-    """Build a short Persian narrative — prefer investigation then explain."""
+    """Richer Persian narrative: greeting + explain + investigation assessment."""
     expl = inp.get("contextual_explanation") if isinstance(inp.get("contextual_explanation"), dict) else {}
-    meaning = _clean(expl.get("meaning") or "", limit=1_500)
+    meaning = _clean(expl.get("meaning") or "", limit=2_000)
     inv = str(inp.get("investigation_markdown") or "")
     inv_summary = _extract_investigation_summary(inv) if inv.strip() else ""
-    # Prefer investigation executive summary when present, else explain meaning.
+    forensic = _extract_section(inv, "Forensic Findings", limit=1_600) if inv.strip() else ""
+    title = _clean(inp.get("title"), limit=200)
+    parts: list[str] = ["با سلام و احترام"]
+    if title:
+        parts.append(f"پس از بررسی هشدار «{title}»، خلاصه وضعیت به شرح زیر است.")
+    # Prefer investigation executive summary when substantive; else explain meaning.
+    core = ""
     if inv_summary and len(inv_summary) >= 40:
-        return inv_summary
-    if meaning:
-        return meaning
-    if inv_summary:
-        return inv_summary
-    desc = _clean(inp.get("description") or inp.get("ai_summary") or "", limit=1_200)
-    if desc:
-        return desc
-    return (
-        "این هشدار به‌عنوان true positive ثبت شده است. "
-        "برای تکمیل شرح، Explain و Investigate را اجرا کنید."
-    )
+        core = inv_summary
+    elif meaning:
+        core = meaning
+    elif inv_summary:
+        core = inv_summary
+    else:
+        core = _clean(inp.get("description") or inp.get("ai_summary") or "", limit=1_400)
+    if core:
+        parts.append(core)
+    if meaning and inv_summary and meaning not in inv_summary and len(meaning) >= 40:
+        parts.append(f"توضیح تشخیص (Explain): {meaning}")
+    if forensic and forensic not in "\n".join(parts):
+        parts.append(f"جمع‌بندی بررسی فنی: {forensic}")
+    if len(parts) <= 1:
+        parts.append(
+            "این هشدار به‌عنوان true positive ثبت شده است. "
+            "برای تکمیل شرح، Explain و Investigate را اجرا کنید."
+        )
+    return "\n\n".join(parts)
 
 
 def _compose_details(inp: dict[str, Any]) -> list[str]:
+    """Detail bullets + short prose context (not a wall of English dump)."""
     lines: list[str] = []
     source = _clean(inp.get("source"), limit=160)
     if source:
         lines.append(f"منبع تشخیص: `{source}`")
+    rule = _clean(inp.get("rule_name"), limit=160)
+    if rule and rule.lower() not in source.lower():
+        lines.append(f"نام قاعده: `{rule}`")
+
     hosts = _bullets([str(h) for h in (inp.get("affected_hosts") or [])], limit=8)
     ips = _bullets([str(i) for i in (inp.get("affected_ips") or [])], limit=8)
     users = _bullets([str(u) for u in (inp.get("affected_users") or [])], limit=8)
@@ -333,9 +396,13 @@ def _compose_details(inp: dict[str, Any]) -> list[str]:
         lines.append("کاربران: " + "، ".join(f"`{u}`" for u in users))
     mitre = _bullets([str(t) for t in (inp.get("mitre_techniques") or [])], limit=8)
     if mitre:
-        lines.append("MITRE: " + "، ".join(f"`{t}`" for t in mitre))
-    for evidence in summarize_llm_payload(inp.get("llm_payload"), max_items=8):
-        lines.append(evidence)
+        lines.append("MITRE ATT&CK: " + "، ".join(f"`{t}`" for t in mitre))
+
+    evidence = summarize_llm_payload(inp.get("llm_payload"), max_items=12)
+    if evidence:
+        lines.append("شواهد استخراج‌شده از LLM Payload:")
+        lines.extend(f"  - {item}" for item in evidence)
+
     iocs = inp.get("iocs") if isinstance(inp.get("iocs"), list) else []
     for ioc in iocs[:8]:
         if isinstance(ioc, dict):
@@ -347,24 +414,63 @@ def _compose_details(inp: dict[str, Any]) -> list[str]:
             value = _clean(ioc, limit=160)
             if value:
                 lines.append(f"IOC: `{value}`")
+
+    tier2 = inp.get("tier2_runbook") if isinstance(inp.get("tier2_runbook"), dict) else {}
+    if tier2:
+        pivot = tier2.get("pivot") if isinstance(tier2.get("pivot"), dict) else {}
+        src = pivot.get("src_ips") if isinstance(pivot.get("src_ips"), list) else []
+        dest = pivot.get("dest_ips") if isinstance(pivot.get("dest_ips"), list) else []
+        related = pivot.get("related_alert_ids") if isinstance(pivot.get("related_alert_ids"), list) else []
+        case_id = pivot.get("case_id")
+        bits: list[str] = []
+        if src:
+            bits.append("src=" + ", ".join(f"`{x}`" for x in src[:4]))
+        if dest:
+            bits.append("dest=" + ", ".join(f"`{x}`" for x in dest[:4]))
+        if related:
+            bits.append(f"related_alerts={max(0, len(related) - 1)}")
+        if case_id:
+            bits.append(f"case=`{case_id}`")
+        if bits:
+            lines.append("Tier-2 IP pivot: " + " · ".join(bits))
+        for step in (tier2.get("steps") or [])[:5]:
+            if not isinstance(step, dict):
+                continue
+            summary = _clean(step.get("summary"), limit=220)
+            status = _clean(step.get("status"), limit=40)
+            if summary and status not in {"pending", ""}:
+                label = _clean(step.get("label") or step.get("action_name"), limit=80) or "Tier-2"
+                lines.append(f"{label}: {summary}")
+
+    # Short analyst guidance paragraph when evidence is thin.
+    if len(lines) <= 2:
+        lines.append(
+            "جزئیات موجودیتی در اسنپ‌شات هشدار محدود است؛ "
+            "رویدادهای خام SIEM و خروجی Explain/Investigate برای تکمیل لازم است."
+        )
     return lines
 
 
 def _compose_actions(inp: dict[str, Any]) -> list[str]:
+    """Recommended actions — from Explain; guidance to execute/track in Runbook."""
     expl = inp.get("contextual_explanation") if isinstance(inp.get("contextual_explanation"), dict) else {}
-    steps = _bullets([str(s) for s in (expl.get("suggested_next_steps") or []) if s], limit=7)
+    steps = _bullets([str(s) for s in (expl.get("suggested_next_steps") or []) if s], limit=8)
     if steps:
         return steps
-    runbook = format_runbook_steps(
-        inp.get("runbook_steps") if isinstance(inp.get("runbook_steps"), list) else [],
-        limit=7,
-    )
-    if runbook:
-        return runbook
+    # Prefer concrete Tier-2 follow-ups when explain is empty.
+    tier2 = inp.get("tier2_runbook") if isinstance(inp.get("tier2_runbook"), dict) else {}
+    pivot = tier2.get("pivot") if isinstance(tier2.get("pivot"), dict) else {}
+    related = pivot.get("related_alert_ids") if isinstance(pivot.get("related_alert_ids"), list) else []
+    if len(related) > 1:
+        return [
+            "هشدارهای مرتبط ۲۴ساعته (Tier-2) داخل Case تجمیع‌شده را در Runbook بررسی و triage کنید.",
+            "Investigate را روی Case اجرا کنید تا گزارش همه هشدارهای لینک‌شده را پوشش دهد.",
+            "شواهد میزبان/فایل (hash، مسیر، action) را از SIEM استخراج و در Runbook ثبت کنید.",
+        ]
     return [
-        "رویدادهای خام مرتبط در SIEM حفظ و استخراج شود.",
-        "شواهد سطح میزبان برای تأیید یا رد بهره‌برداری بررسی شود.",
-        "نتیجه و اقدامات انجام‌شده مستند گردد.",
+        "رویدادهای خام مرتبط را در SIEM حفظ و در Runbook (مرحله Investigate) ثبت کنید.",
+        "شواهد سطح میزبان برای تأیید یا رد بهره‌برداری را بررسی و نتیجه را در Runbook بنویسید.",
+        "نتیجه triage / containment را در Runbook ببندید و گزارش را به‌روز کنید.",
     ]
 
 
@@ -373,7 +479,7 @@ def render_persian_incident_report(
     *,
     generated_at: datetime | None = None,
 ) -> str:
-    """Concise Persian-only customer handoff report."""
+    """Persian customer handoff report with richer narrative + Runbook section."""
     moment = generated_at or datetime.now(UTC)
     title = _clean(inp.get("title"), limit=300) or "رویداد امنیتی بدون عنوان"
     severity = _severity_fa(str(inp.get("severity") or "medium"))
@@ -389,7 +495,7 @@ def render_persian_incident_report(
     actions = _compose_actions(inp)
     runbook = format_runbook_steps(
         inp.get("runbook_steps") if isinstance(inp.get("runbook_steps"), list) else [],
-        limit=8,
+        limit=10,
     )
 
     lines: list[str] = [
@@ -418,19 +524,35 @@ def render_persian_incident_report(
     ]
     if details:
         for item in details:
-            lines.append(f"- {item}")
+            lines.append(f"- {item}" if not item.startswith("  - ") else item)
     else:
         lines.append(
             "- جزئیات موجودیتی در اسنپ‌شات هشدار ثبت نشده؛ "
             "رویدادهای خام SIEM برای تکمیل لازم است."
         )
 
+    lines.extend(
+        [
+            "",
+            "اقدامات انجام‌شده (Runbook):",
+        ]
+    )
     if runbook:
-        lines.extend(["", "اقدامات انجام‌شده (Runbook):"])
         for item in runbook:
             lines.append(f"- {item}")
+    else:
+        lines.append(
+            "- هنوز اقدام اجراشده‌ای در Runbook ثبت نشده است. "
+            "اقدامات پیشنهادی زیر را در تب Runbook انجام و ثبت کنید."
+        )
 
-    lines.extend(["", "اقدامات پیشنهادی:"])
+    lines.extend(
+        [
+            "",
+            "اقدامات پیشنهادی:",
+            "(این موارد راهنمای تحلیل‌گر است و باید در تب Runbook اجرا/ثبت شوند.)",
+        ]
+    )
     for item in actions:
         lines.append(f"- {item}")
     lines.extend(["", "با تشکر.", ""])
@@ -442,7 +564,7 @@ def render_bilingual_incident_report(
     *,
     generated_at: datetime | None = None,
 ) -> str:
-    """Back-compat entrypoint — now returns the concise Persian handoff."""
+    """Back-compat entrypoint — returns the Persian handoff."""
     return render_persian_incident_report(inp, generated_at=generated_at)
 
 

@@ -509,8 +509,9 @@ function AlertIncidentReportPanel({
           Handoff header (operator-filled)
         </h3>
           <p className="mt-1 text-[10px] text-slate-500">
-            هدر گزارش را خودتان پر کنید. بدنه گزارش کوتاه و فارسی است و از Explain،
-            خلاصه Investigate، شواهد مفید LLM Payload و اقدامات واقعی Runbook ساخته می‌شود.
+            هدر را خودتان پر کنید. بدنه فارسی از Explain + Investigate + شواهد LLM +
+            Tier-2 ساخته می‌شود. «اقدامات پیشنهادی» راهنماست و باید در تب Runbook اجرا/ثبت شوند؛
+            «اقدامات انجام‌شده» همان خروجی Runbook است.
           </p>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
           {(
@@ -592,7 +593,7 @@ function AlertIncidentReportPanel({
                 گزارش رخداد · فارسی
               </h3>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                خلاصه شفاف از Explain / Investigate / شواهد — بدون اضافات
+                شرح + جزئیات + Runbook انجام‌شده + اقدامات پیشنهادی (اجرا در Runbook)
               </p>
             </div>
             <button

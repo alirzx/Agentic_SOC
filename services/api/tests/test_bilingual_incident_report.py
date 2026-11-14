@@ -78,12 +78,14 @@ def test_concise_persian_report_omits_noise_and_english_dump():
     assert "شرح رویداد:" in md
     assert "جزئیات رویداد:" in md
     assert "اقدامات پیشنهادی:" in md
+    assert "اقدامات انجام‌شده (Runbook):" in md
+    assert "تب Runbook" in md
+    assert "با سلام و احترام" in md
     assert "203.0.113.9" in md
     assert "risk_score" not in md
     assert "long english dump" not in md
     assert "تحلیل‌گر true_positive ثبت کرد" in md
     assert "شواهد با تطبیق الگوی URL" in md
-    # pending empty procedure noise should not appear as a step without summary
     assert md.count("pending") == 0
 
 
