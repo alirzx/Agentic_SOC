@@ -508,10 +508,10 @@ function AlertIncidentReportPanel({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
           Handoff header (operator-filled)
         </h3>
-        <p className="mt-1 text-[10px] text-slate-500">
-          این فیلدها را خودتان پر کنید — در گزارش به‌صورت «جهت ارائه به / پروژه / کارشناس» می‌آید.
-          محتوای فنی از Explain، AI Investigation، LLM Payload و Runbook ساخته می‌شود.
-        </p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            هدر گزارش را خودتان پر کنید. بدنه گزارش کوتاه و فارسی است و از Explain،
+            خلاصه Investigate، شواهد مفید LLM Payload و اقدامات واقعی Runbook ساخته می‌شود.
+          </p>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
           {(
             [
@@ -555,9 +555,9 @@ function AlertIncidentReportPanel({
 
       {isLoading && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
-          <p className="text-sm font-medium text-slate-300">Generating bilingual report…</p>
+          <p className="text-sm font-medium text-slate-300">در حال ساخت گزارش فارسی…</p>
           <p className="mt-1 text-xs text-slate-500">
-            Explain + Investigation + LLM Payload + Runbook
+            خلاصه Explain / Investigate + شواهد مفید
           </p>
         </div>
       )}
@@ -589,10 +589,10 @@ function AlertIncidentReportPanel({
           <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2">
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                Incident Report · EN + FA
+                گزارش رخداد · فارسی
               </h3>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                Built from Explain, AI Investigation, LLM Payload, and Runbook
+                خلاصه شفاف از Explain / Investigate / شواهد — بدون اضافات
               </p>
             </div>
             <button
