@@ -222,6 +222,8 @@ class AlertDetailResponse(AlertResponse):
     risk_score: int | None = None
     # Ambient Copilot "Explain this alert" — persisted for Case Report + Investigate.
     contextual_explanation: dict | None = None
+    # Operator-filled Persian handoff header for bilingual incident export.
+    report_handoff: dict | None = None
 
 
 class AlertExplanationSaveRequest(BaseModel):
@@ -236,6 +238,16 @@ class AlertInvestigationReportSaveRequest(BaseModel):
 
     markdown: str
     investigation_id: str | None = None
+
+
+class AlertReportHandoffRequest(BaseModel):
+    """Operator-filled Persian handoff header fields for incident export."""
+
+    audience: str | None = None
+    prepared_by: str | None = None
+    project_name: str | None = None
+    analyst: str | None = None
+    approved_by: str | None = None
 
 
 class AlertSnoozeRequest(BaseModel):
@@ -1128,6 +1140,11 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
         if isinstance(extra.get("contextual_explanation"), dict)
         else None
     )
+    stored_handoff = (
+        extra.get("report_handoff")
+        if isinstance(extra.get("report_handoff"), dict)
+        else None
+    )
     return payload.model_copy(
         update={
             "narrative": alert.narrative,
@@ -1143,6 +1160,7 @@ async def _build_alert_detail(db: DBSession, alert: Alert) -> AlertDetailRespons
             or ((alert.source_event_ids or [None])[0] if getattr(alert, "source_event_ids", None) else None),
             "risk_score": alert.priority,
             "contextual_explanation": stored_explanation,
+            "report_handoff": stored_handoff,
         }
     )
 
@@ -1260,6 +1278,94 @@ async def save_alert_investigation_report(
     return await _single_alert_response(db, alert)
 
 
+async def _build_alert_incident_markdown(
+    db: DBSession,
+    alert: Alert,
+    *,
+    tenant_id: uuid.UUID,
+    investigation_markdown: str | None = None,
+    handoff_meta: dict[str, str] | None = None,
+) -> str:
+    """Assemble bilingual report from explain + investigation + llm_payload + runbook."""
+    from app.services.bilingual_incident_report import (
+        build_alert_report_inputs,
+        render_bilingual_incident_report,
+    )
+
+    inv_md = (investigation_markdown or "").strip() or None
+    extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
+    if inv_md is None:
+        stored_inv = extra.get("investigation_report")
+        if isinstance(stored_inv, str) and stored_inv.strip():
+            inv_md = stored_inv.strip()
+        elif isinstance(stored_inv, dict) and isinstance(stored_inv.get("markdown"), str):
+            inv_md = stored_inv["markdown"].strip() or None
+
+    runbook_steps: list[dict] = []
+    runbook_procedure: list[dict] = []
+    try:
+        from app.services.runbook.read import load_runbook
+
+        envelope = await load_runbook(
+            db,
+            tenant_id=tenant_id,
+            subject_type="alert",
+            subject_id=alert.id,
+        )
+        runbook_steps = [step.model_dump(mode="json") for step in envelope.steps]
+        runbook_procedure = [stage.model_dump(mode="json") for stage in envelope.procedure]
+    except Exception:  # noqa: BLE001 — report must still render without runbook
+        logger.warning(
+            "alert.report_runbook_load_failed alert_id=%s",
+            str(alert.id).replace("\r", "").replace("\n", " ")[:64],
+            exc_info=True,
+        )
+
+    return render_bilingual_incident_report(
+        build_alert_report_inputs(
+            alert,
+            investigation_markdown=inv_md,
+            runbook_steps=runbook_steps,
+            runbook_procedure=runbook_procedure,
+            handoff_meta=handoff_meta,
+        )
+    )
+
+
+@router.post(
+    "/{alert_id}/report/handoff",
+    response_model=AlertResponse,
+    summary="Save operator handoff header fields for the bilingual report",
+)
+async def save_alert_report_handoff(
+    alert_id: uuid.UUID,
+    body: AlertReportHandoffRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    db: DBSession,
+) -> AlertResponse:
+    """Persist audience/project/analyst fields filled by the operator."""
+    from app.services.bilingual_incident_report import normalize_handoff_meta
+
+    result = await db.execute(
+        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+
+    meta = normalize_handoff_meta(body.model_dump())
+    extra = dict(alert.enrichment_data) if isinstance(alert.enrichment_data, dict) else {}
+    extra["report_handoff"] = meta
+    await db.execute(
+        update(Alert)
+        .where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+        .values(enrichment_data=extra, updated_at=datetime.now(UTC))
+    )
+    await db.commit()
+    await db.refresh(alert)
+    return await _single_alert_response(db, alert)
+
+
 @router.get(
     "/{alert_id}/report.md",
     summary="Bilingual incident report (Markdown) for true-positive alerts",
@@ -1279,12 +1385,11 @@ async def get_alert_incident_report(
 
     Gated on analyst disposition ``true_positive`` / ``escalate`` so provisional
     or FP alerts do not produce customer-facing incident reports.
+
+    Body is assembled from Ambient Copilot explain, AI Investigation, curated
+    ``llm_payload``, and Runbook procedure/steps — not a thin alert snapshot.
     """
-    from app.services.bilingual_incident_report import (
-        build_alert_report_inputs,
-        is_true_positive_disposition,
-        render_bilingual_incident_report,
-    )
+    from app.services.bilingual_incident_report import is_true_positive_disposition
 
     result = await db.execute(
         select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
@@ -1298,17 +1403,11 @@ async def get_alert_incident_report(
             detail="Incident report is available only after disposition true_positive",
         )
 
-    inv_md = (investigation_markdown or "").strip() or None
-    if inv_md is None:
-        extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
-        stored_inv = extra.get("investigation_report")
-        if isinstance(stored_inv, str) and stored_inv.strip():
-            inv_md = stored_inv.strip()
-        elif isinstance(stored_inv, dict) and isinstance(stored_inv.get("markdown"), str):
-            inv_md = stored_inv["markdown"].strip() or None
-
-    markdown = render_bilingual_incident_report(
-        build_alert_report_inputs(alert, investigation_markdown=inv_md)
+    markdown = await _build_alert_incident_markdown(
+        db,
+        alert,
+        tenant_id=current_user.tenant_id,
+        investigation_markdown=investigation_markdown,
     )
     # Cache last generated report for Case reuse / audit.
     extra = dict(alert.enrichment_data) if isinstance(alert.enrichment_data, dict) else {}
@@ -1316,6 +1415,7 @@ async def get_alert_incident_report(
         "markdown": markdown[:60_000],
         "generated_at": datetime.now(UTC).isoformat(),
         "languages": ["en", "fa"],
+        "sources": ["explain", "investigation", "llm_payload", "runbook"],
     }
     await db.execute(
         update(Alert)

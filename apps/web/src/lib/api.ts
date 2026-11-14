@@ -718,6 +718,14 @@ export interface Alert {
   relatedEntities?: RelatedEntity[];
   miniTimeline?: MiniTimelineEvent[];
   recommendedActions?: RecommendedAction[];
+  /** Operator-filled Persian handoff header for bilingual incident export. */
+  reportHandoff?: {
+    audience?: string;
+    prepared_by?: string;
+    project_name?: string;
+    analyst?: string;
+    approved_by?: string;
+  } | null;
 }
 
 /**
@@ -918,6 +926,18 @@ function normalizeAlert(raw: unknown): Alert {
     relatedEntities,
     miniTimeline,
     recommendedActions,
+    reportHandoff: (() => {
+      const raw = r.report_handoff ?? r.reportHandoff;
+      if (!raw || typeof raw !== 'object') return null;
+      const h = raw as Record<string, unknown>;
+      return {
+        audience: typeof h.audience === 'string' ? h.audience : '',
+        prepared_by: typeof h.prepared_by === 'string' ? h.prepared_by : '',
+        project_name: typeof h.project_name === 'string' ? h.project_name : '',
+        analyst: typeof h.analyst === 'string' ? h.analyst : '',
+        approved_by: typeof h.approved_by === 'string' ? h.approved_by : '',
+      };
+    })(),
   };
 }
 
@@ -1236,6 +1256,22 @@ export const alertsApi = {
         markdown: payload.markdown,
         investigation_id: payload.investigation_id ?? undefined,
       }),
+    }),
+
+  /** Persist operator handoff header fields (audience/project/analyst/…). */
+  saveReportHandoff: (
+    alertId: string,
+    payload: {
+      audience?: string;
+      prepared_by?: string;
+      project_name?: string;
+      analyst?: string;
+      approved_by?: string;
+    },
+  ) =>
+    request<unknown>(`/api/v1/alerts/${alertId}/report/handoff`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 
   /**

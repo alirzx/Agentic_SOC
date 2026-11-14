@@ -463,7 +463,21 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
 
 // ─── Bilingual incident Report (true-positive only) ───────────────────────────
 
-function AlertIncidentReportPanel({ alertId }: { alertId: string }) {
+function AlertIncidentReportPanel({
+  alertId,
+  initialHandoff,
+}: {
+  alertId: string;
+  initialHandoff?: Alert['reportHandoff'];
+}) {
+  const [handoff, setHandoff] = useState({
+    audience: initialHandoff?.audience ?? '',
+    prepared_by: initialHandoff?.prepared_by ?? '',
+    project_name: initialHandoff?.project_name ?? '',
+    analyst: initialHandoff?.analyst ?? '',
+    approved_by: initialHandoff?.approved_by ?? '',
+  });
+  const [savingHandoff, setSavingHandoff] = useState(false);
   const {
     data: markdown,
     error,
@@ -475,66 +489,133 @@ function AlertIncidentReportPanel({ alertId }: { alertId: string }) {
     { revalidateOnFocus: false },
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
-        <p className="text-sm font-medium text-slate-300">Generating bilingual report…</p>
-        <p className="mt-1 text-xs text-slate-500">English + فارسی from explain, investigation, and disposition.</p>
-      </div>
-    );
-  }
-
-  if (error || !markdown) {
-    const status = error instanceof ApiError ? error.status : undefined;
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
-        <p className="text-sm font-medium text-slate-300">
-          {status === 409 ? 'Mark disposition as True positive to unlock Report' : 'Could not load report'}
-        </p>
-        <p className="mt-1 max-w-md text-xs text-slate-500">
-          {error instanceof Error ? error.message : 'Run Explain / Investigate, then retry.'}
-        </p>
-        <button
-          type="button"
-          onClick={() => void mutate()}
-          className="mt-3 text-[11px] text-teal-300 underline hover:text-teal-200"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
+  const saveHandoffAndRefresh = async () => {
+    setSavingHandoff(true);
+    try {
+      await alertsApi.saveReportHandoff(alertId, handoff);
+      toast.success('Handoff fields saved');
+      await mutate();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save handoff fields');
+    } finally {
+      setSavingHandoff(false);
+    }
+  };
 
   return (
-    <div className="rounded-xl border border-slate-800/80 bg-slate-900/40">
-      <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2">
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-            Incident Report · EN + FA
-          </h3>
-          <p className="mt-0.5 text-[10px] text-slate-500">
-            Customer handoff format (English investigation + گزارش رخداد سایبری)
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          Handoff header (operator-filled)
+        </h3>
+        <p className="mt-1 text-[10px] text-slate-500">
+          این فیلدها را خودتان پر کنید — در گزارش به‌صورت «جهت ارائه به / پروژه / کارشناس» می‌آید.
+          محتوای فنی از Explain، AI Investigation، LLM Payload و Runbook ساخته می‌شود.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+          {(
+            [
+              ['audience', 'جهت ارائه به'],
+              ['prepared_by', 'تهیه شده توسط'],
+              ['project_name', 'پروژه'],
+              ['analyst', 'کارشناس شیفت'],
+              ['approved_by', 'تایید توسط'],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="block text-[11px] text-slate-400">
+              {label}
+              <input
+                type="text"
+                value={handoff[key]}
+                onChange={(e) => setHandoff((prev) => ({ ...prev, [key]: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-brand-500"
+                placeholder="[پر شود توسط تحلیل‌گر]"
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void saveHandoffAndRefresh()}
+            disabled={savingHandoff}
+            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-50"
+          >
+            {savingHandoff ? 'Saving…' : 'Save header & regenerate'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void mutate()}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+          >
+            Refresh report
+          </button>
+        </div>
+      </div>
+
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+          <p className="text-sm font-medium text-slate-300">Generating bilingual report…</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Explain + Investigation + LLM Payload + Runbook
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `alert-${alertId.slice(0, 8)}-incident-report.md`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          className="text-[11px] text-slate-400 hover:text-slate-200"
-        >
-          Download .md
-        </button>
-      </div>
-      <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap p-4 font-mono text-[11px] leading-relaxed text-slate-300">
-        {markdown}
-      </pre>
+      )}
+
+      {!isLoading && (error || !markdown) && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+          <p className="text-sm font-medium text-slate-300">
+            {error instanceof ApiError && error.status === 409
+              ? 'Mark disposition as True positive to unlock Report'
+              : 'Could not load report'}
+          </p>
+          <p className="mt-1 max-w-md text-xs text-slate-500">
+            {error instanceof Error
+              ? error.message
+              : 'Run Explain + Investigate (and enrich LLM Payload) then retry.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => void mutate()}
+            className="mt-3 text-[11px] text-teal-300 underline hover:text-teal-200"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!isLoading && markdown && (
+        <div className="rounded-xl border border-slate-800/80 bg-slate-900/40">
+          <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                Incident Report · EN + FA
+              </h3>
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                Built from Explain, AI Investigation, LLM Payload, and Runbook
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `alert-${alertId.slice(0, 8)}-incident-report.md`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="text-[11px] text-slate-400 hover:text-slate-200"
+            >
+              Download .md
+            </button>
+          </div>
+          <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap p-4 font-mono text-[11px] leading-relaxed text-slate-300">
+            {markdown}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
@@ -1498,7 +1579,10 @@ export function AlertDetailView({
       )}
 
       {activeTab === 'report' && isTruePositive && (
-        <AlertIncidentReportPanel alertId={alert.id} />
+        <AlertIncidentReportPanel
+          alertId={alert.id}
+          initialHandoff={alert.reportHandoff}
+        />
       )}
 
       {activeTab === 'llm' && alert.llmPayload && (

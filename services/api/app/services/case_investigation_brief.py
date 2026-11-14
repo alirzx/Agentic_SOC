@@ -466,9 +466,11 @@ def render_case_report_markdown(brief: CaseInvestigationBrief) -> str:
         },
         "mitre_techniques": list(brief.mitre_techniques or []),
         "created_at": brief.generated_at,
-        "project_name": "آستان قدس",
-        "prepared_by": "تیم مرکز عملیات امنیت سورین",
-        "audience": "مرکز فناوری اطلاعات آستان قدس رضوی",
+        "project_name": "",
+        "prepared_by": "",
+        "audience": "",
+        "analyst": "",
+        "approved_by": "",
         "source": "AiSOC Case",
     }
     fa_body = render_persian_handoff(fa_inp, generated_at=brief.generated_at)

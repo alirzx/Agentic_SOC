@@ -1,18 +1,20 @@
 """Bilingual (EN + FA) incident reports for true-positive alerts/cases.
 
-English section follows the AI Investigation narrative shape (executive
-summary, timeline, IOCs, MITRE, recommendations). Persian section follows
-the Soorin SOC handoff template used in production tickets:
+Content priority (richest first):
+1. AI Investigation Markdown (full agent report)
+2. Ambient Copilot Explain Markdown (full sections + next steps)
+3. Curated ``llm_payload`` evidence fields
+4. Runbook procedure / ledger steps (human-readable)
+5. Alert snapshot fields (hosts, IOCs, MITRE)
 
-* گزارش رخداد سایبری
-* عنوان / شدت / وضعیت رویداد
-* شرح رویداد / جزئیات رویداد / اقدامات پیشنهادی
-
-Reports are gated on analyst ``true_positive`` (or case outcome ``incident``).
+Persian handoff header fields (audience / project / prepared_by / analyst /
+approved_by) are **operator-filled** — never hardcoded to a customer name.
+Empty fields render as ``[پر شود توسط تحلیل‌گر]``.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,6 +36,55 @@ _STATUS_FA: dict[str, str] = {
     "resolved": "بسته شده",
     "closed": "بسته شده",
 }
+
+_PLACEHOLDER_FA = "[پر شود توسط تحلیل‌گر]"
+_HANDOFF_KEYS = (
+    "audience",
+    "prepared_by",
+    "project_name",
+    "analyst",
+    "approved_by",
+)
+
+# Prefer these llm_payload keys when summarizing evidence for the report.
+_LLM_PAYLOAD_PREFERRED_KEYS: tuple[str, ...] = (
+    "summary",
+    "title",
+    "description",
+    "rule_name",
+    "rule_id",
+    "detection",
+    "severity",
+    "risk_score",
+    "confidence",
+    "src_ip",
+    "dest_ip",
+    "src",
+    "dest",
+    "host",
+    "hostname",
+    "user",
+    "username",
+    "url",
+    "uri",
+    "http_method",
+    "status",
+    "user_agent",
+    "process",
+    "cmdline",
+    "file_path",
+    "hash",
+    "sha256",
+    "mitre",
+    "techniques",
+    "iocs",
+    "evidence",
+    "raw_fields",
+    "notable",
+    "search_name",
+    "orig_rule_description",
+    "orig_rule_title",
+)
 
 
 def _clean(value: Any, *, limit: int = 4_000) -> str:
@@ -60,6 +111,11 @@ def _status_fa(status: str) -> str:
     return _STATUS_FA.get((status or "").lower(), status or "نامشخص")
 
 
+def _handoff_value(value: Any) -> str:
+    cleaned = _clean(value, limit=160)
+    return cleaned if cleaned else _PLACEHOLDER_FA
+
+
 def _extract_explanation(alert_like: dict[str, Any]) -> dict[str, Any]:
     extra = alert_like.get("enrichment_data")
     if isinstance(extra, dict):
@@ -70,24 +126,156 @@ def _extract_explanation(alert_like: dict[str, Any]) -> dict[str, Any]:
     return direct if isinstance(direct, dict) else {}
 
 
-def build_alert_report_inputs(alert: Any, *, investigation_markdown: str | None = None) -> dict[str, Any]:
+def _extract_handoff_meta(enrichment: dict[str, Any] | None) -> dict[str, str]:
+    meta: dict[str, str] = {k: "" for k in _HANDOFF_KEYS}
+    if not isinstance(enrichment, dict):
+        return meta
+    stored = enrichment.get("report_handoff")
+    if not isinstance(stored, dict):
+        return meta
+    for key in _HANDOFF_KEYS:
+        raw = stored.get(key)
+        if isinstance(raw, str):
+            meta[key] = raw.strip()[:160]
+    return meta
+
+
+def summarize_llm_payload(payload: Any, *, max_items: int = 24) -> list[str]:
+    """Flatten curated LLM evidence into short report lines (no raw dump)."""
+    if not isinstance(payload, dict) or not payload:
+        return []
+    lines: list[str] = []
+    seen: set[str] = set()
+
+    def _add(label: str, value: Any) -> None:
+        if len(lines) >= max_items:
+            return
+        if isinstance(value, (dict, list)):
+            try:
+                rendered = json.dumps(value, ensure_ascii=False, default=str)
+            except TypeError:
+                rendered = str(value)
+        else:
+            rendered = str(value)
+        rendered = _clean(rendered, limit=320)
+        if not rendered:
+            return
+        key = f"{label}:{rendered}"
+        if key in seen:
+            return
+        seen.add(key)
+        lines.append(f"**{label}:** {rendered}")
+
+    for key in _LLM_PAYLOAD_PREFERRED_KEYS:
+        if key in payload:
+            _add(key, payload.get(key))
+    # Catch remaining top-level scalars / short lists.
+    for key, value in payload.items():
+        if key in _LLM_PAYLOAD_PREFERRED_KEYS:
+            continue
+        if key.startswith("_"):
+            continue
+        if isinstance(value, (str, int, float, bool)) or (
+            isinstance(value, list) and len(value) <= 8
+        ):
+            _add(str(key), value)
+        if len(lines) >= max_items:
+            break
+    return lines
+
+
+def format_runbook_steps(steps: list[dict[str, Any]], *, limit: int = 40) -> list[str]:
+    """Human-readable runbook timeline lines."""
+    out: list[str] = []
+    for step in steps[:limit]:
+        if not isinstance(step, dict):
+            continue
+        stage = _clean(step.get("stage_label") or step.get("stage"), limit=40) or "Step"
+        summary = _clean(step.get("summary"), limit=280)
+        status = _clean(step.get("status"), limit=40)
+        actor = _clean(step.get("actor_label") or step.get("actor_type"), limit=80)
+        when = step.get("occurred_at")
+        when_s = ""
+        if isinstance(when, datetime):
+            when_s = when.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        elif when:
+            when_s = _clean(when, limit=40)
+        bits = [f"**{stage}**"]
+        if status:
+            bits.append(f"`{status}`")
+        if when_s:
+            bits.append(when_s)
+        if actor:
+            bits.append(f"by {actor}")
+        head = " · ".join(bits)
+        if summary:
+            out.append(f"- {head}: {summary}")
+        else:
+            out.append(f"- {head}")
+    return out
+
+
+def format_runbook_procedure(procedure: list[dict[str, Any]]) -> list[str]:
+    out: list[str] = []
+    for item in procedure[:20]:
+        if not isinstance(item, dict):
+            continue
+        label = _clean(item.get("stage_label") or item.get("stage"), limit=60)
+        status = _clean(item.get("status"), limit=40)
+        if label:
+            out.append(f"- {label}: `{status or 'pending'}`")
+    return out
+
+
+def build_alert_report_inputs(
+    alert: Any,
+    *,
+    investigation_markdown: str | None = None,
+    runbook_steps: list[dict[str, Any]] | None = None,
+    runbook_procedure: list[dict[str, Any]] | None = None,
+    handoff_meta: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Normalize an Alert ORM / dict into report inputs."""
     if hasattr(alert, "title"):
         enrichment = getattr(alert, "enrichment_data", None) or {}
-        expl = enrichment.get("contextual_explanation") if isinstance(enrichment, dict) else None
+        if not isinstance(enrichment, dict):
+            enrichment = {}
+        expl = enrichment.get("contextual_explanation")
+        if not isinstance(expl, dict):
+            expl = {}
         mitre = list(getattr(alert, "mitre_techniques", None) or [])
-        iocs = []
-        if isinstance(enrichment, dict) and isinstance(enrichment.get("iocs"), list):
+        iocs: list[Any] = []
+        if isinstance(enrichment.get("iocs"), list):
             iocs = enrichment["iocs"]
+        stored_meta = _extract_handoff_meta(enrichment)
+        if handoff_meta:
+            for key in _HANDOFF_KEYS:
+                val = handoff_meta.get(key)
+                if isinstance(val, str) and val.strip():
+                    stored_meta[key] = val.strip()[:160]
+        connector = _clean(getattr(alert, "connector_type", None), limit=80)
+        rule = _clean(getattr(alert, "rule_name", None), limit=160)
+        source = connector or rule
+        if connector and rule and rule.lower() != connector.lower():
+            source = f"{connector} / {rule}"
+        inv = investigation_markdown or ""
+        if not inv.strip():
+            stored_inv = enrichment.get("investigation_report")
+            if isinstance(stored_inv, str):
+                inv = stored_inv
+            elif isinstance(stored_inv, dict):
+                inv = str(stored_inv.get("markdown") or "")
         return {
             "id": str(getattr(alert, "id", "")),
             "title": str(getattr(alert, "title", "") or ""),
-            "description": str(getattr(alert, "description", "") or getattr(alert, "narrative", "") or ""),
+            "description": str(
+                getattr(alert, "description", "") or getattr(alert, "narrative", "") or ""
+            ),
             "severity": str(getattr(alert, "severity", "") or "medium"),
             "status": str(getattr(alert, "status", "") or ""),
             "disposition": str(getattr(alert, "disposition", "") or ""),
-            "source": str(getattr(alert, "connector_type", "") or getattr(alert, "source", "") or ""),
-            "rule_name": str(getattr(alert, "rule_name", "") or ""),
+            "source": source,
+            "rule_name": rule,
             "created_at": getattr(alert, "created_at", None),
             "ai_summary": str(getattr(alert, "ai_summary", "") or ""),
             "narrative": str(getattr(alert, "narrative", "") or ""),
@@ -96,18 +284,20 @@ def build_alert_report_inputs(alert: Any, *, investigation_markdown: str | None 
             "affected_users": list(getattr(alert, "affected_users", None) or []),
             "mitre_techniques": [str(t) for t in mitre if t],
             "iocs": iocs,
-            "contextual_explanation": expl if isinstance(expl, dict) else {},
-            "investigation_markdown": investigation_markdown or "",
-            "project_name": "آستان قدس",
-            "prepared_by": "تیم مرکز عملیات امنیت سورین",
-            "audience": "مرکز فناوری اطلاعات آستان قدس رضوی",
+            "contextual_explanation": expl,
+            "investigation_markdown": inv,
+            "llm_payload": getattr(alert, "llm_payload", None) or None,
+            "runbook_steps": list(runbook_steps or []),
+            "runbook_procedure": list(runbook_procedure or []),
+            **stored_meta,
         }
     data = dict(alert)
     data["contextual_explanation"] = _extract_explanation(data)
     data.setdefault("investigation_markdown", investigation_markdown or "")
-    data.setdefault("project_name", "آستان قدس")
-    data.setdefault("prepared_by", "تیم مرکز عملیات امنیت سورین")
-    data.setdefault("audience", "مرکز فناوری اطلاعات آستان قدس رضوی")
+    data.setdefault("runbook_steps", list(runbook_steps or []))
+    data.setdefault("runbook_procedure", list(runbook_procedure or []))
+    for key in _HANDOFF_KEYS:
+        data.setdefault(key, (handoff_meta or {}).get(key, ""))
     return data
 
 
@@ -115,15 +305,24 @@ def _english_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
     title = _clean(inp.get("title"), limit=300) or "Untitled alert"
     severity = _clean(inp.get("severity"), limit=40) or "medium"
     disposition = _clean(inp.get("disposition"), limit=40) or "true_positive"
-    description = _clean(inp.get("description") or inp.get("narrative") or inp.get("ai_summary"), limit=2_500)
     expl = inp.get("contextual_explanation") if isinstance(inp.get("contextual_explanation"), dict) else {}
-    meaning = _clean(expl.get("meaning") or "", limit=2_000)
-    steps = _bullets([str(s) for s in (expl.get("suggested_next_steps") or []) if s])
-    inv = _clean(inp.get("investigation_markdown") or "", limit=20_000)
+    meaning = _clean(expl.get("meaning") or "", limit=2_500)
+    expl_md = _clean(expl.get("markdown") or "", limit=12_000)
+    steps = _bullets([str(s) for s in (expl.get("suggested_next_steps") or []) if s], limit=12)
+    inv = str(inp.get("investigation_markdown") or "").strip()
+    if len(inv) > 40_000:
+        inv = inv[:40_000]
     hosts = _bullets([str(h) for h in (inp.get("affected_hosts") or [])])
     ips = _bullets([str(i) for i in (inp.get("affected_ips") or [])])
     users = _bullets([str(u) for u in (inp.get("affected_users") or [])])
     mitre = _bullets([str(t) for t in (inp.get("mitre_techniques") or [])])
+    llm_lines = summarize_llm_payload(inp.get("llm_payload"))
+    runbook_lines = format_runbook_steps(
+        inp.get("runbook_steps") if isinstance(inp.get("runbook_steps"), list) else []
+    )
+    procedure_lines = format_runbook_procedure(
+        inp.get("runbook_procedure") if isinstance(inp.get("runbook_procedure"), list) else []
+    )
 
     lines: list[str] = [
         "# Cyber Incident Report",
@@ -132,7 +331,7 @@ def _english_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
         f"**Title:** {title}  ",
         f"**Severity:** {severity}  ",
         f"**Disposition:** {disposition}  ",
-        f"**Source:** {_clean(inp.get('source') or inp.get('rule_name'), limit=120) or '—'}  ",
+        f"**Source:** {_clean(inp.get('source'), limit=160) or '—'}  ",
         f"**Generated:** {generated_at.isoformat()}  ",
         "",
         "## Executive Summary",
@@ -140,20 +339,23 @@ def _english_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
     ]
     if meaning:
         lines.append(meaning)
-    elif description:
-        lines.append(description)
+    elif inv:
+        # First meaningful paragraph from investigation
+        para = next((p.strip() for p in inv.split("\n\n") if p.strip() and not p.strip().startswith("#")), "")
+        lines.append(para[:2_000] if para else "_See AI Investigation section._")
     else:
         lines.append(
             "Analyst marked this alert as a true positive. Supporting investigation "
             "narrative should be completed with raw telemetry and host evidence."
         )
-    lines.extend(["", "## Event narrative", ""])
-    if description and description != meaning:
-        lines.append(description)
-    elif inv:
-        lines.append("_See attached AI Investigation report below._")
-    else:
-        lines.append("_Narrative pending enrichment from raw events._")
+
+    if expl_md:
+        lines.extend(["", "## Alert explanation (Ambient Copilot)", "", expl_md, ""])
+
+    if llm_lines:
+        lines.extend(["", "## LLM evidence payload (curated)", ""])
+        for item in llm_lines:
+            lines.append(f"- {item}")
 
     lines.extend(["", "## Scope", ""])
     if hosts or ips or users:
@@ -164,7 +366,10 @@ def _english_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
         if users:
             lines.append("- **Users:** " + ", ".join(f"`{u}`" for u in users))
     else:
-        lines.append("_No affected hosts/IPs/users were attached to the alert snapshot._")
+        lines.append(
+            "_No affected hosts/IPs/users on the alert snapshot — use LLM payload / "
+            "raw Splunk events to recover entities._"
+        )
 
     lines.extend(["", "## Indicators", ""])
     iocs = inp.get("iocs") if isinstance(inp.get("iocs"), list) else []
@@ -182,6 +387,16 @@ def _english_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
     if mitre:
         lines.extend(["", "## MITRE ATT&CK", "", ", ".join(f"`{t}`" for t in mitre)])
 
+    if procedure_lines or runbook_lines:
+        lines.extend(["", "## Runbook / response workflow", ""])
+        if procedure_lines:
+            lines.append("### Procedure status")
+            lines.extend(procedure_lines)
+            lines.append("")
+        if runbook_lines:
+            lines.append("### Governed steps")
+            lines.extend(runbook_lines)
+
     lines.extend(["", "## Recommended actions", ""])
     if steps:
         for step in steps:
@@ -196,7 +411,7 @@ def _english_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
         )
 
     if inv:
-        lines.extend(["", "## AI Investigation (attached)", "", inv, ""])
+        lines.extend(["", "## AI Investigation (full)", "", inv, ""])
 
     return "\n".join(lines).strip()
 
@@ -206,11 +421,20 @@ def _persian_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
     severity = _severity_fa(str(inp.get("severity") or "medium"))
     disposition = _status_fa(str(inp.get("disposition") or "true_positive"))
     expl = inp.get("contextual_explanation") if isinstance(inp.get("contextual_explanation"), dict) else {}
-    meaning = _clean(expl.get("meaning") or inp.get("ai_summary") or inp.get("description") or "", limit=2_500)
-    details = _clean(inp.get("description") or inp.get("narrative") or "", limit=3_000)
-    steps = _bullets([str(s) for s in (expl.get("suggested_next_steps") or []) if s], limit=10)
+    meaning = _clean(expl.get("meaning") or "", limit=2_500)
+    expl_md = _clean(expl.get("markdown") or "", limit=8_000)
+    inv = str(inp.get("investigation_markdown") or "").strip()
+    steps = _bullets([str(s) for s in (expl.get("suggested_next_steps") or []) if s], limit=12)
     hosts = _bullets([str(h) for h in (inp.get("affected_hosts") or [])])
     ips = _bullets([str(i) for i in (inp.get("affected_ips") or [])])
+    llm_lines = summarize_llm_payload(inp.get("llm_payload"), max_items=16)
+    runbook_lines = format_runbook_steps(
+        inp.get("runbook_steps") if isinstance(inp.get("runbook_steps"), list) else [],
+        limit=25,
+    )
+    procedure_lines = format_runbook_procedure(
+        inp.get("runbook_procedure") if isinstance(inp.get("runbook_procedure"), list) else []
+    )
     created = inp.get("created_at")
     if isinstance(created, datetime):
         event_date = created.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -220,13 +444,15 @@ def _persian_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
     lines: list[str] = [
         "# گزارش رخداد سایبری",
         "",
-        f"جهت ارائه به  ",
-        f"**{_clean(inp.get('audience'), limit=120)}**",
+        "جهت ارائه به  ",
+        f"**{_handoff_value(inp.get('audience'))}**",
         "",
-        f"تهیه شده توسط  ",
-        f"**{_clean(inp.get('prepared_by'), limit=120)}**",
+        "تهیه شده توسط  ",
+        f"**{_handoff_value(inp.get('prepared_by'))}**",
         "",
-        f"**پروژه:** {_clean(inp.get('project_name'), limit=80)}  ",
+        f"**پروژه:** {_handoff_value(inp.get('project_name'))}  ",
+        f"**کارشناس شیفت:** {_handoff_value(inp.get('analyst'))}  ",
+        f"**تایید توسط:** {_handoff_value(inp.get('approved_by'))}  ",
         f"**تاریخ رخداد:** {event_date}  ",
         f"**تاریخ گزارش:** {generated_at.strftime('%Y-%m-%d %H:%M UTC')}  ",
         f"**شناسه هشدار:** `{_clean(inp.get('id'), limit=80)}`  ",
@@ -240,17 +466,32 @@ def _persian_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
     ]
     if meaning:
         lines.append(meaning)
+    elif inv:
+        para = next(
+            (p.strip() for p in inv.split("\n\n") if p.strip() and not p.strip().startswith("#")),
+            "",
+        )
+        lines.append(para[:2_500] if para else "شرح تفصیلی در بخش یافته‌های بررسی هوش مصنوعی آمده است.")
     else:
         lines.append(
             "این هشدار توسط تحلیل‌گر به‌عنوان true positive ثبت شده است. "
-            "شرح تکمیلی باید بر اساس رویدادهای خام و شواهد میزبان تکمیل شود."
+            "برای تکمیل شرح، Explain و Investigate را اجرا کنید تا شواهد LLM Payload "
+            "و مراحل Runbook وارد گزارش شود."
         )
 
     lines.extend(["", "## جزئیات رویداد", ""])
-    if details and details != meaning:
-        lines.append(details)
+    if expl_md and expl_md != meaning:
+        # Keep FA details readable: prefer meaning + structured evidence over raw EN markdown dump
+        lines.append(
+            "توضیح کامل تشخیص (از Ambient Copilot) در بخش انگلیسی گزارش آمده است؛ "
+            "خلاصه‌ای از شواهد curated در ادامه آمده است."
+        )
+    if llm_lines:
+        lines.append("### شواهد LLM Payload")
+        for item in llm_lines:
+            lines.append(f"- {item}")
     detail_bits: list[str] = []
-    source = _clean(inp.get("source") or inp.get("rule_name"), limit=160)
+    source = _clean(inp.get("source"), limit=160)
     if source:
         detail_bits.append(f"منبع تشخیص: `{source}`")
     if hosts:
@@ -263,10 +504,32 @@ def _persian_section(inp: dict[str, Any], *, generated_at: datetime) -> str:
     if detail_bits:
         for bit in detail_bits:
             lines.append(f"- {bit}")
-    elif not (details and details != meaning):
+    elif not llm_lines:
         lines.append(
-            "در اسنپ‌شات فعلی هشدار، فیلدهای میزبان/IP/کاربر یا IOC کامل نشده است؛ "
-            "برای تکمیل جزئیات باید رویدادهای خام SIEM و لاگ‌های مرتبط استخراج شود."
+            "در اسنپ‌شات هشدار، موجودیت/IOC کامل نیست؛ از LLM Payload و رویدادهای خام "
+            "برای تکمیل جزئیات استفاده کنید."
+        )
+
+    if procedure_lines or runbook_lines:
+        lines.extend(["", "## مراحل Runbook / گردش پاسخ", ""])
+        if procedure_lines:
+            lines.append("### وضعیت رویه")
+            lines.extend(procedure_lines)
+            lines.append("")
+        if runbook_lines:
+            lines.append("### گام‌های ثبت‌شده")
+            lines.extend(runbook_lines)
+
+    if inv:
+        lines.extend(
+            [
+                "",
+                "## یافته‌های بررسی هوش مصنوعی",
+                "",
+                "متن کامل بررسی در بخش انگلیسی (AI Investigation) آمده است. "
+                "خلاصه اجرایی همان بخش مبنای تصمیم‌گیری این گزارش است.",
+                "",
+            ]
         )
 
     lines.extend(["", "## اقدامات پیشنهادی", ""])
@@ -323,3 +586,15 @@ def severity_label_fa(severity: str) -> str:
 
 def status_label_fa(status: str) -> str:
     return _status_fa(status)
+
+
+def normalize_handoff_meta(payload: dict[str, Any] | None) -> dict[str, str]:
+    """Sanitize operator-supplied handoff header fields."""
+    out: dict[str, str] = {k: "" for k in _HANDOFF_KEYS}
+    if not isinstance(payload, dict):
+        return out
+    for key in _HANDOFF_KEYS:
+        raw = payload.get(key)
+        if isinstance(raw, str):
+            out[key] = raw.strip()[:160]
+    return out
