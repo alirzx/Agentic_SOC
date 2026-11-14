@@ -397,7 +397,10 @@ async def _tier2_already_ran(
                 SELECT 1 FROM alerts
                  WHERE tenant_id = :tid
                    AND id = :sid
-                   AND enrichment_data ? 'tier2_runbook'
+                   AND (
+                         enrichment_data ? 'tier2_runbook'
+                      OR enrichment_data ? 'tier2_adaptive'
+                   )
                  LIMIT 1
                 """
             ).bindparams(tid=tenant_id, sid=alert_id)
@@ -413,7 +416,11 @@ async def _tier2_already_ran(
                  WHERE tenant_id = :tid
                    AND subject_type = 'alert'
                    AND subject_id = :sid
-                   AND action_name = 'tier2_extract_ips'
+                   AND (
+                         action_name = 'tier2_extract_ips'
+                      OR action_name = 'tier2_alert_context'
+                      OR action_name = 'tier2_entity_extraction'
+                   )
                  LIMIT 1
                 """
             ).bindparams(tid=tenant_id, sid=alert_id)
@@ -422,21 +429,44 @@ async def _tier2_already_ran(
     return row is not None
 
 
+def _tier2_catalog_for_response(latest: dict[str, Any]) -> list[dict[str, str]]:
+    """Prefer adaptive 8-stage catalog when flag on or adaptive steps already present."""
+    from app.services.tier2_ip_pivot import TIER2_RUNBOOK_STEPS, tier2_step_catalog
+
+    adaptive_names = {
+        "tier2_alert_context",
+        "tier2_entity_extraction",
+        "tier2_domain_classification",
+        "tier2_related_discovery",
+        "tier2_correlation_analysis",
+        "tier2_case_management",
+        "tier2_final_report",
+    }
+    if latest.keys() & adaptive_names:
+        from app.services.tier2_adaptive.engine import adaptive_step_catalog
+
+        return adaptive_step_catalog()
+    catalog = tier2_step_catalog()
+    if catalog and catalog[0].get("action_name") == "tier2_alert_context":
+        return catalog
+    return [dict(item) for item in TIER2_RUNBOOK_STEPS]
+
+
 async def _build_tier2_steps_response(
     db: DBSession,
     *,
     tenant_id: uuid.UUID,
     alert_id: uuid.UUID,
 ) -> dict[str, Any]:
-    from app.services.tier2_ip_pivot import TIER2_RUNBOOK_STEPS
-
     latest: dict[str, Any] = {}
+    adaptive_meta: dict[str, Any] | None = None
     # 1) Alert enrichment snapshot (authoritative when Runbook ledger is disabled).
     snap_row = (
         await db.execute(
             text(
                 """
-                SELECT enrichment_data->'tier2_runbook' AS snap
+                SELECT enrichment_data->'tier2_runbook' AS snap,
+                       enrichment_data->'tier2_adaptive' AS adaptive
                   FROM alerts
                  WHERE tenant_id = :tid AND id = :sid
                  LIMIT 1
@@ -445,6 +475,8 @@ async def _build_tier2_steps_response(
         )
     ).mappings().first()
     snap = snap_row["snap"] if snap_row else None
+    if snap_row and isinstance(snap_row.get("adaptive"), dict):
+        adaptive_meta = snap_row["adaptive"]
     if isinstance(snap, dict):
         for step in snap.get("steps") or []:
             if not isinstance(step, dict):
@@ -480,23 +512,39 @@ async def _build_tier2_steps_response(
                 "seq": step.seq,
             }
 
+    catalog = _tier2_catalog_for_response(latest)
     steps = []
-    for item in TIER2_RUNBOOK_STEPS:
+    for item in catalog:
         hit = latest.get(item["action_name"])
+        status = hit["status"] if hit else "pending"
         steps.append(
             {
                 **item,
-                "status": hit["status"] if hit else "pending",
+                "status": status,
                 "summary": hit["summary"] if hit else "Not run yet",
                 "detail": hit.get("detail") if hit else None,
                 "occurred_at": hit.get("occurred_at") if hit else None,
-                "has_result": bool(hit and hit["status"] in {"recorded", "executed"}),
+                "has_result": bool(
+                    hit
+                    and hit["status"]
+                    in {
+                        "recorded",
+                        "executed",
+                        "completed",
+                        "partial",
+                        "not_available",
+                        "no_results",
+                        "skipped",
+                    }
+                ),
             }
         )
     return {
         "alert_id": str(alert_id),
         "steps": steps,
         "ran": any(s["status"] != "pending" for s in steps),
+        "adaptive": adaptive_meta,
+        "stage_count": len(steps),
     }
 
 

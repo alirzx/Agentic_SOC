@@ -131,6 +131,14 @@ class Correlator:
         aid = str(alert.id)
         if aid not in incident.alert_ids:
             incident.alert_ids.append(aid)
+            incident.membership_history.append(
+                {
+                    "action": "added",
+                    "alert_id": aid,
+                    "at": datetime.utcnow().isoformat(),
+                    "correlation_key": alert.correlation_key(),
+                }
+            )
         incident.severity = _max_severity(incident.severity, alert.severity)
         observed = alert.event_time or alert.created_at or datetime.utcnow()
         if incident.last_seen is None or observed > incident.last_seen:
@@ -154,6 +162,37 @@ class Correlator:
         if corr_key not in incident.correlation_keys:
             incident.correlation_keys.append(corr_key)
 
+        # Explainable reasons for this merge (entity:tactic key is the engine;
+        # reasons are audit metadata — alerts are never hidden).
+        reasons = []
+        entity = alert.src_ip or alert.hostname or alert.username or alert.domain
+        if entity:
+            reasons.append({"type": "shared_primary_entity", "value": str(entity)})
+        if alert.mitre_tactics:
+            reasons.append(
+                {"type": "shared_tactic", "value": str(alert.mitre_tactics[0])}
+            )
+        incident.correlation_reasons = reasons
+        incident.correlation_score = 0.7 if reasons else 0.5
+        incident.correlation_version = "corr:v1"
+        return incident
+
+    async def remove_alert(
+        self, incident: IncidentSummary, alert_id: str
+    ) -> IncidentSummary:
+        """Unlink an alert from an incident without deleting the alert."""
+        aid = str(alert_id)
+        incident.alert_ids = [x for x in incident.alert_ids if x != aid]
+        incident.alert_count = max(0, len(incident.alert_ids))
+        incident.membership_history.append(
+            {
+                "action": "removed",
+                "alert_id": aid,
+                "at": datetime.utcnow().isoformat(),
+            }
+        )
+        await self._save_incident(incident)
+        await self._persist_durable(incident, status="open")
         return incident
 
     async def _persist_durable(self, incident: IncidentSummary, *, status: str) -> None:

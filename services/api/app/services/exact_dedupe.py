@@ -1,10 +1,12 @@
-"""Collapse display-identical duplicate alerts and cases within a tenant.
+"""Collapse repeated logical alerts and cases within a tenant.
 
-Analyst-facing surfaces (SOC Funnel + Alerts) show many ESCU rows that look
-identical even when ``dedup_hash`` / ``source_event_ids`` differ. This module
-collapses those by **display fingerprint** (title, severity, rule, entities,
-disposition), keeps one canonical alert, and soft-marks losers as
-``funnel_stage=deduplicated`` (visible in the Deduplicated board column).
+Layer-2 (``AISOC_ALERT_DEDUP_V2``, default on): entity-aware
+``alert_logical_key`` — excludes severity/disposition; different hosts/users
+stay separate; configurable time window (default 15m). Occurrences are
+preserved (``canonical_alert_id``, ``alert_occurrences`` when available).
+
+Legacy display fingerprint (``alert_display_key``) remains for shadow mode and
+when V2 is disabled.
 
 Cases from the agentic funnel that share title+severity are still hard-merged.
 """
@@ -27,6 +29,24 @@ _PRIMARY_ALERT_RE = re.compile(
 _LINKED_COUNT_RE = re.compile(r"Linked alerts:\s*\d+", re.IGNORECASE)
 _CONF_RE = re.compile(r"confidence=\d+(?:\.\d+)?", re.IGNORECASE)
 _DELETE_CHUNK = 400
+_DEFAULT_WINDOW_SECONDS = 900
+
+
+def _dedup_flags() -> tuple[bool, bool, int]:
+    """Return (v2_enabled, shadow, window_seconds)."""
+    try:
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        v2 = bool(getattr(settings, "AISOC_ALERT_DEDUP_V2", True))
+        shadow = bool(getattr(settings, "AISOC_DEDUP_SHADOW", False))
+        window = int(
+            getattr(settings, "AISOC_ALERT_DEDUP_WINDOW_SECONDS", _DEFAULT_WINDOW_SECONDS)
+            or _DEFAULT_WINDOW_SECONDS
+        )
+        return v2, shadow, max(1, window)
+    except Exception:  # noqa: BLE001 — tests without settings
+        return True, False, _DEFAULT_WINDOW_SECONDS
 
 
 def normalize_case_description(description: str | None, *, created_by: str | None) -> str:
@@ -146,33 +166,42 @@ async def _mark_alerts_deduplicated(
     tenant_id: uuid.UUID,
     loser_ids: list[uuid.UUID],
     canonical_id: uuid.UUID,
+    preserve_case_membership: bool = True,
+    logical_key: str | None = None,
 ) -> None:
-    """Soft-collapse losers into the Deduplicated funnel column (keep the row)."""
+    """Soft-collapse losers into the Deduplicated funnel column (keep the row).
+
+    V2 preserves case membership so Case/Tier-2 aggregation does not lose
+    alerts. Legacy mode may still clear ``case_id`` when
+    ``preserve_case_membership=False``.
+    """
     if not loser_ids:
         return
     for i in range(0, len(loser_ids), _DELETE_CHUNK):
         chunk = loser_ids[i : i + _DELETE_CHUNK]
         ids = [str(x) for x in chunk]
+        if not preserve_case_membership:
+            await db.execute(
+                text(
+                    """
+                    UPDATE aisoc_cases
+                       SET alert_ids = ARRAY(
+                             SELECT x FROM unnest(alert_ids) AS t(x)
+                              WHERE NOT (x = ANY(CAST(:ids AS uuid[])))
+                           ),
+                           updated_at = now()
+                     WHERE tenant_id = :tid
+                       AND alert_ids && CAST(:ids AS uuid[])
+                    """
+                ).bindparams(tid=tenant_id, ids=ids)
+            )
+        case_clause = "" if preserve_case_membership else "case_id = NULL,"
         await db.execute(
             text(
-                """
-                UPDATE aisoc_cases
-                   SET alert_ids = ARRAY(
-                         SELECT x FROM unnest(alert_ids) AS t(x)
-                          WHERE NOT (x = ANY(CAST(:ids AS uuid[])))
-                       ),
-                       updated_at = now()
-                 WHERE tenant_id = :tid
-                   AND alert_ids && CAST(:ids AS uuid[])
-                """
-            ).bindparams(tid=tenant_id, ids=ids)
-        )
-        await db.execute(
-            text(
-                """
+                f"""
                 UPDATE alerts
                    SET funnel_stage = 'deduplicated',
-                       case_id = NULL,
+                       {case_clause}
                        tags = COALESCE(tags, '[]'::jsonb) || CAST(:extra AS jsonb),
                        updated_at = now()
                  WHERE tenant_id = :tid
@@ -183,7 +212,11 @@ async def _mark_alerts_deduplicated(
                 tid=tenant_id,
                 ids=ids,
                 extra=json.dumps(
-                    ["deduplicated", f"deduplicated_into:{canonical_id}"]
+                    [
+                        "deduplicated",
+                        f"deduplicated_into:{canonical_id}",
+                        "occurrence_of_logical_alert",
+                    ]
                 ),
             )
         )
@@ -197,6 +230,122 @@ async def _mark_alerts_deduplicated(
                 """
             ).bindparams(tid=tenant_id, cid=canonical_id, n=len(chunk))
         )
+        # Migration 074 columns — best-effort.
+        try:
+            await db.execute(
+                text(
+                    """
+                    UPDATE alerts
+                       SET canonical_alert_id = :cid,
+                           alert_dedup_key = COALESCE(:lkey, alert_dedup_key),
+                           updated_at = now()
+                     WHERE tenant_id = :tid
+                       AND id = ANY(CAST(:ids AS uuid[]))
+                    """
+                ).bindparams(
+                    tid=tenant_id, ids=ids, cid=canonical_id, lkey=logical_key
+                )
+            )
+            await db.execute(
+                text(
+                    """
+                    UPDATE alerts
+                       SET alert_dedup_key = COALESCE(:lkey, alert_dedup_key),
+                           updated_at = now()
+                     WHERE tenant_id = :tid AND id = :cid
+                    """
+                ).bindparams(tid=tenant_id, cid=canonical_id, lkey=logical_key)
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        # Best-effort occurrence rows (table may be absent pre-migration 074).
+        try:
+            for loser_id in chunk:
+                await db.execute(
+                    text(
+                        """
+                        INSERT INTO alert_occurrences (
+                            id, tenant_id, alert_id, source_alert_id,
+                            source_event_ids, seen_at, occurrence_meta
+                        )
+                        SELECT
+                            :oid,
+                            :tid,
+                            :cid,
+                            :sid,
+                            COALESCE(a.source_event_ids, '[]'::jsonb),
+                            COALESCE(a.event_time, a.created_at, now()),
+                            CAST(:meta AS jsonb)
+                          FROM alerts a
+                         WHERE a.id = :sid AND a.tenant_id = :tid
+                        """
+                    ).bindparams(
+                        oid=uuid.uuid4(),
+                        tid=tenant_id,
+                        cid=canonical_id,
+                        sid=loser_id,
+                        meta=json.dumps(
+                            {
+                                "layer": "alert_dedup_v2",
+                                "logical_key": logical_key,
+                            }
+                        ),
+                    )
+                )
+        except Exception:  # noqa: BLE001 — pre-074 schema
+            pass
+
+
+def _group_alerts_for_dedupe(
+    rows: list[dict[str, Any]],
+    *,
+    v2: bool,
+    window_seconds: int,
+) -> dict[str, list[dict[str, Any]]]:
+    """Build collapse groups: V2 logical key + time window, or legacy display key."""
+    from app.services.dedup.alert_identity import (
+        alert_logical_key,
+        within_dedup_window,
+    )
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    if not v2:
+        for r in rows:
+            groups.setdefault(alert_display_key(r), []).append(r)
+        return groups
+
+    # V2: bucket by logical key, then only collapse members inside the window
+    # of the canonical (oldest) row — out-of-window stays independent.
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        r = dict(r)
+        r["_logical_key"] = alert_logical_key({**r, "tenant_id": r.get("tenant_id")})
+        by_key.setdefault(r["_logical_key"], []).append(r)
+
+    for key, members in by_key.items():
+        if len(members) < 2:
+            groups[key] = members
+            continue
+        members_sorted = sorted(
+            members,
+            key=lambda m: m.get("created_at") or m.get("event_time") or 0,
+        )
+        # Greedy window clusters from earliest.
+        clusters: list[list[dict[str, Any]]] = []
+        for row in members_sorted:
+            placed = False
+            for cluster in clusters:
+                if within_dedup_window(
+                    cluster[0], row, window_seconds=window_seconds
+                ):
+                    cluster.append(row)
+                    placed = True
+                    break
+            if not placed:
+                clusters.append([row])
+        for idx, cluster in enumerate(clusters):
+            groups[f"{key}#w{idx}"] = cluster
+    return groups
 
 
 async def dedupe_exact_alerts(
@@ -205,13 +354,12 @@ async def dedupe_exact_alerts(
     tenant_id: uuid.UUID,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Soft-collapse display-identical alerts into the Deduplicated column.
+    """Soft-collapse repeated logical alerts into the Deduplicated column.
 
-    Keeps one canonical row per display group in its current stage; marks the
-    rest ``funnel_stage=deduplicated`` (visible on the SOC Funnel board) and
-    bumps ``occurrence_count`` on the survivor. Rows already marked
-    ``deduplicated`` are left alone.
+    V2 (default): entity-aware key + time window; preserves case membership.
+    Legacy: title|severity|rule|disposition display key.
     """
+    v2, shadow, window_seconds = _dedup_flags()
     rows = (
         await db.execute(
             text(
@@ -219,7 +367,8 @@ async def dedupe_exact_alerts(
                 SELECT id, title, severity, disposition, case_id, dedup_hash,
                        rule_id, rule_name, source_event_ids, affected_hosts,
                        affected_ips, affected_users, ai_summary, funnel_stage,
-                       created_at
+                       created_at, event_time, connector_type, llm_payload,
+                       raw_event, enrichment_data, iocs, mitre_tactics
                   FROM alerts
                  WHERE tenant_id = :tid
                    AND COALESCE(funnel_stage, 'ingested') <> 'deduplicated'
@@ -228,22 +377,24 @@ async def dedupe_exact_alerts(
         )
     ).mappings().all()
 
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        r = dict(row)
-        # Always use display key so distinct Splunk event ids still collapse.
-        # Also union same dedup_hash into that group via secondary index.
-        key = alert_display_key(r)
-        groups.setdefault(key, []).append(r)
+    row_dicts = [{**dict(r), "tenant_id": str(tenant_id)} for r in rows]
+    shadow_report: dict[str, Any] | None = None
+    if shadow:
+        from app.services.dedup.shadow import compare_grouping
 
-    # Second pass: if two groups share a dedup_hash member, merge them
-    # (defensive — rare when display keys already match).
+        shadow_report = compare_grouping(row_dicts, window_seconds=window_seconds)
+
+    groups = _group_alerts_for_dedupe(
+        row_dicts, v2=v2, window_seconds=window_seconds
+    )
+
+    # Same dedup_hash still merges (true Layer-1 twins) even across display keys.
     hash_to_key: dict[str, str] = {}
     merge_into: dict[str, str] = {}
     for key, members in groups.items():
         for m in members:
             h = m.get("dedup_hash")
-            if not h:
+            if not h or str(h).startswith("legacy_dup:"):
                 continue
             hs = str(h)
             if hs in hash_to_key and hash_to_key[hs] != key:
@@ -261,7 +412,6 @@ async def dedupe_exact_alerts(
     collapsed: list[str] = []
     kept: list[str] = []
     for members in groups.values():
-        # Deduplicate member ids if merge created overlaps
         by_id: dict[str, dict[str, Any]] = {str(m["id"]): m for m in members}
         unique = list(by_id.values())
         if len(unique) < 2:
@@ -282,7 +432,9 @@ async def dedupe_exact_alerts(
                             UPDATE alerts SET case_id = :cid, updated_at = now()
                              WHERE id = :id AND tenant_id = :tid
                             """
-                        ).bindparams(cid=m["case_id"], id=canonical["id"], tid=tenant_id)
+                        ).bindparams(
+                            cid=m["case_id"], id=canonical["id"], tid=tenant_id
+                        )
                     )
                     break
         merged = merge_alert_entities(unique)
@@ -304,26 +456,35 @@ async def dedupe_exact_alerts(
                 users=json.dumps(merged["affected_users"]),
             )
         )
+        logical_key = canonical.get("_logical_key")
+        if not logical_key and v2:
+            from app.services.dedup.alert_identity import alert_logical_key
+
+            logical_key = alert_logical_key(canonical)
         await _mark_alerts_deduplicated(
             db,
             tenant_id=tenant_id,
             loser_ids=loser_ids,
             canonical_id=canonical["id"],
+            preserve_case_membership=v2,
+            logical_key=logical_key if isinstance(logical_key, str) else None,
         )
 
-    return {
+    result: dict[str, Any] = {
         "groups_collapsed": sum(
-            1
-            for m in groups.values()
-            if len({str(x["id"]) for x in m}) >= 2
+            1 for m in groups.values() if len({str(x["id"]) for x in m}) >= 2
         ),
-        # Back-compat key for the existing UI ("alerts deleted"); now soft-marked.
         "alerts_deleted": len(collapsed),
         "alerts_deduplicated": len(collapsed),
         "alerts_kept": len(kept),
         "deleted_ids": collapsed[:50],
         "dry_run": dry_run,
+        "dedup_mode": "v2" if v2 else "legacy_display",
+        "window_seconds": window_seconds if v2 else None,
     }
+    if shadow_report is not None:
+        result["shadow"] = shadow_report
+    return result
 
 
 async def dedupe_exact_cases(

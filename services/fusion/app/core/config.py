@@ -41,6 +41,16 @@ class Settings(BaseSettings):
         default=False,
         alias="AISOC_ALERT_DISPLAY_DEDUP",
     )
+    # Layer-3: require explainable entity overlap before Redis correlation merge
+    # expands beyond the classic entity:tactic key (shadow scoring always on).
+    correlation_score_enabled: bool = Field(
+        default=True,
+        alias="AISOC_CORRELATION_SCORE_ENABLED",
+    )
+    correlation_score_threshold: float = Field(
+        default=0.55,
+        alias="AISOC_CORRELATION_SCORE_THRESHOLD",
+    )
 
     # Phase A1 — archive every normalized OCSF event into the ClickHouse event
     # lake (app/services/lake_writer.py). Independent of promotion: an event

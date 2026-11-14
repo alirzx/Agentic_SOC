@@ -207,7 +207,7 @@ export function SocFunnelBoardView() {
       const alertMoved =
         result.alerts.alerts_deduplicated ?? result.alerts.alerts_deleted ?? 0;
       setBackfillMsg(
-        `Deduplicated — alerts: ${alertMoved} moved to Deduplicated ` +
+        `Alert occurrence — alerts: ${alertMoved} marked as occurrences ` +
           `(${result.alerts.groups_collapsed} groups), cases: ${result.cases.cases_deleted} merged ` +
           `(${result.cases.groups_collapsed} groups)`,
       );
@@ -285,7 +285,7 @@ export function SocFunnelBoardView() {
             disabled={busy}
             onClick={() => void runDedupe()}
             className="text-xs px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-100 hover:bg-orange-500/25 disabled:opacity-50"
-            title="Collapse same title+rule (+union entities) into Deduplicated; auto-runs on every board load"
+            title="Collapse same logical alert (entity-aware, 15m window) into Alert occurrence; auto-runs on board load"
           >
             {busy ? 'Running…' : 'Remove duplicates'}
           </button>

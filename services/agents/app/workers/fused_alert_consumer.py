@@ -337,6 +337,36 @@ class FusedAlertTriageWorker:
     async def triage(self, message: dict[str, Any]) -> dict[str, Any] | None:
         """Auto-triage one fused alert. Read-only (copilot): never dispatches a
         response. Returns a verdict summary dict, or None if unprocessable."""
+        # Layer-1: Fusion already absorbed this source event — skip LLM/triage
+        # spend unless operators disable AISOC_SKIP_FUSION_DUPLICATE_TRIAGE.
+        if isinstance(message, dict):
+            decision = str(
+                message.get("fusion_decision")
+                or (message.get("fusion") or {}).get("decision")
+                or ""
+            ).strip().lower()
+            skip_dup = os.environ.get(
+                "AISOC_SKIP_FUSION_DUPLICATE_TRIAGE", "true"
+            ).strip().lower() not in {"0", "false", "no", "off"}
+            if skip_dup and decision in {"duplicate", "duplicated", "deduplicated"}:
+                _METRICS["deduplicated"] += 1
+                logger.info(
+                    "auto_triage_worker.skip_fusion_duplicate",
+                    fusion_decision=decision,
+                    alert_id=str(
+                        message.get("alert_row_id")
+                        or message.get("id")
+                        or (message.get("alert") or {}).get("id")
+                        or ""
+                    ),
+                )
+                return {
+                    "incident_id": str(message.get("incident_id") or message.get("id") or ""),
+                    "skipped": True,
+                    "reason": "fusion_duplicate",
+                    "fusion_decision": decision,
+                    "response_dispatched": False,
+                }
         # Phase B4 — apply business-context rules on the post-fusion alert BEFORE
         # any triage work. A suppress rule drops the alert (no triage spend); a
         # severity/route/tag rule mutates the alert the agent reasons over.

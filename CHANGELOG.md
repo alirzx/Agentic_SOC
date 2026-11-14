@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Three-layer alert deduplication (v2).** Soft Funnel collapse no longer
+  keys on `title|severity|rule|disposition` (which merged distinct hosts).
+  Layer-2 uses entity-aware `alert:v1:` fingerprints + a 15-minute window
+  (`AISOC_ALERT_DEDUP_V2`, default on). Migration `074` adds
+  `UNIQUE(tenant_id, dedup_hash)` after non-destructive twin reconciliation,
+  `alert_occurrences`, and correlation/category columns. Agents skip
+  `fusion_decision=duplicate` envelopes. Funnel column label:
+  **Alert occurrence**. See `docs/audits/THREE_LAYER_DEDUP_IMPLEMENTATION_REPORT.md`.
+  Production DB migration / live flag flip still require operator approval.
+
 ### Fixed
 
 - **SOC Funnel backfill 500 — alerts stuck at Ingested.** Sibling/campaign

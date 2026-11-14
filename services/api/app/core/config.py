@@ -346,6 +346,24 @@ class Settings(BaseSettings):
         return value
 
     # ------------------------------------------------------------------
+    # Tier-2 Adaptive Investigation Engine — feature flags.
+    #
+    # Default OFF in all environments. When enabled, Investigate/Runbook Tier-2
+    # uses the entity-aware adaptive path. Shadow mode evaluates adaptive
+    # without Case mutations so legacy remains the mutating path.
+    # ------------------------------------------------------------------
+    TIER2_ADAPTIVE_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("AISOC_TIER2_ADAPTIVE", "TIER2_ADAPTIVE_ENABLED"),
+    )
+    TIER2_ADAPTIVE_SHADOW: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "AISOC_TIER2_ADAPTIVE_SHADOW", "TIER2_ADAPTIVE_SHADOW"
+        ),
+    )
+
+    # ------------------------------------------------------------------
     # Agents service — internal calls.
     #
     # The API owns the analyst session; the agents service owns outcome memory
@@ -574,6 +592,16 @@ class Settings(BaseSettings):
     AISOC_FEATURE_CSPM: bool = True  # Cloud security posture
     AISOC_FEATURE_IDENTITY_GRAPH: bool = True  # Identity-first correlation graph
     AISOC_FEATURE_BOARD_REPORTS: bool = True  # Auto-generated monthly board reports
+
+    # Three-layer deduplication (see app/services/dedup/).
+    # V2 replaces soft display fingerprint (title|severity|rule|disposition)
+    # with entity-aware logical keys + time window. Default ON after audit;
+    # set AISOC_ALERT_DEDUP_V2=false to restore legacy soft-collapse.
+    AISOC_ALERT_DEDUP_V2: bool = True
+    AISOC_DEDUP_SHADOW: bool = False  # compare legacy vs v2 grouping (no extra writes)
+    AISOC_ALERT_DEDUP_WINDOW_SECONDS: int = 900  # 15 minutes
+    # Skip agent triage when fusion already marked the envelope as DUPLICATE.
+    AISOC_SKIP_FUSION_DUPLICATE_TRIAGE: bool = True
 
     # Drift sweep cadence (hours). Used by services/purple-team scheduler when
     # AISOC_FEATURE_DETECTION_DRIFT is True. Defaults to 168h (weekly).

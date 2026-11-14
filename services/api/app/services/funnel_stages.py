@@ -44,7 +44,9 @@ STAGE_LABELS: dict[str, str] = {
     INGESTED: "Ingested",
     TRIAGED: "Triaged",
     SUPPRESSED: "Suppressed",
-    DEDUPLICATED: "Deduplicated",
+    # Layer-2 alert occurrence (repeated logical alert) — NOT correlation.
+    # Correlated independent alerts keep their stage and carry fusion_incident_id.
+    DEDUPLICATED: "Alert occurrence",
     INVESTIGATING: "Investigating",
     CASED: "Cased",
     READY_FOR_JIRA: "Ready for Jira",

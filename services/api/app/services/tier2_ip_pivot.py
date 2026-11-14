@@ -882,7 +882,64 @@ async def run_tier2_investigate_preflight(
     hours: int = _DEFAULT_HOURS,
     investigate_queued: bool = True,
 ) -> tuple[Tier2PivotResult, list[dict[str, Any]]]:
-    """Full Tier-2 preflight used by Investigate and Runbook Tier-2 button."""
+    """Full Tier-2 preflight used by Investigate and Runbook Tier-2 button.
+
+    When ``AISOC_TIER2_ADAPTIVE`` is enabled, delegates to the adaptive engine
+    (never IP-gated). Shadow mode runs adaptive for enrichment without Case
+    mutations, then continues the legacy path.
+    """
+    from app.services.tier2_adaptive.feature_flags import (
+        selected_tier2_path,
+        tier2_adaptive_enabled,
+        tier2_adaptive_shadow,
+    )
+
+    path = selected_tier2_path()
+    logger.info("tier2.preflight.path", path=path)
+
+    if tier2_adaptive_enabled():
+        from app.services.tier2_adaptive.engine import run_adaptive_investigate_preflight
+
+        adaptive, summaries = await run_adaptive_investigate_preflight(
+            db,
+            alert=alert,
+            tenant_id=tenant_id,
+            hours=hours,
+            investigate_queued=investigate_queued,
+            shadow=False,
+        )
+        # Adapt to legacy return shape for API compatibility.
+        return (
+            Tier2PivotResult(
+                src_ips=adaptive.entities.values("ip")[:8],
+                dest_ips=adaptive.entities.values("ip")[:8],
+                related_alert_ids=adaptive.related_alert_ids,
+                case_id=adaptive.case_id,
+                case_created=adaptive.case_created,
+                case_extended=adaptive.case_extended,
+                window_hours=adaptive.window_hours,
+                notes=adaptive.notes,
+            ),
+            summaries,
+        )
+
+    if tier2_adaptive_shadow():
+        # Evaluate adaptive without Case writes; legacy path remains authoritative.
+        try:
+            from app.services.tier2_adaptive.engine import run_adaptive_pipeline_sync
+
+            shadow_result = run_adaptive_pipeline_sync(
+                alert, hours=hours, shadow=True
+            )
+            logger.info(
+                "tier2.adaptive.shadow",
+                profiles=shadow_result.profiles.names,
+                case_action=shadow_result.case_decision.action,
+                entities=len(shadow_result.entities.entities),
+            )
+        except Exception as exc:  # noqa: BLE001 — shadow must never break legacy
+            logger.warning("tier2.adaptive.shadow_failed", error_type=type(exc).__name__)
+
     alert_id = alert.id if hasattr(alert, "id") else uuid.UUID(str(alert["id"]))
     run_token = uuid.uuid4().hex[:12]
     ips = extract_alert_ips(alert)
@@ -1018,4 +1075,12 @@ async def run_tier2_investigate_preflight(
 
 def tier2_step_catalog() -> list[dict[str, str]]:
     """Static catalog for the Runbook UI before any run has executed."""
+    try:
+        from app.services.tier2_adaptive.feature_flags import tier2_adaptive_enabled
+        from app.services.tier2_adaptive.engine import adaptive_step_catalog
+
+        if tier2_adaptive_enabled():
+            return adaptive_step_catalog()
+    except Exception:  # noqa: BLE001 — catalog must never raise
+        pass
     return [dict(item) for item in TIER2_RUNBOOK_STEPS]

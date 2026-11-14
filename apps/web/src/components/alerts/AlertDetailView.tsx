@@ -26,6 +26,21 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { RunbookPage } from '@/components/runbook/RunbookPage';
 import { request } from '@/lib/api';
 import type { RunbookEnvelope } from '@/components/runbook/runbook.types';
+import {
+  TIER2_ADAPTIVE_PLACEHOLDER_STEPS,
+  type Tier2AdaptiveMeta,
+  type Tier2StepView,
+  adaptLegacyStepsIfNeeded,
+  correlationExplanations,
+  extractEntitiesFromAdaptive,
+  formatCaseDecision,
+  groupEntitiesByType,
+  isAdaptiveStepCatalog,
+  isMultiAlertInvestigation,
+  resolveTier2Placeholders,
+  tier2StatusLabel,
+  tier2StatusTone,
+} from '@/lib/tier2-adaptive';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1154,43 +1169,6 @@ function AnalystOverridePanel({
 // Shown when the alert has no llm_payload (common for simple-mode Splunk
 // connectors or custom SPL queries that don't produce the enriched payload).
 
-type Tier2StepView = {
-  action_name: string;
-  label: string;
-  status: string;
-  summary: string;
-  detail?: string | null;
-  has_result?: boolean;
-};
-
-const TIER2_PLACEHOLDER_STEPS: Tier2StepView[] = [
-  { action_name: 'tier2_extract_ips', label: '1. Extract src_ip / dest_ip', status: 'pending', summary: 'Waiting for first run…' },
-  { action_name: 'tier2_find_related', label: '2. Find related alerts (24h / dest_ip)', status: 'pending', summary: 'Waiting for first run…' },
-  { action_name: 'tier2_aggregate_case', label: '3. Aggregate into one Case', status: 'pending', summary: 'Waiting for first run…' },
-  { action_name: 'tier2_investigate', label: '4. Investigate on Case', status: 'pending', summary: 'Waiting for first run…' },
-  { action_name: 'tier2_case_report', label: '5. Case report scope', status: 'pending', summary: 'Waiting for first run…' },
-];
-
-function tier2StatusTone(status: string): string {
-  if (status === 'executed' || status === 'recorded') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-  }
-  if (status === 'skipped') {
-    return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
-  }
-  if (status === 'failed') {
-    return 'border-red-500/30 bg-red-500/10 text-red-300';
-  }
-  return 'border-slate-700/50 bg-slate-900/40 text-slate-400';
-}
-
-function tier2StatusLabel(status: string): string {
-  if (status === 'executed' || status === 'recorded') return 'Has result';
-  if (status === 'skipped') return 'Empty / skipped';
-  if (status === 'failed') return 'Failed';
-  return 'Pending';
-}
-
 function Tier2RunbookPanel({
   alertId,
   onLedgerChanged,
@@ -1198,7 +1176,8 @@ function Tier2RunbookPanel({
   alertId: string;
   onLedgerChanged?: () => void;
 }) {
-  const [steps, setSteps] = useState<Tier2StepView[]>(TIER2_PLACEHOLDER_STEPS);
+  const [steps, setSteps] = useState<Tier2StepView[]>(TIER2_ADAPTIVE_PLACEHOLDER_STEPS);
+  const [adaptive, setAdaptive] = useState<Tier2AdaptiveMeta | null>(null);
   const [booting, setBooting] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1217,6 +1196,7 @@ function Tier2RunbookPanel({
           steps: Tier2StepView[];
           ran?: boolean;
           auto_ran?: boolean;
+          adaptive?: Tier2AdaptiveMeta | null;
         }>(`/api/v1/runbook/alerts/${alertId}/tier2-steps?auto=true`);
         if (cancelled) return;
         const stillPending =
@@ -1229,12 +1209,14 @@ function Tier2RunbookPanel({
             ran?: boolean;
             auto_ran?: boolean;
             status?: string;
+            adaptive?: Tier2AdaptiveMeta | null;
           }>(`/api/v1/runbook/alerts/${alertId}/tier2-pivot?once=true`, {
             method: 'POST',
           });
         }
         if (cancelled) return;
-        setSteps(data.steps?.length ? data.steps : TIER2_PLACEHOLDER_STEPS);
+        setSteps(adaptLegacyStepsIfNeeded(resolveTier2Placeholders(data.steps)));
+        setAdaptive(data.adaptive || null);
         if (data.auto_ran || data.ran) {
           onLedgerChangedRef.current?.();
         }
@@ -1254,17 +1236,19 @@ function Tier2RunbookPanel({
     setRunning(true);
     setError(null);
     try {
-      const data = await request<{ steps?: Tier2StepView[] }>(
+      const data = await request<{ steps?: Tier2StepView[]; adaptive?: Tier2AdaptiveMeta | null }>(
         `/api/v1/runbook/alerts/${alertId}/tier2-pivot?once=false`,
         { method: 'POST' },
       );
       if (data.steps?.length) {
-        setSteps(data.steps);
+        setSteps(adaptLegacyStepsIfNeeded(data.steps));
+        setAdaptive(data.adaptive || null);
       } else {
-        const refresh = await request<{ steps: Tier2StepView[] }>(
+        const refresh = await request<{ steps: Tier2StepView[]; adaptive?: Tier2AdaptiveMeta | null }>(
           `/api/v1/runbook/alerts/${alertId}/tier2-steps?auto=false`,
         );
-        setSteps(refresh.steps?.length ? refresh.steps : TIER2_PLACEHOLDER_STEPS);
+        setSteps(adaptLegacyStepsIfNeeded(resolveTier2Placeholders(refresh.steps)));
+        setAdaptive(refresh.adaptive || null);
       }
       toast.success('Tier-2 steps re-run and saved');
       onLedgerChangedRef.current?.();
@@ -1277,13 +1261,23 @@ function Tier2RunbookPanel({
     }
   };
 
+  const adaptiveMode = isAdaptiveStepCatalog(steps);
+  const entities = extractEntitiesFromAdaptive(adaptive);
+  const entitiesByType = groupEntitiesByType(entities);
+  const corrLines = correlationExplanations(adaptive);
+  const multiAlert = isMultiAlertInvestigation(adaptive);
+
   return (
     <div className="rounded-lg border border-slate-800/70 bg-slate-950/40 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-200">Tier-2 Investigate · Runbook</h3>
+          <h3 className="text-sm font-semibold text-slate-200">
+            Tier-2 Investigate · {adaptiveMode ? 'Adaptive Runbook' : 'Runbook'}
+          </h3>
           <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
-            Extract IPs → related alerts (24h) → Case → Investigate → Case report.
+            {adaptiveMode
+              ? 'Alert context → entities → profiles → correlation → case → investigation → report. Missing IP is not an error.'
+              : 'Extract IPs → related alerts (24h) → Case → Investigate → Case report.'}{' '}
             Runs automatically once and is saved; use the button only to re-run.
           </p>
         </div>
@@ -1301,6 +1295,21 @@ function Tier2RunbookPanel({
       )}
       {booting && steps.every((s) => s.status === 'pending') ? (
         <p className="text-xs text-slate-500">Auto-running Tier-2 and loading results…</p>
+      ) : null}
+      {adaptive?.profiles && adaptive.profiles.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {adaptive.profiles.map((profile) => (
+            <span
+              key={profile}
+              className="rounded border border-slate-700/70 bg-slate-900/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300"
+            >
+              {profile}
+            </span>
+          ))}
+          <span className="rounded border border-slate-700/70 bg-slate-900/60 px-2 py-0.5 text-[10px] text-slate-400">
+            {multiAlert ? 'Multi-alert' : 'Single-alert'}
+          </span>
+        </div>
       ) : null}
       <ol className="space-y-2">
         {steps.map((step) => (
@@ -1323,6 +1332,58 @@ function Tier2RunbookPanel({
           </li>
         ))}
       </ol>
+      {Object.keys(entitiesByType).length > 0 ? (
+        <div className="rounded-lg border border-slate-800/60 bg-black/20 p-3 space-y-2">
+          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Extracted entities
+          </h4>
+          {Object.entries(entitiesByType).map(([type, items]) => (
+            <div key={type} className="text-[11px] text-slate-300">
+              <span className="font-medium text-slate-200">{type}</span>
+              <ul className="mt-1 space-y-0.5 pl-3">
+                {items.slice(0, 6).map((ent, idx) => (
+                  <li key={`${type}-${idx}`}>
+                    {ent.normalized_value}
+                    {ent.source_field ? (
+                      <span className="text-slate-500"> · {ent.source_field}</span>
+                    ) : null}
+                    {ent.confidence != null ? (
+                      <span className="text-slate-500"> · conf {ent.confidence}</span>
+                    ) : null}
+                    {ent.is_inferred ? (
+                      <span className="text-amber-400/80"> · inferred</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {adaptive?.case_decision ? (
+        <div className="rounded-lg border border-slate-800/60 bg-black/20 p-3 text-[11px] text-slate-300">
+          <h4 className="font-semibold uppercase tracking-wide text-slate-400">Case decision</h4>
+          <p className="mt-1">{formatCaseDecision(adaptive)}</p>
+        </div>
+      ) : null}
+      {corrLines.length > 0 ? (
+        <div className="rounded-lg border border-slate-800/60 bg-black/20 p-3 text-[11px] text-slate-300 space-y-1">
+          <h4 className="font-semibold uppercase tracking-wide text-slate-400">Correlation</h4>
+          {corrLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      ) : null}
+      {adaptive?.report?.timeline && adaptive.report.timeline.length > 0 ? (
+        <div className="rounded-lg border border-slate-800/60 bg-black/20 p-3 text-[11px] text-slate-300 space-y-1">
+          <h4 className="font-semibold uppercase tracking-wide text-slate-400">Evidence timeline</h4>
+          {adaptive.report.timeline.slice(0, 12).map((evt, idx) => (
+            <p key={`tl-${idx}`}>
+              {evt.ts || '—'} · {evt.kind || 'event'} · {evt.label || ''}
+            </p>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

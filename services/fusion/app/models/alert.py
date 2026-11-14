@@ -119,6 +119,13 @@ class RawAlert(BaseModel):
         event_ids = sorted(
             {str(x).strip() for x in (self.source_event_ids or []) if str(x).strip()}
         )
+        # Optional connector instance scopes Layer-1 only when present so
+        # existing Redis/PG fingerprints for the common path stay stable.
+        source_instance = getattr(self, "source_instance", None) or (
+            (self.raw_event or {}).get("source_instance")
+            if isinstance(getattr(self, "raw_event", None), dict)
+            else None
+        )
         if event_ids:
             fields: dict[str, Any] = {
                 "tenant_id": str(self.tenant_id),
@@ -137,6 +144,8 @@ class RawAlert(BaseModel):
                 "file_hash": self.file_hash,
                 "rule_id": self.rule_id,
             }
+        if source_instance:
+            fields["source_instance"] = str(source_instance).strip().lower()
         canonical = json.dumps(fields, sort_keys=True)
         return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -247,3 +256,8 @@ class IncidentSummary(BaseModel):
     correlation_keys: list[str] = Field(default_factory=list)
     first_seen: datetime = Field(default_factory=datetime.utcnow)
     last_seen: datetime = Field(default_factory=datetime.utcnow)
+    # Layer-3 explainability (migration 074 columns on fusion_incidents).
+    correlation_score: float | None = None
+    correlation_reasons: list[dict[str, Any]] = Field(default_factory=list)
+    correlation_version: str | None = "corr:v1"
+    membership_history: list[dict[str, Any]] = Field(default_factory=list)

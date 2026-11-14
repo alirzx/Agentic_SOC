@@ -75,6 +75,11 @@ class Alert(Base):
     entities: Mapped[list] = mapped_column(JSONB, default=list)
     dedup_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     occurrence_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Layer-2 logical identity + occurrence link (migration 074).
+    alert_dedup_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    canonical_alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    alert_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    alert_category_meta: Mapped[dict] = mapped_column(JSONB, default=dict)
     fusion_incident_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, index=True
     )
