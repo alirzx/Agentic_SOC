@@ -5,7 +5,19 @@ from __future__ import annotations
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.services.tier2_ip_pivot import extract_alert_ips
+from app.services.tier2_ip_pivot import (
+    TIER2_RUNBOOK_STEPS,
+    extract_alert_ips,
+    tier2_step_catalog,
+)
+
+
+def test_tier2_catalog_has_five_ordered_steps():
+    catalog = tier2_step_catalog()
+    assert len(catalog) == 5
+    assert catalog[0]["action_name"] == "tier2_extract_ips"
+    assert catalog[-1]["action_name"] == "tier2_case_report"
+    assert len(TIER2_RUNBOOK_STEPS) == 5
 
 
 def test_extract_prefers_llm_payload_dest_and_src():

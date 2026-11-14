@@ -247,8 +247,8 @@ export const RunbookActions: FC<{ steps: RunbookStep[] }> = ({ steps }) => (
           <div className="flex items-center gap-1.5 flex-wrap">
             <ActorBadge type={step.actor_type} label={step.actor_label} />
             <span className="text-slate-200 font-medium">
-              {kindLabel(step.kind)}
-              {step.action_name ? (
+              {actionLabel(step.action_name, step.kind)}
+              {step.action_name && !step.action_name.startsWith("tier2_") ? (
                 <span className="font-mono text-slate-400 ml-1">{step.action_name}</span>
               ) : null}
             </span>
@@ -301,8 +301,8 @@ export const RunbookTimeline: FC<{ steps: RunbookStep[] }> = ({ steps }) => (
           <div className="pb-4 flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-slate-200 font-medium">
-                {kindLabel(step.kind)}
-                {step.action_name ? (
+                {actionLabel(step.action_name, step.kind)}
+                {step.action_name && !step.action_name.startsWith("tier2_") ? (
                   <span className="font-mono text-slate-500 text-[10px] ml-1">{step.action_name}</span>
                 ) : null}
               </span>
@@ -327,11 +327,26 @@ export const RunbookTimeline: FC<{ steps: RunbookStep[] }> = ({ steps }) => (
   </div>
 );
 
+const TIER2_ACTION_LABELS: Record<string, string> = {
+  tier2_extract_ips: "Tier-2 · استخراج IP",
+  tier2_find_related: "Tier-2 · هشدارهای ۲۴ساعت",
+  tier2_aggregate_case: "Tier-2 · تجمیع Case",
+  tier2_investigate: "Tier-2 · Investigate",
+  tier2_case_report: "Tier-2 · گزارش کیس",
+};
+
 function kindLabel(kind: string | null | undefined): string {
   if (!kind) return "Action";
   return kind
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function actionLabel(actionName: string | null | undefined, kind: string): string {
+  if (actionName && TIER2_ACTION_LABELS[actionName]) {
+    return TIER2_ACTION_LABELS[actionName];
+  }
+  return kindLabel(kind);
 }
 
 function formatTime(iso: string): string {

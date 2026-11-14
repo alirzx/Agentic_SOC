@@ -384,6 +384,106 @@ def _validate_rule_input(data: AutomationRuleCreate | AutomationRulePatch) -> No
 # ── LLM Payload enrichment ────────────────────────────────────────────────────
 
 @router.post(
+    "/alerts/{alert_id}/tier2-pivot",
+    summary="Run Tier-2 IP pivot steps into the alert Runbook",
+)
+async def run_tier2_pivot(
+    alert_id: str,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    hours: int = Query(default=24, ge=1, le=168),
+) -> dict[str, Any]:
+    """Execute the Tier-2 Investigate preflight and record each step on the Runbook.
+
+    Steps (always written, with hit/miss outcome):
+    1. extract src_ip / dest_ip
+    2. find related alerts in the last N hours
+    3. aggregate into one Case (when siblings exist)
+    4. investigate handoff note
+    5. case report scope
+    """
+    from sqlalchemy import select
+
+    from app.services.tier2_ip_pivot import run_tier2_investigate_preflight, tier2_step_catalog
+
+    aid = _parse_uuid(alert_id, "alert_id")
+    result = await db.execute(
+        select(Alert).where(Alert.id == aid, Alert.tenant_id == current_user.tenant_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    pivot, related = await run_tier2_investigate_preflight(
+        db,
+        alert=alert,
+        tenant_id=current_user.tenant_id,
+        hours=hours,
+        investigate_queued=False,
+    )
+    await db.refresh(alert)
+    return {
+        "status": "ok",
+        "catalog": tier2_step_catalog(),
+        "pivot": pivot.to_dict(),
+        "related_alerts": related,
+        "case_id": pivot.case_id,
+        "related_count": pivot.to_dict().get("related_count", 0),
+    }
+
+
+@router.get(
+    "/alerts/{alert_id}/tier2-steps",
+    summary="Tier-2 step catalog + latest outcomes from the Runbook ledger",
+)
+async def get_tier2_steps(
+    alert_id: str,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+) -> dict[str, Any]:
+    """Return the five Tier-2 steps merged with the latest ledger outcomes."""
+    from app.services.tier2_ip_pivot import TIER2_RUNBOOK_STEPS
+
+    aid = _parse_uuid(alert_id, "alert_id")
+    envelope = await load_runbook(
+        db,
+        tenant_id=current_user.tenant_id,
+        subject_type="alert",
+        subject_id=aid,
+    )
+    latest: dict[str, Any] = {}
+    for step in envelope.steps:
+        name = step.action_name or ""
+        if name.startswith("tier2_"):
+            latest[name] = {
+                "action_name": name,
+                "status": step.status,
+                "summary": step.summary,
+                "detail": step.detail,
+                "occurred_at": step.occurred_at.isoformat() if step.occurred_at else None,
+                "seq": step.seq,
+            }
+    steps = []
+    for item in TIER2_RUNBOOK_STEPS:
+        hit = latest.get(item["action_name"])
+        steps.append(
+            {
+                **item,
+                "status": hit["status"] if hit else "pending",
+                "summary": hit["summary"] if hit else "هنوز اجرا نشده",
+                "detail": hit.get("detail") if hit else None,
+                "occurred_at": hit.get("occurred_at") if hit else None,
+                "has_result": bool(hit and hit["status"] in {"recorded", "executed"}),
+            }
+        )
+    return {
+        "alert_id": str(aid),
+        "steps": steps,
+        "ran": any(s["status"] != "pending" for s in steps),
+    }
+
+
+@router.post(
     "/alerts/{alert_id}/enrich-payload",
     summary="Build or refresh the LLM payload for an alert",
 )

@@ -33,6 +33,35 @@ logger = structlog.get_logger()
 
 _SIBLING_CAP = 64
 _DEFAULT_HOURS = 24
+
+# Canonical Tier-2 steps shown in the Alert Runbook tab (order matters).
+TIER2_RUNBOOK_STEPS: tuple[dict[str, str], ...] = (
+    {
+        "action_name": "tier2_extract_ips",
+        "label": "1. استخراج src_ip / dest_ip",
+        "label_en": "Extract src_ip / dest_ip",
+    },
+    {
+        "action_name": "tier2_find_related",
+        "label": "2. جست‌وجوی هشدارهای ۲۴ساعت (dest_ip)",
+        "label_en": "Find related alerts (24h)",
+    },
+    {
+        "action_name": "tier2_aggregate_case",
+        "label": "3. تجمیع در یک Case",
+        "label_en": "Aggregate into one Case",
+    },
+    {
+        "action_name": "tier2_investigate",
+        "label": "4. Investigate روی Case",
+        "label_en": "Investigate on Case",
+    },
+    {
+        "action_name": "tier2_case_report",
+        "label": "5. گزارش کیس (هشدارهای مرتبط)",
+        "label_en": "Case report scope",
+    },
+)
 _IP_RE = re.compile(
     r"^(?:"
     r"(?:\d{1,3}\.){3}\d{1,3}"  # IPv4
@@ -493,25 +522,267 @@ async def aggregate_into_case(
     return case_id, created, extended
 
 
+async def _emit_tier2_step(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
+    run_token: str,
+    action_name: str,
+    summary: str,
+    status: str,
+    detail: str | None = None,
+    output_payload: dict[str, Any] | None = None,
+) -> None:
+    """One visible Runbook ledger line for a Tier-2 step (always shown)."""
+    from app.services.runbook.recorder import record_event
+
+    payload = dict(output_payload or {})
+    payload["run_token"] = run_token
+    payload["tier2"] = True
+    payload["has_result"] = status in {"recorded", "executed"}
+    await record_event(
+        db,
+        tenant_id=tenant_id,
+        subject_type="alert",
+        subject_id=alert_id,
+        stage="investigate",
+        kind="enrichment",
+        summary=summary[:1000],
+        detail=detail,
+        status=status,
+        actor_type="system",
+        actor_label="tier2-investigate",
+        action_name=action_name,
+        output_payload=payload,
+        idempotency_key=f"tier2:{alert_id}:{action_name}:{run_token}",
+    )
+
+
+async def emit_tier2_runbook_steps(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
+    run_token: str,
+    ips: ExtractedIps,
+    related_ids: list[uuid.UUID],
+    related_summaries: list[dict[str, Any]],
+    case_id: uuid.UUID | None,
+    created: bool,
+    extended: bool,
+    hours: int,
+    investigate_queued: bool,
+) -> list[dict[str, Any]]:
+    """Emit all five Tier-2 steps with explicit hit/miss outcomes for the UI."""
+    steps_out: list[dict[str, Any]] = []
+    related_count = max(0, len(related_ids) - 1)
+
+    # 1) Extract IPs
+    if ips.all_ips:
+        s1_status = "recorded"
+        s1_summary = (
+            f"نتیجه: src_ip=[{', '.join(ips.src_ips) or '—'}] · "
+            f"dest_ip=[{', '.join(ips.dest_ips) or '—'}]"
+        )
+    else:
+        s1_status = "skipped"
+        s1_summary = (
+            "نتیجه: خالی — هیچ src_ip/dest_ip از llm_payload، raw_event، "
+            "affected_ips یا IOC استخراج نشد"
+        )
+    await _emit_tier2_step(
+        db,
+        tenant_id=tenant_id,
+        alert_id=alert_id,
+        run_token=run_token,
+        action_name="tier2_extract_ips",
+        summary=s1_summary,
+        status=s1_status,
+        detail=json.dumps({"src_ips": ips.src_ips, "dest_ips": ips.dest_ips}, ensure_ascii=False),
+        output_payload={"src_ips": ips.src_ips, "dest_ips": ips.dest_ips},
+    )
+    steps_out.append({"action_name": "tier2_extract_ips", "status": s1_status, "summary": s1_summary})
+
+    # 2) Find related 24h
+    if not ips.all_ips:
+        s2_status = "skipped"
+        s2_summary = "نتیجه: رد شد — بدون IP قابل جست‌وجو نیست"
+    elif related_count > 0:
+        s2_status = "recorded"
+        titles = [str(s.get("title") or s.get("id")) for s in related_summaries if str(s.get("id")) != str(alert_id)]
+        s2_summary = (
+            f"نتیجه: {related_count} هشدار مرتبط در {hours}ساعت "
+            f"(dest اولویت، سپس src) — نمونه: {', '.join(titles[:3]) or '—'}"
+        )
+    else:
+        s2_status = "skipped"
+        s2_summary = (
+            f"نتیجه: خالی — در {hours}ساعت گذشته هشدار دیگری با همین "
+            f"dest_ip/src_ip پیدا نشد"
+        )
+    await _emit_tier2_step(
+        db,
+        tenant_id=tenant_id,
+        alert_id=alert_id,
+        run_token=run_token,
+        action_name="tier2_find_related",
+        summary=s2_summary,
+        status=s2_status,
+        detail=json.dumps(
+            {"related_alert_ids": [str(x) for x in related_ids], "related_count": related_count},
+            ensure_ascii=False,
+        ),
+        output_payload={
+            "related_alert_ids": [str(x) for x in related_ids],
+            "related_count": related_count,
+            "related_alerts": related_summaries[:20],
+        },
+    )
+    steps_out.append({"action_name": "tier2_find_related", "status": s2_status, "summary": s2_summary})
+
+    # 3) Aggregate case
+    if related_count > 0 and case_id is not None:
+        s3_status = "executed"
+        verb = "ایجاد شد" if created else ("گسترش یافت" if extended else "به‌روز شد")
+        s3_summary = f"نتیجه: Case `{case_id}` {verb} — {len(related_ids)} هشدار لینک شد"
+    elif case_id is not None and related_count == 0:
+        s3_status = "skipped"
+        s3_summary = f"نتیجه: تجمیع جدید لازم نبود — Case موجود `{case_id}` (بدون sibling)"
+    else:
+        s3_status = "skipped"
+        s3_summary = "نتیجه: Case ساخته نشد — هشدار مرتبطی برای تجمیع نبود"
+    await _emit_tier2_step(
+        db,
+        tenant_id=tenant_id,
+        alert_id=alert_id,
+        run_token=run_token,
+        action_name="tier2_aggregate_case",
+        summary=s3_summary,
+        status=s3_status,
+        detail=json.dumps(
+            {
+                "case_id": str(case_id) if case_id else None,
+                "created": created,
+                "extended": extended,
+                "alert_ids": [str(x) for x in related_ids],
+            },
+            ensure_ascii=False,
+        ),
+        output_payload={
+            "case_id": str(case_id) if case_id else None,
+            "created": created,
+            "extended": extended,
+        },
+    )
+    steps_out.append({"action_name": "tier2_aggregate_case", "status": s3_status, "summary": s3_summary})
+
+    # 4) Investigate on case
+    if investigate_queued and case_id is not None and related_count > 0:
+        s4_status = "recorded"
+        s4_summary = (
+            f"نتیجه: Investigate روی Case `{case_id}` با {len(related_ids)} هشدار لینک‌شده صف شد"
+        )
+    elif investigate_queued:
+        s4_status = "recorded"
+        s4_summary = "نتیجه: Investigate روی همین هشدار اجرا می‌شود (بدون sibling)"
+    else:
+        s4_status = "skipped"
+        s4_summary = "نتیجه: Investigate هنوز اجرا نشده — از Overview → Start AI Investigation بزنید"
+    await _emit_tier2_step(
+        db,
+        tenant_id=tenant_id,
+        alert_id=alert_id,
+        run_token=run_token,
+        action_name="tier2_investigate",
+        summary=s4_summary,
+        status=s4_status,
+        output_payload={
+            "case_id": str(case_id) if case_id else None,
+            "investigate_queued": investigate_queued,
+        },
+    )
+    steps_out.append({"action_name": "tier2_investigate", "status": s4_status, "summary": s4_summary})
+
+    # 5) Case report scope
+    if case_id is not None and related_count > 0:
+        s5_status = "recorded"
+        s5_summary = (
+            f"نتیجه: گزارش کیس شامل {len(related_ids)} هشدار مرتبط است "
+            f"(GET /cases/{case_id}/report.md)"
+        )
+    elif case_id is not None:
+        s5_status = "skipped"
+        s5_summary = f"نتیجه: گزارش کیس فقط همین هشدار را دارد (Case `{case_id}`)"
+    else:
+        s5_status = "skipped"
+        s5_summary = "نتیجه: گزارش کیس چند‌هشداری آماده نیست — Case ساخته نشد"
+    await _emit_tier2_step(
+        db,
+        tenant_id=tenant_id,
+        alert_id=alert_id,
+        run_token=run_token,
+        action_name="tier2_case_report",
+        summary=s5_summary,
+        status=s5_status,
+        output_payload={
+            "case_id": str(case_id) if case_id else None,
+            "linked_alert_count": len(related_ids),
+        },
+    )
+    steps_out.append({"action_name": "tier2_case_report", "status": s5_status, "summary": s5_summary})
+    return steps_out
+
+
 async def run_tier2_investigate_preflight(
     db: AsyncSession,
     *,
     alert: Any,
     tenant_id: uuid.UUID,
     hours: int = _DEFAULT_HOURS,
+    investigate_queued: bool = True,
 ) -> tuple[Tier2PivotResult, list[dict[str, Any]]]:
-    """Full Tier-2 preflight used by ``POST /agents/investigate``."""
+    """Full Tier-2 preflight used by Investigate and Runbook Tier-2 button."""
     alert_id = alert.id if hasattr(alert, "id") else uuid.UUID(str(alert["id"]))
+    run_token = uuid.uuid4().hex[:12]
     ips = extract_alert_ips(alert)
     notes: list[str] = []
+    related_ids: list[uuid.UUID] = [alert_id]
+    summaries: list[dict[str, Any]] = []
+    case_id: uuid.UUID | None = None
+    created = False
+    extended = False
+    existing_case = getattr(alert, "case_id", None)
+    if isinstance(existing_case, uuid.UUID):
+        case_id = existing_case
+
     if not ips.all_ips:
         notes.append("No src_ip/dest_ip resolved from llm_payload, raw_event, or affected_ips.")
+        try:
+            await emit_tier2_runbook_steps(
+                db,
+                tenant_id=tenant_id,
+                alert_id=alert_id,
+                run_token=run_token,
+                ips=ips,
+                related_ids=related_ids,
+                related_summaries=[],
+                case_id=case_id,
+                created=False,
+                extended=False,
+                hours=hours,
+                investigate_queued=investigate_queued,
+            )
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001
+            await db.rollback()
+            logger.warning("tier2.runbook_emit_failed", error_type=type(exc).__name__)
         return (
             Tier2PivotResult(
                 src_ips=[],
                 dest_ips=[],
                 related_alert_ids=[str(alert_id)],
-                case_id=str(alert.case_id) if getattr(alert, "case_id", None) else None,
+                case_id=str(case_id) if case_id else None,
                 case_created=False,
                 case_extended=False,
                 window_hours=hours,
@@ -529,12 +800,7 @@ async def run_tier2_investigate_preflight(
         hours=hours,
     )
     summaries = await _load_related_summaries(db, tenant_id=tenant_id, alert_ids=related_ids)
-    case_id: uuid.UUID | None = None
-    created = False
-    extended = False
-    existing_case = getattr(alert, "case_id", None)
-    if isinstance(existing_case, uuid.UUID):
-        case_id = existing_case
+
     if len(related_ids) > 1:
         case_id, created, extended = await aggregate_into_case(
             db,
@@ -547,89 +813,46 @@ async def run_tier2_investigate_preflight(
             f"Tier-2 pivot: {len(related_ids)} alert(s) on "
             f"dest={ips.dest_ips or '-'} src={ips.src_ips or '-'} → case {case_id}"
         )
-        await db.commit()
-        try:
-            from app.services.runbook.emitters import emit_case_created
-            from app.services.runbook.recorder import record_event
-
-            if created:
-                await emit_case_created(
-                    db,
-                    tenant_id=tenant_id,
-                    case_id=case_id,
-                    case_title=f"Tier-2 IP pivot ({len(related_ids)} alerts)",
-                    alert_ids=[str(x) for x in related_ids],
-                    actor_label="tier2-investigate",
-                    severity=str(getattr(alert, "severity", "") or None),
-                    disposition=str(getattr(alert, "disposition", "") or None),
-                    idempotency_key=f"tier2-case-created:{case_id}",
-                )
-            await record_event(
-                db,
-                tenant_id=tenant_id,
-                subject_type="alert",
-                subject_id=alert_id,
-                stage="investigate",
-                kind="enrichment",
-                summary=(
-                    f"Tier-2 IP check · src={','.join(ips.src_ips) or '—'} · "
-                    f"dest={','.join(ips.dest_ips) or '—'} · "
-                    f"{max(0, len(related_ids) - 1)} related in {hours}h"
-                ),
-                detail=json.dumps(
-                    {
-                        "src_ips": ips.src_ips,
-                        "dest_ips": ips.dest_ips,
-                        "related_alert_ids": [str(x) for x in related_ids],
-                        "case_id": str(case_id) if case_id else None,
-                    },
-                    ensure_ascii=False,
-                )[:4000],
-                status="recorded",
-                actor_type="system",
-                actor_label="tier2-investigate",
-                action_name="ip_pivot_aggregate",
-                output_payload={
-                    "related_count": max(0, len(related_ids) - 1),
-                    "case_id": str(case_id) if case_id else None,
-                },
-                idempotency_key=f"tier2-ip-pivot:{alert_id}:{hours}",
-            )
-            await db.commit()
-        except Exception as exc:  # noqa: BLE001 — pivot must not fail Investigate
-            await db.rollback()
-            logger.warning("tier2.runbook_emit_failed", error_type=type(exc).__name__)
     else:
         notes.append(
             f"Tier-2 IP check complete — no related alerts in {hours}h "
             f"(src={ips.src_ips or '—'}, dest={ips.dest_ips or '—'})."
         )
-        await db.commit()
-        try:
-            from app.services.runbook.recorder import record_event
 
-            await record_event(
+    await db.commit()
+    try:
+        if created and case_id is not None:
+            from app.services.runbook.emitters import emit_case_created
+
+            await emit_case_created(
                 db,
                 tenant_id=tenant_id,
-                subject_type="alert",
-                subject_id=alert_id,
-                stage="investigate",
-                kind="enrichment",
-                summary=(
-                    f"Tier-2 IP check · src={','.join(ips.src_ips) or '—'} · "
-                    f"dest={','.join(ips.dest_ips) or '—'} · 0 related in {hours}h"
-                ),
-                status="recorded",
-                actor_type="system",
+                case_id=case_id,
+                case_title=f"Tier-2 IP pivot ({len(related_ids)} alerts)",
+                alert_ids=[str(x) for x in related_ids],
                 actor_label="tier2-investigate",
-                action_name="ip_pivot_check",
-                output_payload={"related_count": 0, "src_ips": ips.src_ips, "dest_ips": ips.dest_ips},
-                idempotency_key=f"tier2-ip-pivot:{alert_id}:{hours}",
+                severity=str(getattr(alert, "severity", "") or None),
+                disposition=str(getattr(alert, "disposition", "") or None),
+                idempotency_key=f"tier2-case-created:{case_id}:{run_token}",
             )
-            await db.commit()
-        except Exception as exc:  # noqa: BLE001
-            await db.rollback()
-            logger.warning("tier2.runbook_emit_failed", error_type=type(exc).__name__)
+        await emit_tier2_runbook_steps(
+            db,
+            tenant_id=tenant_id,
+            alert_id=alert_id,
+            run_token=run_token,
+            ips=ips,
+            related_ids=related_ids,
+            related_summaries=summaries,
+            case_id=case_id,
+            created=created,
+            extended=extended,
+            hours=hours,
+            investigate_queued=investigate_queued,
+        )
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001 — pivot must not fail Investigate
+        await db.rollback()
+        logger.warning("tier2.runbook_emit_failed", error_type=type(exc).__name__)
 
     result = Tier2PivotResult(
         src_ips=ips.src_ips,
@@ -648,5 +871,11 @@ async def run_tier2_investigate_preflight(
         case_id=str(case_id) if case_id else None,
         created=created,
         extended=extended,
+        run_token=run_token,
     )
     return result, summaries
+
+
+def tier2_step_catalog() -> list[dict[str, str]]:
+    """Static catalog for the Runbook UI before any run has executed."""
+    return [dict(item) for item in TIER2_RUNBOOK_STEPS]
