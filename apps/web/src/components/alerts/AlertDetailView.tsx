@@ -1180,16 +1180,22 @@ function Tier2RunbookPanel({
     setLoading(true);
     setError(null);
     try {
-      const data = await request<{ steps: Tier2StepView[] }>(
-        `/api/v1/runbook/alerts/${alertId}/tier2-steps`,
-      );
+      // GET auto=true runs Tier-2 once server-side if ledger has no steps yet.
+      const data = await request<{
+        steps: Tier2StepView[];
+        ran?: boolean;
+        auto_ran?: boolean;
+      }>(`/api/v1/runbook/alerts/${alertId}/tier2-steps?auto=true`);
       setSteps(data.steps || []);
+      if (data.auto_ran) {
+        onRan?.();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [alertId]);
+  }, [alertId, onRan]);
 
   useEffect(() => {
     void loadSteps();
@@ -1199,8 +1205,11 @@ function Tier2RunbookPanel({
     setRunning(true);
     setError(null);
     try {
-      await request(`/api/v1/runbook/alerts/${alertId}/tier2-pivot`, { method: 'POST' });
-      toast.success('مراحل Tier-2 در Runbook ثبت شد');
+      // Manual re-run — once=false appends a fresh ledger set.
+      await request(`/api/v1/runbook/alerts/${alertId}/tier2-pivot?once=false`, {
+        method: 'POST',
+      });
+      toast.success('مراحل Tier-2 دوباره در Runbook ثبت شد');
       await loadSteps();
       onRan?.();
     } catch (err) {
@@ -1239,16 +1248,16 @@ function Tier2RunbookPanel({
           <h3 className="text-sm font-semibold text-slate-200">Tier-2 Investigate · Runbook</h3>
           <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
             استخراج IP → هشدارهای ۲۴ساعت → Case → Investigate → گزارش کیس.
-            هر مرحله نتیجهٔ موفق یا خالی را نشان می‌دهد.
+            اولین بار به‌صورت خودکار اجرا و در Runbook ذخیره می‌شود؛ دکمه فقط برای اجرای مجدد است.
           </p>
         </div>
         <button
           type="button"
           onClick={() => void runPivot()}
-          disabled={running}
+          disabled={running || loading}
           className="shrink-0 px-3 py-1.5 text-xs font-medium rounded bg-brand-600/80 hover:bg-brand-500 text-white disabled:opacity-50"
         >
-          {running ? 'در حال اجرا…' : 'اجرای Tier-2'}
+          {running || loading ? 'در حال اجرا…' : 'اجرای مجدد Tier-2'}
         </button>
       </div>
       {error && (
@@ -1420,6 +1429,23 @@ export function AlertDetailView({
       revalidateOnFocus: false,
     },
   );
+
+  // Auto-run Tier-2 once as soon as the alert opens (persists to Runbook ledger).
+  useEffect(() => {
+    if (!alert?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await request(`/api/v1/runbook/alerts/${alert.id}/tier2-steps?auto=true`);
+      } catch {
+        /* best-effort — Runbook tab will retry */
+      }
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [alert?.id]);
 
   const handleStatusChange = async (newStatus: Alert['status']) => {
     try {

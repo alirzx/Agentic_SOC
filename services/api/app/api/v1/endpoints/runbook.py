@@ -383,73 +383,42 @@ def _validate_rule_input(data: AutomationRuleCreate | AutomationRulePatch) -> No
 
 # ── LLM Payload enrichment ────────────────────────────────────────────────────
 
-@router.post(
-    "/alerts/{alert_id}/tier2-pivot",
-    summary="Run Tier-2 IP pivot steps into the alert Runbook",
-)
-async def run_tier2_pivot(
-    alert_id: str,
+async def _tier2_already_ran(
     db: DBSession,
-    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
-    hours: int = Query(default=24, ge=1, le=168),
-) -> dict[str, Any]:
-    """Execute the Tier-2 Investigate preflight and record each step on the Runbook.
-
-    Steps (always written, with hit/miss outcome):
-    1. extract src_ip / dest_ip
-    2. find related alerts in the last N hours
-    3. aggregate into one Case (when siblings exist)
-    4. investigate handoff note
-    5. case report scope
-    """
-    from sqlalchemy import select
-
-    from app.services.tier2_ip_pivot import run_tier2_investigate_preflight, tier2_step_catalog
-
-    aid = _parse_uuid(alert_id, "alert_id")
-    result = await db.execute(
-        select(Alert).where(Alert.id == aid, Alert.tenant_id == current_user.tenant_id)
-    )
-    alert = result.scalar_one_or_none()
-    if alert is None:
-        raise HTTPException(status_code=404, detail="Alert not found")
-
-    pivot, related = await run_tier2_investigate_preflight(
-        db,
-        alert=alert,
-        tenant_id=current_user.tenant_id,
-        hours=hours,
-        investigate_queued=False,
-    )
-    await db.refresh(alert)
-    return {
-        "status": "ok",
-        "catalog": tier2_step_catalog(),
-        "pivot": pivot.to_dict(),
-        "related_alerts": related,
-        "case_id": pivot.case_id,
-        "related_count": pivot.to_dict().get("related_count", 0),
-    }
+    *,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
+) -> bool:
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT 1 FROM runbook_events
+                 WHERE tenant_id = :tid
+                   AND subject_type = 'alert'
+                   AND subject_id = :sid
+                   AND action_name = 'tier2_extract_ips'
+                 LIMIT 1
+                """
+            ).bindparams(tid=tenant_id, sid=alert_id)
+        )
+    ).fetchone()
+    return row is not None
 
 
-@router.get(
-    "/alerts/{alert_id}/tier2-steps",
-    summary="Tier-2 step catalog + latest outcomes from the Runbook ledger",
-)
-async def get_tier2_steps(
-    alert_id: str,
+async def _build_tier2_steps_response(
     db: DBSession,
-    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    *,
+    tenant_id: uuid.UUID,
+    alert_id: uuid.UUID,
 ) -> dict[str, Any]:
-    """Return the five Tier-2 steps merged with the latest ledger outcomes."""
     from app.services.tier2_ip_pivot import TIER2_RUNBOOK_STEPS
 
-    aid = _parse_uuid(alert_id, "alert_id")
     envelope = await load_runbook(
         db,
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         subject_type="alert",
-        subject_id=aid,
+        subject_id=alert_id,
     )
     latest: dict[str, Any] = {}
     for step in envelope.steps:
@@ -477,10 +446,126 @@ async def get_tier2_steps(
             }
         )
     return {
-        "alert_id": str(aid),
+        "alert_id": str(alert_id),
         "steps": steps,
         "ran": any(s["status"] != "pending" for s in steps),
     }
+
+
+@router.post(
+    "/alerts/{alert_id}/tier2-pivot",
+    summary="Run Tier-2 IP pivot steps into the alert Runbook",
+)
+async def run_tier2_pivot(
+    alert_id: str,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    hours: int = Query(default=24, ge=1, le=168),
+    once: bool = Query(
+        default=True,
+        description="If true, skip when Tier-2 already ran once for this alert",
+    ),
+) -> dict[str, Any]:
+    """Execute the Tier-2 Investigate preflight and record each step on the Runbook.
+
+    Default ``once=true`` so auto-run on alert open only persists the first time.
+    Pass ``once=false`` (manual button) to re-run and append a fresh ledger set.
+    """
+    from sqlalchemy import select
+
+    from app.services.tier2_ip_pivot import run_tier2_investigate_preflight, tier2_step_catalog
+
+    aid = _parse_uuid(alert_id, "alert_id")
+    result = await db.execute(
+        select(Alert).where(Alert.id == aid, Alert.tenant_id == current_user.tenant_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    if once and await _tier2_already_ran(db, tenant_id=current_user.tenant_id, alert_id=aid):
+        steps_payload = await _build_tier2_steps_response(
+            db, tenant_id=current_user.tenant_id, alert_id=aid
+        )
+        return {
+            "status": "already_ran",
+            "catalog": tier2_step_catalog(),
+            "pivot": None,
+            "related_alerts": [],
+            "case_id": None,
+            "related_count": 0,
+            **steps_payload,
+        }
+
+    pivot, related = await run_tier2_investigate_preflight(
+        db,
+        alert=alert,
+        tenant_id=current_user.tenant_id,
+        hours=hours,
+        investigate_queued=False,
+    )
+    await db.refresh(alert)
+    steps_payload = await _build_tier2_steps_response(
+        db, tenant_id=current_user.tenant_id, alert_id=aid
+    )
+    return {
+        "status": "ok",
+        "catalog": tier2_step_catalog(),
+        "pivot": pivot.to_dict(),
+        "related_alerts": related,
+        "case_id": pivot.case_id,
+        "related_count": pivot.to_dict().get("related_count", 0),
+        **steps_payload,
+    }
+
+
+@router.get(
+    "/alerts/{alert_id}/tier2-steps",
+    summary="Tier-2 step catalog + latest outcomes (auto-runs once if missing)",
+)
+async def get_tier2_steps(
+    alert_id: str,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    auto: bool = Query(
+        default=True,
+        description="When true, run Tier-2 once if the ledger has no tier2_* steps yet",
+    ),
+) -> dict[str, Any]:
+    """Return the five Tier-2 steps; optionally auto-run and persist the first time."""
+    from sqlalchemy import select
+
+    from app.services.tier2_ip_pivot import run_tier2_investigate_preflight
+
+    aid = _parse_uuid(alert_id, "alert_id")
+    auto_ran = False
+    if auto and not await _tier2_already_ran(db, tenant_id=current_user.tenant_id, alert_id=aid):
+        result = await db.execute(
+            select(Alert).where(Alert.id == aid, Alert.tenant_id == current_user.tenant_id)
+        )
+        alert = result.scalar_one_or_none()
+        if alert is None:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        try:
+            await run_tier2_investigate_preflight(
+                db,
+                alert=alert,
+                tenant_id=current_user.tenant_id,
+                hours=24,
+                investigate_queued=False,
+            )
+            auto_ran = True
+        except Exception:  # noqa: BLE001 — still return pending steps if auto-run fails
+            logger.exception(
+                "tier2.auto_run_failed alert=%s",
+                safe_log_value(str(aid))[:_MAX_TAG],
+            )
+
+    payload = await _build_tier2_steps_response(
+        db, tenant_id=current_user.tenant_id, alert_id=aid
+    )
+    payload["auto_ran"] = auto_ran
+    return payload
 
 
 @router.post(
