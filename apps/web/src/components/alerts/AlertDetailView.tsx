@@ -461,6 +461,84 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
   );
 }
 
+// ─── Bilingual incident Report (true-positive only) ───────────────────────────
+
+function AlertIncidentReportPanel({ alertId }: { alertId: string }) {
+  const {
+    data: markdown,
+    error,
+    isLoading,
+    mutate,
+  } = useSWR(
+    ['alert-incident-report', alertId],
+    () => alertsApi.getIncidentReportMarkdown(alertId),
+    { revalidateOnFocus: false },
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+        <p className="text-sm font-medium text-slate-300">Generating bilingual report…</p>
+        <p className="mt-1 text-xs text-slate-500">English + فارسی from explain, investigation, and disposition.</p>
+      </div>
+    );
+  }
+
+  if (error || !markdown) {
+    const status = error instanceof ApiError ? error.status : undefined;
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+        <p className="text-sm font-medium text-slate-300">
+          {status === 409 ? 'Mark disposition as True positive to unlock Report' : 'Could not load report'}
+        </p>
+        <p className="mt-1 max-w-md text-xs text-slate-500">
+          {error instanceof Error ? error.message : 'Run Explain / Investigate, then retry.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => void mutate()}
+          className="mt-3 text-[11px] text-teal-300 underline hover:text-teal-200"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-900/40">
+      <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+            Incident Report · EN + FA
+          </h3>
+          <p className="mt-0.5 text-[10px] text-slate-500">
+            Customer handoff format (English investigation + گزارش رخداد سایبری)
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `alert-${alertId.slice(0, 8)}-incident-report.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="text-[11px] text-slate-400 hover:text-slate-200"
+        >
+          Download .md
+        </button>
+      </div>
+      <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap p-4 font-mono text-[11px] leading-relaxed text-slate-300">
+        {markdown}
+      </pre>
+    </div>
+  );
+}
+
 // ─── AI Investigation Panel ───────────────────────────────────────────────────
 
 function AIInvestigation({ alertId }: { alertId: string }) {
@@ -486,6 +564,15 @@ function AIInvestigation({ alertId }: { alertId: string }) {
       if (started.status === 'completed' || started.status === 'failed') {
         if (started.status === 'failed') {
           toast.error(started.error || 'Investigation failed');
+        } else if (started.findings && started.findings.trim().length >= 40) {
+          try {
+            await alertsApi.saveInvestigationReport(alertId, {
+              markdown: started.findings,
+              investigation_id: started.id,
+            });
+          } catch {
+            /* best-effort */
+          }
         }
         return;
       }
@@ -504,6 +591,15 @@ function AIInvestigation({ alertId }: { alertId: string }) {
         toast.error(latest.error || 'Investigation failed');
       } else if (latest.status !== 'completed') {
         toast.error('Investigation still running on the agent — refresh in a minute.');
+      } else if (latest.findings && latest.findings.trim().length >= 40) {
+        try {
+          await alertsApi.saveInvestigationReport(alertId, {
+            markdown: latest.findings,
+            investigation_id: latest.id,
+          });
+        } catch {
+          /* Report persistence is best-effort */
+        }
       }
     } catch (err) {
       setInvestigation(null);
@@ -1047,7 +1143,7 @@ export function AlertDetailView({
   title?: string;
   host?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'runbook' | 'raw' | 'llm'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'runbook' | 'raw' | 'llm' | 'report'>('overview');
   // Side drawer for the "Explain this alert" structured walkthrough
   // (`POST /api/v1/explain`). Kept local to the detail view because it
   // only makes sense while a single alert is on screen.
@@ -1116,6 +1212,8 @@ export function AlertDetailView({
     );
   }
 
+  const isTruePositive =
+    alert.disposition === 'true_positive' || alert.disposition === 'escalate';
   const sevCfg =
     SEVERITY_CONFIG[alert.severity as keyof typeof SEVERITY_CONFIG] ??
     SEVERITY_CONFIG.info;
@@ -1220,6 +1318,20 @@ export function AlertDetailView({
             {tab}
           </button>
         ))}
+        {isTruePositive && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('report')}
+            className={clsx(
+              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              activeTab === 'report'
+                ? 'text-brand-400 border-blue-400'
+                : 'text-gray-500 border-transparent hover:text-gray-300'
+            )}
+          >
+            Report
+          </button>
+        )}
         {alert.llmPayload && (
           <button
             onClick={() => setActiveTab('llm')}
@@ -1254,6 +1366,9 @@ export function AlertDetailView({
                 description: alert.description,
                 severity: alert.severity,
                 status: alert.status,
+                disposition: alert.disposition ?? null,
+                funnel_stage: alert.funnelStage ?? null,
+                analyst_disposition: alert.disposition ?? null,
                 source: alert.source,
                 source_ref: alert.sourceRef,
                 risk_score: alert.riskScore,
@@ -1380,6 +1495,10 @@ export function AlertDetailView({
             {JSON.stringify(alert.rawEvent || { message: 'Raw event data not available for this alert.' }, null, 2)}
           </pre>
         </Section>
+      )}
+
+      {activeTab === 'report' && isTruePositive && (
+        <AlertIncidentReportPanel alertId={alert.id} />
       )}
 
       {activeTab === 'llm' && alert.llmPayload && (

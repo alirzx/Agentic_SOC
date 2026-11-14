@@ -1897,10 +1897,12 @@ function ReportPanel({
     <div className="rounded-xl border border-slate-800/80 bg-slate-900/40">
       <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Incident Report</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+            Incident Report · EN + FA
+          </h3>
           {isAuto ? (
             <p className="text-[10px] text-slate-500 mt-0.5">
-              Auto-generated from case triage · run Investigate for a deeper agent report
+              Bilingual auto-report from case triage · run Investigate for a deeper agent report
             </p>
           ) : null}
         </div>

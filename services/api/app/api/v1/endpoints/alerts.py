@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, computed_field
 from sqlalchemy import String, and_, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -228,6 +229,13 @@ class AlertExplanationSaveRequest(BaseModel):
 
     markdown: str
     model: str | None = None
+
+
+class AlertInvestigationReportSaveRequest(BaseModel):
+    """Persist AI Investigation Markdown for bilingual incident export."""
+
+    markdown: str
+    investigation_id: str | None = None
 
 
 class AlertSnoozeRequest(BaseModel):
@@ -1213,6 +1221,115 @@ async def get_alert(
     # Never block the Investigation Rail on a slow/hung Splunk lookup.
     alert = await hydrate_alert_for_detail(db, alert)
     return await _build_alert_detail(db, alert)
+
+
+@router.post("/{alert_id}/investigation-report", response_model=AlertResponse)
+async def save_alert_investigation_report(
+    alert_id: uuid.UUID,
+    body: AlertInvestigationReportSaveRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    db: DBSession,
+) -> AlertResponse:
+    """Store AI Investigation Markdown on the alert for Report export."""
+    markdown = (body.markdown or "").strip()
+    if len(markdown) < 40:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="markdown too short")
+    if len(markdown) > 60_000:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="markdown too long")
+
+    result = await db.execute(
+        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+
+    extra = dict(alert.enrichment_data) if isinstance(alert.enrichment_data, dict) else {}
+    extra["investigation_report"] = {
+        "markdown": markdown,
+        "investigation_id": (body.investigation_id or "").strip() or None,
+        "saved_at": datetime.now(UTC).isoformat(),
+    }
+    await db.execute(
+        update(Alert)
+        .where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+        .values(enrichment_data=extra, updated_at=datetime.now(UTC))
+    )
+    await db.commit()
+    await db.refresh(alert)
+    return await _single_alert_response(db, alert)
+
+
+@router.get(
+    "/{alert_id}/report.md",
+    summary="Bilingual incident report (Markdown) for true-positive alerts",
+    response_class=PlainTextResponse,
+)
+async def get_alert_incident_report(
+    alert_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+    db: DBSession,
+    investigation_markdown: str | None = Query(
+        default=None,
+        description="Optional AI Investigation Markdown to embed in the report body.",
+        max_length=40_000,
+    ),
+) -> PlainTextResponse:
+    """Export a bilingual (EN + FA) incident report.
+
+    Gated on analyst disposition ``true_positive`` / ``escalate`` so provisional
+    or FP alerts do not produce customer-facing incident reports.
+    """
+    from app.services.bilingual_incident_report import (
+        build_alert_report_inputs,
+        is_true_positive_disposition,
+        render_bilingual_incident_report,
+    )
+
+    result = await db.execute(
+        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    if not is_true_positive_disposition(alert.disposition):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Incident report is available only after disposition true_positive",
+        )
+
+    inv_md = (investigation_markdown or "").strip() or None
+    if inv_md is None:
+        extra = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
+        stored_inv = extra.get("investigation_report")
+        if isinstance(stored_inv, str) and stored_inv.strip():
+            inv_md = stored_inv.strip()
+        elif isinstance(stored_inv, dict) and isinstance(stored_inv.get("markdown"), str):
+            inv_md = stored_inv["markdown"].strip() or None
+
+    markdown = render_bilingual_incident_report(
+        build_alert_report_inputs(alert, investigation_markdown=inv_md)
+    )
+    # Cache last generated report for Case reuse / audit.
+    extra = dict(alert.enrichment_data) if isinstance(alert.enrichment_data, dict) else {}
+    extra["incident_report"] = {
+        "markdown": markdown[:60_000],
+        "generated_at": datetime.now(UTC).isoformat(),
+        "languages": ["en", "fa"],
+    }
+    await db.execute(
+        update(Alert)
+        .where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+        .values(enrichment_data=extra, updated_at=datetime.now(UTC))
+    )
+    await db.commit()
+
+    filename = f"alert-{str(alert_id)[:8]}-incident-report.md"
+    return PlainTextResponse(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{alert_id}/explanation", response_model=AlertResponse)

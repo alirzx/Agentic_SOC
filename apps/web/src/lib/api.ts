@@ -1224,6 +1224,58 @@ export const alertsApi = {
         model: payload.model ?? undefined,
       }),
     }),
+
+  /** Persist AI Investigation Markdown for bilingual Report export. */
+  saveInvestigationReport: (
+    alertId: string,
+    payload: { markdown: string; investigation_id?: string | null },
+  ) =>
+    request<unknown>(`/api/v1/alerts/${alertId}/investigation-report`, {
+      method: 'POST',
+      body: JSON.stringify({
+        markdown: payload.markdown,
+        investigation_id: payload.investigation_id ?? undefined,
+      }),
+    }),
+
+  /**
+   * Bilingual (EN + FA) incident report for true-positive alerts.
+   * Returns Markdown text; 409 when disposition is not true_positive.
+   */
+  getIncidentReportMarkdown: async (
+    alertId: string,
+    investigationMarkdown?: string | null,
+  ): Promise<string> => {
+    const headers: Record<string, string> = {
+      Accept: 'text/markdown, text/plain;q=0.9, */*;q=0.8',
+      'X-Tenant-Id': getActiveTenantId(),
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        /* localStorage unavailable; ignore */
+      }
+    }
+    const qs =
+      investigationMarkdown && investigationMarkdown.trim()
+        ? `?investigation_markdown=${encodeURIComponent(
+            investigationMarkdown.trim().slice(0, 40_000),
+          )}`
+        : '';
+    const url = `${API_BASE}/api/v1/alerts/${encodeURIComponent(alertId)}/report.md${qs}`;
+    const response = await fetch(url, { headers, cache: 'no-store' });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /alerts/${alertId}/report.md`,
+        response.status,
+        detail,
+      );
+    }
+    return response.text();
+  },
 };
 
 // ─── Investigation Queue (W7) ───────────────────────────────────────────────

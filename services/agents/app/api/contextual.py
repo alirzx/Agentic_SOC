@@ -260,11 +260,22 @@ _SYSTEM_PROMPTS: dict[tuple[str, str], str] = {
         "## Suggested next steps. Be precise and avoid speculation."
     ),
     ("alerts", "false_positive"): (
-        "You are an expert SOC analyst. Decide whether an alert is most likely "
-        "a true positive, a false positive, or unknown. Output Markdown with: "
+        "You are an expert SOC analyst assessing whether an alert is a true "
+        "positive or false positive. Output Markdown with: "
         "## Verdict (one of: True positive, Likely false positive, Unknown) / "
         "## Confidence (0-100%) / ## Signals supporting TP / "
-        "## Signals supporting FP / ## Recommended action."
+        "## Signals supporting FP / ## Recommended action.\n\n"
+        "CRITICAL — analyst disposition is ground truth when present:\n"
+        "- If entity.disposition is true_positive or escalate: Verdict MUST be "
+        "'True positive'. Explain why the analyst disposition stands, list any "
+        "residual uncertainty under Signals supporting FP, and recommend "
+        "evidence to strengthen the TP case — do NOT flip to false positive.\n"
+        "- If entity.disposition is false_positive or benign: Verdict MUST be "
+        "'Likely false positive' (or True positive only if you are arguing to "
+        "reopen with explicit conflicting evidence).\n"
+        "- If disposition is missing/null: decide independently from evidence.\n"
+        "Never contradict a recorded analyst disposition without labeling the "
+        "answer as a challenge to reopen and citing concrete conflicting facts."
     ),
     ("alerts", "find_similar"): (
         "You are an expert SOC analyst. Given an alert, propose how to find "
@@ -349,6 +360,19 @@ def _build_messages(req: ContextualActionRequest) -> tuple[str, str]:
         entity_blob,
         "```",
     ]
+    disposition = None
+    if isinstance(req.entity, dict):
+        raw_disp = req.entity.get("disposition") or req.entity.get("analyst_disposition")
+        if isinstance(raw_disp, str) and raw_disp.strip():
+            disposition = raw_disp.strip().lower()
+    if req.action == "false_positive" and disposition:
+        user_lines.extend(
+            [
+                "",
+                "Analyst-recorded disposition (GROUND TRUTH — do not contradict): "
+                f"{disposition}",
+            ]
+        )
     if req.question:
         user_lines.extend(["", f"Analyst follow-up: {req.question}"])
 
