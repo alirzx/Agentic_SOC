@@ -1094,7 +1094,11 @@ export const alertsApi = {
       page_size?: number;
       pageSize?: number;
     }>('/api/v1/alerts', {
-      params: filters as Record<string, string>,
+      // The API reads `page_size` (snake_case); `pageSize` alone was ignored.
+      params: {
+        ...filters,
+        ...(filters.pageSize ? { page_size: filters.pageSize } : {}),
+      } as Record<string, string | number>,
     });
     const rows = Array.isArray(raw.alerts)
       ? raw.alerts

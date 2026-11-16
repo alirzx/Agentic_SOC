@@ -1,78 +1,75 @@
-import Image from 'next/image';
-import Link from 'next/link';
-import { BrandLogo } from '@/components/brand/BrandLogo';
-import { BRAND } from '@/lib/brand';
+import Link from "next/link";
+import { BrandWordmark } from "@/components/brand/BrandWordmark";
+import { BRAND } from "@/lib/brand";
 
-const LOGIN_HREF = '/login';
-const GET_STARTED_HREF = '/login';
+const LOGIN_HREF = "/login";
+const GET_STARTED_HREF = "/login";
 
 const SUBCOPY_LEAD =
-  'Discover relationships between assets, services, users, and network activity. Analyze connections, detect anomalies, and investigate your infrastructure with';
-const SUBCOPY_EMPHASIS = 'AI-powered';
-const SUBCOPY_TAIL = 'insights.';
+  "Detect threats, investigate security incidents, and automate your security operations with AI-powered intelligence. Correlate alerts, uncover hidden attack patterns, and accelerate incident response with autonomous";
+const SUBCOPY_EMPHASIS = "AI agents";
 
 /**
- * Landing hero — real HTML/CSS matching the Soorin design.
- * Mesh art is decorative only (`soorin-hero-mesh.jpg`); all copy and CTAs
- * are coded so nothing is a zoomed screenshot.
+ * Landing hero — real HTML/CSS matching the Soorin light hero design.
+ * The wave-line art and teal glows are decorative only
+ * (`/landing-hero-bg.svg`, extracted from the design with no baked-in UI
+ * text); all copy and CTAs are coded so nothing is a zoomed screenshot.
+ *
+ * Colours are explicit hex values on purpose: this splash keeps its light
+ * design regardless of the console theme.
  */
 export function SoorinHero() {
   return (
-    <main className="relative flex h-dvh flex-col overflow-hidden bg-[#05080f] font-sans text-white">
-      {/* Decorative mesh — right side only, no baked-in UI text */}
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-[70%] sm:w-[65%] lg:w-[58%]">
-        <Image
-          src="/soorin-hero-mesh.jpg"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 1024px) 70vw, 58vw"
-          className="object-cover object-left"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#05080f] via-[#05080f]/55 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#05080f]/80 via-transparent to-[#05080f]/35" />
-      </div>
-
-      <div
+    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-[#ffffff] font-sans text-[#121724]">
+      {/* Decorative background — glows + wave lines */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- decorative SVG art */}
+      <img
+        src="/landing-hero-bg.svg"
+        alt=""
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(79,210,194,0.14),_transparent_42%)]"
+        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-[70%_50%] opacity-70"
       />
 
-      <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-10 lg:px-14">
+      <header className="relative z-10 flex items-center justify-between px-5 pl-6 py-6 sm:px-10 lg:px-20 lg:py-8">
         <Link
           href="/"
           aria-label={BRAND.product}
-          className="inline-flex items-center rounded-full border border-white/15 bg-[#0b1c24]/75 px-3 py-1.5 backdrop-blur-sm transition hover:border-teal-20/40"
+          // Inline colour: the light-theme remap layer turns the dark-surface
+          // utility `bg-[#121724]` white, but this pill is dark by design.
+          style={{ backgroundColor: "#121724" }}
+          className="inline-flex h-12 items-center rounded-full pl-3 pr-1 transition hover:opacity-90 sm:h-16 sm:pr-1"
         >
-          <BrandLogo variant="nav" size={28} />
+          <span className="sm:hidden">
+            <BrandWordmark height={30} textClassName="text-[#ffffff]" />
+          </span>
+          <span className="hidden sm:inline">
+            <BrandWordmark height={36} textClassName="text-[#ffffff]" />
+          </span>
         </Link>
 
         <Link
           href={LOGIN_HREF}
-          className="inline-flex items-center gap-2 rounded-full bg-[#6ff3df] px-5 py-2 text-sm font-gilroy-semibold text-[#06242a] shadow-[0_8px_24px_rgba(111,243,223,0.28)] transition hover:bg-[#8af7e7]"
+          className="inline-flex h-[47px] items-center gap-2.5 rounded-full border border-[#4FD2C2] bg-[#4FD2C2] px-7 text-[15px] font-gilroy-medium text-[#ffffff] transition hover:bg-[#3AC7B6]"
         >
           <LoginGlyph />
           Log in
         </Link>
       </header>
 
-      <div className="relative z-10 flex flex-1 flex-col justify-center px-5 pb-16 sm:px-10 lg:max-w-3xl lg:px-14">
-        <h1 className="font-gilroy-bold text-[2.6rem] leading-[1.05] tracking-[-0.04em] text-white sm:text-6xl lg:text-[4.35rem]">
-          Soorin
-          <br />
-          Agentic SOC.
+      <div className="relative z-10 flex flex-1 flex-col justify-center px-5 pb-20 sm:px-10 lg:px-[110px]">
+        <h1 className="font-gilroy-bold text-[2.75rem] leading-[1.05] tracking-[-0.02em] text-[#121724] sm:text-6xl lg:text-[5.4rem]">
+          Ai-powered SOC.
         </h1>
-        <p className="mt-7 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg font-gilroy-medium">
-          {SUBCOPY_LEAD}{' '}
-          <span className="font-gilroy-semibold text-[#6ff3df]">{SUBCOPY_EMPHASIS}</span>{' '}
-          {SUBCOPY_TAIL}
+        <p className="mt-8 max-w-[1020px] text-base leading-[1.65] text-[#121724] sm:text-lg lg:text-[23px] font-gilroy-medium">
+          {SUBCOPY_LEAD}{" "}
+          <span className="font-gilroy-semibold text-[#4FD2C2]">{SUBCOPY_EMPHASIS}</span>.
         </p>
         <Link
           href={GET_STARTED_HREF}
-          className="mt-10 inline-flex w-fit items-center gap-2 rounded-full bg-[#6ff3df] px-7 py-3 text-base font-gilroy-semibold text-[#06242a] shadow-[0_10px_28px_rgba(111,243,223,0.3)] transition hover:bg-[#8af7e7]"
+          className="mt-12 inline-flex h-[54px] w-fit items-center gap-4 rounded-[10px] bg-[#58DFCF] px-8 text-[19px] font-gilroy-semibold text-[#ffffff] shadow-[0_0_0_3px_rgba(106,248,231,0.25)] transition hover:bg-[#4FD2C2]"
         >
           Get started
-          <span aria-hidden>→</span>
+          <ArrowGlyph />
         </Link>
       </div>
     </main>
@@ -81,17 +78,32 @@ export function SoorinHero() {
 
 function LoginGlyph() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
-        d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+        d="M9.6 7.6c.3-3.3 2-4.6 5.7-4.6h.1c4.1 0 5.7 1.6 5.7 5.7v6.6c0 4.1-1.6 5.7-5.7 5.7h-.1c-3.6 0-5.3-1.3-5.7-4.5"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
       <path
-        d="M10 17l5-5-5-5M15 12H3"
+        d="M3 12h11.9M12.7 8.6 16 12l-3.3 3.4"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ArrowGlyph() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 12h15M13 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

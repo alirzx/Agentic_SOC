@@ -419,9 +419,10 @@ describe('InvestigationRail — related entities section', () => {
     // The pivotable principal renders an anchor.
     const aliceLink = screen.getByText('Alice (Finance)').closest('a');
     expect(aliceLink).not.toBeNull();
+    // Matches the backend pivot format (services/api/app/services/alert_rail.py).
     expect(aliceLink).toHaveAttribute(
       'href',
-      '/graph/user/alice%40example.com',
+      '/graph?entity=user:alice%40example.com',
     );
 
     // The non-pivotable host does NOT render an anchor — `closest('a')` should
@@ -431,7 +432,7 @@ describe('InvestigationRail — related entities section', () => {
 
     // The network IP chip renders an anchor too.
     const ipLink = screen.getByText('10.0.0.7').closest('a');
-    expect(ipLink).toHaveAttribute('href', '/graph/ip/10.0.0.7');
+    expect(ipLink).toHaveAttribute('href', '/graph?entity=ip:10.0.0.7');
   });
 
   it('omits the section entirely when no related entities are returned', () => {

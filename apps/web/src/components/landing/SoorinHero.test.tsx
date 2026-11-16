@@ -27,7 +27,7 @@ describe('SoorinHero', () => {
   it('renders the splash headline and both CTAs to login', () => {
     render(<SoorinHero />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      /soorin\s*agentic soc\.?/i,
+      /ai-powered soc\.?/i,
     );
     expect(screen.getByRole('link', { name: /log in/i })).toHaveAttribute(
       'href',

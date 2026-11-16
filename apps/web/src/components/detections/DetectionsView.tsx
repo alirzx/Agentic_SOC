@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
@@ -192,6 +192,17 @@ export function DetectionsView() {
   const [enabledFilter, setEnabledFilter] = useState<'all' | 'on' | 'off'>(
     'all',
   );
+
+  // Deep links (e.g. from the Coverage Advisor): `?q=T1059&enabled=off`
+  // pre-fills the search and enabled filter. Read after mount so the SSR
+  // markup and first client render agree.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) setSearch(q);
+    const enabled = params.get('enabled');
+    if (enabled === 'on' || enabled === 'off') setEnabledFilter(enabled);
+  }, []);
 
   // Selection state for bulk operations. We keep it as a Set so we can
   // do O(1) `has()` checks while rendering each rule card.

@@ -2,7 +2,6 @@
 
 /**
  * LiveFeedPanel
- *
  * Subscribes to the realtime `alerts` channel and renders the most recent
  * fused alerts as a live-streaming list. When no events have arrived yet,
  * the panel shows an honest empty state — never fabricated demo events.

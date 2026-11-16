@@ -29,19 +29,20 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 const SYSTEM_QUERY = '(prefers-color-scheme: light)';
 
 function readStoredPreference(): ThemePreference {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'light';
   try {
     const value = window.localStorage.getItem(THEME_STORAGE_KEY);
     if (value === 'light' || value === 'dark' || value === 'system') return value;
   } catch {
     // localStorage can throw on iOS private mode etc; fall back silently.
   }
-  return 'dark';
+  // Light is the product default for anyone who hasn't chosen a theme.
+  return 'light';
 }
 
 function resolvePreference(preference: ThemePreference): ResolvedTheme {
   if (preference !== 'system') return preference;
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'light';
   return window.matchMedia(SYSTEM_QUERY).matches ? 'light' : 'dark';
 }
 
@@ -57,8 +58,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Initialised with the same default the bootstrap script uses so that the
   // first React render matches the DOM the script wrote → no hydration
   // mismatch. The effect below corrects it from localStorage on mount.
-  const [preference, setPreferenceState] = useState<ThemePreference>('dark');
-  const [resolved, setResolved] = useState<ResolvedTheme>('dark');
+  const [preference, setPreferenceState] = useState<ThemePreference>('light');
+  const [resolved, setResolved] = useState<ResolvedTheme>('light');
 
   // Mount: pick up whatever the bootstrap script already wrote so the React
   // tree agrees with the DOM. Then try to reconcile with the server-stored

@@ -60,12 +60,12 @@ describe('ThemeProvider', () => {
     setSystemPrefersLight(false);
   });
 
-  it('defaults to dark when localStorage is empty', () => {
+  it('defaults to light when localStorage is empty', () => {
     const { result } = renderHook(() => useTheme(), {
       wrapper: ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
     });
-    expect(result.current.preference).toBe('dark');
-    expect(result.current.resolved).toBe('dark');
+    expect(result.current.preference).toBe('light');
+    expect(result.current.resolved).toBe('light');
   });
 
   it('hydrates from localStorage when set', () => {
@@ -87,18 +87,18 @@ describe('ThemeProvider', () => {
     expect(result.current.resolved).toBe('light');
   });
 
-  it('toggle cycles dark → light → system → dark', () => {
+  it('toggle cycles light → system → dark → light', () => {
     const { result } = renderHook(() => useTheme(), {
       wrapper: ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
     });
 
-    expect(result.current.preference).toBe('dark');
-    act(() => result.current.toggle());
     expect(result.current.preference).toBe('light');
     act(() => result.current.toggle());
     expect(result.current.preference).toBe('system');
     act(() => result.current.toggle());
     expect(result.current.preference).toBe('dark');
+    act(() => result.current.toggle());
+    expect(result.current.preference).toBe('light');
   });
 
   it('persists the choice to localStorage and writes data-theme onto <html>', () => {

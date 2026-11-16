@@ -8,7 +8,7 @@ const path = require('path');
 // `/api/v1/*`, `/api/v1/contextual/*`, `/ws/*` and `/sse` to downstream
 // services. They never reach the browser — only the Node.js process.
 //
-// Defaults are localhost for `pnpm --filter @aisoc/web dev` outside Docker.
+// Default// Defaults are localhost for `pnpm --filter @aisoc/web dev` outside Docker.
 // In the demo Compose stack the `web` service overrides these via env to
 // Docker DNS names (`http://api:8000`, `http://agents:8084`,
 // `http://realtime:4000`).
@@ -27,10 +27,21 @@ const FUSION_HOST = process.env.FUSION_URL || '';
 const ENRICHMENT_HOST = process.env.ENRICHMENT_URL || 'http://localhost:8083';
 const OSQUERY_TLS_HOST = process.env.OSQUERY_TLS_URL || 'http://localhost:8090';
 
+// Next 16 blocks dev-server assets (/_next/static chunks, the HMR socket)
+// for any origin other than localhost, so opening `next dev` from another
+// machine on the LAN (http://192.168.x.x:5000) 403s every chunk. Allow the
+// private LAN ranges by default; override with a comma-separated
+// AISOC_DEV_ORIGINS (e.g. "devbox.local,172.20.*.*"). Dev-only — ignored by
+// `next build` / `next start`.
+const DEV_ORIGINS = (process.env.AISOC_DEV_ORIGINS || '192.168.*.*,10.*.*.*,127.0.0.1')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const nextConfig = {
   reactStrictMode: true,
-  // AI Investigation / funnel backfill can exceed the default Next rewrite
-  // proxy budget (~30s). Without this the browser sees a 500/502 while the
+  allowedDevOrigins: DEV_ORIGINS,
+// proxy budget (~30s). Without this the browser sees a 500/502 while the
   // agents service is still working and the UI stuck on "Investigating…".
   experimental: {
     proxyTimeout: 180_000,

@@ -213,17 +213,17 @@ export function SavedViewsBar<TFilters extends object>({
 
   return (
     <div
-      className="flex items-center gap-2 flex-wrap py-2 px-3 bg-dark-70/80 border border-[#374151]/60 rounded-xl"
+      className="flex items-center gap-3 flex-wrap py-3 px-6 bg-surface-card border border-surface-border rounded-2xl"
       data-testid="saved-views-bar"
     >
-      <span className="text-xs text-gray-500 mr-1 shrink-0">Saved views</span>
+      <span className="text-xs text-fg-muted shrink-0">Saved views</span>
 
       {error && (
         <span className="text-xs text-red-400">Failed to load saved views</span>
       )}
 
       {!error && views.length === 0 && !isLoading && (
-        <span className="text-xs text-gray-600 italic">
+        <span className="text-xs text-fg-subtle">
           None yet — save your current filters to come back to them later.
         </span>
       )}
@@ -313,7 +313,7 @@ export function SavedViewsBar<TFilters extends object>({
         <button
           type="button"
           onClick={() => setSaveDialogOpen(true)}
-          className="text-xs px-2.5 py-1 rounded-lg border border-dashed border-[#333A47] text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
+          className="text-xs px-4 py-2 rounded-lg border border-dashed border-gray-600 text-fg-muted hover:text-fg-primary hover:border-teal-20/60 transition-colors"
           data-testid="save-current-view-btn"
         >
           + Save current view
