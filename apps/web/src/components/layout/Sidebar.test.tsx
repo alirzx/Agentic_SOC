@@ -38,15 +38,11 @@ describe('Sidebar', () => {
     // everything else is grouped under one of these four titles.
     expect(screen.getByText('Threat Operations')).toBeInTheDocument();
     expect(screen.getByText('Intelligence')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /agentic shadow runs/i })).toHaveAttribute(
-      'href',
-      '/agentic/shadow-runs',
-    );
     expect(screen.getByText('Automation')).toBeInTheDocument();
     expect(screen.getByText('Platform')).toBeInTheDocument();
   });
 
-  it('exposes the workflow soc and compliance entry points', () => {
+  it('exposes core workflow entry points and hides deferred surfaces', () => {
     render(<Sidebar />);
 
     const workflow = screen.getByRole('link', { name: /workflow soc/i });
@@ -55,11 +51,13 @@ describe('Sidebar', () => {
     const funnel = screen.getByRole('link', { name: /soc funnel/i });
     expect(funnel).toHaveAttribute('href', '/soc-funnel');
 
-    const compliance = screen.getByRole('link', { name: /compliance/i });
-    expect(compliance).toHaveAttribute('href', '/compliance');
-
     const users = screen.getByRole('link', { name: /^users$/i });
     expect(users).toHaveAttribute('href', '/settings/users');
+
+    expect(screen.queryByRole('link', { name: /investigation queue/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^hunt$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /compliance/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /agentic shadow runs/i })).not.toBeInTheDocument();
   });
 
   it('renders the MIT license attribution in the footer', () => {
