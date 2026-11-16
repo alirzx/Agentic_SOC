@@ -2303,6 +2303,41 @@ export const casesApi = {
     URL.revokeObjectURL(url);
   },
 
+  /**
+   * Agent-authored Markdown report for a completed investigation run.
+   * Requires bearer auth — do not call with a bare same-origin fetch.
+   */
+  getInvestigationReportMarkdown: async (
+    caseId: string,
+    runId: string,
+  ): Promise<string> => {
+    const headers: Record<string, string> = {
+      Accept: 'text/markdown, text/plain;q=0.9, */*;q=0.8',
+      'X-Tenant-Id': getActiveTenantId(),
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        /* localStorage unavailable; ignore */
+      }
+    }
+    const resp = await fetch(
+      `${API_BASE}/api/v1/cases/${encodeURIComponent(caseId)}/investigations/${encodeURIComponent(runId)}/report.md`,
+      { headers, cache: 'no-store' },
+    );
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => '');
+      throw new ApiError(
+        `API ${resp.status} ${resp.statusText} — /cases/${caseId}/investigations/${runId}/report.md`,
+        resp.status,
+        detail,
+      );
+    }
+    return resp.text();
+  },
+
   // WS-D2 — auto-summary at investigation close.
   // The backend renders both the structured payload (json) and a print-ready
   // page (html). We expose JSON for callers that want to drive their own UI

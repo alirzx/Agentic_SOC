@@ -1519,6 +1519,88 @@ async def case_auto_postmortem(
     return postmortem
 
 
+async def _proxy_investigation_report(
+    *,
+    case_id: str,
+    run_id: str,
+    tenant_id: uuid.UUID | str,
+    suffix: str,
+    default_media_type: str,
+    disposition: str,
+) -> Response:
+    """Proxy an agents investigation report artifact (``.md`` / ``.html`` / ``.pdf``).
+
+    The Case workspace fetches
+    ``/cases/{id}/investigations/{run_id}/report.md`` after a run completes.
+    Agents owns the artifact at ``/investigations/{run_id}/report.*``; without
+    this proxy the console gets a FastAPI 404 (``{"detail":"Not Found"}``)
+    even though the run itself is healthy.
+    """
+    if suffix not in {"md", "html", "pdf"}:
+        raise HTTPException(status_code=400, detail="unsupported_report_format")
+    safe_run_id = quote(run_id, safe="")
+    resp = await _agents_proxy(
+        "GET",
+        f"/api/v1/investigations/{safe_run_id}/report.{suffix}",
+        tenant_id=tenant_id,
+    )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    safe_case_id = _safe_filename_segment(case_id)
+    safe_run_id_filename = _safe_filename_segment(run_id)
+    filename = f"case-{safe_case_id}-{safe_run_id_filename}.{suffix}"
+    return Response(
+        content=resp.content,
+        media_type=resp.headers.get("content-type", default_media_type),
+        headers={
+            "Content-Disposition": resp.headers.get(
+                "content-disposition",
+                f'{disposition}; filename="{filename}"',
+            ),
+        },
+    )
+
+
+@router.get(
+    "/{case_id}/investigations/{run_id}/report.md",
+    summary="Download investigation Markdown report",
+    response_class=PlainTextResponse,
+)
+async def case_investigation_markdown(
+    case_id: str,
+    run_id: str,
+    user: AuthUser,
+) -> Response:
+    return await _proxy_investigation_report(
+        case_id=case_id,
+        run_id=run_id,
+        tenant_id=user.tenant_id,
+        suffix="md",
+        default_media_type="text/markdown; charset=utf-8",
+        disposition="inline",
+    )
+
+
+@router.get(
+    "/{case_id}/investigations/{run_id}/report.html",
+    summary="Download investigation HTML report",
+    response_class=HTMLResponse,
+)
+async def case_investigation_html(
+    case_id: str,
+    run_id: str,
+    user: AuthUser,
+) -> Response:
+    return await _proxy_investigation_report(
+        case_id=case_id,
+        run_id=run_id,
+        tenant_id=user.tenant_id,
+        suffix="html",
+        default_media_type="text/html; charset=utf-8",
+        disposition="inline",
+    )
+
+
 @router.get(
     "/{case_id}/investigations/{run_id}/report.pdf",
     summary="Download investigation PDF report",
@@ -1528,25 +1610,13 @@ async def case_investigation_pdf(
     run_id: str,
     user: AuthUser,
 ) -> Response:
-    safe_run_id = quote(run_id, safe="")
-    resp = await _agents_proxy(
-        "GET",
-        f"/api/v1/investigations/{safe_run_id}/report.pdf",
+    return await _proxy_investigation_report(
+        case_id=case_id,
+        run_id=run_id,
         tenant_id=user.tenant_id,
-    )
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    safe_case_id = _safe_filename_segment(case_id)
-    safe_run_id_filename = _safe_filename_segment(run_id)
-    return Response(
-        content=resp.content,
-        media_type=resp.headers.get("content-type", "application/pdf"),
-        headers={
-            "Content-Disposition": resp.headers.get(
-                "content-disposition",
-                f'attachment; filename="case-{safe_case_id}-{safe_run_id_filename}.pdf"',
-            ),
-        },
+        suffix="pdf",
+        default_media_type="application/pdf",
+        disposition="attachment",
     )
 
 
