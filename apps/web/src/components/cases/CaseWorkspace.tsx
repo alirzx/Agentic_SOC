@@ -483,7 +483,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       }, 5000);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Backend offline';
-      toast(`Demo mode: investigation not available (${message})`);
+      toast.error(`Investigation unavailable (${message})`);
       // Set demo investigation result
       setInvestigationStatus('completed');
       setInvestigationData({
