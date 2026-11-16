@@ -95,12 +95,12 @@ async def get_investigation(run_id: str, request: Request):
     run = _runs.get(run_id)
     if not run:
         # ``app.main`` historically registered this legacy route before the
-        # newer investigator route at the same path. Serve the newer store as
-        # a compatibility fallback so route ordering cannot bypass ownership
+        # newer investigator route at the same path. Serve the durable store
+        # as a compatibility fallback so route ordering cannot bypass ownership
         # or make successfully launched investigator runs unpollable.
-        from app.api.investigate import _runs as investigator_runs  # noqa: PLC0415
+        from app.api import investigation_run_store as run_store  # noqa: PLC0415
 
-        run = investigator_runs.get(run_id)
+        run = await run_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Investigation run not found")
     await require_run_owner(request, run.get("_tenant_owner"))

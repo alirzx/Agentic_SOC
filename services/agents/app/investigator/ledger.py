@@ -382,6 +382,47 @@ async def complete_run(
         )
 
 
+async def fetch_run(run_id: uuid.UUID) -> dict[str, Any] | None:
+    """Load one ``investigation_runs`` row (+ latest report_md artifact).
+
+    Used by poll endpoints when the Redis/in-memory run store misses after an
+    agents restart. Best-effort — returns None when the DB is unavailable.
+    """
+    pool = await get_pool()
+    if pool is None:
+        return None
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, tenant_id, case_id, alert_summary, model_used,
+                       status, error, started_at, completed_at
+                  FROM investigation_runs
+                 WHERE id = $1
+                """,
+                run_id,
+            )
+            if row is None:
+                return None
+            data = dict(row)
+            report = await conn.fetchval(
+                """
+                SELECT content
+                  FROM investigation_artifacts
+                 WHERE run_id = $1 AND kind = 'report_md'
+                 ORDER BY created_at DESC
+                 LIMIT 1
+                """,
+                run_id,
+            )
+            if isinstance(report, str) and report.strip():
+                data["report_md"] = report
+            return data
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ledger.fetch_run_failed", run_id=str(run_id), error=str(exc))
+        return None
+
+
 def _coerce_uuid(value: Any) -> uuid.UUID | None:
     try:
         return uuid.UUID(str(value))

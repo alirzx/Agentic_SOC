@@ -25,6 +25,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, WebSocke
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
+from app.api import investigation_run_store as run_store
 from app.investigator import InvestigatorOrchestrator
 from app.orchestrator.router import RouterOrchestrator
 from app.privacy.tenant import require_run_owner, resolve_request_tenant, resolve_tenant_for_llm, trusted_workflow_tenant
@@ -62,9 +63,8 @@ def is_router_investigate_enabled() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Simple in-memory run store (swap for Redis in production)
+# Durable run store (Redis + in-process fallback) — see investigation_run_store
 # ---------------------------------------------------------------------------
-_runs: dict[str, dict[str, Any]] = {}
 _orch = InvestigatorOrchestrator()
 _router_orch = RouterOrchestrator()
 
@@ -180,9 +180,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
         ):
             if event.get("type") == "step":
                 audit_log.append(event)
-                # Update the in-memory run so pollers see progress
-                _runs[run_id]["audit_log"] = audit_log
-                # Broadcast to realtime → WebSocket clients
+                await run_store.mutate_run(run_id, audit_log=audit_log)
                 await _emit_event(run_id, req.tenant_id, event)
 
             elif event.get("type") == "done":
@@ -192,7 +190,8 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
                     final_status = "completed"
                 state_error = state_data.get("error")
                 err_msg = _safe_error_message(state_error) if final_status == "failed" else None
-                _runs[run_id].update(
+                await run_store.update_run(
+                    run_id,
                     {
                         "status": final_status,
                         "report_md": state_data.get("report_md", ""),
@@ -203,7 +202,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
                         "responder": state_data.get("responder", {}),
                         "completed_at": datetime.utcnow().isoformat(),
                         "error": err_msg,
-                    }
+                    },
                 )
                 await _emit_event(
                     run_id,
@@ -222,7 +221,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
 
             elif event.get("type") == "error":
                 err_msg = _safe_error_message(event.get("error")) or "Investigation failed"
-                _runs[run_id].update({"status": "failed", "error": err_msg})
+                await run_store.mutate_run(run_id, status="failed", error=err_msg)
                 await _emit_event(
                     run_id,
                     req.tenant_id,
@@ -242,7 +241,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
             error_category=type(exc).__name__,
             error=err_msg,
         )
-        _runs[run_id].update({"status": "failed", "error": err_msg})
+        await run_store.mutate_run(run_id, status="failed", error=err_msg)
 
 
 # ---------------------------------------------------------------------------
@@ -261,13 +260,16 @@ async def launch_investigation(
     trusted_tenant = trusted_workflow_tenant(request, body.tenant_id)
     tenant_owner = await resolve_tenant_for_llm(trusted_tenant, allow_default=True)
     run_id = str(uuid4())
-    _runs[run_id] = {
-        "run_id": run_id,
-        "case_id": case_id,
-        "_tenant_owner": tenant_owner,
-        "status": "running",
-        "started_at": datetime.utcnow().isoformat(),
-    }
+    await run_store.put_run(
+        run_id,
+        {
+            "run_id": run_id,
+            "case_id": case_id,
+            "_tenant_owner": tenant_owner,
+            "status": "running",
+            "started_at": datetime.utcnow().isoformat(),
+        },
+    )
     trusted_body = body.model_copy(update={"tenant_id": tenant_owner})
     background_tasks.add_task(_run_and_store, run_id, case_id, trusted_body)
     logger.info("investigation.launched", run_id=run_id, case_id=case_id)
@@ -279,12 +281,43 @@ async def launch_investigation(
     )
 
 
+async def _load_run_or_404(run_id: str) -> dict[str, Any]:
+    run = await run_store.get_run(run_id)
+    if run:
+        return run
+    # Ledger fallback after Redis eviction / cold start mid-poll.
+    try:
+        from app.investigator import ledger
+
+        row = await ledger.fetch_run(UUID(run_id))
+    except (ValueError, TypeError, ImportError):
+        row = None
+    if not row:
+        raise HTTPException(status_code=404, detail="Investigation run not found")
+    started = row.get("started_at")
+    completed = row.get("completed_at")
+    hydrated = {
+        "run_id": run_id,
+        "case_id": str(row.get("case_id") or ""),
+        "_tenant_owner": str(row["tenant_id"]) if row.get("tenant_id") else None,
+        "status": str(row.get("status") or "running"),
+        "started_at": started.isoformat() if hasattr(started, "isoformat") else str(started or ""),
+        "completed_at": completed.isoformat() if hasattr(completed, "isoformat") else (
+            str(completed) if completed else None
+        ),
+        "error": row.get("error"),
+        "report_md": row.get("report_md") or "",
+        "report_html": "",
+        "audit_log": [],
+    }
+    await run_store.put_run(run_id, hydrated)
+    return hydrated
+
+
 @router.get("/investigations/{run_id}")
 async def get_investigation(run_id: str, request: Request):
     """Poll investigation status and results."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Investigation run not found")
+    run = await _load_run_or_404(run_id)
     await require_run_owner(request, run.get("_tenant_owner"))
     slim = {k: v for k, v in run.items() if k not in ("report_md", "report_html", "_tenant_owner")}
     return slim
@@ -293,9 +326,7 @@ async def get_investigation(run_id: str, request: Request):
 @router.get("/investigations/{run_id}/report.md", response_class=PlainTextResponse)
 async def get_report_md(run_id: str, request: Request):
     """Download the Markdown incident report."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = await _load_run_or_404(run_id)
     await require_run_owner(request, run.get("_tenant_owner"))
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
@@ -305,9 +336,7 @@ async def get_report_md(run_id: str, request: Request):
 @router.get("/investigations/{run_id}/report.html", response_class=HTMLResponse)
 async def get_report_html(run_id: str, request: Request):
     """Download the HTML incident report."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = await _load_run_or_404(run_id)
     await require_run_owner(request, run.get("_tenant_owner"))
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
@@ -319,9 +348,7 @@ async def get_report_pdf(run_id: str, request: Request):
     """Download the PDF incident report (rendered from HTML via weasyprint)."""
     from fastapi.responses import Response as FastAPIResponse
 
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = await _load_run_or_404(run_id)
     await require_run_owner(request, run.get("_tenant_owner"))
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
@@ -355,8 +382,8 @@ async def stream_investigation(ws: WebSocket, run_id: str):
     WebSocket stream: emits per-step JSON events as the pipeline progresses.
 
     Two modes:
-    1. If the run is already in _runs (background task is running), replay
-       its current audit_log and then long-poll for completion.
+    1. If the run is already in the durable store (background task is running),
+       replay its current audit_log and then long-poll for completion.
     2. If query params case_id + alert_summary are supplied, run a fresh
        investigation directly on this connection (dev/test use-case).
     """
@@ -365,7 +392,7 @@ async def stream_investigation(ws: WebSocket, run_id: str):
         await ws.close(code=1008)
         return
     owner = await resolve_tenant_for_llm(authenticated, allow_default=True)
-    run = _runs.get(run_id)
+    run = await run_store.get_run(run_id)
     if run is not None:
         if run.get("_tenant_owner") != owner:
             await ws.close(code=1008)
@@ -380,17 +407,16 @@ async def stream_investigation(ws: WebSocket, run_id: str):
     await ws.accept()
     try:
         # If a background run exists, tail it via polling
-        if run_id in _runs:
+        if run is not None:
             seen = 0
             while True:
-                run = _runs.get(run_id, {})
-                audit = run.get("audit_log", [])
-                # Send any new audit entries
+                current = await run_store.get_run(run_id) or {}
+                audit = current.get("audit_log", [])
                 for entry in audit[seen:]:
                     await ws.send_text(json.dumps({"type": "step", **entry}))
                 seen = len(audit)
 
-                status = run.get("status", "running")
+                status = current.get("status", "running")
                 if status in ("completed", "failed"):
                     await ws.send_text(
                         json.dumps(
@@ -398,7 +424,7 @@ async def stream_investigation(ws: WebSocket, run_id: str):
                                 "type": "done" if status == "completed" else "error",
                                 "case_id": case_id,
                                 "status": status,
-                                "error": run.get("error"),
+                                "error": current.get("error"),
                             }
                         )
                     )
