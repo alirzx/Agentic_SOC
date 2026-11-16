@@ -149,6 +149,16 @@ async def _emit_event(run_id: str, tenant_id: str, event: dict[str, Any]) -> Non
 # ---------------------------------------------------------------------------
 
 
+def _safe_error_message(exc: Any, *, max_len: int = 500) -> str | None:
+    """Return a short, non-secret error string for API/UI surfaces."""
+    if exc is None:
+        return None
+    text = str(exc).replace("\r", " ").replace("\n", " ").strip()
+    if not text:
+        return None
+    return text[:max_len]
+
+
 async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> None:
     audit_log: list[dict[str, Any]] = []
     # Reuse the API-issued run id as the ledger row id so consumers can
@@ -177,9 +187,14 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
 
             elif event.get("type") == "done":
                 state_data = event.get("state", {})
+                final_status = str(state_data.get("status") or "completed")
+                if final_status not in {"completed", "failed", "cancelled"}:
+                    final_status = "completed"
+                state_error = state_data.get("error")
+                err_msg = _safe_error_message(state_error) if final_status == "failed" else None
                 _runs[run_id].update(
                     {
-                        "status": "completed",
+                        "status": final_status,
                         "report_md": state_data.get("report_md", ""),
                         "report_html": state_data.get("report_html", ""),
                         "audit_log": audit_log,
@@ -187,22 +202,26 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
                         "forensic": state_data.get("forensic", {}),
                         "responder": state_data.get("responder", {}),
                         "completed_at": datetime.utcnow().isoformat(),
-                        "error": None,
+                        "error": err_msg,
                     }
                 )
                 await _emit_event(
                     run_id,
                     req.tenant_id,
                     {
-                        "kind": "completed",
+                        "kind": "completed" if final_status == "completed" else "error",
                         "agent": "orchestrator",
-                        "summary": "Investigation completed",
-                        "data": {"status": "completed"},
+                        "summary": (
+                            "Investigation completed"
+                            if final_status == "completed"
+                            else (err_msg or "Investigation failed")
+                        ),
+                        "data": {"status": final_status},
                     },
                 )
 
             elif event.get("type") == "error":
-                err_msg = "Investigation failed"
+                err_msg = _safe_error_message(event.get("error")) or "Investigation failed"
                 _runs[run_id].update({"status": "failed", "error": err_msg})
                 await _emit_event(
                     run_id,
@@ -216,8 +235,14 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
                 )
 
     except Exception as exc:  # noqa: BLE001
-        logger.error("investigation_bg_task failed", run_id=run_id, error_category=type(exc).__name__)
-        _runs[run_id].update({"status": "failed", "error": "Investigation failed"})
+        err_msg = _safe_error_message(exc) or "Investigation failed"
+        logger.error(
+            "investigation_bg_task failed",
+            run_id=run_id,
+            error_category=type(exc).__name__,
+            error=err_msg,
+        )
+        _runs[run_id].update({"status": "failed", "error": err_msg})
 
 
 # ---------------------------------------------------------------------------
