@@ -537,7 +537,31 @@ async def explain_step(
         InvestigationArtifact.run_id == run_id,
         InvestigationArtifact.event_id == focus.id,
     )
-    arts = (await db.execute(arts_q)).scalars().all()
+    arts = list((await db.execute(arts_q)).scalars().all())
+
+    # REPORT steps historically stored only ``report_hash`` on the event and
+    # wrote the markdown as a run-level artifact (event_id NULL). Resolve that
+    # blob so the explain panel can show readable content, not just the hash.
+    focus_kind = str(focus.kind or "").lower()
+    payload = focus.payload if isinstance(focus.payload, dict) else {}
+    report_hash = str(payload.get("report_hash") or focus.output_hash or "").strip().lower()
+    if focus_kind in {"report", "rpt"} or report_hash or payload.get("report_preview"):
+        seen = {a.id for a in arts}
+        extras_q = select(InvestigationArtifact).where(
+            InvestigationArtifact.run_id == run_id,
+            InvestigationArtifact.kind.in_(("report_md", "report_html", "summary_md")),
+        )
+        for art in (await db.execute(extras_q)).scalars().all():
+            if art.id in seen:
+                continue
+            if report_hash and str(art.sha256 or "").lower() == report_hash:
+                arts.append(art)
+                seen.add(art.id)
+                continue
+            # Fallback: any unbound report_md for this run when focus is a report step.
+            if focus_kind in {"report", "rpt"} and art.event_id is None and art.kind == "report_md":
+                arts.append(art)
+                seen.add(art.id)
 
     return ExplainResponse(
         run=_run_to_summary(run),

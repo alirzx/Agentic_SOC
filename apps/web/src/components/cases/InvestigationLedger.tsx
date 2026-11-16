@@ -764,8 +764,11 @@ function ExplainPanel({ runId, step }: { runId: string; step: number }) {
           )}
         </div>
 
+        {/* Readable investigation report (resolved from hash / artifact) */}
+        <ReportReadableBlock runId={runId} focus={focus} artifacts={artifacts} />
+
         {/* Cryptographic hashes for replay verification */}
-        {(focus.input_hash || focus.output_hash) && (
+        {(focus.input_hash || focus.output_hash || reportHashOf(focus)) && (
           <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
               Replay hashes
@@ -774,29 +777,36 @@ function ExplainPanel({ runId, step }: { runId: string; step: number }) {
               {focus.input_hash && (
                 <HashRow label="input" value={focus.input_hash} />
               )}
-              {focus.output_hash && (
-                <HashRow label="output" value={focus.output_hash} />
+              {(focus.output_hash || reportHashOf(focus)) && (
+                <HashRow
+                  label="report"
+                  value={focus.output_hash || reportHashOf(focus) || ''}
+                />
               )}
             </div>
           </div>
         )}
 
-        {/* Payload */}
-        {focus.payload && Object.keys(focus.payload).length > 0 && (
-          <CollapsibleBlock title="Payload" defaultOpen>
-            <JsonView value={focus.payload} />
+        {/* Payload — hide opaque hash-only blobs when we already show the report */}
+        {focus.payload &&
+          Object.keys(focus.payload).length > 0 &&
+          !isHashOnlyReportPayload(focus.payload) && (
+          <CollapsibleBlock title="Payload" defaultOpen={false}>
+            <JsonView value={stripReportPreview(focus.payload)} />
           </CollapsibleBlock>
         )}
 
-        {/* Artifacts (LLM transcripts, tool I/O) */}
-        {artifacts.length > 0 && (
+        {/* Artifacts (LLM transcripts, tool I/O) — report_md rendered above */}
+        {artifacts.filter((a) => a.kind !== 'report_md').length > 0 && (
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Artifacts ({artifacts.length})
+              Artifacts ({artifacts.filter((a) => a.kind !== 'report_md').length})
             </p>
-            {artifacts.map((art) => (
-              <ArtifactBlock key={art.id} artifact={art} />
-            ))}
+            {artifacts
+              .filter((a) => a.kind !== 'report_md')
+              .map((art) => (
+                <ArtifactBlock key={art.id} artifact={art} />
+              ))}
           </div>
         )}
 
@@ -815,6 +825,152 @@ function ExplainPanel({ runId, step }: { runId: string; step: number }) {
         </div>
       </div>
     </Panel>
+  );
+}
+
+function reportHashOf(event: LedgerEvent): string | null {
+  const payload = event.payload;
+  if (!payload || typeof payload !== 'object') return null;
+  const hash = payload.report_hash;
+  return typeof hash === 'string' && hash.trim() ? hash.trim() : null;
+}
+
+function isHashOnlyReportPayload(payload: Record<string, unknown>): boolean {
+  const keys = Object.keys(payload).filter((k) => payload[k] !== undefined && payload[k] !== null);
+  const interesting = keys.filter((k) => !['duration_ms', 'report_chars', 'report_format'].includes(k));
+  return (
+    interesting.length > 0 &&
+    interesting.every((k) => k === 'report_hash') &&
+    typeof payload.report_hash === 'string'
+  );
+}
+
+function stripReportPreview(payload: Record<string, unknown>): Record<string, unknown> {
+  const { report_preview: _preview, ...rest } = payload;
+  return rest;
+}
+
+function resolveReportMarkdown(
+  focus: LedgerEvent,
+  artifacts: LedgerArtifactDetail[],
+): { markdown: string; source: 'artifact' | 'preview'; sha256?: string } | null {
+  const wantHash = (reportHashOf(focus) || focus.output_hash || '').toLowerCase();
+  const reports = artifacts.filter((a) => a.kind === 'report_md' && !!a.content);
+  if (wantHash) {
+    const match = reports.find((a) => a.sha256.toLowerCase() === wantHash);
+    if (match?.content) {
+      return { markdown: match.content, source: 'artifact', sha256: match.sha256 };
+    }
+  }
+  if (reports[0]?.content) {
+    return {
+      markdown: reports[0].content,
+      source: 'artifact',
+      sha256: reports[0].sha256,
+    };
+  }
+  const preview = focus.payload?.report_preview;
+  if (typeof preview === 'string' && preview.trim()) {
+    return { markdown: preview, source: 'preview' };
+  }
+  return null;
+}
+
+function ReportReadableBlock({
+  runId,
+  focus,
+  artifacts,
+}: {
+  runId: string;
+  focus: LedgerEvent;
+  artifacts: LedgerArtifactDetail[];
+}) {
+  const kind = (focus.kind || '').toLowerCase();
+  const wantHash = (reportHashOf(focus) || focus.output_hash || '').toLowerCase();
+  const local = resolveReportMarkdown(focus, artifacts);
+  const needsFetch =
+    !local &&
+    !!wantHash &&
+    (kind === 'report' || kind === 'reporter' || !!reportHashOf(focus));
+
+  const { data: fetched, isLoading } = useSWR<LedgerArtifactDetail | null>(
+    needsFetch ? ['ledger.report_by_hash', runId, wantHash] : null,
+    async () => {
+      const list = await ledgerApi.listArtifacts(runId);
+      const hit =
+        list.find(
+          (a) =>
+            a.kind === 'report_md' && a.sha256.toLowerCase() === wantHash,
+        ) || list.find((a) => a.kind === 'report_md');
+      if (!hit) return null;
+      return ledgerApi.getArtifact(runId, hit.id);
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+
+  const resolved =
+    local ||
+    (fetched?.content
+      ? {
+          markdown: fetched.content,
+          source: 'artifact' as const,
+          sha256: fetched.sha256,
+        }
+      : null);
+
+  const isReportStep =
+    kind === 'report' || kind === 'reporter' || !!reportHashOf(focus) || !!resolved;
+  if (!isReportStep) return null;
+
+  if (isLoading && !resolved) {
+    return (
+      <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+        <Skeleton className="mb-2 h-4 w-1/4 rounded" />
+        <Skeleton className="h-40 w-full rounded" />
+      </div>
+    );
+  }
+
+  if (!resolved) {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-300/90">
+          Report content
+        </p>
+        <p className="mt-1.5 text-xs text-slate-400">
+          Only a content hash was stored on this step
+          {wantHash ? (
+            <>
+              {' '}
+              (<code className="font-mono text-[10px] text-slate-300">{wantHash.slice(0, 16)}…</code>)
+            </>
+          ) : null}
+          . The full markdown artifact was not found for this run — open the Case{' '}
+          <span className="text-slate-300">Report</span> tab or re-run investigation.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-teal-500/30 bg-slate-950/50">
+      <div className="flex items-center gap-2 border-b border-slate-800/60 px-3 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-300/90">
+          Report content
+        </p>
+        <span className="text-[10px] text-slate-500">
+          {resolved.source === 'preview' ? 'preview from step payload' : 'resolved from artifact'}
+        </span>
+        {resolved.sha256 && (
+          <code className="ml-auto truncate font-mono text-[10px] text-slate-500">
+            sha256:{resolved.sha256.slice(0, 12)}…
+          </code>
+        )}
+      </div>
+      <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap p-3 font-mono text-[11px] leading-relaxed text-slate-200">
+        {resolved.markdown}
+      </pre>
+    </div>
   );
 }
 
