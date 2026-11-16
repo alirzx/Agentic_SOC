@@ -318,11 +318,12 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
         raw_alert=raw,
     )
     camp_key = primary_campaign_key(theme, entities)
-    title = campaign_case_title(theme, entities)
+    # Title/description finalized after sibling fan-out (linked_alert_count).
+    title = campaign_case_title(theme, entities, linked_alert_count=1)
     findings_blob = "\n".join(f"- {f}" for f in (state.findings or [])[:12])
     entity_bits = ", ".join(f"{k}:{v}" for k, v in entities[:6]) or "(no strong entity)"
     description = (
-        f"Auto-created by Agentic SOC funnel as an attack-campaign case.\n"
+        f"Auto-created by Agentic SOC funnel as an incident case.\n"
         f"Theme: {theme}\n"
         f"Entities: {entity_bits}\n"
         f"Disposition: {verdict} (confidence={float(state.confidence or 0.0):.2f})\n"
@@ -471,9 +472,23 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                 )
 
                 linked_ids = [alert_uuid] + [r["id"] for r in related_rows]
+                linked_n = len(linked_ids)
+                title = campaign_case_title(theme, entities, linked_alert_count=linked_n)
+                case_kind = "attack-campaign" if linked_n > 1 else "incident"
+                description = (
+                    f"Auto-created by Agentic SOC funnel as an {case_kind} case.\n"
+                    f"Theme: {theme}\n"
+                    f"Entities: {entity_bits}\n"
+                    f"Disposition: {verdict} (confidence={float(state.confidence or 0.0):.2f})\n"
+                    f"Severity: {severity}\n"
+                    f"Seed alert: {alert_title}\n"
+                    f"Linked alerts: {linked_n}\n\n"
+                    f"Summary: {state.alert_summary or alert_title}\n\n"
+                    f"Investigation notes:\n{findings_blob or '- (pending enrichment)'}\n"
+                )[:8000]
                 # Reuse an open campaign case (theme + entity key), not same title.
                 existing_case = None
-                if camp_key:
+                if camp_key and linked_n > 1:
                     existing_case = await conn.fetchval(
                         """
                         SELECT id FROM aisoc_cases
@@ -531,7 +546,12 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                     )
                 created_new = existing_case is None
                 case_id = existing_case or uuid.uuid4()
-                tags = campaign_tags(theme=theme, campaign_key=camp_key, source="agentic_funnel")
+                tags = campaign_tags(
+                    theme=theme,
+                    campaign_key=camp_key,
+                    source="agentic_funnel",
+                    linked_alert_count=linked_n,
+                )
                 if created_new:
                     await conn.execute(
                         """

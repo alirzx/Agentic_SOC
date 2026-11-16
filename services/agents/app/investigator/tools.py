@@ -94,7 +94,15 @@ _MITRE_KEYWORDS: dict[str, str] = {
     "c2": "T1071",
     "exfiltration": "T1041",
     "ransomware": "T1486",
-    "privilege escalation": "T1068",
+    # Windows UAC bypass is T1548.002 — not T1548.001 (setuid/setgid) and not
+    # generic T1068 unless an actual exploit is evidenced.
+    "uac bypass": "T1548.002",
+    "bypass user account control": "T1548.002",
+    "fodhelper": "T1548.002",
+    "computerdefaults": "T1548.002",
+    "sdclt": "T1548.002",
+    "delegateexecute": "T1548.002",
+    "privilege escalation": "T1548.002",
     "persistence": "T1547",
     "reconnaissance": "T1592",
     "discovery": "T1083",
@@ -107,12 +115,24 @@ _MITRE_KEYWORDS: dict[str, str] = {
 
 def map_to_mitre(text: str) -> list[str]:
     """Heuristic keyword-to-technique mapper (extend with ATT&CK dataset)."""
+    from app.investigator.claim_validation import normalize_mitre_techniques
+
     hits: list[str] = []
     lower = text.lower()
     for keyword, technique_id in _MITRE_KEYWORDS.items():
         if keyword in lower and technique_id not in hits:
             hits.append(technique_id)
-    return hits
+    uac = any(
+        k in lower
+        for k in (
+            "uac",
+            "fodhelper",
+            "delegateexecute",
+            "ms-settings",
+            "user account control",
+        )
+    )
+    return normalize_mitre_techniques(hits, uac_context=uac)
 
 
 # ---------------------------------------------------------------------------

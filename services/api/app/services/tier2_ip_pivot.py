@@ -354,12 +354,19 @@ async def aggregate_into_case(
     theme = infer_attack_theme(title=title, mitre_techniques=mitre)
     entities: list[tuple[str, str]] = [("ip", ip) for ip in ips.dest_ips[:3]] or [("ip", ip) for ip in ips.src_ips[:3]]
     camp_key = primary_campaign_key(theme, entities) or f"tier2-ip|{seed_id}"
-    case_title = campaign_case_title(theme, entities)
+    # Pivot cases are multi-alert by construction when siblings exist; default
+    # to campaign framing — caller may override title below for pivot clarity.
+    case_title = campaign_case_title(theme, entities, linked_alert_count=2)
     if ips.dest_ips:
         case_title = f"Tier-2 dest_ip pivot · {', '.join(ips.dest_ips[:2])}"[:500]
     elif ips.src_ips:
         case_title = f"Tier-2 src_ip pivot · {', '.join(ips.src_ips[:2])}"[:500]
-    tags = campaign_tags(theme=theme, campaign_key=camp_key, source="tier2-investigate")
+    tags = campaign_tags(
+        theme=theme,
+        campaign_key=camp_key,
+        source="tier2-investigate",
+        linked_alert_count=2,
+    )
     tags["tier2_ip_pivot"] = True
     tags["pivot_dest_ips"] = ips.dest_ips[:8]
     tags["pivot_src_ips"] = ips.src_ips[:8]

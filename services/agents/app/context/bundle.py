@@ -250,6 +250,7 @@ LLM_SAFE_KEYS = (
     "entity_keys",
     "neighborhood_summaries",
     "blast_radius_max",
+    "historical_retrieved_count",
     "historical_similar_count",
     "historical_verdicts",
     "ueba_max_deviation",
@@ -323,14 +324,28 @@ class ContextBundle(BaseModel):
                 parts.append(f"    * {line}")
         if s.get("blast_radius_max"):
             parts.append(f"- Max blast-radius score: {s['blast_radius_max']:.2f}")
-        if s.get("historical_similar_count"):
-            top = max(
-                (h["similarity"] for h in s.get("historical_verdicts") or []),
-                default=0.0,
-            )
-            parts.append(f"- Similar historical cases: {s['historical_similar_count']} " f"(top similarity={top:.2f})")
-            for h in (s.get("historical_verdicts") or [])[:3]:
-                parts.append(f"    * {h['key']} → {h['verdict']} (sim={h['similarity']:.2f})")
+        hist_floor = 0.25
+        retrieved = int(s.get("historical_retrieved_count") or s.get("historical_similar_count") or 0)
+        similar_rows = [
+            h
+            for h in (s.get("historical_verdicts") or [])
+            if float(h.get("similarity") or 0.0) >= hist_floor
+        ]
+        top = max((float(h["similarity"]) for h in (s.get("historical_verdicts") or [])), default=0.0)
+        if retrieved:
+            if similar_rows:
+                parts.append(
+                    f"- Similar historical cases: {len(similar_rows)} "
+                    f"(top similarity={top:.2f}; floor={hist_floor})"
+                )
+                for h in similar_rows[:3]:
+                    parts.append(f"    * {h['key']} → {h['verdict']} (sim={h['similarity']:.2f})")
+            else:
+                parts.append(
+                    f"- Historical memory retrieved {retrieved} candidate(s) but "
+                    f"none met similarity floor {hist_floor} (top={top:.2f}). "
+                    "No meaningful historical similarity found."
+                )
         if s.get("ueba_entities_with_baseline"):
             parts.append(
                 f"- UEBA: {s['ueba_entities_with_baseline']} entities with baseline, "
@@ -370,7 +385,10 @@ class ContextBundle(BaseModel):
             "entity_keys": sorted(e.key for e in self.entities)[:25],
             "neighborhood_summaries": neigh_summaries[:25],
             "blast_radius_max": max(blast_scores) if blast_scores else 0.0,
-            "historical_similar_count": len(self.historical_similar_cases),
+            "historical_retrieved_count": len(self.historical_similar_cases),
+            "historical_similar_count": sum(
+                1 for h in self.historical_similar_cases if h.similarity_score >= 0.25
+            ),
             "historical_verdicts": [
                 {
                     "key": h.key,

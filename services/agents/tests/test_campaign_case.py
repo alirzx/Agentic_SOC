@@ -29,10 +29,17 @@ def test_infer_theme_from_title_keywords():
 
 def test_campaign_title_is_narrative_not_rule_name():
     entities = [("host", "WIN-DC01"), ("ip", "10.1.2.3")]
-    title = campaign_case_title("command-and-control", entities)
+    title = campaign_case_title("command-and-control", entities, linked_alert_count=2)
     assert "C2" in title or "command-and-control" in title
+    assert "campaign" in title.lower()
     assert "WIN-DC01" in title
     assert "Risk - 24 Hour" not in title
+
+
+def test_solo_alert_uses_incident_title_not_campaign():
+    title = campaign_case_title("general-intrusion", [], linked_alert_count=1)
+    assert "incident" in title.lower()
+    assert "campaign" not in title.lower()
 
 
 def test_campaign_key_prefers_host():

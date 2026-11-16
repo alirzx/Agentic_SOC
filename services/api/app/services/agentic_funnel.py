@@ -544,7 +544,8 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         }
 
         now = datetime.now(UTC)
-        title = campaign_case_title(theme, entities)
+        linked_n = len(sibling_ids)
+        title = campaign_case_title(theme, entities, linked_alert_count=linked_n)
         severity = str(alert.get("severity") or "medium")
         if severity not in {"info", "low", "medium", "high", "critical"}:
             severity = "medium"
@@ -553,16 +554,22 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             f"{d.get('alert_id')}: {d.get('decision_reason', '')[:120]}"
             for d in correlation_audit["linked"][:8]
         ) or "solo alert (no scored siblings)"
+        case_kind = "attack-campaign" if linked_n > 1 else "incident"
         description = (
-            f"Auto-created by Agentic SOC funnel backfill as an attack-campaign case.\n"
+            f"Auto-created by Agentic SOC funnel backfill as an {case_kind} case.\n"
             f"Theme: {theme}\n"
             f"Entities: {entity_bits}\n"
             f"Disposition (seed only): {disposition}\n"
             f"Seed alert: {alert.get('title')}\n"
-            f"Linked alerts: {len(sibling_ids)}\n"
+            f"Linked alerts: {linked_n}\n"
             f"Correlation: {link_bits}\n"
         )
-        tags = campaign_tags(theme=theme, campaign_key=camp_key, source="backfill")
+        tags = campaign_tags(
+            theme=theme,
+            campaign_key=camp_key,
+            source="backfill",
+            linked_alert_count=linked_n,
+        )
         tags["correlation"] = correlation_audit
         existing = None
         # Reuse requires SAME campaign_key AND an evidenced v2 link from this

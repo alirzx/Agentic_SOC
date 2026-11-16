@@ -14,9 +14,20 @@ def test_infer_c2_theme():
 
 
 def test_title_is_campaign_narrative():
-    title = campaign_case_title("lateral-movement", [("host", "WKSTN-22")])
+    title = campaign_case_title(
+        "lateral-movement",
+        [("host", "WKSTN-22")],
+        linked_alert_count=3,
+    )
     assert "lateral" in title.lower()
+    assert "campaign" in title.lower()
     assert "WKSTN-22" in title
+
+
+def test_solo_title_is_incident():
+    title = campaign_case_title("privilege-escalation", [], linked_alert_count=1)
+    assert "incident" in title.lower()
+    assert "campaign" not in title.lower()
 
 
 def test_primary_key_stable():

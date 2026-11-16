@@ -49,6 +49,23 @@ _THEME_TITLE: dict[str, str] = {
     "general-intrusion": "Suspected intrusion campaign",
 }
 
+_THEME_INCIDENT_TITLE: dict[str, str] = {
+    "command-and-control": "Suspected C2 / command-and-control incident",
+    "lateral-movement": "Suspected lateral movement incident",
+    "credential-access": "Suspected credential-access incident",
+    "initial-access": "Suspected initial-access incident",
+    "execution": "Suspected malware execution incident",
+    "persistence": "Suspected persistence incident",
+    "privilege-escalation": "Suspected privilege-escalation incident",
+    "defense-evasion": "Suspected defense-evasion incident",
+    "discovery": "Suspected discovery / recon incident",
+    "collection": "Suspected collection incident",
+    "exfiltration": "Suspected data-exfiltration incident",
+    "impact": "Suspected impact / ransomware incident",
+    "reconnaissance": "Suspected reconnaissance incident",
+    "general-intrusion": "Suspected intrusion incident",
+}
+
 # Title keyword hints when MITRE tactics are missing (Splunk ES notables).
 _KEYWORD_THEMES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
@@ -150,9 +167,15 @@ def primary_campaign_key(theme: str, entities: list[tuple[str, str]]) -> str | N
     return f"{theme}|{kind}:{safe}"
 
 
-def campaign_case_title(theme: str, entities: list[tuple[str, str]]) -> str:
-    """Human case title — attack narrative, not the first rule name."""
-    base = _THEME_TITLE.get(theme, _THEME_TITLE["general-intrusion"])
+def campaign_case_title(
+    theme: str,
+    entities: list[tuple[str, str]],
+    *,
+    linked_alert_count: int = 1,
+) -> str:
+    """Human case title — incident for solo alerts, campaign when multi-linked."""
+    table = _THEME_TITLE if linked_alert_count > 1 else _THEME_INCIDENT_TITLE
+    base = table.get(theme, table["general-intrusion"])
     bits = [value for _, value in entities[:3]]
     if bits:
         return f"{base} involving {', '.join(bits)}"[:500]
@@ -164,13 +187,16 @@ def campaign_tags(
     theme: str,
     campaign_key: str | None,
     source: str,
+    linked_alert_count: int = 1,
 ) -> dict[str, Any]:
+    case_model = "attack_campaign" if linked_alert_count > 1 else "incident"
     tags: dict[str, Any] = {
         "agentic-promoted": True,
         "reportable": True,
         "source": source,
         "campaign_theme": theme,
-        "case_model": "attack_campaign",
+        "case_model": case_model,
+        "linked_alert_count": linked_alert_count,
     }
     if campaign_key:
         tags["campaign_key"] = campaign_key

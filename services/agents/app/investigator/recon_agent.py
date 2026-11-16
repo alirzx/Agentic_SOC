@@ -211,7 +211,15 @@ async def run_recon(state_dict: dict[str, Any]) -> dict[str, Any]:
         )
 
     # 3. Build ReconFindings
-    mitre = list(set(llm_result.get("mitre_techniques", []) + map_to_mitre(state.alert_summary)))
+    from app.investigator.claim_validation import normalize_mitre_techniques
+
+    raw_mitre = list(llm_result.get("mitre_techniques", []) or []) + map_to_mitre(state.alert_summary)
+    alert_l = (state.alert_summary or "").lower()
+    uac_ctx = any(
+        k in alert_l
+        for k in ("uac", "fodhelper", "delegateexecute", "ms-settings", "user account control")
+    )
+    mitre = normalize_mitre_techniques([str(t) for t in raw_mitre], uac_context=uac_ctx)
     for technique in mitre:
         state.log_evidence(
             agent="ReconAgent",

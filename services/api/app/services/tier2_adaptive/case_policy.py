@@ -292,8 +292,14 @@ async def apply_case_decision(
         severity = str(row.get("severity") or "medium")
         if severity not in {"info", "low", "medium", "high", "critical"}:
             severity = "medium"
-        case_title = campaign_case_title(theme, pairs)
-        tags = campaign_tags(theme=theme, campaign_key=camp_key, source="tier2-adaptive")
+        linked_n = len(member_ids)
+        case_title = campaign_case_title(theme, pairs, linked_alert_count=linked_n)
+        tags = campaign_tags(
+            theme=theme,
+            campaign_key=camp_key,
+            source="tier2-adaptive",
+            linked_alert_count=linked_n,
+        )
         tags["tier2_adaptive"] = True
         tags["case_policy_version"] = CASE_POLICY_VERSION
         tags["entity_kinds"] = [k for k, _ in pairs[:8]]
