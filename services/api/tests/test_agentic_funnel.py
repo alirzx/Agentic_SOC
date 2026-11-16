@@ -21,15 +21,47 @@ def test_noisy_low_is_fp():
     assert classify_backfill({"title": "Network - Unapproved Port Activity Detected - Rule", "severity": "low"}) == "false_positive"
 
 
-def test_high_severity_promotes():
-    assert classify_backfill({"title": "Something odd", "severity": "critical"}) == "true_positive"
+def test_high_severity_alone_needs_review():
+    assert classify_backfill({"title": "Something odd", "severity": "critical"}) == "needs_review"
+
+
+def test_powershell_high_without_attack_hint_needs_review():
+    assert (
+        classify_backfill(
+            {
+                "title": "Soorin-Endpoint-Powershell Invoke Command",
+                "severity": "high",
+            }
+        )
+        == "needs_review"
+    )
+
+
+def test_risk_threshold_is_needs_review():
+    assert (
+        classify_backfill(
+            {
+                "title": "Risk - 24 Hour Risk Threshold Exceeded",
+                "severity": "high",
+            }
+        )
+        == "needs_review"
+    )
 
 
 def test_backfill_tp_is_jira_eligible_only_with_evidence_bar():
     disp = classify_backfill({"title": "Detect Password Spray Attempts", "severity": "medium"})
     # Medium heuristic TP alone must NOT flood Jira.
     assert not passes_jira_gate(disposition=disp, severity="medium", confidence=0.4)
-    assert passes_jira_gate(disposition=disp, severity="high")
+    # High severity alone also must NOT pass the evidence bar.
+    assert not passes_jira_gate(disposition=disp, severity="high", confidence=0.4)
+    assert passes_jira_gate(
+        disposition=disp,
+        severity="high",
+        confidence=0.8,
+        rule_name="Detect Password Spray Attempts",
+        mitre_techniques=["T1110"],
+    )
 
 
 def test_backfill_fp_is_not_jira_eligible():
@@ -59,6 +91,20 @@ def test_derive_funnel_stage_legacy_paths():
                 "case_id": case_id,
                 "disposition": "true_positive",
                 "severity": "high",
+            },
+            has_external_ref=False,
+        )
+        == "cased"
+    )
+    assert (
+        derive_funnel_stage(
+            {
+                "case_id": case_id,
+                "disposition": "true_positive",
+                "severity": "high",
+                "confidence": 0.85,
+                "rule_name": "ESCU - Access LSASS",
+                "mitre_techniques": ["T1003"],
             },
             has_external_ref=False,
         )

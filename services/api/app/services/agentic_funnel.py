@@ -27,6 +27,15 @@ from app.services.campaign_case import (
     infer_attack_theme,
     primary_campaign_key,
 )
+from app.services.campaign_correlation import (
+    campaign_temporal_window_seconds,
+    extract_alert_hosts,
+    is_candidate_eligible,
+    is_risk_supporting_alert,
+    is_seed_eligible,
+    select_campaign_siblings,
+    summarize_correlation_decisions,
+)
 from app.services.runbook.emitters import emit_case_created
 
 logger = structlog.get_logger()
@@ -62,19 +71,37 @@ def _severity_rank(sev: str | None) -> int:
     return {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}.get((sev or "").lower(), 3)
 
 
+_WEAK_AUTO_TP = re.compile(
+    r"(?i)powershell|scriptblock|invoke-command|invoke\s*command|"
+    r"defender\s*exclusion|short-lived\s*account|uac\s*bypass|"
+    r"unapproved\s*port|policy\s*disabled"
+)
+
+
 def classify_backfill(alert: dict[str, Any]) -> str:
-    """Heuristic disposition for alerts that never went through auto-triage."""
+    """Heuristic disposition for alerts that never went through auto-triage.
+
+    High/critical severity alone is NOT true_positive — that previously forced
+    PowerShell/admin noise and weak detections into TP and then into megacases.
+    """
     existing = (alert.get("disposition") or "").strip().lower()
     if existing:
         return existing
     title = str(alert.get("title") or "")
     sev = str(alert.get("severity") or "medium").lower()
-    if _ATTACK_HINTS.search(title) or sev in {"high", "critical"}:
-        return "true_positive"
+    if is_risk_supporting_alert(alert):
+        # Risk rollups inherit context; do not auto-declare independent TP attacks.
+        return "needs_review"
     if sev in {"low", "info"} and _NOISE_HINTS.search(title):
         return "false_positive"
-    if sev == "medium" and _ATTACK_HINTS.search(title):
+    # Ambiguous admin / living-off-the-land detections need human review even
+    # when severity is high (ScriptBlock Invoke-*, Defender exclusion, etc.).
+    if _WEAK_AUTO_TP.search(title):
+        return "needs_review"
+    if _ATTACK_HINTS.search(title) and sev in {"high", "critical", "medium", "low"}:
         return "true_positive"
+    if sev in {"high", "critical"}:
+        return "needs_review"
     if sev in {"low", "info"}:
         return "false_positive"
     return "needs_review"
@@ -259,10 +286,31 @@ async def sync_legacy_funnel_stages(
         )
     # Ready for Jira — triage evidence bar (NOT every TP+case):
     # high/critical OR investigation prose OR (medium + conf≥70 + rule/MITRE).
+    # Evidence bar aligned with passes_ready_for_jira_stage: severity alone
+    # is insufficient — need investigation prose OR conf≥70 + rule/MITRE metadata.
+    _evidence_sql = """
+                      length(COALESCE(ai_summary, '')) >= 100
+                   OR length(COALESCE(narrative, '')) >= 200
+                   OR (
+                        COALESCE(
+                          confidence,
+                          CASE
+                            WHEN ai_score IS NULL THEN 0
+                            WHEN ai_score <= 1 THEN CAST(ROUND(ai_score * 100) AS int)
+                            ELSE CAST(ROUND(ai_score) AS int)
+                          END
+                        ) >= 70
+                    AND (
+                          NULLIF(rule_id, '') IS NOT NULL
+                       OR NULLIF(rule_name, '') IS NOT NULL
+                       OR jsonb_array_length(COALESCE(mitre_techniques, '[]'::jsonb)) > 0
+                    )
+                   )
+    """
     counts["ready_for_jira"] = _n(
         await db.execute(
             text(
-                """
+                f"""
                 UPDATE alerts
                    SET funnel_stage = 'ready_for_jira', updated_at = now()
                  WHERE tenant_id = :tid
@@ -270,63 +318,23 @@ async def sync_legacy_funnel_stages(
                    AND case_id IS NOT NULL
                    AND disposition IN ('true_positive','escalate','likely_tp')
                    AND funnel_stage NOT IN ('jira_pushed','ready_for_jira')
-                   AND (
-                         lower(severity) IN ('high','critical')
-                      OR length(COALESCE(ai_summary, '')) >= 80
-                      OR length(COALESCE(narrative, '')) >= 80
-                      OR (
-                           lower(severity) = 'medium'
-                       AND COALESCE(
-                             confidence,
-                             CASE
-                               WHEN ai_score IS NULL THEN 0
-                               WHEN ai_score <= 1 THEN CAST(ROUND(ai_score * 100) AS int)
-                               ELSE CAST(ROUND(ai_score) AS int)
-                             END
-                           ) >= 70
-                       AND (
-                             NULLIF(rule_id, '') IS NOT NULL
-                          OR NULLIF(rule_name, '') IS NOT NULL
-                          OR jsonb_array_length(COALESCE(mitre_techniques, '[]'::jsonb)) > 0
-                       )
-                      )
-                   )
+                   AND ({_evidence_sql})
                 """
             ).bindparams(tid=tenant_id, since=since)
         )
     )
-    # Demote heuristic TP+case noise that was previously marked ready_for_jira.
+    # Demote Cases previously marked ready_for_jira on severity alone.
     demoted = _n(
         await db.execute(
             text(
-                """
+                f"""
                 UPDATE alerts
                    SET funnel_stage = 'cased', updated_at = now()
                  WHERE tenant_id = :tid
                    AND created_at >= :since
                    AND case_id IS NOT NULL
                    AND funnel_stage = 'ready_for_jira'
-                   AND NOT (
-                         lower(severity) IN ('high','critical')
-                      OR length(COALESCE(ai_summary, '')) >= 80
-                      OR length(COALESCE(narrative, '')) >= 80
-                      OR (
-                           lower(severity) = 'medium'
-                       AND COALESCE(
-                             confidence,
-                             CASE
-                               WHEN ai_score IS NULL THEN 0
-                               WHEN ai_score <= 1 THEN CAST(ROUND(ai_score * 100) AS int)
-                               ELSE CAST(ROUND(ai_score) AS int)
-                             END
-                           ) >= 70
-                       AND (
-                             NULLIF(rule_id, '') IS NOT NULL
-                          OR NULLIF(rule_name, '') IS NOT NULL
-                          OR jsonb_array_length(COALESCE(mitre_techniques, '[]'::jsonb)) > 0
-                       )
-                      )
-                   )
+                   AND NOT ({_evidence_sql})
                 """
             ).bindparams(tid=tenant_id, since=since)
         )
@@ -394,9 +402,10 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             text(
                 """
                 SELECT id, title, severity, status, disposition, case_id, tags,
-                       affected_hosts, affected_ips, raw_event, created_at,
-                       rule_id, rule_name, mitre_techniques, confidence, ai_score,
-                       ai_summary, narrative
+                       affected_hosts, affected_ips, affected_users, raw_event,
+                       created_at, event_time, llm_payload, iocs,
+                       rule_id, rule_name, mitre_techniques, mitre_tactics,
+                       confidence, ai_score, ai_summary, narrative
                   FROM alerts
                  WHERE tenant_id = :tid AND created_at >= :since
                  ORDER BY created_at DESC
@@ -404,6 +413,9 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             ).bindparams(tid=tenant_id, since=since)
         )
     ).mappings().all()
+    # Materialize once so sibling scoring can see the full 24h (or window) set
+    # without re-querying with a loose OR(host|ip|user) that false-merged campaigns.
+    window_alerts: list[dict[str, Any]] = [dict(r) for r in rows]
 
     fp_tagged = 0
     cases_created = 0
@@ -466,20 +478,21 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             fp_tagged += 1
             continue
 
-        if alert.get("case_id"):
-            # Already cased — funnel_stage reconciled in sync_legacy_funnel_stages.
+        # Stamp classified disposition onto the in-memory row so seed/candidate
+        # eligibility sees a real disposition (never admit on missing/unknown).
+        alert["disposition"] = disposition
+        seed_ok, seed_why = is_seed_eligible(alert)
+        if not seed_ok:
             skipped += 1
+            logger.debug(
+                "campaign_seed_ineligible",
+                alert_id=str(alert_id),
+                reason=seed_why,
+            )
             continue
 
-        if disposition not in {"true_positive", "needs_review", "escalate"}:
-            # Non-promotable but already dispositioned → leave for stage sync (triaged).
-            skipped += 1
-            continue
-        if disposition == "needs_review" and _severity_rank(alert.get("severity")) < 3:
-            skipped += 1
-            continue
-
-        # Attack-campaign siblings: shared host / IP / user — not same title.
+        # Attack-campaign siblings: scored entity+temporal correlation only.
+        # Never OR-match host|ip|user across the whole window (that built megacases).
         entities = campaign_entities(alert, raw if isinstance(raw, dict) else {})
         theme = infer_attack_theme(
             title=str(alert.get("title") or ""),
@@ -490,53 +503,44 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             raw_alert=raw if isinstance(raw, dict) else {},
         )
         camp_key = primary_campaign_key(theme, entities)
-        camp_host = next((v for k, v in entities if k == "host"), host)
-        camp_ip = next((v for k, v in entities if k == "ip"), src)
-        camp_user = next((v for k, v in entities if k == "user"), None)
 
+        uncased_candidates = []
+        for a in window_alerts:
+            if str(a.get("id")) == str(alert_id):
+                continue
+            # Apply classified disposition for eligibility when row is blank.
+            if not str(a.get("disposition") or "").strip():
+                a = dict(a)
+                a["disposition"] = classify_backfill(a)
+            ok, _why = is_candidate_eligible(a)
+            if ok:
+                uncased_candidates.append(a)
+        accepted_sibs, link_decisions = select_campaign_siblings(
+            alert,
+            uncased_candidates,
+            temporal_window_seconds=campaign_temporal_window_seconds(hours),
+            limit=_SIBLING_CAP,
+        )
+        # Risk seeds stay solo — supporting rollups must not open intrusion megacases.
+        if is_risk_supporting_alert(alert):
+            accepted_sibs = []
         sibling_ids: list[uuid.UUID] = [alert_id]
-        if camp_host or camp_ip or camp_user:
-            sibs = (
-                await db.execute(
-                    text(
-                        """
-                        SELECT id FROM alerts
-                         WHERE tenant_id = :tid
-                           AND created_at >= :since
-                           AND id <> :id
-                           AND case_id IS NULL
-                           AND COALESCE(disposition, '') NOT IN ('false_positive','benign','benign_true_positive')
-                           AND (
-                                 (CAST(:host AS text) IS NOT NULL AND (
-                                     COALESCE(affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:host AS text)])
-                                  OR COALESCE(raw_event->>'hostname', '') = CAST(:host AS text)
-                                  OR COALESCE(raw_event->>'dvc', '') = CAST(:host AS text)
-                                 ))
-                              OR (CAST(:ip AS text) IS NOT NULL AND (
-                                     COALESCE(affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:ip AS text)])
-                                  OR COALESCE(raw_event->>'src_ip', '') = CAST(:ip AS text)
-                                  OR COALESCE(raw_event->>'src', '') = CAST(:ip AS text)
-                                 ))
-                              OR (CAST(:usr AS text) IS NOT NULL AND (
-                                     COALESCE(affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:usr AS text)])
-                                  OR COALESCE(raw_event->>'username', '') = CAST(:usr AS text)
-                                 ))
-                           )
-                         ORDER BY created_at DESC
-                         LIMIT :lim
-                        """
-                    ).bindparams(
-                        tid=tenant_id,
-                        since=since,
-                        id=alert_id,
-                        host=str(camp_host) if camp_host else None,
-                        ip=str(camp_ip) if camp_ip else None,
-                        usr=str(camp_user) if camp_user else None,
-                        lim=_SIBLING_CAP,
-                    )
-                )
-            ).fetchall()
-            sibling_ids.extend(r[0] for r in sibs)
+        sibling_ids.extend(
+            a["id"] if isinstance(a["id"], uuid.UUID) else uuid.UUID(str(a["id"]))
+            for a in accepted_sibs
+        )
+        correlation_audit = {
+            "algorithm_version": "campaign-corr:v2",
+            "seed_alert_id": str(alert_id),
+            "seed_hosts": extract_alert_hosts(alert),
+            "discovery": summarize_correlation_decisions(link_decisions),
+            "linked": [
+                d for d in link_decisions if d.get("linked")
+            ][:_SIBLING_CAP],
+            "rejected_sample": [
+                d for d in link_decisions if not d.get("linked")
+            ][:20],
+        }
 
         now = datetime.now(UTC)
         title = campaign_case_title(theme, entities)
@@ -544,16 +548,24 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         if severity not in {"info", "low", "medium", "high", "critical"}:
             severity = "medium"
         entity_bits = ", ".join(f"{k}:{v}" for k, v in entities[:6]) or "(no strong entity)"
+        link_bits = "; ".join(
+            f"{d.get('alert_id')}: {d.get('decision_reason', '')[:120]}"
+            for d in correlation_audit["linked"][:8]
+        ) or "solo alert (no scored siblings)"
         description = (
             f"Auto-created by Agentic SOC funnel backfill as an attack-campaign case.\n"
             f"Theme: {theme}\n"
             f"Entities: {entity_bits}\n"
-            f"Disposition: {disposition}\n"
+            f"Disposition (seed only): {disposition}\n"
             f"Seed alert: {alert.get('title')}\n"
             f"Linked alerts: {len(sibling_ids)}\n"
+            f"Correlation: {link_bits}\n"
         )
         tags = campaign_tags(theme=theme, campaign_key=camp_key, source="backfill")
+        tags["correlation"] = correlation_audit
         existing = None
+        # Only reuse a case with the SAME campaign_key — never chain via loose
+        # host/ip/user EXISTS (that merged web+lsass+powershell megacases).
         if camp_key:
             existing = (
                 await db.execute(
@@ -571,48 +583,6 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     ).bindparams(tid=tenant_id, since=since, ckey=camp_key)
                 )
             ).fetchone()
-        if existing is None and (camp_host or camp_ip or camp_user):
-            existing = (
-                await db.execute(
-                    text(
-                        """
-                        SELECT c.id, c.alert_ids FROM aisoc_cases c
-                         WHERE c.tenant_id = :tid
-                           AND c.status NOT IN ('resolved', 'closed')
-                           AND c.created_by IN ('agentic-funnel', 'agentic-funnel-backfill')
-                           AND c.opened_at >= :since
-                           AND c.tags->>'case_model' = 'attack_campaign'
-                           AND EXISTS (
-                                 SELECT 1 FROM alerts a
-                                  WHERE a.case_id = c.id AND a.tenant_id = :tid
-                                    AND (
-                                          (CAST(:host AS text) IS NOT NULL AND (
-                                              COALESCE(a.affected_hosts, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:host AS text)])
-                                           OR COALESCE(a.raw_event->>'hostname', '') = CAST(:host AS text)
-                                           OR COALESCE(a.raw_event->>'dvc', '') = CAST(:host AS text)
-                                          ))
-                                       OR (CAST(:ip AS text) IS NOT NULL AND (
-                                              COALESCE(a.affected_ips, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:ip AS text)])
-                                           OR COALESCE(a.raw_event->>'src_ip', '') = CAST(:ip AS text)
-                                          ))
-                                       OR (CAST(:usr AS text) IS NOT NULL AND (
-                                              COALESCE(a.affected_users, '[]'::jsonb) @> to_jsonb(ARRAY[CAST(:usr AS text)])
-                                           OR COALESCE(a.raw_event->>'username', '') = CAST(:usr AS text)
-                                          ))
-                                    )
-                           )
-                         ORDER BY c.opened_at ASC
-                         LIMIT 1
-                        """
-                    ).bindparams(
-                        tid=tenant_id,
-                        since=since,
-                        host=str(camp_host) if camp_host else None,
-                        ip=str(camp_ip) if camp_ip else None,
-                        usr=str(camp_user) if camp_user else None,
-                    )
-                )
-            ).fetchone()
         created_new = existing is None
         if existing is not None:
             case_id = existing[0]
@@ -623,6 +593,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     """
                     UPDATE aisoc_cases
                        SET alert_ids = CAST(:alert_ids AS UUID[]),
+                           tags = COALESCE(tags, '{}'::jsonb) || CAST(:corr AS jsonb),
                            updated_at = :now
                      WHERE id = :id AND tenant_id = :tid
                     """
@@ -630,6 +601,7 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     id=case_id,
                     tid=tenant_id,
                     alert_ids=[str(x) for x in merged],
+                    corr=json.dumps({"correlation": correlation_audit}),
                     now=now,
                 )
             )
@@ -678,26 +650,41 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
             )
             else "cased"
         )
+        # Stamp case membership for seed + scored siblings. Do NOT copy the seed
+        # disposition onto siblings (that forced 12× true_positive without evidence).
         await db.execute(
             text(
                 """
                 UPDATE alerts
                    SET case_id = :cid,
-                       disposition = COALESCE(NULLIF(disposition, ''), :d),
                        tags = COALESCE(tags, '[]'::jsonb) || CAST(:tag AS JSONB),
                        status = CASE WHEN status IN ('new','triaging') THEN 'in_progress' ELSE status END,
-                       funnel_stage = :stage,
+                       funnel_stage = CASE
+                         WHEN id = :seed THEN CAST(:stage AS text)
+                         ELSE COALESCE(NULLIF(funnel_stage, ''), 'cased')
+                       END,
                        updated_at = now()
                  WHERE tenant_id = :tid AND id = ANY(CAST(:ids AS UUID[]))
                 """
             ).bindparams(
                 cid=case_id,
-                d=disposition,
                 tag=json.dumps(["agentic-promoted", "reportable"]),
                 tid=tenant_id,
                 ids=[str(x) for x in sibling_ids],
+                seed=alert_id,
                 stage=next_stage,
             )
+        )
+        # Persist seed disposition only on the seed row when missing.
+        await db.execute(
+            text(
+                """
+                UPDATE alerts
+                   SET disposition = COALESCE(NULLIF(disposition, ''), :d),
+                       updated_at = now()
+                 WHERE tenant_id = :tid AND id = :seed
+                """
+            ).bindparams(d=disposition, tid=tenant_id, seed=alert_id)
         )
         if created_new:
             for task in _tasks_for(alert, host, src, dst):
@@ -940,7 +927,14 @@ async def funnel_board(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 "funnel_board.auto_dedupe_failed",
                 error=str(exc).replace("\r", " ").replace("\n", " ")[:300],
             )
-            await db.rollback()
+            rb = getattr(db, "rollback", None)
+            if callable(rb):
+                try:
+                    result = rb()
+                    if hasattr(result, "__await__"):
+                        await result  # type: ignore[misc]
+                except Exception:  # noqa: BLE001
+                    pass
 
     since = _window_since(hours)
     tasks_by_alert, tasks_by_stage = await _open_runbook_tasks(

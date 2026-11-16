@@ -125,11 +125,23 @@ def derive_case_outcome(
     """Return ``(outcome_key, rationale)`` from linked alert dispositions."""
     counts = Counter((d or "").strip().lower() for d in dispositions if d)
     tag_set = set()
+    weak_correlation = False
     if isinstance(tags, dict):
         if tags.get("false_positive"):
             tag_set.add("false_positive")
         if tags.get("reportable"):
             tag_set.add("reportable")
+        if tags.get("needs_review") or tags.get("reconciled"):
+            weak_correlation = True
+        corr = tags.get("correlation")
+        if isinstance(corr, dict):
+            linked = corr.get("linked") if isinstance(corr.get("linked"), list) else []
+            rejected = corr.get("rejected_sample") or corr.get("unlinked") or []
+            if isinstance(rejected, list) and len(rejected) >= 3 and len(linked) <= 1:
+                weak_correlation = True
+            if corr.get("algorithm_version") and not linked and len(dispositions) > 3:
+                # Legacy megacase: many members, no explainable link audit.
+                weak_correlation = True
         labels = tags.get("labels")
         if isinstance(labels, list):
             tag_set.update(str(x).lower() for x in labels)
@@ -141,6 +153,13 @@ def derive_case_outcome(
 
     if "false_positive" in tag_set and tp == 0 and escalate == 0:
         return "false_positive", "Case tagged false_positive and no true-positive alerts remain."
+    if weak_correlation and (tp > 0 or escalate > 0):
+        return (
+            "needs_review",
+            "Multiple alerts are linked but correlation evidence is weak or missing "
+            f"(tp={tp}, escalate={escalate}) — re-score with /correlation-audit before "
+            "treating as a single incident.",
+        )
     if tp > 0 or escalate > 0 or "reportable" in tag_set:
         return (
             "incident",
@@ -165,10 +184,19 @@ def build_brief_from_rows(inputs: BriefInputs, *, now: datetime | None = None) -
     moment = now or datetime.now(UTC)
     case = inputs.case
     dispositions = [a.disposition or "" for a in inputs.alerts]
+    tags_for_outcome = dict(case.tags) if isinstance(case.tags, dict) else {}
+    # Legacy megacases (audit 065bd5b9): many members, no strong entity, no
+    # explainable correlation audit → force needs_review instead of "Likely incident".
+    if (
+        len(inputs.alerts) >= 5
+        and "(no strong entity)" in str(case.description or "").lower()
+        and not isinstance(tags_for_outcome.get("correlation"), dict)
+    ):
+        tags_for_outcome["needs_review"] = True
     outcome, rationale = derive_case_outcome(
         dispositions=dispositions,
         case_status=case.status,
-        tags=case.tags,
+        tags=tags_for_outcome,
     )
     disp_counts = dict(Counter((d or "unset").strip().lower() or "unset" for d in dispositions))
 
@@ -230,14 +258,60 @@ def build_brief_from_rows(inputs: BriefInputs, *, now: datetime | None = None) -
         text = note.strip()
         if text:
             actions.append(ActionItem(kind="investigate", label="Finding / report note", detail=text[:240]))
+    linked_titles = {str(a.title or "").strip().lower() for a in inputs.alerts if a.title}
     for title in inputs.task_titles[:8]:
+        # Drop stale tasks that name a rule not present among linked alerts
+        # (legacy megacases often kept UAC-bypass tasks after membership drifted).
+        quoted = None
+        if "«" in title and "»" in title:
+            quoted = title.split("«", 1)[1].split("»", 1)[0].strip().lower()
+        if quoted and linked_titles and quoted not in linked_titles:
+            if not any(quoted[:40] in t for t in linked_titles):
+                continue
         actions.append(ActionItem(kind="task", label="Investigation task", detail=title[:200]))
+    # Surface explainable correlation (or its absence) for megacase audits.
+    corr = tags.get("correlation") if isinstance(tags, dict) else None
+    if isinstance(corr, dict):
+        linked_n = len(corr.get("linked") or []) if isinstance(corr.get("linked"), list) else 0
+        rejected_n = (
+            len(corr.get("rejected_sample") or [])
+            if isinstance(corr.get("rejected_sample"), list)
+            else 0
+        )
+        actions.append(
+            ActionItem(
+                kind="correlate",
+                label="Campaign correlation audit",
+                detail=(
+                    f"algorithm={corr.get('algorithm_version') or 'unknown'}; "
+                    f"evidenced_links={linked_n}; rejected_sample={rejected_n}; "
+                    f"seed={corr.get('seed_alert_id') or '—'}. "
+                    "Use GET …/correlation-audit for per-alert scores."
+                ),
+            )
+        )
+    elif len(inputs.alerts) > 3 and "(no strong entity)" in str(case.description or ""):
+        actions.append(
+            ActionItem(
+                kind="correlate",
+                label="Correlation evidence missing",
+                detail=(
+                    f"{len(inputs.alerts)} alerts linked with no strong shared entity in "
+                    "case description — run POST …/reconcile-correlation before treating "
+                    "as one incident."
+                ),
+            )
+        )
+
     if ready:
         actions.append(
             ActionItem(
                 kind="itsm",
                 label="Marked ready for Jira",
-                detail="Evidence bar met (high/critical or medium@≥70% with metadata / investigation prose).",
+                detail=(
+                    "Evidence bar met (investigation prose, or high/critical@≥70% with "
+                    "rule/MITRE metadata — severity alone is insufficient)."
+                ),
             )
         )
     if pushed:

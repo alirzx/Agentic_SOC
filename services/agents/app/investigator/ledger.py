@@ -246,6 +246,39 @@ async def record_event(
         return None
 
 
+async def find_event_id_by_seq(
+    *,
+    run_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    seq: int,
+) -> uuid.UUID | None:
+    """Return the event UUID for ``(run_id, seq)`` if present."""
+    pool = await get_pool()
+    if pool is None:
+        return None
+    try:
+        async with pool.acquire() as conn:
+            await _set_rls_context(conn, tenant_id)
+            row = await conn.fetchrow(
+                """
+                SELECT id FROM investigation_events
+                 WHERE run_id = $1 AND seq = $2
+                 LIMIT 1
+                """,
+                run_id,
+                seq,
+            )
+            return row["id"] if row else None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(
+            "ledger.find_event_id_failed",
+            run_id=str(run_id),
+            seq=seq,
+            error=str(exc),
+        )
+        return None
+
+
 async def record_artifact(
     *,
     run_id: uuid.UUID,

@@ -198,12 +198,14 @@ class InvestigatorOrchestrator:
 
             # Persist the full audit log post-hoc (one shot, no streaming)
             if tenant_uuid is not None:
+                report_event_id = None
                 for seq, entry in enumerate(final.audit_log):
-                    await ledger.record_event(
+                    kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
+                    event_id = await ledger.record_event(
                         run_id=run_uuid,
                         tenant_id=tenant_uuid,
                         seq=seq,
-                        kind=entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind),
+                        kind=kind_val,
                         agent=entry.agent,
                         summary=entry.summary,
                         payload=entry.metadata,
@@ -212,14 +214,18 @@ class InvestigatorOrchestrator:
                         duration_ms=int(entry.duration_ms),
                         timestamp=entry.timestamp,
                     )
+                    if kind_val == "report" and event_id is not None:
+                        report_event_id = event_id
 
-                # Stash the final report as an artifact for replay/audit
+                # Stash the final report as an artifact for replay/audit,
+                # linked to the REPORT ledger step so explain UI can resolve it.
                 if final.report_md:
                     await ledger.record_artifact(
                         run_id=run_uuid,
                         tenant_id=tenant_uuid,
                         kind="report_md",
                         content=final.report_md,
+                        event_id=report_event_id,
                     )
 
                 await ledger.complete_run(
@@ -357,11 +363,24 @@ class InvestigatorOrchestrator:
             # Emit the final "done" event with the complete state payload
             if last_state is not None:
                 if tenant_uuid is not None and last_state.report_md:
+                    report_event_id = None
+                    for seq, entry in enumerate(last_state.audit_log):
+                        kind_val = (
+                            entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
+                        )
+                        if kind_val == "report":
+                            report_event_id = await ledger.find_event_id_by_seq(
+                                run_id=run_uuid,
+                                tenant_id=tenant_uuid,
+                                seq=seq,
+                            )
+                            break
                     await ledger.record_artifact(
                         run_id=run_uuid,
                         tenant_id=tenant_uuid,
                         kind="report_md",
                         content=last_state.report_md,
+                        event_id=report_event_id,
                     )
                 if tenant_uuid is not None:
                     await ledger.complete_run(
