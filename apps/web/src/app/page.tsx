@@ -8,12 +8,12 @@ const siteUrl = getPublicSiteUrl();
 export const metadata: Metadata = {
   title: { absolute: `${BRAND.product}.` },
   description:
-    'Discover relationships between assets, services, users, and network activity. Analyze connections, detect anomalies, and investigate your infrastructure with AI-powered insights.',
+    'Detect threats, investigate security incidents, and automate your security operations with AI-powered intelligence. Correlate alerts, uncover hidden attack patterns, and accelerate incident response with autonomous AI agents.',
   alternates: { canonical: '/' },
   openGraph: {
     title: BRAND.product,
     description:
-      'Analyze connections, detect anomalies, and investigate your infrastructure with AI-powered insights.',
+      'AI-powered SOC: correlate alerts, uncover hidden attack patterns, and accelerate incident response with autonomous AI agents.',
     url: siteUrl,
     siteName: BRAND.product,
     type: 'website',

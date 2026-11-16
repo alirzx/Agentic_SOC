@@ -11,10 +11,19 @@ import { BRAND } from '@/lib/brand';
  *
  * Screen readers get the product name from the visually hidden text.
  */
-export function BrandWordmark({ height = 40, className }: { height?: number; className?: string }) {
+export function BrandWordmark({
+  height = 40,
+  className,
+  textClassName = 'text-fg-primary',
+}: {
+  height?: number;
+  className?: string;
+  /** Colour of the lettering (`currentColor`); defaults to the theme ink. */
+  textClassName?: string;
+}) {
   const width = Math.round((height * 213) / 40);
   return (
-    <span className={clsx('inline-flex items-center text-fg-primary', className)}>
+    <span className={clsx('inline-flex items-center', textClassName, className)}>
       <svg
         width={width}
         height={height}

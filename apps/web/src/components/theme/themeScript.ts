@@ -7,7 +7,7 @@
  * The script:
  *   1. reads `localStorage["aisoc-theme"]` ("light" | "dark" | "system"),
  *   2. resolves "system" against `prefers-color-scheme`, defaulting to
- *      "dark" when localStorage is empty (the historical default),
+ *      "light" when localStorage is empty (the product default),
  *   3. writes the resolved theme to `<html data-theme="…">`,
  *   4. mirrors it to `<html style="color-scheme: …">` so UA chrome
  *      (scrollbars, native form controls) matches.
@@ -24,7 +24,7 @@ export const themeBootstrapScript = `
     var stored = window.localStorage.getItem('${THEME_STORAGE_KEY}');
     var preference = stored === 'light' || stored === 'dark' || stored === 'system'
       ? stored
-      : 'dark';
+      : 'light';
     var resolved;
     if (preference === 'system') {
       resolved = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -36,8 +36,8 @@ export const themeBootstrapScript = `
     root.setAttribute('data-theme-preference', preference);
     root.style.colorScheme = resolved;
   } catch (_) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    document.documentElement.style.colorScheme = 'dark';
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.style.colorScheme = 'light';
   }
 })();
 `.trim();

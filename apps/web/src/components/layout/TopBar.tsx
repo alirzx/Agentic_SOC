@@ -134,13 +134,13 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
       }`}
     >
       {/* Page title */}
-      <div>
+      <div className="shrink-0 whitespace-nowrap">
         <h1 className="text-[17px] font-gilroy-semibold text-fg-primary leading-tight">{routeInfo.title}</h1>
         <p className="text-xs text-fg-muted font-gilroy-medium">{routeInfo.description}</p>
       </div>
 
       {/* Center: command palette launcher — AssetManagement search pill */}
-      <div className="flex-1 max-w-[380px] mx-6">
+      <div className="flex-1 min-w-[160px] max-w-[380px] mx-6">
         <button
           type="button"
           onClick={openPalette}

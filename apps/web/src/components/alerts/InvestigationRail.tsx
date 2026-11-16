@@ -37,6 +37,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
+import { X } from 'lucide-react';
 import {
   alertsApi,
   type Alert,
@@ -61,19 +62,50 @@ const ENTITY_KIND_CONFIG: Record<
   RelatedEntity['kind'],
   { label: string; tone: string }
 > = {
-  principal: { label: 'Principals', tone: 'text-brand-300' },
-  network: { label: 'Network', tone: 'text-cyan-300' },
-  workflow: { label: 'Workflow', tone: 'text-purple-300' },
-  tenant: { label: 'Tenant', tone: 'text-gray-300' },
+  principal: { label: 'Principals', tone: 'text-teal-10' },
+  network: { label: 'Network', tone: 'text-[#3163CF]' },
+  workflow: { label: 'Workflow', tone: 'text-[#7B5EE6]' },
+  tenant: { label: 'Tenant', tone: 'text-fg-muted' },
 };
+
+/** Outlined pill colours for the rail header (light dashboard design). */
+const PILL_HEX: Record<string, string> = {
+  critical: '#FD4E4E',
+  high: '#F98B3E',
+  medium: '#F2AC49',
+  low: '#4FD2C2',
+  info: '#939DAD',
+  new: '#7B5EE6',
+  triaged: '#3163CF',
+  investigating: '#4FD2C2',
+  resolved: '#4ADE80',
+  false_positive: '#939DAD',
+};
+
+const CONFIDENCE_LABEL: Record<string, { label: string; hex: string }> = {
+  high: { label: 'High conf.', hex: '#4FD2C2' },
+  medium: { label: 'Med', hex: '#F2BD57' },
+  low: { label: 'Low', hex: '#939DAD' },
+};
+
+function RailPill({ hex, children, className }: { hex: string; children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={clsx('inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] leading-none', className)}
+      style={{ borderColor: `${hex}B3`, backgroundColor: `${hex}1F`, color: hex }}
+    >
+      {children}
+    </span>
+  );
+}
 
 /** Tone map for the priority chip on a recommended action. */
 const PRIORITY_TONE: Record<RecommendedAction['priority'], string> = {
-  critical: 'border-red-500/40 bg-red-500/10 text-red-300',
-  high: 'border-orange-500/40 bg-orange-500/10 text-orange-300',
-  medium: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300',
-  low: 'border-brand-500/40 bg-brand-500/10 text-brand-300',
-  info: 'border-gray-500/40 bg-gray-500/10 text-gray-300',
+  critical: 'border-[#FD4E4E]/60 bg-[#FD4E4E]/10 text-[#FD4E4E]',
+  high: 'border-[#F98B3E]/60 bg-[#F98B3E]/10 text-[#F98B3E]',
+  medium: 'border-[#F2BD57]/70 bg-[#F2BD57]/10 text-[#D99A1E]',
+  low: 'border-teal-20/60 bg-teal-20/10 text-teal-10',
+  info: 'border-gray-500/50 bg-gray-500/10 text-fg-muted',
 };
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -115,9 +147,9 @@ export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) 
   if (error || !alert) {
     return (
       <RailShell title="Investigation rail" onClose={onClose}>
-        <div className="px-4 py-6 text-sm text-red-300">
+        <div className="px-4 py-6 text-sm text-[#FD4E4E]">
           <p className="font-medium">Couldn&apos;t load the alert envelope.</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-fg-muted">
             The alert API didn&apos;t respond. Try selecting the alert again or
             open the full detail view.
           </p>
@@ -165,20 +197,20 @@ function RailShell({
 }) {
   return (
     <aside
-      className="flex flex-col min-w-0 max-w-full bg-dark-60 border border-[#374151]/60 rounded-xl overflow-hidden h-full"
+      className="flex flex-col min-w-0 max-w-full bg-surface-card border border-surface-border rounded-2xl overflow-hidden h-full"
       aria-label="Investigation rail"
     >
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#374151]/60 bg-dark-70/80 min-w-0">
-        <h2 className="text-sm font-semibold text-gray-100 truncate min-w-0" title={title}>
+      <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-surface-border min-w-0">
+        <h2 className="text-[13px] font-gilroy-semibold text-fg-primary truncate min-w-0" title={title}>
           {title}
         </h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close investigation rail"
-          className="shrink-0 text-xs text-gray-500 hover:text-gray-300 px-2 py-0.5 rounded hover:bg-dark-20/60 transition-colors"
+          className="shrink-0 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border border-fg-subtle/60 text-fg-subtle hover:text-fg-primary hover:border-fg-muted transition-colors"
         >
-          Close
+          <X className="h-3 w-3" strokeWidth={2} aria-hidden />
         </button>
       </div>
       <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">{children}</div>
@@ -189,11 +221,11 @@ function RailShell({
 function RailPlaceholder() {
   return (
     <aside
-      className="flex flex-col items-center justify-center bg-dark-70/50 border border-dashed border-[#374151]/60 rounded-xl text-gray-500 text-sm h-full p-6 text-center"
+      className="flex min-h-[220px] flex-col items-center justify-center bg-surface-card border border-dashed border-surface-border rounded-2xl text-fg-muted text-sm h-full p-6 text-center"
       aria-label="Investigation rail (no alert selected)"
     >
-      <p className="font-medium text-gray-400">Select an alert to investigate</p>
-      <p className="mt-1 text-xs text-gray-600">
+      <p className="font-gilroy-medium text-fg-secondary">Select an alert to investigate</p>
+      <p className="mt-1 text-xs text-fg-subtle">
         Click a row in the queue on the left. The rail will show the fusion
         narrative, related entities, recent events, and recommended actions.
       </p>
@@ -228,42 +260,57 @@ function RailHeader({
   alert: Alert;
   onDeepExplain: () => void;
 }) {
+  const confidence = alert.confidenceLabel ? CONFIDENCE_LABEL[alert.confidenceLabel] : undefined;
+  const technique = alert.mitreAttack?.[0]?.techniqueId;
   return (
-    <div className="px-4 py-3 border-b border-[#374151]/60 bg-dark-70/80">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
-        <span className="capitalize text-gray-300">{alert.severity}</span>
-        <span>·</span>
-        <span className="capitalize">{alert.status.replace('_', ' ')}</span>
-        <span>·</span>
-        <span>{alert.source}</span>
-        <span>·</span>
-        <span suppressHydrationWarning>
-          {formatDistanceToNow(new Date(alert.createdAt), { addSuffix: true })}
-        </span>
+    <div className="px-4 py-4 border-b border-surface-border">
+      <div className="flex flex-wrap items-center gap-2">
+        {confidence && (
+          <RailPill hex={confidence.hex}>
+            <span title="Detection confidence">{confidence.label}</span>
+          </RailPill>
+        )}
+        <RailPill hex={PILL_HEX[alert.severity] ?? PILL_HEX.info}>
+          <span className="capitalize">{alert.severity}</span>
+        </RailPill>
+        <RailPill hex={PILL_HEX[alert.status] ?? PILL_HEX.new}>
+          <span className="capitalize">{alert.status.replace('_', ' ')}</span>
+        </RailPill>
         {typeof alert.riskScore === 'number' && (
-          <>
-            <span>·</span>
-            <span className="font-mono text-gray-400">
-              risk {Math.round(alert.riskScore)}
-            </span>
-          </>
+          <RailPill hex="#939DAD">
+            <span className="font-mono">risk {Math.round(alert.riskScore)}</span>
+          </RailPill>
         )}
       </div>
-      <div className="mt-3 flex items-center gap-3">
+
+      <dl className="mt-4 grid grid-cols-[80px_1fr] gap-x-3 gap-y-2.5 text-[11px]">
+        <dt className="text-fg-subtle">Source</dt>
+        <dd className="text-fg-secondary break-words">{alert.source}</dd>
+        <dt className="text-fg-subtle">Stage</dt>
+        <dd className="text-fg-secondary">{alert.funnelStage ? alert.funnelStage.replace(/_/g, ' ') : '—'}</dd>
+        <dt className="text-fg-subtle">Technique</dt>
+        <dd className="text-fg-secondary">{technique ?? '—'}</dd>
+        <dt className="text-fg-subtle">Time</dt>
+        <dd className="text-fg-secondary" suppressHydrationWarning>
+          {formatDistanceToNow(new Date(alert.createdAt), { addSuffix: true })}
+        </dd>
+      </dl>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onDeepExplain}
           aria-label="Open AI deep explain drawer"
           title="Run the LLM deep-explain for this alert"
-          className="text-xs font-medium px-2.5 py-1 rounded border border-violet-500/40 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 hover:border-violet-500/60 transition-colors"
+          className="text-[11px] px-2.5 py-1 rounded-md border border-[#3163CF]/60 bg-[#3163CF]/10 text-[#3163CF] hover:bg-[#3163CF]/20 transition-colors"
         >
           ✦ Deep Explain
         </button>
         <Link
           href={`/alerts/${alert.id}`}
-          className="text-xs text-brand-300 hover:text-brand-200 transition-colors"
+          className="text-[11px] px-2.5 py-1 rounded-md border border-teal-20/60 bg-teal-20/10 text-teal-10 hover:bg-teal-20/20 transition-colors"
         >
-          Open full detail →
+          Open full detail
         </Link>
       </div>
     </div>
@@ -274,10 +321,10 @@ function RailHeader({
 
 function SectionHeader({ title, count }: { title: string; count?: number }) {
   return (
-    <h3 className="text-[11px] uppercase tracking-wider text-gray-500 mb-2 font-medium">
+    <h3 className="text-[11px] text-fg-subtle mb-3">
       {title}
       {typeof count === 'number' && (
-        <span className="ml-1.5 text-gray-600">({count})</span>
+        <span className="ml-1">({count})</span>
       )}
     </h3>
   );
@@ -289,9 +336,9 @@ function NarrativeSection({ narrative }: { narrative: string | null }) {
   // paragraph + bullet structure produced by `narrative.build_narrative`
   // renders without us pulling in a full Markdown engine.
   return (
-    <section className="px-4 py-4 border-b border-[#374151]/40">
+    <section className="px-4 py-4 border-b border-surface-border">
       <SectionHeader title="Narrative" />
-      <p className="text-sm text-gray-300 whitespace-pre-wrap break-words leading-relaxed">
+      <p className="text-[11px] text-fg-secondary whitespace-pre-wrap break-words leading-relaxed">
         {narrative}
       </p>
     </section>
@@ -311,7 +358,7 @@ function RelatedEntitiesSection({ entities }: { entities: RelatedEntity[] }) {
     { principal: [], network: [], workflow: [], tenant: [] },
   );
   return (
-    <section className="px-4 py-4 border-b border-[#374151]/40 min-w-0 max-w-full overflow-x-hidden">
+    <section className="px-4 py-4 border-b border-surface-border min-w-0 max-w-full overflow-x-hidden">
       <SectionHeader title="Related entities" count={entities.length} />
       <div className="space-y-3 min-w-0 max-w-full">
         {(Object.keys(ENTITY_KIND_CONFIG) as Array<keyof typeof ENTITY_KIND_CONFIG>).map(
@@ -321,7 +368,7 @@ function RelatedEntitiesSection({ entities }: { entities: RelatedEntity[] }) {
             const cfg = ENTITY_KIND_CONFIG[kind];
             return (
               <div key={kind} className="min-w-0 max-w-full">
-                <p className={clsx('text-xs font-medium', cfg.tone)}>{cfg.label}</p>
+                <p className={clsx('text-[11px]', cfg.tone)}>{cfg.label}</p>
                 {/*
                   Stack chips vertically. Horizontal flex-wrap still overflows
                   when a grid/flex ancestor keeps min-width:auto for long
@@ -346,16 +393,16 @@ function EntityChip({ entity }: { entity: RelatedEntity }) {
   const inner = (
     <span
       className={clsx(
-        'flex w-full min-w-0 max-w-full items-start gap-1.5 text-xs px-2 py-0.5 rounded border border-[#333A47]/60 bg-dark-20/60 text-gray-200 box-border',
+        'flex w-full min-w-0 max-w-full items-baseline gap-1.5 text-[13px] px-3 py-2.5 rounded-lg border border-surface-border bg-surface-card text-fg-secondary box-border',
         entity.pivotPath &&
-          'hover:bg-gray-700/60 hover:border-gray-600/60 cursor-pointer transition-colors',
+          'hover:border-teal-20/60 hover:text-fg-primary cursor-pointer transition-colors',
       )}
       title={`${entity.type}: ${entity.value}`}
     >
-      <span className="shrink-0 text-gray-500 font-mono text-[10px] leading-relaxed">
+      <span className="shrink-0 text-fg-subtle text-[10px] leading-relaxed">
         {entity.type}
       </span>
-      <span className="font-mono min-w-0 flex-1 break-all whitespace-normal leading-relaxed">
+      <span className="min-w-0 flex-1 break-all whitespace-normal leading-relaxed">
         {display}
       </span>
     </span>
@@ -376,7 +423,7 @@ function EntityChip({ entity }: { entity: RelatedEntity }) {
 function MiniTimelineSection({ events }: { events: MiniTimelineEvent[] }) {
   if (events.length === 0) return null;
   return (
-    <section className="px-4 py-4 border-b border-[#374151]/40">
+    <section className="px-4 py-4 border-b border-surface-border">
       <SectionHeader title="Recent events" count={events.length} />
       <ol className="space-y-2.5">
         {events.map((e) => (
@@ -397,24 +444,24 @@ function TimelineRow({ event }: { event: MiniTimelineEvent }) {
     ts = event.timestamp;
   }
   return (
-    <li className="text-xs text-gray-300 border-l-2 border-[#333A47]/60 pl-3">
+    <li className="text-xs text-fg-secondary border-l-2 border-teal-20/50 pl-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-gray-500 text-[10px]" suppressHydrationWarning>
+        <span className="text-fg-subtle text-[10px] tabular-nums" suppressHydrationWarning>
           {ts}
         </span>
-        <span className="px-1.5 py-0 text-[10px] font-mono rounded border border-[#333A47]/60 bg-dark-20/40 text-gray-400 uppercase">
+        <span className="px-1.5 py-0 text-[10px] rounded-md border border-surface-border bg-surface-hover text-fg-muted uppercase">
           {event.source === 'case_timeline' ? 'case' : 'audit'}
         </span>
-        <span className="text-[10px] uppercase text-gray-500 tracking-wide">
+        <span className="text-[10px] uppercase text-fg-subtle tracking-wide">
           {event.type}
         </span>
       </div>
-      <p className="mt-0.5 text-gray-200 break-words">{event.title}</p>
+      <p className="mt-0.5 text-fg-primary break-words">{event.title}</p>
       {event.description && (
-        <p className="mt-0.5 text-gray-500 line-clamp-2">{event.description}</p>
+        <p className="mt-0.5 text-fg-muted line-clamp-2">{event.description}</p>
       )}
       {event.actor && (
-        <p className="mt-0.5 text-[10px] text-gray-600">by {event.actor}</p>
+        <p className="mt-0.5 text-[10px] text-fg-subtle">by {event.actor}</p>
       )}
     </li>
   );
@@ -429,26 +476,26 @@ function RecommendedActionsSection({ actions }: { actions: RecommendedAction[] }
         {actions.map((a, idx) => (
           <li
             key={`${a.action}-${idx}`}
-            className="border border-[#374151]/60 bg-dark-70/80 rounded-lg p-2.5"
+            className="border border-surface-border bg-surface-card rounded-lg p-3"
           >
             <div className="flex items-start gap-2">
               <span
                 className={clsx(
-                  'text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border shrink-0 mt-0.5',
+                  'text-[10px] uppercase px-1.5 py-0.5 rounded-md border shrink-0 mt-0.5',
                   PRIORITY_TONE[a.priority] ?? PRIORITY_TONE.medium,
                 )}
               >
                 {a.priority}
               </span>
-              <p className="text-sm text-gray-200 flex-1 min-w-0 break-words">{a.action}</p>
+              <p className="text-[13px] text-fg-primary flex-1 min-w-0 break-words">{a.action}</p>
             </div>
             {a.rationale && (
-              <p className="mt-1 text-xs text-gray-500 ml-[3.25rem] break-words">
+              <p className="mt-1 text-xs text-fg-muted ml-[3.25rem] break-words">
                 {a.rationale}
               </p>
             )}
             {a.risk && (
-              <p className="mt-1 text-xs text-amber-400/80 ml-[3.25rem] break-words">
+              <p className="mt-1 text-xs text-[#D98A1E] ml-[3.25rem] break-words">
                 Risk: {a.risk}
               </p>
             )}

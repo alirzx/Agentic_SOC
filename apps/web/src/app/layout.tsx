@@ -171,14 +171,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // Default to `data-theme="dark"` for SSR so that the markup React sends
-    // matches what the bootstrap script will write before hydration. The
-    // bootstrap script (rendered first thing inside <body>) flips this to
-    // light/system if the user previously chose so, before any pixels are
-    // painted — that's why we don't see a flash.
+    // Default to `data-theme="light"` (the product default) for SSR so that
+    // the markup React sends matches what the bootstrap script will write
+    // before hydration. The bootstrap script (rendered first thing inside
+    // <body>) flips this to dark/system if the user previously chose so,
+    // before any pixels are painted — that's why we don't see a flash.
     <html
       lang="en"
-      data-theme="dark"
+      data-theme="light"
       className={`${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
