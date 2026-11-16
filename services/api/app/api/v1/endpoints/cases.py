@@ -1339,6 +1339,56 @@ async def _emit_summary_breadcrumb(
 
 
 @router.get(
+    "/{case_id}/correlation-audit",
+    summary="Explainable campaign correlation audit (read-only)",
+)
+async def case_correlation_audit(
+    case_id: str,
+    db: DBSession,
+    user: AuthUser,
+) -> dict[str, Any]:
+    """Score every linked alert against the campaign seed — no writes.
+
+    Returns per-link matched entities, score, role (primary/supporting/rejected).
+    """
+    from app.services.campaign_reconcile import score_case_membership
+
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    return await score_case_membership(db, tenant_id=user.tenant_id, case_id=cid)
+
+
+class ReconcileBody(BaseModel):
+    dry_run: bool = Field(default=True, description="When true, only report; no unlinks")
+
+
+@router.post(
+    "/{case_id}/reconcile-correlation",
+    summary="Unlink alerts that fail entity-aware campaign correlation",
+)
+async def case_reconcile_correlation(
+    case_id: str,
+    db: DBSession,
+    user: AuthUser,
+    body: ReconcileBody | None = None,
+) -> dict[str, Any]:
+    """Split false megacases: keep evidenced siblings, unlink the rest.
+
+    Default ``dry_run=true``. Pass ``{\"dry_run\": false}`` to apply.
+    """
+    from app.services.campaign_reconcile import reconcile_campaign_case
+
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    dry = True if body is None else bool(body.dry_run)
+    result = await reconcile_campaign_case(
+        db,
+        tenant_id=user.tenant_id,
+        case_id=cid,
+        dry_run=dry,
+    )
+    return result
+
+
+@router.get(
     "/{case_id}/brief",
     response_model=CaseInvestigationBrief,
     summary="Investigation brief — evidence, alert reports, outcome",

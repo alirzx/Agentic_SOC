@@ -8,13 +8,26 @@ when `runbook_tasks` does not exist yet.
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from app.services import agentic_funnel
 from app.services.agentic_funnel import funnel_board
+
+
+@pytest.fixture(autouse=True)
+def _suppress_board_auto_dedupe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Board unit tests mock only task/count/sample queries — skip soft-dedupe."""
+
+    class _AlwaysFresh(dict):
+        def get(self, key: str, default: float = 0.0) -> float:  # type: ignore[override]
+            return time.monotonic()
+
+    monkeypatch.setattr(agentic_funnel, "_last_auto_dedupe_monotonic", _AlwaysFresh())
 
 
 def _rows(rows: list[dict[str, Any]]) -> MagicMock:

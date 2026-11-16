@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **False megacase correlation (audit case 065bd5b9).** Funnel backfill no
+  longer links alerts on severity / Splunk source / loose OR(host|ip|user).
+  Campaign siblings require shared host/user/IP with scored evidence;
+  cross-domain links need host or user; Risk threshold alerts are supporting
+  only. Ready-for-Jira no longer passes on severity alone. PowerShell /
+  Defender-exclusion / short-lived-account heuristics stay `needs_review`.
+  New endpoints: `GET /cases/{id}/correlation-audit`,
+  `POST /cases/{id}/reconcile-correlation` (default dry-run) to split legacy
+  megacases without deleting alerts.
+
 ### Changed
 
 - **Three-layer alert deduplication (v2).** Soft Funnel collapse no longer

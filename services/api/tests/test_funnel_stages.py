@@ -52,9 +52,22 @@ def test_jira_gate_blocks_fp_and_unapproved_needs_review():
     assert passes_jira_gate(disposition="needs_review", analyst_approved=True)
     # TP alone is not enough — evidence bar required (triage doc).
     assert not passes_jira_gate(disposition="true_positive", severity="medium", confidence=0.4)
-    assert passes_jira_gate(disposition="true_positive", severity="high")
-    assert passes_jira_gate(disposition="escalate", severity="critical")
-    # Unknown disposition only with analyst approval (operator ITSM select).
+    # Severity alone is insufficient for the evidence bar (audit 065bd5b9).
+    assert not passes_jira_gate(disposition="true_positive", severity="high")
+    assert passes_jira_gate(
+        disposition="true_positive",
+        severity="high",
+        confidence=0.8,
+        rule_name="ESCU - LSASS",
+        mitre_techniques=["T1003"],
+    )
+    assert passes_jira_gate(
+        disposition="escalate",
+        severity="critical",
+        confidence=0.85,
+        rule_name="ESCU - Ransomware",
+        mitre_techniques=["T1486"],
+    )
     assert not passes_jira_gate(disposition=None)
     assert passes_jira_gate(disposition=None, analyst_approved=True)
 
@@ -68,10 +81,19 @@ def test_ready_for_jira_stage_evidence_bar():
         confidence=0.4,
         case_id=case_id,
     )
-    assert passes_ready_for_jira_stage(
+    # High severity alone is NOT ready-for-jira (needs investigation or conf+metadata).
+    assert not passes_ready_for_jira_stage(
         disposition="true_positive",
         severity="high",
         case_id=case_id,
+    )
+    assert passes_ready_for_jira_stage(
+        disposition="true_positive",
+        severity="high",
+        confidence=0.8,
+        case_id=case_id,
+        rule_name="ESCU - LSASS Access",
+        mitre_techniques=["T1003"],
     )
     assert passes_ready_for_jira_stage(
         disposition="true_positive",
