@@ -100,12 +100,42 @@ async def reconcile_campaign_case(
     if case is None:
         return {"ok": False, "error": "case_not_found", "case_id": str(case_id)}
     if len(alerts) <= 1:
+        # Stale alert_ids[] on the case (list shows N, FK membership is 0/1)
+        # still needs a rewrite so the console stops advertising megacases.
+        live_ids = [str(a["id"]) for a in alerts]
+        stale = list(case.get("alert_ids") or [])
+        if not dry_run and [str(x) for x in stale] != live_ids:
+            await db.execute(
+                text(
+                    """
+                    UPDATE aisoc_cases
+                       SET alert_ids = CAST(:aids AS uuid[]),
+                           updated_at = now()
+                     WHERE id = :cid AND tenant_id = :tid
+                    """
+                ).bindparams(
+                    cid=case_id,
+                    tid=tenant_id,
+                    aids=live_ids,
+                )
+            )
+            await db.commit()
+            return {
+                "ok": True,
+                "case_id": str(case_id),
+                "action": "trimmed_stale_alert_ids",
+                "reason": "solo_or_empty",
+                "kept": live_ids,
+                "unlinked": [],
+                "stale_alert_ids_before": len(stale),
+                "dry_run": False,
+            }
         return {
             "ok": True,
             "case_id": str(case_id),
             "action": "noop",
             "reason": "solo_or_empty",
-            "kept": [str(a["id"]) for a in alerts],
+            "kept": live_ids,
             "unlinked": [],
             "dry_run": dry_run,
         }

@@ -33,6 +33,7 @@ from app.services.campaign_correlation import (
     is_candidate_eligible,
     is_risk_supporting_alert,
     is_seed_eligible,
+    score_campaign_link,
     select_campaign_siblings,
     summarize_correlation_decisions,
 )
@@ -564,10 +565,11 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
         tags = campaign_tags(theme=theme, campaign_key=camp_key, source="backfill")
         tags["correlation"] = correlation_audit
         existing = None
-        # Only reuse a case with the SAME campaign_key — never chain via loose
-        # host/ip/user EXISTS (that merged web+lsass+powershell megacases).
+        # Reuse requires SAME campaign_key AND an evidenced v2 link from this
+        # seed to the existing case seed. Same key alone previously merged
+        # hundreds of solo alerts into one megacase (theme|host buckets).
         if camp_key:
-            existing = (
+            existing_row = (
                 await db.execute(
                     text(
                         """
@@ -583,10 +585,52 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     ).bindparams(tid=tenant_id, since=since, ckey=camp_key)
                 )
             ).fetchone()
+            if existing_row is not None:
+                prior_ids = list(existing_row[1] or [])
+                existing_seed_id = prior_ids[0] if prior_ids else None
+                existing_seed = None
+                if existing_seed_id is not None:
+                    existing_seed = next(
+                        (
+                            a
+                            for a in window_alerts
+                            if str(a.get("id")) == str(existing_seed_id)
+                        ),
+                        None,
+                    )
+                    if existing_seed is None:
+                        existing_seed = (
+                            await db.execute(
+                                text(
+                                    """
+                                    SELECT id, title, severity, disposition, case_id, tags,
+                                           affected_hosts, affected_ips, affected_users, raw_event,
+                                           created_at, event_time, llm_payload, iocs,
+                                           rule_id, rule_name, mitre_techniques, mitre_tactics,
+                                           confidence, ai_score, funnel_stage
+                                      FROM alerts
+                                     WHERE tenant_id = :tid AND id = :aid
+                                     LIMIT 1
+                                    """
+                                ).bindparams(tid=tenant_id, aid=existing_seed_id)
+                            )
+                        ).mappings().first()
+                        existing_seed = dict(existing_seed) if existing_seed else None
+                can_reuse = False
+                if existing_seed is not None and str(existing_seed.get("id")) != str(alert_id):
+                    link = score_campaign_link(
+                        existing_seed,
+                        alert,
+                        temporal_window_seconds=campaign_temporal_window_seconds(hours),
+                    )
+                    can_reuse = bool(link.linked)
+                if can_reuse:
+                    existing = existing_row
         created_new = existing is None
         if existing is not None:
             case_id = existing[0]
             prior = list(existing[1] or [])
+            # Only merge this seed + scored siblings — never dump unrelated same-key solos.
             merged = list(dict.fromkeys([*prior, *sibling_ids]))
             await db.execute(
                 text(

@@ -32,12 +32,15 @@ def test_different_hosts_different_keys():
 
 
 def test_reuse_policy_documented_constants():
-    """Reuse requires same campaign_key + open status + funnel creators + window.
+    """Reuse requires same campaign_key + open status + funnel creators + window
+    AND an evidenced v2 link to the existing case seed (not key alone).
 
-    Enforced in agentic_funnel SQL — this locks the window helper contract.
+    Enforced in agentic_funnel SQL + score_campaign_link gate.
     """
     assert campaign_temporal_window_seconds(24) == 86_400
     allowed_creators = {"agentic-funnel", "agentic-funnel-backfill"}
     assert "agentic-funnel-backfill" in allowed_creators
     blocked_statuses = {"resolved", "closed"}
     assert "open" not in blocked_statuses
+    # Same campaign_key without entities must not invent a reusable key.
+    assert primary_campaign_key("general-intrusion", []) is None
