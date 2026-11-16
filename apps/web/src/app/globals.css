@@ -10,6 +10,12 @@
  * navy surfaces (dark-80…dark-10), teal primary (#4FD2C2 / #6AF8E7),
  * Gilroy typography. Console is dark-by-default; light mode remains
  * opt-in via ThemeProvider (`data-theme`).
+ *
+ * Light palette follows the light dashboard design: page #F6F8FB, white
+ * cards with #E5E7EB borders, navy ink #121724, gray text ramp
+ * #374151 / #6B7280 / #939DAD and the teal #4FD2C2 accent. Dark-first
+ * utilities used across components are remapped by ./light-theme.css
+ * (imported from layout.tsx).
  */
 
 /* Gilroy (spelled Gilory in AssetManagement classNames for parity) */
@@ -122,20 +128,22 @@
 }
 
 [data-theme="light"] {
-  --surface-base: #f8fafc;
+  --surface-base: #f6f8fb;
   --surface-raised: #ffffff;
   --surface-card: #ffffff;
-  --surface-hover: #eef2f7;
-  --surface-subtle: #f1f5f9;
+  --surface-hover: #f3f4f6;
+  --surface-subtle: #f9fafb;
 
-  --surface-border: rgba(15, 23, 42, 0.12);
-  --surface-divider: rgba(15, 23, 42, 0.06);
+  --landing-grad-hero: linear-gradient(to bottom right, #4fd2c2 0%, #f6f8fb 80%);
+
+  --surface-border: #e5e7eb;
+  --surface-divider: #f3f4f6;
 
   --fg-primary: #121724;
-  --fg-secondary: #333a47;
-  --fg-muted: #596272;
-  --fg-subtle: #728497;
-  --fg-inverse: #fffefe;
+  --fg-secondary: #374151;
+  --fg-muted: #6b7280;
+  --fg-subtle: #939dad;
+  --fg-inverse: #ffffff;
 
   --background: var(--surface-base);
   --foreground: var(--fg-primary);
@@ -146,9 +154,9 @@
   --selection-bg: rgba(79, 210, 194, 0.22);
   --selection-fg: #121724;
 
-  --scrollbar-thumb: rgba(79, 210, 194, 0.55);
+  --scrollbar-thumb: #d1d5db;
   --scrollbar-thumb-hover: #4fd2c2;
-  --scrollbar-track: rgba(15, 23, 42, 0.06);
+  --scrollbar-track: transparent;
 }
 
 * {
@@ -210,6 +218,22 @@ button {
   outline: 2px solid #4fd2c2;
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/*
+ * Recharts makes the chart surface keyboard-focusable (tabindex=0), so a
+ * mouse click on any chart drew the browser's default focus outline (dark
+ * in light mode) around the whole chart. Drop it for pointer focus and
+ * keep the teal ring for keyboard navigation only.
+ */
+.recharts-wrapper :focus:not(:focus-visible),
+.recharts-wrapper:focus:not(:focus-visible) {
+  outline: none;
+}
+.recharts-surface:focus-visible {
+  outline: 2px solid #4fd2c2;
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 
 select {

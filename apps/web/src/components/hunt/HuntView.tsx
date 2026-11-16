@@ -43,6 +43,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useTheme } from '@/components/theme/ThemeProvider';
 
 // Monaco is heavy and SSR-incompatible; load it client-side only.
 const MonacoEditor = dynamic(
@@ -626,6 +627,8 @@ function ResultRow({ result }: { result: HuntResult }) {
 // ─── Main view ────────────────────────────────────────────────────────────────
 
 export function HuntView() {
+  const { resolved: resolvedTheme } = useTheme();
+  const monacoTheme = resolvedTheme === 'light' ? 'vs' : 'vs-dark';
   const [language, setLanguage] = useState<Lang>('kql');
   const [query, setQuery] = useState<string>(STARTERS.kql);
   const [preset, setPreset] = useState<string>('24h');
@@ -1107,7 +1110,7 @@ export function HuntView() {
                 onMount={(editor) => {
                   editorRef.current = editor;
                 }}
-                theme="vs-dark"
+                theme={monacoTheme}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,

@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useRealtimeChannel, type RealtimeStatus } from '@/lib/realtime';
+import { Card, CardHeader } from './ui';
 
 type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -57,11 +58,11 @@ interface AlertLike {
 }
 
 const SEVERITY_COLORS: Record<Severity, string> = {
-  critical: 'bg-red-500/20 text-red-300 border border-red-500/30',
-  high: 'bg-orange-500/20 text-orange-300 border border-orange-500/30',
-  medium: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30',
-  low: 'bg-brand-500/20 text-brand-300 border border-brand-500/30',
-  info: 'bg-gray-500/20 text-gray-300 border border-gray-500/30',
+  critical: 'bg-[#FD4E4E]/15 text-[#FD4E4E] border border-[#FD4E4E]/70',
+  high: 'bg-[#F98B3E]/15 text-[#F98B3E] border border-[#F98B3E]/70',
+  medium: 'bg-[#F2BD57]/15 text-[#D99A1E] border border-[#F2BD57]/70',
+  low: 'bg-teal-20/15 text-teal-10 border border-teal-20/70',
+  info: 'bg-gray-500/15 text-fg-muted border border-gray-500/50',
 };
 
 const MAX_VISIBLE = 12;
@@ -162,55 +163,52 @@ export function LiveFeedPanel() {
   const pill = statusToLabel(status, hasReal);
 
   return (
-    <div className="bg-[#111620] border border-[#374151]/60 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+    <Card className="p-6">
+      <CardHeader
+        title="Live Feed"
+        subtitle="Most recent alerts from connected sources"
+        className="mb-4"
+        action={
           <span
-            className={clsx(
-              'w-2 h-2 rounded-full',
-              pill.tone === 'live' && 'bg-emerald-400 animate-pulse',
-              pill.tone === 'reconnect' && 'bg-amber-400 animate-pulse',
-              pill.tone === 'waiting' && 'bg-gray-500',
-            )}
-          />
-          Live Feed
-        </h3>
-        <span
-          className={clsx(
-            'text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border',
-            pill.tone === 'live' && 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-            pill.tone === 'reconnect' && 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-            pill.tone === 'waiting' && 'bg-gray-500/10 text-gray-400 border-[#333A47]',
-          )}
-          title={
-            pill.tone === 'waiting'
-              ? 'No fused alerts yet — connect Splunk (or another source) to start the feed'
-              : `WebSocket: ${status}`
-          }
-        >
-          {pill.label}
-        </span>
-      </div>
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-surface-border bg-surface-hover px-3 py-1 text-xs text-fg-muted"
+            title={
+              pill.tone === 'waiting'
+                ? 'No fused alerts yet — connect Splunk (or another source) to start the feed'
+                : `WebSocket: ${status}`
+            }
+          >
+            <span
+              className={clsx(
+                'w-1.5 h-1.5 rounded-full',
+                pill.tone === 'live' && 'bg-green-500 animate-pulse',
+                pill.tone === 'reconnect' && 'bg-[#F2BD57] animate-pulse',
+                pill.tone === 'waiting' && 'bg-gray-500',
+              )}
+            />
+            {pill.label}
+          </span>
+        }
+      />
 
-      <div className="space-y-2.5 overflow-y-auto max-h-52 pr-1">
+      <div className="overflow-y-auto max-h-[272px] pr-1 divide-y divide-surface-border">
         {visible.length === 0 ? (
-          <p className="text-xs text-gray-500 py-6 text-center">
+          <p className="text-xs text-fg-muted py-6 text-center">
             Waiting for live alerts from connected sources…
           </p>
         ) : (
           visible.map((event) => (
-          <div key={event.id} className="flex items-start gap-2">
+          <div key={event.id} className="flex items-center gap-3 py-2.5">
             <span
               className={clsx(
-                'text-xs px-1.5 py-0.5 rounded font-medium shrink-0 mt-0.5',
+                'w-[66px] text-center text-xs py-1 rounded font-gilroy-medium shrink-0',
                 SEVERITY_COLORS[event.severity],
               )}
             >
               {event.severity.toUpperCase().slice(0, 4)}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-300 leading-tight truncate">{event.text}</p>
-              <p className="text-[11px] text-gray-600 mt-0.5">
+              <p className="text-sm text-fg-secondary leading-tight truncate">{event.text}</p>
+              <p className="text-[10px] text-fg-subtle mt-0.5">
                 {event.source} · {relativeTime(event.receivedAt, now)}
               </p>
             </div>
@@ -218,6 +216,6 @@ export function LiveFeedPanel() {
           ))
         )}
       </div>
-    </div>
+    </Card>
   );
 }

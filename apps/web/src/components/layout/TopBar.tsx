@@ -129,26 +129,26 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
 
   return (
     <header
-      className={`fixed left-60 right-0 h-16 flex items-center justify-between px-6 bg-dark-70/95 backdrop-blur-sm border-b border-[#374151] z-20 ${
+      className={`fixed left-0 md:left-[304px] right-0 h-[76px] flex items-center justify-between pl-16 pr-6 md:pl-2 bg-surface-base/90 backdrop-blur-sm z-20 ${
         demoOffset ? 'top-9' : 'top-0'
       }`}
     >
       {/* Page title */}
       <div>
-        <h1 className="text-base font-gilroy-semibold text-white leading-tight">{routeInfo.title}</h1>
-        <p className="text-xs text-amgray-50 font-gilroy-medium">{routeInfo.description}</p>
+        <h1 className="text-[17px] font-gilroy-semibold text-fg-primary leading-tight">{routeInfo.title}</h1>
+        <p className="text-xs text-fg-muted font-gilroy-medium">{routeInfo.description}</p>
       </div>
 
       {/* Center: command palette launcher — AssetManagement search pill */}
-      <div className="flex-1 max-w-lg mx-8">
+      <div className="flex-1 max-w-[380px] mx-6">
         <button
           type="button"
           onClick={openPalette}
           aria-label="Open command palette"
-          className="group relative flex w-full items-center gap-3 rounded-full border border-[#374151] bg-dark-70 h-[42px] px-4 text-left text-sm text-amgray-30 transition-all hover:border-teal-20/50 hover:text-teal-10 focus:border-teal-20 focus:outline-none focus:ring-2 focus:ring-teal-20/30"
+          className="group relative flex w-full items-center gap-3 rounded-full border border-surface-border bg-surface-card h-[42px] px-4 text-left text-sm text-fg-subtle transition-all hover:border-teal-20/50 focus:border-teal-20 focus:outline-none focus:ring-2 focus:ring-teal-20/30"
         >
           <svg
-            className="h-4 w-4 text-amgray-50 transition-colors group-hover:text-teal-10"
+            className="h-[18px] w-[18px] text-fg-muted transition-colors group-hover:text-teal-10"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -160,10 +160,10 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          <span className="flex-1 truncate text-amgray-30 group-hover:text-amgray-20 font-gilroy-medium">
+          <span className="flex-1 truncate text-fg-subtle group-hover:text-fg-muted text-[13px]">
             Search alerts, cases, rules, or run a command…
           </span>
-          <kbd className="pointer-events-none rounded-[6px] bg-dark-20 border border-[#333A47] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amgray-30">
+          <kbd className="pointer-events-none rounded-full bg-surface-hover px-2.5 py-0.5 text-[11px] tracking-wide text-fg-muted">
             {shortcut}
           </kbd>
         </button>
@@ -200,12 +200,12 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
           <RoleBadge role={userRole} />
         </div>
 
-        <div className="hidden lg:block h-6 w-px bg-[#374151]" aria-hidden />
+        <div className="hidden lg:block h-9 w-px bg-surface-border" aria-hidden />
 
         {/* Clock */}
-        <div className="text-right hidden lg:block">
-          <p className="text-sm font-mono text-amgray-20" suppressHydrationWarning>{timeStr}</p>
-          <p className="text-xs text-amgray-50" suppressHydrationWarning>{dateStr}</p>
+        <div className="text-right hidden lg:block whitespace-nowrap">
+          <p className="text-xs text-fg-secondary tabular-nums" suppressHydrationWarning>{timeStr}</p>
+          <p className="text-xs text-fg-muted" suppressHydrationWarning>{dateStr}</p>
         </div>
 
         <ThemeToggle />
@@ -214,7 +214,7 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
         <button
           type="button"
           aria-label="Open notifications"
-          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#374151] text-amgray-30 hover:text-teal-10 hover:border-teal-20/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-20/50"
+          className="relative flex h-[42px] w-[42px] items-center justify-center rounded-full border border-surface-border bg-surface-card text-fg-muted hover:text-teal-10 hover:border-teal-20/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-20/50"
         >
           <svg
             className="w-5 h-5"
@@ -227,18 +227,18 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
           </svg>
           <span
             aria-hidden
-            className="absolute top-1.5 right-1.5 w-2 h-2 bg-teal-20 rounded-full ring-2 ring-dark-70 shadow-[0_0_10px_0_#3AC7B6]"
+            className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-teal-20 rounded-full ring-2 ring-surface-base"
           />
         </button>
 
         {/* User avatar */}
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-teal-20 flex items-center justify-center text-xs font-gilroy-bold text-dark-80">
+          <div className="w-[42px] h-[42px] rounded-full bg-teal-20/15 border border-teal-20/60 flex items-center justify-center text-sm font-gilroy-bold text-fg-primary">
             {initials}
           </div>
-          <div className="hidden lg:block">
-            <p className="text-xs font-gilroy-medium text-amgray-20">{user?.username || user?.email || 'Operator'}</p>
-            <p className="text-xs text-amgray-50">{(user?.role || userRole || 'user').replace(/_/g, ' ')}</p>
+          <div className="hidden 2xl:block whitespace-nowrap">
+            <p className="text-xs font-gilroy-medium text-fg-secondary">{user?.username || user?.email || 'Operator'}</p>
+            <p className="text-xs text-fg-muted">{(user?.role || userRole || 'user').replace(/_/g, ' ')}</p>
           </div>
           <button
             type="button"
@@ -246,7 +246,7 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
               authApi.logout();
               window.location.assign('/login');
             }}
-            className="hidden md:inline text-xs text-amgray-40 hover:text-white px-2 py-1 rounded-md border border-[#374151]"
+            className="hidden md:inline whitespace-nowrap text-xs text-fg-muted hover:text-fg-primary px-3 py-1.5 rounded-full border border-surface-border bg-surface-card"
           >
             Sign out
           </button>

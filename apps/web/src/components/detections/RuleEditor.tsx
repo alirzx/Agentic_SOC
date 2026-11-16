@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { SimpleRuleBuilder } from '@/components/detections/SimpleRuleBuilder';
+import { useTheme } from '@/components/theme/ThemeProvider';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
@@ -105,6 +106,8 @@ interface RuleEditorProps {
 }
 
 export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
+  const { resolved: resolvedTheme } = useTheme();
+  const monacoTheme = resolvedTheme === 'light' ? 'vs' : 'vs-dark';
   const router = useRouter();
 
   // Load existing rule when editing
@@ -730,7 +733,7 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
                 language={monacoLang}
                 value={body}
                 onChange={(val) => setBody(val ?? '')}
-                theme="vs-dark"
+                theme={monacoTheme}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,
@@ -777,7 +780,7 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
                     language="json"
                     value={sampleEvent}
                     onChange={(val) => setSampleEvent(val ?? '')}
-                    theme="vs-dark"
+                    theme={monacoTheme}
                     options={{
                       minimap: { enabled: false },
                       fontSize: 12,

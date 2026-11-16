@@ -12,12 +12,16 @@
  */
 'use client';
 
+import { useId } from 'react';
+
 interface SparklineProps {
   points: number[];
   /** Width in px when rendered inline. The viewbox stays fixed at 100×30. */
   width?: number;
   height?: number;
   className?: string;
+  /** Draw a soft gradient area under the line (light dashboard design). */
+  area?: boolean;
 }
 
 const VIEWBOX_WIDTH = 100;
@@ -28,8 +32,10 @@ export function Sparkline({
   width = 96,
   height = 28,
   className,
+  area = false,
 }: SparklineProps) {
   const path = pointsToPath(points);
+  const gradientId = useId();
 
   return (
     <svg
@@ -41,6 +47,21 @@ export function Sparkline({
       className={className}
       preserveAspectRatio="none"
     >
+      {area && (
+        <>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity={0.28} />
+              <stop offset="100%" stopColor="currentColor" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <polygon
+            points={`0,${VIEWBOX_HEIGHT} ${path} ${VIEWBOX_WIDTH},${VIEWBOX_HEIGHT}`}
+            fill={`url(#${gradientId})`}
+            stroke="none"
+          />
+        </>
+      )}
       <polyline
         points={path}
         fill="none"
@@ -48,6 +69,7 @@ export function Sparkline({
         strokeWidth={1.4}
         strokeLinecap="round"
         strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
       />
     </svg>
   );

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, type ReactNode } from "react";
 import useSWR from "swr";
+import { RefreshCw } from "lucide-react";
 
 import {
   metricsApi,
@@ -11,6 +12,7 @@ import {
   type CalibrationBucket,
   type CostAggregate,
 } from "@/lib/api";
+import { Card, CardHeader, SectionHeading, StatTile, type Tone } from "./ui";
 
 const EMPTY_SOC_METRICS: SOCMetrics = {
   kpis: {
@@ -46,6 +48,11 @@ function formatTokens(n: number): string {
   return `${n}`;
 }
 
+/** Threshold state -> design tone (good = teal, warn = amber, bad = red). */
+function tone(value: number, warnAbove: number, badAbove: number): Tone {
+  return value > badAbove ? "bad" : value > warnAbove ? "warn" : "good";
+}
+
 function KpiCard({
   label,
   value,
@@ -55,32 +62,25 @@ function KpiCard({
   label: string;
   value: string | number;
   unit?: string;
-  color?: string;
+  color?: Tone;
 }) {
-  return (
-    <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4 flex flex-col gap-1">
-      <span className="text-xs text-gray-400 uppercase tracking-wider">{label}</span>
-      <span className={`text-2xl font-bold ${color ?? "text-white"}`}>
-        {value}
-        {unit && <span className="text-sm font-normal text-gray-400 ml-1">{unit}</span>}
-      </span>
-    </div>
-  );
+  return <StatTile label={label} value={value} unit={unit} tone={color ?? "neutral"} />;
 }
 
+/** Chip accent per tactic (tinted fill + solid border). */
 const TACTIC_COLORS: Record<string, string> = {
-  "Initial Access": "bg-red-900",
-  Execution: "bg-orange-900",
-  Persistence: "bg-yellow-900",
-  "Privilege Escalation": "bg-amber-900",
-  "Defense Evasion": "bg-lime-900",
-  "Credential Access": "bg-green-900",
-  Discovery: "bg-teal-900",
-  "Lateral Movement": "bg-cyan-900",
-  Collection: "bg-sky-900",
-  Exfiltration: "bg-blue-900",
-  "Command and Control": "bg-teal-900",
-  Impact: "bg-purple-900",
+  "Initial Access": "#FD4E4E",
+  Execution: "#F98B3E",
+  Persistence: "#F2BD57",
+  "Privilege Escalation": "#F2AC49",
+  "Defense Evasion": "#7B5EE6",
+  "Credential Access": "#4ADE80",
+  Discovery: "#4FD2C2",
+  "Lateral Movement": "#8FBCE2",
+  Collection: "#3163CF",
+  Exfiltration: "#3163CF",
+  "Command and Control": "#4FD2C2",
+  Impact: "#8531CF",
 };
 
 function AttackHeatmap({ cells }: { cells: AttackHeatmapCell[] }) {
@@ -94,7 +94,7 @@ function AttackHeatmap({ cells }: { cells: AttackHeatmapCell[] }) {
 
   if (cells.length === 0) {
     return (
-      <div className="text-gray-500 text-sm flex items-center justify-center h-32">
+      <div className="text-fg-muted text-sm flex items-center justify-center h-32">
         No ATT&amp;CK data in the selected period.
       </div>
     );
@@ -104,22 +104,22 @@ function AttackHeatmap({ cells }: { cells: AttackHeatmapCell[] }) {
     <div className="space-y-4">
       {Object.entries(tacticGroups).map(([tactic, techniques]) => (
         <div key={tactic}>
-          <div className="text-xs font-semibold text-gray-300 mb-1 uppercase tracking-wide">
+          <div className="text-xs text-fg-muted mb-2">
             {tactic}
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-2">
             {techniques.map((cell) => {
               const intensity = Math.max(0.15, cell.count / maxCount);
-              const bgClass = TACTIC_COLORS[tactic] ?? "bg-dark-20";
+              const hex = TACTIC_COLORS[tactic] ?? "#939DAD";
               return (
                 <div
                   key={cell.technique}
                   title={`${cell.technique}: ${cell.count} alerts`}
-                  className={`${bgClass} border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 cursor-default`}
-                  style={{ opacity: intensity }}
+                  className="border rounded-md px-2 py-1 text-[11px] text-fg-secondary cursor-default"
+                  style={{ opacity: intensity, backgroundColor: `${hex}26`, borderColor: hex }}
                 >
                   {cell.technique}
-                  <span className="ml-1 text-gray-400">({cell.count})</span>
+                  <span className="ml-1">({cell.count})</span>
                 </div>
               );
             })}
@@ -130,7 +130,12 @@ function AttackHeatmap({ cells }: { cells: AttackHeatmapCell[] }) {
   );
 }
 
-export function SOCMetricsDashboard() {
+export function SOCMetricsDashboard({
+  topTactics,
+}: {
+  /** Optional "Top tactics" card rendered beside the technique heatmap. */
+  topTactics?: ReactNode;
+} = {}) {
   const { data, error, mutate } = useSWR<SOCMetrics>(
     // Opaque cache key — `metricsApi.getSOC()` routes through the
     // tenant- and auth-aware `request()` helper, which attaches
@@ -168,17 +173,6 @@ export function SOCMetricsDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">SOC Performance Metrics</h2>
-        <button
-          onClick={refresh}
-          className="text-xs text-gray-400 hover:text-gray-200 px-3 py-1 border border-[#333A47] rounded transition-colors"
-        >
-          Refresh
-        </button>
-      </div>
-
       {errorMessage && (
         <div className="rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="font-semibold">SOC metrics unavailable:</span>{" "}
@@ -186,111 +180,108 @@ export function SOCMetricsDashboard() {
         </div>
       )}
 
+      {/* Threat coverage: top tactics + ATT&CK heatmap */}
+      <section>
+        <SectionHeading>Threat coverage (MITRE ATT&amp;CK)</SectionHeading>
+        <div className={topTactics ? "grid grid-cols-1 lg:grid-cols-2 gap-4" : undefined}>
+          {topTactics}
+          <Card className="p-6">
+            <CardHeader
+              title="ATT&CK Technique Heatmap"
+              subtitle="Technique ID (alert count) by tactic; stronger colour means more alerts"
+              className="mb-5"
+            />
+            <AttackHeatmap cells={heatmap} />
+          </Card>
+        </div>
+      </section>
+
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section>
+        <SectionHeading
+          action={
+            <button
+              onClick={refresh}
+              className="inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg-primary px-3 py-1.5 border border-surface-border bg-surface-card rounded-full transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+              Refresh
+            </button>
+          }
+        >
+          SOC Performance
+        </SectionHeading>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard
             label="MTTD"
             value={kpis?.mttd_hours.toFixed(1) ?? "—"}
             unit="hrs"
-            color={
-              (kpis?.mttd_hours ?? 0) > 4
-                ? "text-red-400"
-                : (kpis?.mttd_hours ?? 0) > 2
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            color={tone(kpis?.mttd_hours ?? 0, 2, 4)}
           />
           <KpiCard
             label="MTTR"
             value={kpis?.mttr_hours.toFixed(1) ?? "—"}
             unit="hrs"
-            color={
-              (kpis?.mttr_hours ?? 0) > 24
-                ? "text-red-400"
-                : (kpis?.mttr_hours ?? 0) > 8
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            color={tone(kpis?.mttr_hours ?? 0, 8, 24)}
           />
           <KpiCard
             label="MTTC"
             value={kpis?.mttc_hours.toFixed(1) ?? "—"}
             unit="hrs"
-            color={
-              (kpis?.mttc_hours ?? 0) > 24
-                ? "text-red-400"
-                : (kpis?.mttc_hours ?? 0) > 8
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            color={tone(kpis?.mttc_hours ?? 0, 8, 24)}
           />
           <KpiCard
-            label="Escalation Rate"
+            label="Escalation rate"
             value={
               kpis ? `${(kpis.escalation_rate * 100).toFixed(1)}%` : "—"
             }
-            color={
-              (kpis?.escalation_rate ?? 0) > 0.5
-                ? "text-red-400"
-                : (kpis?.escalation_rate ?? 0) > 0.25
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            color={tone(kpis?.escalation_rate ?? 0, 0.25, 0.5)}
           />
           <KpiCard
-            label="False Positive Rate"
+            label="False positive rate"
             value={
               kpis
                 ? `${(kpis.false_positive_rate * 100).toFixed(1)}%`
                 : "—"
             }
-            color={
-              (kpis?.false_positive_rate ?? 0) > 0.3
-                ? "text-red-400"
-                : (kpis?.false_positive_rate ?? 0) > 0.15
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            color={tone(kpis?.false_positive_rate ?? 0, 0.15, 0.3)}
           />
           <KpiCard
-            label="Alert Volume (7d)"
+            label="Alert volume (7d)"
             value={kpis?.alert_volume_7d ?? "—"}
           />
           <KpiCard
-            label="Cases Opened (7d)"
+            label="Cases opened (7d)"
             value={kpis?.cases_opened_7d ?? "—"}
           />
           <KpiCard
-            label="Cases Closed (7d)"
+            label="Cases closed (7d)"
             value={kpis?.cases_closed_7d ?? "—"}
-            color="text-green-400"
-          />
-          <KpiCard
-            label="Analyst Overrides (7d)"
-            value={kpis?.analyst_overrides_7d ?? "—"}
-            color="text-brand-400"
+            color="good"
           />
         </div>
+      </section>
 
       {/* Confidence Calibration Curve */}
-      <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">
-          Agent Confidence Calibration (7d)
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          Predicted confidence vs. actual true-positive rate. Diagonal alignment indicates
-          well-calibrated confidence.
-        </p>
-        <CalibrationCurve buckets={calibration} />
-      </div>
-
-      {/* ATT&CK Heatmap */}
-      <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">
-          ATT&amp;CK Technique Heatmap
-        </h3>
-        <AttackHeatmap cells={heatmap} />
-      </div>
+      <section>
+        <SectionHeading>AI agent quality</SectionHeading>
+        <Card className="p-6">
+          <CardHeader
+            title="Agent Confidence Calibration (7d)"
+            subtitle="Predicted confidence vs. actual true-positive rate. Diagonal alignment indicates well-calibrated confidence."
+            action={
+              <span className="shrink-0 text-xs text-fg-muted">
+                Analyst overrides (7d):{" "}
+                <span className="font-gilroy-semibold text-teal-20">
+                  {kpis?.analyst_overrides_7d ?? "—"}
+                </span>
+              </span>
+            }
+            className="mb-6"
+          />
+          <CalibrationCurve buckets={calibration} />
+        </Card>
+      </section>
 
       {/* Investigation Cost Telemetry */}
       <CostTelemetryPanel />
@@ -329,18 +320,11 @@ function CostTelemetryPanel() {
         : null;
 
   return (
-    <div className="bg-dark-70 border border-[#333A47] rounded-lg p-4">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-sm font-semibold text-gray-300">
-          Investigation Cost Telemetry (30d)
-        </h3>
-        <span className="text-xs text-gray-500">
-          Tokens · Latency · Spend per model, aggregated across runs
-        </span>
-      </div>
-      <p className="text-xs text-gray-500 mb-4">
-        Source of truth for TCO transparency. Per-run breakdowns are available on
-        each investigation detail view.
+    <section>
+      <SectionHeading>Investigation cost (30d)</SectionHeading>
+      <p className="-mt-2 mb-4 text-xs text-fg-muted">
+        Tokens · Latency · Spend per model, aggregated across runs. Per-run
+        breakdowns are available on each investigation detail view.
       </p>
 
       {errorMessage && (
@@ -351,58 +335,46 @@ function CostTelemetryPanel() {
       )}
 
       {isLoading && !resolved ? (
-        <div className="h-32 animate-pulse bg-dark-20 rounded" />
+        <div className="h-32 animate-pulse bg-dark-20 rounded-2xl" />
       ) : !totals || totals.runs === 0 ? (
-        <div className="text-gray-500 text-sm flex items-center justify-center h-24">
+        <Card className="text-fg-muted text-sm flex items-center justify-center h-24">
           No investigation runs with cost telemetry in the last 30 days.
-        </div>
+        </Card>
       ) : (
         <div className="space-y-4">
           {/* Totals strip */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <KpiCard
-              label="Total Spend"
+              label="Total spend"
               value={formatUsd(totals.total_cost_usd)}
-              color={
-                totals.total_cost_usd > 100
-                  ? "text-red-400"
-                  : totals.total_cost_usd > 25
-                  ? "text-yellow-400"
-                  : "text-green-400"
-              }
+              color={tone(totals.total_cost_usd, 25, 100)}
             />
-            <KpiCard label="Runs" value={totals.runs} />
-            <KpiCard label="LLM Calls" value={totals.calls} />
+            <KpiCard label="Runs" value={totals.runs.toLocaleString("en-US")} />
+            <KpiCard label="LLM calls" value={totals.calls.toLocaleString("en-US")} />
             <KpiCard
-              label="Avg $/Run"
+              label="Avg $/run"
               value={formatUsd(totals.avg_cost_per_run)}
             />
             <KpiCard
-              label="Avg Latency/Call"
+              label="Avg latency/call"
               value={`${(totals.avg_latency_per_call_ms / 1000).toFixed(2)}`}
               unit="s"
-              color={
-                totals.avg_latency_per_call_ms > 10_000
-                  ? "text-red-400"
-                  : totals.avg_latency_per_call_ms > 5_000
-                  ? "text-yellow-400"
-                  : "text-green-400"
-              }
+              color={tone(totals.avg_latency_per_call_ms, 5_000, 10_000)}
             />
           </div>
 
           {/* Per-model breakdown */}
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
+          <Card className="overflow-x-auto px-6 py-3">
+            <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-gray-500 border-b border-[#374151]">
-                  <th className="text-left py-2 pr-4 font-medium">Model</th>
-                  <th className="text-right py-2 pr-4 font-medium">Runs</th>
-                  <th className="text-right py-2 pr-4 font-medium">Calls</th>
-                  <th className="text-right py-2 pr-4 font-medium">Prompt Tokens</th>
-                  <th className="text-right py-2 pr-4 font-medium">Completion Tokens</th>
-                  <th className="text-right py-2 pr-4 font-medium">Spend</th>
-                  <th className="text-left py-2 font-medium">Share</th>
+                <tr className="text-fg-muted border-b border-surface-border">
+                  <th className="text-left py-3 pr-4 font-normal">Model</th>
+                  <th className="text-right py-3 pr-4 font-normal">Runs</th>
+                  <th className="text-right py-3 pr-4 font-normal">Calls</th>
+                  <th className="text-right py-3 pr-4 font-normal">Prompt tokens</th>
+                  <th className="text-right py-3 pr-4 font-normal">Completion tokens</th>
+                  <th className="text-right py-3 pr-4 font-normal">Spend</th>
+                  <th className="text-left py-3 font-normal">Share</th>
                 </tr>
               </thead>
               <tbody>
@@ -411,30 +383,30 @@ function CostTelemetryPanel() {
                   return (
                     <tr
                       key={row.model}
-                      className="border-b border-[#374151]/50 last:border-0"
+                      className="border-b border-surface-border last:border-0"
                     >
-                      <td className="py-2 pr-4 text-gray-200 font-mono">
+                      <td className="py-3 pr-4 text-fg-secondary">
                         {row.model}
                       </td>
-                      <td className="py-2 pr-4 text-right text-gray-400">
-                        {row.runs}
+                      <td className="py-3 pr-4 text-right text-fg-secondary tabular-nums">
+                        {row.runs.toLocaleString("en-US")}
                       </td>
-                      <td className="py-2 pr-4 text-right text-gray-400">
-                        {row.calls}
+                      <td className="py-3 pr-4 text-right text-fg-secondary tabular-nums">
+                        {row.calls.toLocaleString("en-US")}
                       </td>
-                      <td className="py-2 pr-4 text-right text-gray-400 font-mono">
+                      <td className="py-3 pr-4 text-right text-fg-secondary tabular-nums">
                         {formatTokens(row.total_prompt_tokens)}
                       </td>
-                      <td className="py-2 pr-4 text-right text-gray-400 font-mono">
+                      <td className="py-3 pr-4 text-right text-fg-secondary tabular-nums">
                         {formatTokens(row.total_completion_tokens)}
                       </td>
-                      <td className="py-2 pr-4 text-right text-white font-mono">
+                      <td className="py-3 pr-4 text-right text-fg-primary tabular-nums">
                         {formatUsd(row.total_cost_usd)}
                       </td>
-                      <td className="py-2 min-w-[120px]">
-                        <div className="h-2 bg-dark-20 rounded overflow-hidden">
+                      <td className="py-3 min-w-[120px]">
+                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-blue-700"
+                            className="h-full bg-teal-20 rounded-full"
                             style={{ width: `${sharePct}%` }}
                           />
                         </div>
@@ -444,17 +416,17 @@ function CostTelemetryPanel() {
                 })}
               </tbody>
             </table>
-          </div>
+          </Card>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
 function CalibrationCurve({ buckets }: { buckets: CalibrationBucket[] }) {
   if (!buckets || buckets.length === 0) {
     return (
-      <div className="text-gray-500 text-sm flex items-center justify-center h-40">
+      <div className="text-fg-muted text-sm flex items-center justify-center h-40">
         Not enough labeled investigations to compute calibration yet.
       </div>
     );
@@ -463,13 +435,13 @@ function CalibrationCurve({ buckets }: { buckets: CalibrationBucket[] }) {
   const maxSamples = Math.max(...buckets.map((b) => b.sample_count), 1);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {/* Header row */}
-      <div className="grid grid-cols-12 gap-2 text-xs text-gray-500 px-1">
-        <div className="col-span-3">Confidence Bin</div>
-        <div className="col-span-6">Predicted vs Actual TP Rate</div>
-        <div className="col-span-2 text-right">Actual</div>
-        <div className="col-span-1 text-right">N</div>
+      <div className="grid grid-cols-[88px_1fr_64px_40px] sm:grid-cols-[108px_1fr_80px_48px] gap-3 text-sm text-fg-muted">
+        <div>Bin</div>
+        <div>Predicted vs actual TP rate</div>
+        <div className="text-right">Actual</div>
+        <div className="text-right">N</div>
       </div>
       {buckets.map((bucket) => {
         const lo = (bucket.predicted_lower * 100).toFixed(0);
@@ -478,12 +450,9 @@ function CalibrationCurve({ buckets }: { buckets: CalibrationBucket[] }) {
         const actual = bucket.actual_tp_rate;
         // Drift is gap between actual and the midpoint of the predicted band.
         const drift = Math.abs(actual - midpoint);
+        const driftTone: Tone = drift > 0.2 ? "bad" : drift > 0.1 ? "warn" : "good";
         const driftColor =
-          drift > 0.2
-            ? "bg-red-500"
-            : drift > 0.1
-            ? "bg-yellow-500"
-            : "bg-green-500";
+          driftTone === "bad" ? "#FD4E4E" : driftTone === "warn" ? "#F2BD57" : "#4ADE80";
         const sampleOpacity = Math.max(
           0.2,
           bucket.sample_count / maxSamples
@@ -492,18 +461,18 @@ function CalibrationCurve({ buckets }: { buckets: CalibrationBucket[] }) {
         return (
           <div
             key={`${bucket.predicted_lower}-${bucket.predicted_upper}`}
-            className="grid grid-cols-12 gap-2 items-center text-xs"
+            className="grid grid-cols-[88px_1fr_64px_40px] sm:grid-cols-[108px_1fr_80px_48px] gap-3 items-center text-sm"
             title={`Predicted ${lo}-${hi}%; actual TP rate ${(actual * 100).toFixed(
               1,
             )}%; ${bucket.sample_count} samples`}
           >
-            <div className="col-span-3 text-gray-400">
-              {lo}-{hi}%
+            <div className="text-fg-secondary">
+              {lo}–{hi}%
             </div>
-            <div className="col-span-6 relative h-5 bg-dark-20 rounded">
+            <div className="relative h-[18px] bg-gray-700 rounded">
               {/* Predicted band */}
               <div
-                className="absolute top-0 bottom-0 bg-blue-900 opacity-40 rounded"
+                className="absolute top-0 bottom-0 bg-[#8FBCE2] rounded"
                 style={{
                   left: `${bucket.predicted_lower * 100}%`,
                   width: `${(bucket.predicted_upper - bucket.predicted_lower) * 100}%`,
@@ -511,25 +480,21 @@ function CalibrationCurve({ buckets }: { buckets: CalibrationBucket[] }) {
               />
               {/* Actual marker */}
               <div
-                className={`absolute top-0 bottom-0 w-1 ${driftColor}`}
+                className="absolute top-0 bottom-0 w-1 rounded-l"
                 style={{
                   left: `calc(${actual * 100}% - 2px)`,
                   opacity: sampleOpacity,
+                  backgroundColor: driftColor,
                 }}
               />
             </div>
             <div
-              className={`col-span-2 text-right font-mono ${
-                drift > 0.2
-                  ? "text-red-400"
-                  : drift > 0.1
-                  ? "text-yellow-400"
-                  : "text-green-400"
-              }`}
+              className="text-right font-gilroy-semibold tabular-nums"
+              style={{ color: driftColor }}
             >
               {(actual * 100).toFixed(1)}%
             </div>
-            <div className="col-span-1 text-right text-gray-500 font-mono">
+            <div className="text-right text-fg-secondary tabular-nums text-xs">
               {bucket.sample_count}
             </div>
           </div>

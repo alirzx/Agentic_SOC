@@ -19,9 +19,12 @@
  * Author: Beenu Arora <beenu@cyble.com>
  */
 
+import type { ReactNode } from 'react';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
+import { ArrowDown, ArrowUp, Bell, Timer, Users } from 'lucide-react';
 import { metricsApi, type FunnelMetrics } from '@/lib/api';
+import { Card, CardHeader, IconBadge, Pill, type AccentName } from './ui';
 
 type Period = '1h' | '24h' | '7d' | '30d';
 
@@ -44,7 +47,11 @@ interface TileProps {
   lowerIsBetter?: boolean;
   /** Tiny note under the value (e.g. "events", "alerts/sec"). */
   unit?: string;
+  accent: AccentName;
+  icon?: ReactNode;
 }
+
+const BELL = <Bell className="h-4 w-4" strokeWidth={1.75} />;
 
 function formatNumber(n: number): string {
   if (!Number.isFinite(n)) return '—';
@@ -75,7 +82,7 @@ function formatDelta(delta: number | null): string {
   return `${sign}${Math.abs(Number(rounded))}%`;
 }
 
-function Tile({ label, value, delta, lowerIsBetter = false, unit }: TileProps) {
+function Tile({ label, value, delta, lowerIsBetter = false, unit, accent, icon = BELL }: TileProps) {
   const isGood =
     delta === null || delta === 0
       ? null
@@ -84,24 +91,27 @@ function Tile({ label, value, delta, lowerIsBetter = false, unit }: TileProps) {
         : delta > 0;
   const deltaColor =
     isGood === null
-      ? 'text-gray-500'
+      ? 'text-fg-muted'
       : isGood
-        ? 'text-green-400'
-        : 'text-red-400';
+        ? 'text-teal-20'
+        : 'text-[#FD4E4E]';
+  const DeltaArrow = delta !== null && delta < 0 ? ArrowDown : delta !== null && delta > 0 ? ArrowUp : null;
 
   return (
-    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
-      <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider truncate">
+    <div className="rounded-2xl border border-surface-border bg-surface-card p-5 min-w-0">
+      <IconBadge accent={accent} size={32}>{icon}</IconBadge>
+      <p className="mt-4 text-sm leading-tight text-fg-muted">
         {label}
       </p>
-      <p className="text-2xl font-bold text-gray-100 mt-1 tabular-nums truncate">
+      <p className="text-xl font-gilroy-semibold text-fg-primary mt-3 tabular-nums truncate">
         {value}
       </p>
-      <div className="flex items-baseline gap-2 mt-1">
-        <span className={clsx('text-xs font-medium tabular-nums', deltaColor)}>
+      <div className={clsx('flex items-center gap-1 mt-2', deltaColor)}>
+        {DeltaArrow && <DeltaArrow className="h-3 w-3 shrink-0" aria-hidden />}
+        <span className="text-xs tabular-nums">
           {formatDelta(delta)}
         </span>
-        {unit && <span className="text-[11px] text-gray-600 truncate">{unit}</span>}
+        {unit && <span className="text-xs truncate">{unit}</span>}
       </div>
     </div>
   );
@@ -109,8 +119,9 @@ function Tile({ label, value, delta, lowerIsBetter = false, unit }: TileProps) {
 
 function LoadingTile({ label }: { label: string }) {
   return (
-    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
-      <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider truncate">
+    <div className="rounded-2xl border border-surface-border bg-surface-card p-5 min-w-0">
+      <span className="block h-8 w-8 rounded-full bg-dark-20/60 animate-pulse" />
+      <p className="mt-4 text-sm text-fg-muted truncate">
         {label}
       </p>
       <div className="mt-2 h-7 w-20 rounded bg-dark-20/60 animate-pulse" />
@@ -155,18 +166,13 @@ export function FunnelKpiBar({
     const errorMessage =
       error instanceof Error ? error.message : String(error);
     return (
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-base font-semibold text-gray-100">
-              Operations Funnel
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Live tenant pipeline: events → correlations → alerts
-            </p>
-          </div>
-          <span className="text-xs text-gray-500">Last {period}</span>
-        </div>
+      <Card className="p-6">
+        <CardHeader
+          title="Operations Funnel"
+          subtitle="Live tenant pipeline: events → correlations → alerts"
+          action={<Pill>Last {period}</Pill>}
+          className="mb-5"
+        />
         <div className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
           <p className="font-semibold">Funnel metrics unavailable</p>
           <p className="mt-1 text-xs text-red-300/80">{errorMessage}</p>
@@ -174,66 +180,67 @@ export function FunnelKpiBar({
             SWR will keep retrying every 4s; refresh the page if it persists.
           </p>
         </div>
-      </div>
+      </Card>
     );
   }
 
   if (isLoading || !data) {
     return (
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-100">Operations Funnel</h2>
-          <span className="text-xs text-gray-500">Last {period}</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <Card className="p-6">
+        <CardHeader
+          title="Operations Funnel"
+          subtitle="Live tenant pipeline: events → correlations → alerts"
+          action={<Pill>Last {period}</Pill>}
+          className="mb-5"
+        />
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
           {TILE_LABELS.map((l) => (
             <LoadingTile key={l} label={l} />
           ))}
         </div>
-      </div>
+      </Card>
     );
   }
 
   const { deltas } = data;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-base font-semibold text-gray-100">
-            Operations Funnel
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Live tenant pipeline: events → correlations → alerts
-          </p>
-        </div>
-        <span className="text-xs text-gray-500">Last {period}</span>
-      </div>
+    <Card className="p-6">
+      <CardHeader
+        title="Operations Funnel"
+        subtitle="Live tenant pipeline: events → correlations → alerts"
+        action={<Pill>Last {period}</Pill>}
+        className="mb-5"
+      />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
         <Tile
           label="Events of Interest"
           value={formatNumber(data.events_of_interest)}
           delta={deltas.events_of_interest}
           unit="events"
+          accent="blue"
         />
         <Tile
           label="Correlation Instances"
           value={formatNumber(data.correlation_instances)}
           delta={deltas.correlation_instances}
           unit="groups"
+          accent="purple"
         />
         <Tile
           label="Alerts Generated"
           value={formatNumber(data.alerts_generated)}
           delta={deltas.alerts_generated}
           unit="alerts"
+          accent="green"
         />
         <Tile
           label="Signal / Noise"
           value={formatPercent(data.signal_to_noise)}
           delta={deltas.signal_to_noise}
           unit="of dispositioned"
+          accent="yellow"
         />
         <Tile
           label="MTTD"
@@ -241,6 +248,8 @@ export function FunnelKpiBar({
           delta={deltas.mttd_seconds}
           lowerIsBetter
           unit="to first-seen"
+          accent="teal"
+          icon={<Timer className="h-4 w-4" strokeWidth={1.75} />}
         />
         <Tile
           label="Analyst Queue"
@@ -248,9 +257,11 @@ export function FunnelKpiBar({
           delta={deltas.analyst_queue_depth}
           lowerIsBetter
           unit="open"
+          accent="violet"
+          icon={<Users className="h-4 w-4" strokeWidth={1.75} />}
         />
       </div>
-    </div>
+    </Card>
   );
 }
 

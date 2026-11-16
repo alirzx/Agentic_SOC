@@ -6,10 +6,10 @@
  * Main SOC dashboard with live metrics, charts, and source activity.
  *
  * WS-F3: Drag-and-drop widget reordering.
- * Each major section (DashboardWelcome, Top Metrics, Charts row, Bottom row,
- * SOC Performance) is a draggable "widget". The user can grab the ⠿ handle in
- * the widget's header and drop it anywhere in the layout. Order is persisted to
- * localStorage so it survives page refreshes.
+ * Each major section (DashboardWelcome, Alert triage, Alert volume, Live feed +
+ * severity, Pipeline & efficiency, SOC Performance) is a draggable "widget".
+ * The user can grab the ⠿ handle in the widget's header and drop it anywhere in
+ * the layout. Order is persisted to localStorage so it survives page refreshes.
  *
  * Author: Beenu <beenu@cyble.com>
  */
@@ -20,81 +20,127 @@ import { metricsApi, type DashboardMetrics } from '@/lib/api';
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
 import { format } from 'date-fns';
+import { Bell, Building2 } from 'lucide-react';
+import { useTheme } from '@/components/theme/ThemeProvider';
 import { LiveFeedPanel } from './LiveFeedPanel';
 import { SOCMetricsDashboard } from './SOCMetricsDashboard';
 import { DashboardWelcome } from './DashboardWelcome';
 import { FunnelKpiBar } from './FunnelKpiBar';
 import { EfficiencyReport } from './EfficiencyReport';
 import { PipelineHealth } from './PipelineHealth';
+import { ACCENT, Card, CardHeader, IconBadge, Pill, SectionHeading, type AccentName } from './ui';
 
-const RechartsArea = dynamic(
+/** Theme-aware chart chrome (grid lines, axis ticks, tooltip, slice gaps). */
+function useChartChrome() {
+  const { resolved } = useTheme();
+  return resolved === 'light'
+    ? { grid: '#D1D5DB', axis: '#9CA3AF', tick: '#374151', card: '#FFFFFF' }
+    : { grid: '#2A3142', axis: '#374151', tick: '#9CA3AF', card: '#181E2D' };
+}
+
+type ChartChrome = ReturnType<typeof useChartChrome>;
+
+const RechartsLine = dynamic(
   () => import('recharts').then((m) => {
-    const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = m;
-    function RechartsAreaInner(props: { data: { time: string; count: number }[] }) {
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = m;
+    function RechartsLineInner(props: { data: { time: string; count: number }[]; chrome: ChartChrome }) {
+      const { chrome } = props;
       return (
-        <ResponsiveContainer width="100%" height={180}>
-          <AreaChart data={props.data}>
-            <defs>
-              <linearGradient id="alertGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#4FD2C2" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#4FD2C2" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-            <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} interval={3} />
-            <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} />
-            <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey="count" stroke="#4FD2C2" fill="url(#alertGrad)" strokeWidth={2} name="Alerts" />
-          </AreaChart>
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={props.data} margin={{ top: 10, right: 12, left: -8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="2 3" stroke={chrome.grid} />
+            <XAxis
+              dataKey="time"
+              tick={{ fill: chrome.tick, fontSize: 11 }}
+              tickLine={false}
+              axisLine={{ stroke: chrome.axis }}
+              interval="preserveStartEnd"
+              minTickGap={18}
+            />
+            <YAxis tick={{ fill: chrome.tick, fontSize: 11 }} tickLine={false} axisLine={{ stroke: chrome.axis }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ stroke: chrome.grid }} />
+            <Line
+              type="monotone"
+              dataKey="count"
+              stroke={ACCENT.purple}
+              strokeWidth={1.5}
+              name="Alerts"
+              dot={(dotProps: { cx?: number; cy?: number; index?: number }) => (
+                <g key={dotProps.index}>
+                  <circle cx={dotProps.cx} cy={dotProps.cy} r={6} fill={ACCENT.purple} fillOpacity={0.25} />
+                  <circle cx={dotProps.cx} cy={dotProps.cy} r={2.5} fill={ACCENT.purple} />
+                </g>
+              )}
+              activeDot={{ r: 5, fill: ACCENT.purple, stroke: chrome.card, strokeWidth: 2 }}
+            />
+          </LineChart>
         </ResponsiveContainer>
       );
     }
-    return RechartsAreaInner;
+    return RechartsLineInner;
   }),
-  { ssr: false, loading: () => <div className="h-[180px] bg-dark-20/30 animate-pulse rounded" /> },
+  { ssr: false, loading: () => <div className="h-[260px] bg-dark-20/30 animate-pulse rounded" /> },
 );
 
 const RechartsPie = dynamic(
   () => import('recharts').then((m) => {
     const { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } = m;
-    function RechartsPieInner(props: { data: { name: string; value: number; color: string }[] }) {
+    function RechartsPieInner(props: { data: { name: string; value: number; color: string }[]; chrome: ChartChrome }) {
       return (
-        <ResponsiveContainer width="100%" height={140}>
+        <ResponsiveContainer width="100%" height={240}>
           <PieChart>
-            <Pie data={props.data} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={0}>
+            <Pie
+              data={props.data}
+              cx="50%"
+              cy="50%"
+              innerRadius={58}
+              outerRadius={108}
+              dataKey="value"
+              stroke={props.chrome.card}
+              strokeWidth={3}
+              cornerRadius={4}
+            >
               {props.data.map((entry, i) => (
                 <Cell key={i} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip formatter={(value, name) => [value, name]} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px', fontSize: '12px' }} />
+            <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
       );
     }
     return RechartsPieInner;
   }),
-  { ssr: false, loading: () => <div className="h-[140px] bg-dark-20/30 animate-pulse rounded" /> },
+  { ssr: false, loading: () => <div className="h-[240px] bg-dark-20/30 animate-pulse rounded" /> },
 );
 
 const RechartsBar = dynamic(
   () => import('recharts').then((m) => {
     const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = m;
-    function RechartsBarInner(props: { data: { tactic: string; count: number }[] }) {
+    function RechartsBarInner(props: { data: { tactic: string; count: number }[]; chrome: ChartChrome }) {
+      const { chrome } = props;
       return (
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={props.data} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
-            <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} />
-            <YAxis type="category" dataKey="tactic" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} width={100} />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Alerts" />
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={props.data} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="2 3" stroke={chrome.grid} />
+            <XAxis type="number" tick={{ fill: chrome.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
+            <YAxis
+              type="category"
+              dataKey="tactic"
+              tick={{ fill: chrome.tick, fontSize: 11 }}
+              tickLine={false}
+              axisLine={{ stroke: chrome.tick }}
+              width={100}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: chrome.grid, fillOpacity: 0.25 }} />
+            <Bar dataKey="count" fill={ACCENT.purple} fillOpacity={0.75} maxBarSize={38} name="Alerts" />
           </BarChart>
         </ResponsiveContainer>
       );
     }
     return RechartsBarInner;
   }),
-  { ssr: false, loading: () => <div className="h-[180px] bg-dark-20/30 animate-pulse rounded" /> },
+  { ssr: false, loading: () => <div className="h-[300px] bg-dark-20/30 animate-pulse rounded" /> },
 );
 
 class DashboardErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -145,38 +191,32 @@ interface MetricCardProps {
   label: string;
   value: string | number;
   sub?: string;
-  color?: 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'gray';
+  accent: AccentName;
+  icon?: ReactNode;
   trend?: { value: number; label: string };
 }
 
-const COLOR_MAP = {
-  red: 'text-red-400',
-  orange: 'text-orange-400',
-  yellow: 'text-yellow-400',
-  green: 'text-green-400',
-  blue: 'text-brand-400',
-  purple: 'text-purple-400',
-  gray: 'text-gray-400',
-};
-
-function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProps) {
+function MetricCard({ label, value, sub, accent, icon, trend }: MetricCardProps) {
   return (
-    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
-      <div>
-        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">{label}</p>
-        <p className={clsx('text-3xl font-bold', COLOR_MAP[color])}>{value}</p>
-        {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+    <Card className="p-5">
+      <div className="flex items-center gap-3">
+        <IconBadge accent={accent}>{icon ?? <Bell className="h-4 w-4" strokeWidth={1.75} />}</IconBadge>
+        <p className="text-sm text-fg-muted truncate">{label}</p>
       </div>
+      <p className="mt-4 text-2xl font-gilroy-semibold text-fg-primary tabular-nums">
+        {typeof value === 'number' ? value.toLocaleString('en-US') : value}
+      </p>
+      {sub && <p className="text-xs text-fg-muted mt-2">{sub}</p>}
       {trend && (
         <div className={clsx(
-          'flex items-center gap-1 mt-3 text-xs',
-          trend.value >= 0 ? 'text-red-400' : 'text-green-400'
+          'flex items-center gap-1 mt-1.5 text-xs',
+          trend.value >= 0 ? 'text-[#FD4E4E]' : 'text-teal-20'
         )}>
           <span>{trend.value >= 0 ? '+' : '-'}{Math.abs(trend.value)}%</span>
-          <span className="text-gray-600">{trend.label}</span>
+          <span className={trend.value >= 0 ? 'text-[#FD4E4E]' : 'text-teal-20'}>{trend.label}</span>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -185,10 +225,10 @@ function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProp
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-dark-70 border border-[#333A47] rounded-lg px-3 py-2 text-xs">
-      <p className="text-gray-400 mb-1">{label}</p>
+    <div className="bg-surface-card border border-surface-border rounded-lg px-3 py-2 text-xs shadow-sm">
+      {label && <p className="text-fg-muted mb-1">{label}</p>}
       {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color }} className="font-medium">
+        <p key={i} style={{ color: p.payload?.color ?? p.color }} className="font-medium">
           {p.name}: {p.value}
         </p>
       ))}
@@ -211,11 +251,11 @@ type WidgetId =
 
 const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   'welcome',
-  'funnel-kpis',
-  'efficiency-and-pipeline',
   'top-metrics',
   'charts-row',
   'bottom-row',
+  'funnel-kpis',
+  'efficiency-and-pipeline',
   'soc-performance',
 ];
 
@@ -271,7 +311,7 @@ function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, child
       className={clsx(
         'relative group transition-opacity',
         isDragging && 'opacity-40',
-        isOver && 'ring-2 ring-brand-500/60 ring-offset-2 ring-offset-gray-950 rounded-xl',
+        isOver && 'ring-2 ring-brand-500/60 ring-offset-4 ring-offset-surface-base rounded-2xl',
       )}
       aria-label={`Dashboard widget: ${id}`}
     >
@@ -280,8 +320,8 @@ function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, child
         aria-label="Drag to reorder"
         title="Drag to reorder"
         className={clsx(
-          'absolute top-2 right-2 z-10 cursor-grab active:cursor-grabbing',
-          'px-1.5 py-0.5 rounded text-gray-600 hover:text-gray-400',
+          'absolute -top-1 right-0 z-10 cursor-grab active:cursor-grabbing',
+          'px-1.5 py-0.5 rounded text-fg-subtle hover:text-fg-muted',
           'opacity-0 group-hover:opacity-100 transition-opacity',
           'select-none text-base leading-none',
         )}
@@ -348,6 +388,7 @@ function useDashboardLayout() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
+  const chrome = useChartChrome();
   const { data: rawMetrics, error: metricsError } = useSWR(
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
@@ -393,12 +434,14 @@ export function DashboardView() {
   }));
 
   const SEVERITY_CHART_DATA = [
-    { name: 'Critical', value: metrics.alerts.critical, color: '#ef4444' },
-    { name: 'High', value: metrics.alerts.high, color: '#f97316' },
-    { name: 'Medium', value: metrics.alerts.medium, color: '#eab308' },
-    { name: 'Low', value: metrics.alerts.low, color: '#4FD2C2' },
-    { name: 'Info', value: metrics.alerts.info ?? 0, color: '#64748b' },
+    { name: 'Critical', value: metrics.alerts.critical, color: ACCENT.red },
+    { name: 'High', value: metrics.alerts.high, color: ACCENT.orange },
+    { name: 'Medium', value: metrics.alerts.medium, color: ACCENT.yellow },
+    { name: 'Low', value: metrics.alerts.low, color: ACCENT.teal },
+    { name: 'Info', value: metrics.alerts.info ?? 0, color: ACCENT.slate },
   ];
+
+  const activeSourceCount = metrics.sources.filter((s) => s.status === 'active').length;
 
   // WS-F3: drag-and-drop widget reordering
   const { order, dragState, handleDragStart, handleDragOver, handleDrop } = useDashboardLayout();
@@ -407,150 +450,157 @@ export function DashboardView() {
   const widgetContent: Record<WidgetId, ReactNode> = {
     welcome: <Suspense fallback={null}><DashboardWelcome /></Suspense>,
 
-    // PR-3 / W1: Six-tile funnel KPI strip (events → correlations → alerts +
-    // signal/noise, MTTD, analyst queue) backed by /api/v1/metrics/funnel.
-    'funnel-kpis': <FunnelKpiBar period="24h" />,
-
-    // PR-3 / W1+W9: Efficiency ratios (correlation efficiency, alert yield,
-    // MITRE coverage) alongside per-stage pipeline health.
-    'efficiency-and-pipeline': (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <EfficiencyReport period="24h" />
-        <PipelineHealth />
-      </div>
-    ),
-
     'top-metrics': (
-      <div>
-        {/* Section header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-100">Security Operations Center</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Entity-risk alerting, confidence-scored triage, and{' '}
-              {metrics.sources.filter((s) => s.status === 'active').length} connected sources
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-          <MetricCard
-            label="Active Alerts"
-            value={metrics.alerts.total}
-            sub={`${metrics.alerts.new} new today`}
-            color="blue"
-            trend={{ value: 12, label: 'vs yesterday' }}
-          />
+      <section>
+        <SectionHeading>Alert triage</SectionHeading>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
           <MetricCard
             label="Critical"
             value={metrics.alerts.critical}
             sub="Require immediate action"
-            color="red"
+            accent="red"
             trend={{ value: -3, label: 'vs yesterday' }}
           />
           <MetricCard
-            label="Open Cases"
+            label="Active alerts"
+            value={metrics.alerts.total}
+            sub={`${metrics.alerts.new.toLocaleString('en-US')} new today`}
+            accent="green"
+            trend={{ value: 12, label: 'vs yesterday' }}
+          />
+          <MetricCard
+            label="Open cases"
             value={metrics.cases.open}
             sub={`${metrics.cases.inProgress} in progress`}
-            color="orange"
+            accent="orange"
           />
           <MetricCard
             label="MTTR"
             value={`${metrics.alerts.mttr}m`}
             sub="Mean time to resolve"
-            color="green"
+            accent="violet"
             trend={{ value: -8, label: 'vs last week' }}
           />
           <MetricCard
-            label="Connected Sources"
-            value={metrics.sources.filter(s => s.status === 'active').length}
+            label="Connected sources"
+            value={activeSourceCount}
             sub="EDR, SIEM, Cloud, IAM, SaaS"
-            color="purple"
+            accent="blue"
           />
         </div>
-      </div>
+      </section>
     ),
 
     'charts-row': (
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
-            <span className="text-xs text-gray-500">Last 24 hours</span>
-          </div>
-          <RechartsArea data={trendData} />
-        </div>
-        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Severity Breakdown</h3>
-          <RechartsPie data={SEVERITY_CHART_DATA} />
-          <div className="space-y-1.5 mt-2">
-            {SEVERITY_CHART_DATA.map((d) => (
-              <div key={d.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                  <span className="text-gray-400">{d.name}</span>
-                </div>
-                <span className="text-gray-300 font-medium">{d.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <section>
+        <SectionHeading>Alert volume</SectionHeading>
+        <Card className="p-6">
+          <CardHeader
+            title="Alert volume (24h)"
+            subtitle="Alerts per interval, hourly pattern"
+            action={<Pill>Last 24h</Pill>}
+            className="mb-5"
+          />
+          <RechartsLine data={trendData} chrome={chrome} />
+        </Card>
+      </section>
     ),
 
     'bottom-row': (
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Top MITRE ATT&CK Tactics</h3>
-          <RechartsBar data={metrics.topMitre} />
-        </div>
-        <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
-          <div className="space-y-3">
-            {metrics.sources.map((src) => {
-              const maxCount = Math.max(...metrics.sources.map(s => s.count));
-              const pct = Math.round((src.count / maxCount) * 100);
-              return (
-                <div key={src.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className={clsx(
-                        'w-1.5 h-1.5 rounded-full',
-                        src.status === 'active' ? 'bg-green-500' : 'bg-gray-500'
-                      )} />
-                      <span className="text-xs text-gray-300">{src.name}</span>
-                    </div>
-                    <span className="text-xs text-gray-500">{src.count}</span>
-                  </div>
-                  <div className="h-1 bg-dark-20 rounded-full">
-                    <div className="h-1 bg-brand-500/60 rounded-full" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <LiveFeedPanel />
+        <Card className="p-6">
+          <CardHeader title="Severity breakdown" subtitle="Alert mix across the five severity tiers" />
+          <div className="mt-2 flex flex-col sm:flex-row items-center gap-4">
+            <div className="w-full sm:w-1/2">
+              <RechartsPie data={SEVERITY_CHART_DATA} chrome={chrome} />
+            </div>
+            <div className="w-full sm:w-1/2 space-y-3">
+              {SEVERITY_CHART_DATA.map((d) => (
+                <div key={d.name} className="grid grid-cols-[1fr_auto] items-center gap-4 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                    <span className="text-fg-secondary">{d.name}</span>
+                  </div>
+                  <span className="text-fg-secondary tabular-nums min-w-[4rem]">{d.value.toLocaleString('en-US')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+    ),
+
+    // PR-3 / W1: Six-tile funnel KPI strip (events → correlations → alerts +
+    // signal/noise, MTTD, analyst queue) backed by /api/v1/metrics/funnel.
+    'funnel-kpis': (
+      <section>
+        <SectionHeading>Pipeline &amp; efficiency</SectionHeading>
+        <FunnelKpiBar period="24h" />
+      </section>
+    ),
+
+    // PR-3 / W1+W9: Per-stage pipeline health, then efficiency ratios
+    // (correlation efficiency, alert yield, MITRE coverage) beside the
+    // per-source event volume.
+    'efficiency-and-pipeline': (
+      <div className="space-y-4">
+        <PipelineHealth />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <EfficiencyReport period="24h" />
+          <Card className="p-6">
+            <CardHeader
+              title="Connected sources"
+              subtitle={`${activeSourceCount} active · events per source`}
+              action={<IconBadge accent="blue" size={32}><Building2 className="h-4 w-4" strokeWidth={1.75} /></IconBadge>}
+              className="mb-5"
+            />
+            <div className="space-y-5">
+              {metrics.sources.length === 0 && (
+                <p className="text-xs text-fg-muted py-6 text-center">No connected sources yet.</p>
+              )}
+              {metrics.sources.map((src) => {
+                const maxCount = Math.max(...metrics.sources.map(s => s.count));
+                const pct = Math.round((src.count / maxCount) * 100);
+                return (
+                  <div key={src.name}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={clsx(
+                          'w-1.5 h-1.5 rounded-full shrink-0',
+                          src.status === 'active' ? 'bg-green-500' : 'bg-gray-500'
+                        )} />
+                        <span className="text-sm font-gilroy-semibold text-fg-primary truncate">{src.name}</span>
+                      </div>
+                      <span className="text-sm font-gilroy-semibold text-fg-primary tabular-nums">{src.count}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-700 rounded-full">
+                      <div className="h-1.5 bg-teal-20 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
       </div>
     ),
 
     'soc-performance': (
-      <div className="pt-2">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-base font-semibold text-gray-100">SOC Performance</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Outcome metrics, agent calibration, and technique coverage. Auto-computed every 30s.
-            </p>
-          </div>
-        </div>
-        <SOCMetricsDashboard />
-      </div>
+      <SOCMetricsDashboard
+        topTactics={
+          <Card className="p-6 h-full">
+            <CardHeader title="Top tactics" subtitle="Alerts per tactic" className="mb-4" />
+            <RechartsBar data={metrics.topMitre} chrome={chrome} />
+          </Card>
+        }
+      />
     ),
   };
 
   return (
     <DashboardErrorBoundary>
-      <div className="space-y-5">
+      <div className="space-y-6">
         {metricsErrorMessage && (
           <div className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
             <p className="font-semibold">Dashboard metrics unavailable</p>

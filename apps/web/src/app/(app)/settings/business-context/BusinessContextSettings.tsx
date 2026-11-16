@@ -20,6 +20,7 @@ import {
   saveRules,
 } from "./client";
 import { RuleBuilder } from "./RuleBuilder";
+import { useTheme } from "@/components/theme/ThemeProvider";
 import { PreviewTable } from "./PreviewTable";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
@@ -57,6 +58,8 @@ rules:
 `;
 
 export function BusinessContextSettings() {
+  const { resolved: resolvedTheme } = useTheme();
+  const monacoTheme = resolvedTheme === 'light' ? 'vs' : 'vs-dark';
   const [yaml, setYaml] = useState<string>(STARTER_YAML);
   const [envelope, setEnvelope] = useState<RulesEnvelope | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -204,7 +207,7 @@ export function BusinessContextSettings() {
           <div className="flex-1">
             <MonacoEditor
               language="yaml"
-              theme="vs-dark"
+              theme={monacoTheme}
               value={yaml}
               options={{
                 fontSize: 13,

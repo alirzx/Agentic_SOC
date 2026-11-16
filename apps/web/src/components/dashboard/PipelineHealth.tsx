@@ -21,6 +21,7 @@ import {
   type PipelineHealth as PipelineHealthData,
   type PipelineStage,
 } from '@/lib/api';
+import { Card, CardHeader, Pill } from './ui';
 
 type Status = PipelineStage['status'];
 
@@ -53,29 +54,29 @@ function statusStyles(status: Status) {
     case 'green':
       return {
         dot: 'bg-green-500',
-        ring: 'ring-green-500/30',
-        text: 'text-green-400',
+        ring: 'ring-green-500/25',
+        text: 'text-teal-20',
         bar: 'bg-green-500/70',
       };
     case 'yellow':
       return {
-        dot: 'bg-amber-500',
-        ring: 'ring-amber-500/30',
-        text: 'text-amber-400',
+        dot: 'bg-[#F98B3E]',
+        ring: 'ring-[#F98B3E]/25',
+        text: 'text-[#F98B3E]',
         bar: 'bg-amber-500/70',
       };
     case 'red':
       return {
-        dot: 'bg-red-500',
-        ring: 'ring-red-500/30',
-        text: 'text-red-400',
+        dot: 'bg-[#FD4E4E]',
+        ring: 'ring-[#FD4E4E]/25',
+        text: 'text-[#FD4E4E]',
         bar: 'bg-red-500/70',
       };
     default:
       return {
-        dot: 'bg-gray-600',
-        ring: 'ring-gray-600/30',
-        text: 'text-gray-500',
+        dot: 'bg-gray-500',
+        ring: 'ring-gray-500/25',
+        text: 'text-fg-muted',
         bar: 'bg-gray-600/50',
       };
   }
@@ -107,36 +108,36 @@ function formatErrorRate(ratio: number): string {
 function StageCard({ stage }: { stage: PipelineStage }) {
   const styles = statusStyles(stage.status);
   return (
-    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-sm font-semibold text-gray-100 truncate">
+    <div className="rounded-2xl border border-surface-border bg-surface-card p-5 min-w-0">
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-lg font-gilroy-semibold text-fg-primary truncate">
           {STAGE_LABELS[stage.stage]}
         </p>
         <span
-          className={clsx('h-2.5 w-2.5 rounded-full ring-2', styles.dot, styles.ring)}
+          className={clsx('mt-1.5 h-2 w-2 rounded-full ring-4', styles.dot, styles.ring)}
           aria-label={`status ${stage.status}`}
         />
       </div>
-      <p className="text-[11px] text-gray-500 truncate">
+      <p className="text-xs text-fg-muted truncate">
         {STAGE_DESCRIPTIONS[stage.stage]}
       </p>
 
       <dl className="mt-3 space-y-1.5">
-        <div className="flex items-baseline justify-between text-xs">
-          <dt className="text-gray-500">Backlog</dt>
-          <dd className="font-medium text-gray-200 tabular-nums">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <dt className="text-fg-subtle">Backlog</dt>
+          <dd className="text-fg-subtle tabular-nums">
             {formatBacklog(stage.backlog)}
           </dd>
         </div>
-        <div className="flex items-baseline justify-between text-xs">
-          <dt className="text-gray-500">p95</dt>
-          <dd className="font-medium text-gray-200 tabular-nums">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <dt className="text-fg-subtle">p95</dt>
+          <dd className="text-fg-subtle tabular-nums">
             {formatLatency(stage.p95_latency_ms)}
           </dd>
         </div>
-        <div className="flex items-baseline justify-between text-xs">
-          <dt className="text-gray-500">Errors</dt>
-          <dd className={clsx('font-medium tabular-nums', styles.text)}>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <dt className="text-fg-subtle">Errors</dt>
+          <dd className={clsx('tabular-nums', styles.text)}>
             {formatErrorRate(stage.error_rate)}
           </dd>
         </div>
@@ -147,14 +148,14 @@ function StageCard({ stage }: { stage: PipelineStage }) {
 
 function LoadingStage({ stage }: { stage: PipelineStage['stage'] }) {
   return (
-    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-4 min-w-0">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-sm font-semibold text-gray-100 truncate">
+    <div className="rounded-2xl border border-surface-border bg-surface-card p-5 min-w-0">
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-lg font-gilroy-semibold text-fg-primary truncate">
           {STAGE_LABELS[stage]}
         </p>
-        <span className="h-2.5 w-2.5 rounded-full bg-gray-700 animate-pulse" />
+        <span className="mt-1.5 h-2 w-2 rounded-full bg-gray-500 ring-4 ring-gray-500/25 animate-pulse" />
       </div>
-      <p className="text-[11px] text-gray-500 truncate">
+      <p className="text-xs text-fg-muted truncate">
         {STAGE_DESCRIPTIONS[stage]}
       </p>
       <div className="mt-3 space-y-2">
@@ -183,31 +184,28 @@ export function PipelineHealth() {
   for (const s of data?.stages ?? []) stagesByName[s.stage] = s;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-base font-semibold text-gray-100">
-            Pipeline Health
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Ingest → normalize → fuse → correlate → alert
-          </p>
-        </div>
-        {error ? (
-          <span className="text-xs text-red-400">unavailable</span>
-        ) : (
-          <span className="text-xs text-gray-500">Live</span>
-        )}
-      </div>
+    <Card className="p-6">
+      <CardHeader
+        title="Pipeline Health"
+        subtitle="Ingest → normalize → fuse → correlate → alert"
+        action={
+          error ? (
+            <Pill className="border-red-500/30 bg-red-500/10 text-[#FD4E4E]">unavailable</Pill>
+          ) : (
+            <Pill>Live</Pill>
+          )
+        }
+        className="mb-5"
+      />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
         {STAGE_ORDER.map((name) => {
           const stage = stagesByName[name];
           if (isLoading || !stage) return <LoadingStage key={name} stage={name} />;
           return <StageCard key={name} stage={stage} />;
         })}
       </div>
-    </div>
+    </Card>
   );
 }
 

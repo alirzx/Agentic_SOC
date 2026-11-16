@@ -20,6 +20,7 @@
 import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { metricsApi, type FunnelMetrics } from '@/lib/api';
+import { Card, CardHeader, Pill } from './ui';
 
 type Period = '1h' | '24h' | '7d' | '30d';
 
@@ -69,25 +70,25 @@ function BarRow({
 }: BarRowProps) {
   const v = clamp01(value);
   // For "good-high" metrics, color by threshold; for others, neutral.
-  let barColor = 'bg-brand-500/70';
+  let barColor = 'bg-teal-20';
   if (goodHigh) {
-    if (v < 0.2) barColor = 'bg-red-500/70';
-    else if (v < 0.5) barColor = 'bg-amber-500/70';
-    else barColor = 'bg-green-500/70';
+    if (v < 0.2) barColor = 'bg-[#FD4E4E]';
+    else if (v < 0.5) barColor = 'bg-[#F2BD57]';
+    else barColor = 'bg-teal-20';
   }
 
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3 mb-1">
+      <div className="flex items-baseline justify-between gap-3 mb-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-200 truncate">{label}</p>
-          <p className="text-[11px] text-gray-500 truncate">{description}</p>
+          <p className="text-sm font-gilroy-semibold text-fg-primary truncate">{label}</p>
+          <p className="text-xs text-fg-muted truncate">{description}</p>
         </div>
-        <p className="text-sm font-semibold text-gray-100 tabular-nums shrink-0">
+        <p className="text-sm font-gilroy-semibold text-fg-primary tabular-nums shrink-0">
           {display}
         </p>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-dark-20/80 overflow-hidden">
+      <div className="h-1.5 w-full rounded-full bg-gray-700 overflow-hidden">
         <div
           className={clsx('h-full rounded-full transition-[width]', barColor)}
           style={{ width: `${(v * 100).toFixed(1)}%` }}
@@ -100,8 +101,8 @@ function BarRow({
 function LoadingBar({ label }: { label: string }) {
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3 mb-1">
-        <p className="text-sm font-medium text-gray-200 truncate">{label}</p>
+      <div className="flex items-baseline justify-between gap-3 mb-3">
+        <p className="text-sm font-gilroy-semibold text-fg-primary truncate">{label}</p>
         <div className="h-4 w-12 rounded bg-dark-20/60 animate-pulse" />
       </div>
       <div className="h-1.5 w-full rounded-full bg-dark-20/40 animate-pulse" />
@@ -125,29 +126,24 @@ export function EfficiencyReport({
   );
 
   return (
-    <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-100">
-            Efficiency Report
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            How well raw signal converts to actionable alerts
-          </p>
-        </div>
-        <span className="text-xs text-gray-500">Last {period}</span>
-      </div>
+    <Card className="p-6">
+      <CardHeader
+        title="Efficiency Report"
+        subtitle="How well raw signal converts to actionable alerts"
+        action={<Pill>Last {period}</Pill>}
+        className="mb-5"
+      />
 
       {error ? (
-        <p className="text-sm text-gray-400">Efficiency metrics unavailable.</p>
+        <p className="text-sm text-fg-muted">Efficiency metrics unavailable.</p>
       ) : isLoading || !data ? (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <LoadingBar label="Correlation efficiency" />
           <LoadingBar label="Alert yield" />
           <LoadingBar label="MITRE coverage" />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <BarRow
             label="Correlation efficiency"
             description="Alerts produced per correlation instance"
@@ -175,7 +171,7 @@ export function EfficiencyReport({
           />
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 

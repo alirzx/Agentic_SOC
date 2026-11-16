@@ -10,6 +10,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { clsx } from 'clsx';
+import { ArrowDown, ArrowUp, CircleAlert } from 'lucide-react';
 
 import type { InsightTile } from '@/lib/api';
 
@@ -18,6 +20,12 @@ interface InsightTileCardProps {
   sparkline: ReactNode;
 }
 
+const DIRECTION_TEXT = {
+  up: 'text-teal-20',
+  down: 'text-[#FD4E4E]',
+  flat: 'text-fg-muted',
+} as const;
+
 export function InsightTileCard({ tile, sparkline }: InsightTileCardProps) {
   const direction = deltaDirection(tile);
   const deltaLabel = formatDelta(tile.delta_pct);
@@ -25,36 +33,43 @@ export function InsightTileCard({ tile, sparkline }: InsightTileCardProps) {
     tile.delta_pct === null
       ? 'No data for the previous window — delta undefined.'
       : `Compared to the previous window: ${deltaLabel}.`;
+  const Arrow =
+    tile.delta_pct === null || tile.delta_pct === 0
+      ? null
+      : tile.delta_pct > 0
+        ? ArrowUp
+        : ArrowDown;
 
   return (
     <div
-      className="flex flex-col justify-between rounded-lg border border-border bg-card p-4"
+      className="flex min-h-[122px] flex-col rounded-2xl border border-surface-border bg-surface-card p-4"
       // The `aria-label` rolls the value + delta into one string so a
       // screen reader announces the change without us shipping a
       // table-with-headers.
       aria-label={`${tile.label}: ${formatValue(tile)}, ${deltaTitle}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
-          {tile.label}
-        </span>
-        <span
-          className={
-            direction === 'up'
-              ? 'rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300'
-              : direction === 'down'
-                ? 'rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300'
-                : 'rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground'
-          }
-          title={deltaTitle}
-        >
-          {deltaLabel}
+      <div className="flex min-h-[2rem] items-start justify-between gap-2">
+        <span className="text-xs leading-snug text-fg-secondary">{tile.label}</span>
+        <span title={deltaTitle} className="shrink-0 text-fg-subtle">
+          <CircleAlert className="h-[18px] w-[18px]" strokeWidth={1.25} aria-hidden />
         </span>
       </div>
 
-      <div className="mt-2 flex items-end justify-between gap-2">
-        <span className="text-2xl font-semibold tabular-nums">{formatValue(tile)}</span>
-        <div className="text-muted-foreground">{sparkline}</div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-lg font-gilroy-semibold text-fg-primary tabular-nums truncate">
+          {formatValue(tile)}
+        </span>
+        <div className={clsx('shrink-0', DIRECTION_TEXT[direction])}>{sparkline}</div>
+      </div>
+
+      <div
+        className={clsx('mt-auto flex items-center gap-1 pt-2 text-xs', DIRECTION_TEXT[direction])}
+        title={deltaTitle}
+      >
+        {Arrow && <Arrow className="h-3 w-3" aria-hidden />}
+        <span className="tabular-nums">
+          {tile.delta_pct === 0 ? 'No change' : deltaLabel}
+        </span>
       </div>
     </div>
   );
@@ -64,7 +79,7 @@ export function InsightTileCard({ tile, sparkline }: InsightTileCardProps) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatValue(tile: InsightTile): string {
+export function formatValue(tile: InsightTile): string {
   switch (tile.unit) {
     case 'hours':
       return `${tile.value.toFixed(1)}h`;
@@ -87,7 +102,7 @@ function formatValue(tile: InsightTile): string {
   }
 }
 
-function formatDelta(delta: number | null): string {
+export function formatDelta(delta: number | null): string {
   if (delta === null) return '—';
   const sign = delta > 0 ? '+' : '';
   return `${sign}${delta.toFixed(1)}%`;

@@ -21,7 +21,7 @@ export function AppShell({ children }: AppShellProps) {
   // In demo mode the banner adds 36px (h-9) to the top, so push the main
   // content down to keep the TopBar from sliding underneath it.
   const demo = isDemoMode();
-  const topPadClass = demo ? 'pt-[100px]' : 'pt-16';
+  const topPadClass = demo ? 'pt-[112px]' : 'pt-[76px]';
 
   return (
     // SWR v2 disables `revalidateOnMount` by default whenever `fallbackData`
@@ -55,10 +55,10 @@ export function AppShell({ children }: AppShellProps) {
           <DemoBanner />
         </ClientOnly>
         <Sidebar />
-        <div className="md:ml-60">
+        <div className="md:ml-[304px]">
           <TopBar demoOffset={demo} />
           <main className={`${topPadClass} min-h-screen`}>
-            <div className="p-6">{children}</div>
+            <div className="px-6 pb-6 pt-4 md:pl-2">{children}</div>
           </main>
         </div>
         {/*
