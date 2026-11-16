@@ -406,12 +406,14 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               setInvestigationStatus('completed');
               setInvestigating(false);
               toast.success('Investigation complete — report ready');
-              // Fetch the Markdown report
-              fetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.md`)
-                .then((r) => r.ok ? r.text() : '')
-                .then((md) => { if (md) setReportMd(md); })
-                .catch(() => { /* best-effort */ });
-              // Also fetch full data
+              casesApi
+                .getInvestigationReportMarkdown(caseId, runId)
+                .then((md) => {
+                  if (md) setReportMd(md);
+                })
+                .catch(() => {
+                  /* fall back to auto case report.md in ReportPanel */
+                });
               casesApi.getInvestigation(caseId, runId)
                 .then((inv) => setInvestigationData(inv as Record<string, unknown>))
                 .catch(() => { /* best-effort */ });
@@ -463,9 +465,14 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             if (inv.status === 'completed') {
               toast.success('Investigation complete — report ready');
               try {
-                const resp = await fetch(`/api/v1/cases/${caseId}/investigations/${result.run_id}/report.md`);
-                if (resp.ok) setReportMd(await resp.text());
-              } catch { /* best-effort */ }
+                const md = await casesApi.getInvestigationReportMarkdown(
+                  caseId,
+                  result.run_id,
+                );
+                if (md) setReportMd(md);
+              } catch {
+                /* fall back to auto case report.md in ReportPanel */
+              }
             } else {
               toast.error(`Investigation failed: ${inv.error ?? 'unknown error'}`);
             }

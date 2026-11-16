@@ -213,10 +213,12 @@ def passes_ready_for_jira_stage(
     1. Must have a Case.
     2. Disposition must be TP / escalate / likely_tp (needs_review only with
        analyst approval). Never FP/benign.
-    3. PLUS at least one evidence bar:
-       * severity high/critical, OR
-       * medium + confidence ≥ 70% + triage-meaningful metadata, OR
+    3. PLUS at least one evidence bar (severity alone is NOT enough — audit
+       case 065bd5b9: high TP megacases were marked Ready for Jira without
+       investigation prose or analyst approval):
        * investigation evidence (ai_summary / narrative), OR
+       * high/critical + confidence ≥ 70% + triage-meaningful metadata, OR
+       * medium + confidence ≥ 70% + triage-meaningful metadata, OR
        * explicit analyst approval.
     """
     if not case_id:
@@ -234,21 +236,18 @@ def passes_ready_for_jira_stage(
         return True
     sev = (severity or "medium").strip().lower()
     conf = _as_unit_confidence(confidence)
-    if sev in _HIGH_SEV:
-        return True
     if has_investigation_evidence(ai_summary=ai_summary, narrative=narrative):
         return True
-    if (
-        sev == "medium"
-        and conf >= 0.70
-        and has_triage_meaningful_metadata(
-            rule_id=rule_id,
-            rule_name=rule_name,
-            mitre_techniques=mitre_techniques,
-            analytic_story=analytic_story,
-            security_domain=security_domain,
-        )
-    ):
+    meaningful = has_triage_meaningful_metadata(
+        rule_id=rule_id,
+        rule_name=rule_name,
+        mitre_techniques=mitre_techniques,
+        analytic_story=analytic_story,
+        security_domain=security_domain,
+    )
+    if sev in _HIGH_SEV and conf >= 0.70 and meaningful:
+        return True
+    if sev == "medium" and conf >= 0.70 and meaningful:
         return True
     return False
 
@@ -291,24 +290,21 @@ def passes_jira_gate(
         return analyst_approved
     if not require_evidence_bar:
         return True
-    # Evidence bar (same as ready_for_jira stage, case optional for push API).
+    # Evidence bar — severity alone never qualifies (see passes_ready_for_jira_stage).
     sev = (severity or "medium").strip().lower()
     conf = _as_unit_confidence(confidence)
-    if sev in _HIGH_SEV:
-        return True
     if has_investigation_evidence(ai_summary=ai_summary, narrative=narrative):
         return True
-    if (
-        sev == "medium"
-        and conf >= 0.70
-        and has_triage_meaningful_metadata(
-            rule_id=rule_id,
-            rule_name=rule_name,
-            mitre_techniques=mitre_techniques,
-            analytic_story=analytic_story,
-            security_domain=security_domain,
-        )
-    ):
+    meaningful = has_triage_meaningful_metadata(
+        rule_id=rule_id,
+        rule_name=rule_name,
+        mitre_techniques=mitre_techniques,
+        analytic_story=analytic_story,
+        security_domain=security_domain,
+    )
+    if sev in _HIGH_SEV and conf >= 0.70 and meaningful:
+        return True
+    if sev == "medium" and conf >= 0.70 and meaningful:
         return True
     _ = case_id
     return False

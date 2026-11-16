@@ -26,7 +26,7 @@ from .prompt_sanitizer import (
     sanitize_iterable_of_strings,
     sanitize_text,
 )
-from .state import InvestigatorState, StepKind
+from .state import AuditEntry, InvestigatorState, StepKind
 from .tools import sha256_of
 
 logger = structlog.get_logger()
@@ -219,12 +219,27 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     report_hash = sha256_of(state.report_md)
-    state.log(
-        StepKind.REPORT,
-        "ReportWriterAgent",
-        f"Report written ({len(state.report_md)} chars, hash={report_hash[:12]})",
-        duration_ms=elapsed_ms,
-        report_hash=report_hash,
+    # Keep a short readable preview in the ledger payload so the UI does not
+    # show only an opaque hash. Full markdown lives in the report_md artifact
+    # (and investigation run report endpoint); report_hash verifies integrity.
+    preview = (state.report_md or "").strip()
+    if len(preview) > 4000:
+        preview = preview[:4000] + "\n\n…(truncated; open full report artifact)…"
+    state.log_entry(
+        AuditEntry(
+            kind=StepKind.REPORT,
+            agent="ReportWriterAgent",
+            summary=f"Report written ({len(state.report_md)} chars, hash={report_hash[:12]})",
+            metadata={
+                "duration_ms": elapsed_ms,
+                "report_hash": report_hash,
+                "report_chars": len(state.report_md or ""),
+                "report_preview": preview,
+                "report_format": "markdown",
+            },
+            output_hash=report_hash,
+            duration_ms=elapsed_ms,
+        )
     )
     state.status = "completed"
     state.completed_at = datetime.utcnow()
