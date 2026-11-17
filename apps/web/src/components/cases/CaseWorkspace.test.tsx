@@ -153,19 +153,15 @@ describe('CaseWorkspace', () => {
     );
   });
 
-  it('shows the demo banner when the backend errors out', () => {
+  it('shows case-not-found instead of a synthetic workspace when the API 404s', () => {
     swrState.caseData = undefined;
-    swrState.caseError = new Error('fetch failed');
+    swrState.caseError = new Error('API 404 Not Found — /api/v1/cases/case-1000');
 
-    render(<CaseWorkspace caseId="INC-001" />);
+    render(<CaseWorkspace caseId="case-1000" />);
 
-    // Falls back to buildDemoCase, so the demo title renders…
-    expect(
-      screen.getByRole('heading', { level: 1, name: /lateral movement from finance subnet/i }),
-    ).toBeInTheDocument();
-
-    // …and the demo-mode banner is visible so the analyst knows it's not live data.
-    expect(screen.getByText(/demo data — writes disabled/i)).toBeInTheDocument();
+    expect(screen.getByText(/case not found/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /investigate with agent/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to cases/i })).toHaveAttribute('href', '/cases');
   });
 
   describe('attack-chain panel', () => {

@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from app.api import alert_investigate as api
+from app.api import investigation_run_store as run_store
 from app.privacy.tenant import tenant_signature
 
 TENANT_A = "11111111-1111-1111-1111-111111111111"
@@ -36,7 +37,7 @@ def _privacy_config(monkeypatch):
         "base_url_normalized_sanitized": "synthetic",
     })
     monkeypatch.setattr(api, "resolve_tenant_for_llm", AsyncMock(side_effect=lambda tenant, **_: str(UUID(tenant))))
-    api._runs.clear()
+    run_store.clear_memory_for_tests()
 
 
 @pytest.mark.asyncio
@@ -56,12 +57,15 @@ async def test_signed_tenant_controls_background_run_and_poll(monkeypatch):
         _request(TENANT_A),
     )
     assert pending.status == "running"
-    assert api._runs[pending.id]["_tenant_owner"] == TENANT_A
+    stored = await run_store.get_run(pending.id)
+    assert stored is not None
+    assert stored["_tenant_owner"] == TENANT_A
     tasks = list(api._background_tasks)
     assert len(tasks) == 1
     await asyncio.gather(*tasks)
     orchestrator.run.assert_awaited_once()
     assert orchestrator.run.await_args.kwargs["tenant_id"] == TENANT_A
+    assert orchestrator.run.await_args.kwargs["run_id"] == UUID(pending.id)
 
     owned = await api.get_alert_investigation(pending.id, _request(TENANT_A))
     assert owned.status == "completed"
@@ -83,7 +87,7 @@ async def test_unsigned_body_tenant_cannot_start_background_investigation(monkey
         )
     assert rejected.value.status_code == 403
     runner.assert_not_awaited()
-    assert api._runs == {}
+    assert await run_store.get_run("unused") is None
 
 
 @pytest.mark.asyncio
@@ -98,7 +102,9 @@ async def test_background_error_is_sanitized_and_tenant_scoped(monkeypatch):
     result = await api.get_alert_investigation(pending.id, _request(TENANT_A))
     assert result.status == "failed"
     assert result.error == "Investigation failed"
-    assert "private-provider-key" not in str(api._runs[pending.id])
+    failed = await run_store.get_run(pending.id)
+    assert failed is not None
+    assert "private-provider-key" not in str(failed)
     with pytest.raises(HTTPException) as denied:
         await api.get_alert_investigation(pending.id, _request(TENANT_B))
     assert denied.value.status_code == 404

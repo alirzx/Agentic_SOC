@@ -20,32 +20,12 @@ type CaseFilterSnapshot = {
   search: string;
 };
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-// Deterministic mock data — no Date.now() or Math.random() to avoid SSR hydration mismatches.
-const MOCK_CASE_BASE = new Date('2026-05-06T12:00:00Z').getTime();
-const MOCK_CASES: Case[] = Array.from({ length: 18 }, (_, i) => ({
-  id: `case-${1000 + i}`,
-  title: [
-    'Ransomware incident on finance workstations',
-    'Suspected APT lateral movement campaign',
-    'Credential stuffing attack against portal',
-    'Data exfiltration via cloud storage abuse',
-    'Supply chain compromise investigation',
-    'Insider threat: anomalous data access',
-    'Phishing campaign targeting executives',
-    'Cryptominer on dev server cluster',
-    'Brute-force attack on VPN endpoints',
-    'Unauthorized cloud resource provisioning',
-  ][i % 10],
-  status: (['open', 'in_progress', 'resolved', 'closed'] as Case['status'][])[i % 4],
-  severity: (['critical', 'high', 'medium', 'low'] as Case['severity'][])[i % 4],
-  assignee: ['alice@company.com', 'bob@company.com', 'carol@company.com', undefined][i % 4],
-  alertCount: ((i * 13 + 7) % 30) + 1,
-  createdAt: new Date(MOCK_CASE_BASE - i * 7200000).toISOString(),
-  updatedAt: new Date(MOCK_CASE_BASE - i * 1800000).toISOString(),
-  tags: [['ransomware', 'finance'], ['apt', 'lateral'], ['credential', 'portal'], ['exfil', 'cloud']][i % 4],
-}));
+const EMPTY_CASES: CasesResponse = {
+  cases: [],
+  total: 0,
+  page: 1,
+  pageSize: 0,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -141,9 +121,9 @@ type FilterStatus = Case['status'] | 'all';
 interface CasesViewProps {
   /**
    * Optional pre-fetched cases from a Server Component. When provided, these
-   * are rendered on first paint (no flash of mock data) and SWR revalidates
-   * in the background. When omitted (e.g. dev/local without API access),
-   * deterministic mock data is used so the layout stays stable for SSR.
+   * are rendered on first paint and SWR revalidates in the background.
+   * When omitted or the API is empty, the empty-state UI is shown — never
+   * synthetic ``case-1000`` rows that break detail routes.
    */
   initialCases?: CasesResponse;
 }
@@ -153,14 +133,9 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
   const [severityFilter, setSeverityFilter] = useState<Case['severity'] | 'all'>('all');
   const [search, setSearch] = useState('');
 
-  const fallback: CasesResponse = initialCases ?? {
-    cases: MOCK_CASES,
-    total: MOCK_CASES.length,
-    page: 1,
-    pageSize: MOCK_CASES.length,
-  };
+  const fallback: CasesResponse = initialCases ?? EMPTY_CASES;
 
-  const { data: casesData, isLoading } = useSWR(
+  const { data: casesData, isLoading, error: casesError } = useSWR(
     ['cases', statusFilter, severityFilter],
     () =>
       casesApi.list({
@@ -171,6 +146,7 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
       }),
     {
       fallbackData: fallback,
+      shouldRetryOnError: true,
     }
   );
 
@@ -184,6 +160,7 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
   const statusTotals = casesData?.statusTotals;
   const mapBackendTotals = (keys: string[]): number =>
     keys.reduce((sum, key) => sum + (statusTotals?.[key] ?? 0), 0);
+  const liveCases = casesData?.cases ?? [];
   const statCounts = statusTotals
     ? {
         all: Object.values(statusTotals).reduce((sum, n) => sum + n, 0),
@@ -193,11 +170,11 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
         closed: mapBackendTotals(['closed']),
       }
     : {
-        all: casesData?.total ?? (casesData?.cases ?? MOCK_CASES).length,
-        open: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'open').length,
-        in_progress: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'in_progress').length,
-        resolved: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'resolved').length,
-        closed: (casesData?.cases ?? MOCK_CASES).filter((c) => c.status === 'closed').length,
+        all: casesData?.total ?? liveCases.length,
+        open: liveCases.filter((c) => c.status === 'open').length,
+        in_progress: liveCases.filter((c) => c.status === 'in_progress').length,
+        resolved: liveCases.filter((c) => c.status === 'resolved').length,
+        closed: liveCases.filter((c) => c.status === 'closed').length,
       };
 
   return (
@@ -307,6 +284,12 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
         <div className="flex items-center justify-center h-48">
           <div className="w-6 h-6 border-2 border-brand-500/30 border-t-blue-500 rounded-full animate-spin" />
         </div>
+      ) : casesError && liveCases.length === 0 ? (
+        <EmptyState
+          icon={EmptyStateIcons.case}
+          title="Could not load cases"
+          description="The API request for /api/v1/cases failed. Sign in again, then refresh. Synthetic case-1000 placeholders are no longer shown."
+        />
       ) : cases.length === 0 ? (
         // WS-F5 — distinguish "filter miss" from "no cases ever". The former
         // gets a "clear filters" CTA; the latter explains what cases are and

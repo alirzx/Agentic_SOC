@@ -6,7 +6,7 @@ import uuid
 import pytest
 from fastapi import BackgroundTasks, HTTPException, Request
 
-from app.api import investigate as investigator_api
+from app.api import investigation_run_store as run_store
 from app.api import router as legacy_router
 from app.privacy.context import PrivacyConfigurationError
 from app.privacy.tenant import require_run_owner, tenant_signature, resolve_request_tenant
@@ -112,12 +112,15 @@ async def test_legacy_route_order_falls_through_to_owned_investigator_run(monkey
     owner = str(uuid.uuid4())
     monkeypatch.setenv("AISOC_AGENTS_TENANT_SIGNING_KEY", key)
     legacy_router._runs.clear()
-    investigator_api._runs.clear()
-    investigator_api._runs["investigator-run"] = {
-        "status": "completed",
-        "_tenant_owner": owner,
-        "report_md": "Synthetic report",
-    }
+    run_store.clear_memory_for_tests()
+    await run_store.put_run(
+        "investigator-run",
+        {
+            "status": "completed",
+            "_tenant_owner": owner,
+            "report_md": "Synthetic report",
+        },
+    )
 
     result = await legacy_router.get_investigation(
         "investigator-run",

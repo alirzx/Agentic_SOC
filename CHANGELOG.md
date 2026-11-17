@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Alert/case Investigate poll 404 after agents restart.** Investigation
+  status lived only in an in-process dict, so `GET /api/v1/agents/investigations/{id}`
+  (and case poll) returned 404 when agents restarted mid-run. Runs now mirror
+  to Redis, share the poll id with the ledger, and hydrate from
+  `investigation_runs` on store miss. Also fixed a NameError that skipped
+  persisting failed alert-investigate outcomes.
+
 - **False megacase correlation (audit case 065bd5b9).** Funnel backfill no
   longer links alerts on severity / Splunk source / loose OR(host|ip|user).
   Campaign siblings require shared host/user/IP with scored evidence;

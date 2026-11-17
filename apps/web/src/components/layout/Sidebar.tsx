@@ -6,47 +6,28 @@ import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import {
   BookOpenCheck,
-  Bot,
   BriefcaseBusiness,
-  Building2,
   CalendarClock,
   ChartNoAxesColumnIncreasing,
   ChartPie,
   CircleDollarSign,
-  ClipboardCheck,
-  Compass,
-  Crosshair,
-  FileLock,
   FolderSearch,
   Funnel,
-  Globe,
   Grid3x3,
-  KeyRound,
   LayoutDashboard,
-  LibraryBig,
-  ListTodo,
-  MessagesSquare,
-  Newspaper,
   NotebookPen,
   Plug,
   Radar,
-  Rocket,
-  ScanEye,
   ScrollText,
   Settings,
-  ShieldCheck,
   ShieldUser,
-  SlidersHorizontal,
   Sparkles,
-  Swords,
-  Timer,
   Users,
   Waypoints,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
 import packageJson from "../../../package.json";
-import { LiveQueueBadge } from "./LiveQueueBadge";
 import { BrandWordmark } from "@/components/brand/BrandWordmark";
 import { BRAND } from "@/lib/brand";
 
@@ -60,9 +41,7 @@ interface NavItem {
   badgeColor?: string;
   /**
    * Optional live-data right slot. Renders in place of the static ``badge``
-   * pill when present, so nav items that need real-time counts (e.g. the
-   * Investigation Queue) can own their own polling without bloating this
-   * component.
+   * pill when present.
    */
   liveBadge?: React.ReactNode;
 }
@@ -108,45 +87,14 @@ const navSections: NavSection[] = [
         icon: navIcon(Funnel),
       },
       {
-        label: "Investigation Queue",
-        href: "/queue",
-        icon: navIcon(ListTodo),
-        liveBadge: <LiveQueueBadge />,
-      },
-      {
         label: "Cases",
         href: "/cases",
         icon: navIcon(BriefcaseBusiness),
       },
       {
-        label: "Hunt",
-        href: "/hunt",
-        icon: navIcon(Crosshair),
-      },
-      {
-        label: "Explore",
-        href: "/explore",
-        icon: navIcon(Compass),
-      },
-      {
-        label: "Detection Rules",
-        href: "/detection",
-        icon: navIcon(ScanEye),
-      },
-      {
-        label: "Detection Catalog",
-        href: "/detection/catalog",
-        icon: navIcon(LibraryBig),
-      },
-      {
         label: "MITRE Coverage",
         href: "/detection/coverage",
         icon: navIcon(Grid3x3),
-      },
-      {
-        label: "Detection Tuning",
-        href: "/detection/tuning",
-        icon: navIcon(SlidersHorizontal),
       },
       {
         label: "Shifts",
@@ -173,26 +121,6 @@ const navSections: NavSection[] = [
         href: "/copilot",
         icon: navIcon(Sparkles),
       },
-      {
-        label: "Investigation Chat",
-        href: "/investigate",
-        icon: navIcon(MessagesSquare),
-      },
-      {
-        label: "Agentic Shadow Runs",
-        href: "/agentic/shadow-runs",
-        icon: navIcon(Bot),
-      },
-      {
-        label: "Coverage Advisor",
-        href: "/coverage-advisor",
-        icon: navIcon(ShieldCheck),
-      },
-      {
-        label: "EASM",
-        href: "/easm",
-        icon: navIcon(Globe),
-      },
     ],
   },
   {
@@ -209,21 +137,6 @@ const navSections: NavSection[] = [
         icon: navIcon(BookOpenCheck),
       },
       {
-        label: "File Integrity (FIM)",
-        href: "/fim",
-        icon: navIcon(FileLock),
-      },
-      {
-        label: "Honeytokens",
-        href: "/honeytokens",
-        icon: navIcon(KeyRound),
-      },
-      {
-        label: "Purple Team",
-        href: "/purple-team",
-        icon: navIcon(Swords),
-      },
-      {
         label: "Runbook",
         href: "/runbook",
         icon: navIcon(NotebookPen),
@@ -233,11 +146,6 @@ const navSections: NavSection[] = [
   {
     title: "Platform",
     items: [
-      {
-        label: "Get started",
-        href: "/onboarding",
-        icon: navIcon(Rocket),
-      },
       {
         label: "Connectors",
         href: "/connectors",
@@ -254,29 +162,9 @@ const navSections: NavSection[] = [
         icon: navIcon(ShieldUser),
       },
       {
-        label: "Compliance",
-        href: "/compliance",
-        icon: navIcon(ClipboardCheck),
-      },
-      {
-        label: "MSSP Dashboard",
-        href: "/mssp",
-        icon: navIcon(Building2),
-      },
-      {
         label: "Team Analytics",
         href: "/analytics/team",
         icon: navIcon(ChartPie),
-      },
-      {
-        label: "SLA Tracking",
-        href: "/sla",
-        icon: navIcon(Timer),
-      },
-      {
-        label: "Executive Digest",
-        href: "/reports/digest",
-        icon: navIcon(Newspaper),
       },
       {
         label: "Cost Dashboard",

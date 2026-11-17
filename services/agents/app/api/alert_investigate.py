@@ -18,12 +18,13 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.api import investigation_run_store as run_store
 from app.investigator import InvestigatorOrchestrator
 from app.privacy.context import PrivacyConfigurationError
 from app.llm.gateway_config import validate_gateway_config
@@ -33,7 +34,6 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents-investigate"])
 
-_runs: dict[str, dict[str, Any]] = {}
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
@@ -161,11 +161,17 @@ async def _run_investigation(
     try:
         # Prefer the Tier-2 aggregated case so fetch_related_alerts loads siblings.
         orchestrator_case_id = (investigation_case_id or "").strip() or alert_id
+        try:
+            run_uuid = UUID(run_id)
+        except (ValueError, TypeError):
+            run_uuid = uuid4()
+        # Reuse the poll id as the ledger run id so restart recovery can join them.
         state = await InvestigatorOrchestrator().run(
             case_id=orchestrator_case_id,
             alert_summary=summary,
             raw_alert=raw_alert or {"alert_id": alert_id},
             tenant_id=tenant_id,
+            run_id=run_uuid,
         )
         completed_at = datetime.now(UTC).isoformat()
         status = state.status if state.status in ("completed", "failed", "running") else "completed"
@@ -184,7 +190,7 @@ async def _run_investigation(
             model=model_name,
             error="Investigation failed" if status == "failed" else None,
         )
-        _runs[run_id] = {**result.model_dump(), "_tenant_owner": tenant_id}
+        await run_store.put_run(run_id, {**result.model_dump(), "_tenant_owner": tenant_id})
         logger.info(
             "alert_investigate.done",
             run_id=run_id,
@@ -208,10 +214,7 @@ async def _run_investigation(
             model=model_name,
             error="Investigation failed",
         )
-        _runs[run_id] = {
-            **result.model_dump(),
-            **({"_tenant_owner": tenant_owner} if tenant_owner is not None else {}),
-        }
+        await run_store.put_run(run_id, {**result.model_dump(), "_tenant_owner": tenant_id})
 
 
 @router.post("/investigate", response_model=AgentInvestigationOut)
@@ -255,7 +258,7 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
         relatedAlertIds=related_ids,
         pivot=pivot,
     )
-    _runs[run_id] = {**pending.model_dump(), "_tenant_owner": tenant_id}
+    await run_store.put_run(run_id, {**pending.model_dump(), "_tenant_owner": tenant_id})
     logger.info(
         "alert_investigate.start",
         run_id=run_id,
@@ -285,7 +288,10 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
 @router.get("/investigations/{run_id}", response_model=AgentInvestigationOut)
 async def get_alert_investigation(run_id: str, request: Request) -> AgentInvestigationOut:
     """Poll run status only for the authenticated tenant owner."""
-    run = _runs.get(run_id)
+    run = await run_store.get_run(run_id)
+    if not run:
+        # Last resort: ledger row written with the same run_id (survives Redis loss).
+        run = await _hydrate_from_ledger(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Investigation run not found")
     await require_run_owner(request, run.get("_tenant_owner"))
@@ -298,6 +304,39 @@ async def get_alert_investigation(run_id: str, request: Request) -> AgentInvesti
             model=run.get("model"),
         )
     return AgentInvestigationOut.model_validate(run)
+
+
+async def _hydrate_from_ledger(run_id: str) -> dict[str, Any] | None:
+    """Rebuild a poll document from ``investigation_runs`` when the store misses."""
+    try:
+        from app.investigator import ledger
+    except ImportError:
+        return None
+    try:
+        row = await ledger.fetch_run(UUID(run_id))
+    except (ValueError, TypeError):
+        return None
+    if not row:
+        return None
+    started = row.get("started_at")
+    completed = row.get("completed_at")
+    doc = {
+        "id": run_id,
+        "alertId": str(row.get("case_id") or ""),
+        "status": str(row.get("status") or "running"),
+        "findings": row.get("report_md") or None,
+        "recommendations": [],
+        "actions": [],
+        "startedAt": started.isoformat() if hasattr(started, "isoformat") else str(started or ""),
+        "completedAt": completed.isoformat() if hasattr(completed, "isoformat") else (
+            str(completed) if completed else None
+        ),
+        "model": row.get("model_used"),
+        "error": row.get("error"),
+        "_tenant_owner": str(row["tenant_id"]) if row.get("tenant_id") else None,
+    }
+    await run_store.put_run(run_id, doc)
+    return doc
 
 
 @router.get("/llm-status")
