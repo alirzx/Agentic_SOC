@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from app.services.exact_dedupe import (
+    _mark_alerts_deduplicated,
     alert_display_key,
     case_content_key,
     merge_alert_entities,
@@ -131,3 +133,58 @@ def test_merge_alert_entities_unions_hosts():
     assert merged["affected_hosts"] == ["Host-A", "Host-B"]
     assert merged["affected_ips"] == ["1.1.1.1"]
     assert merged["affected_users"] == ["alice"]
+
+
+class _MappingResult:
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self._rows = rows
+
+    def mappings(self):
+        return self
+
+    def all(self) -> list[dict[str, object]]:
+        return self._rows
+
+
+class _ExactDedupeDb:
+    def __init__(self, loser_rows: list[dict[str, object]]) -> None:
+        self.loser_rows = loser_rows
+        self.statements: list[str] = []
+
+    async def execute(self, statement):
+        sql = str(statement)
+        self.statements.append(sql)
+        if "SELECT id, case_id FROM alerts" in sql:
+            return _MappingResult(self.loser_rows)
+        return _MappingResult([])
+
+
+@pytest.mark.asyncio
+async def test_legacy_dedup_preserves_cased_losers_and_clears_uncased_losers():
+    uncased_id = uuid4()
+    cased_id = uuid4()
+    cased_case_id = uuid4()
+    db = _ExactDedupeDb(
+        [
+            {"id": uncased_id, "case_id": None},
+            {"id": cased_id, "case_id": cased_case_id},
+        ]
+    )
+
+    await _mark_alerts_deduplicated(
+        db,
+        tenant_id=uuid4(),
+        loser_ids=[uncased_id, cased_id],
+        canonical_id=uuid4(),
+        preserve_case_membership=False,
+    )
+
+    funnel_updates = [
+        sql
+        for sql in db.statements
+        if "UPDATE alerts" in sql and "SET funnel_stage = 'deduplicated'" in sql
+    ]
+    assert len(funnel_updates) == 2
+    assert any("case_id = NULL" in sql for sql in funnel_updates)
+    assert any("case_id = NULL" not in sql for sql in funnel_updates)
+    assert any("UPDATE aisoc_cases" in sql for sql in db.statements)

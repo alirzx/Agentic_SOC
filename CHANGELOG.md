@@ -7,6 +7,146 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Graph correlation engine v2.0** (`services/correlation`) — a second,
+  independent case-creation path running in parallel with the legacy
+  agentic-funnel promoter. It reads `alerts.llm_payload` only, extracts a closed
+  set of value-shaped keys (host, user, IP, domain, hash, host-scoped process
+  GUID), folds alerts into `(:Observation)`s by the topology of the action, and
+  links actions with L1/L2/L3 scoring (θ=3) before opening a campaign case
+  through `POST /api/v1/cases/from-correlation`. Alert ownership is claimed
+  atomically so one alert can never land in two cases, and every case records
+  which writer produced it (`creation_method`). Reference:
+  `docs/architecture/correlation-engine.md`; case object:
+  `docs/architecture/case-lifecycle.md`; approved design:
+  `docs/plans/case/2.0.md`.
+- **One correlation view for candidates and cases.** `CorrelationInspectModal`
+  is fed by an identical payload from `GET /cases/candidates/{key}` and
+  `GET /cases/{id}/correlation`: scored graph, L1/L2/L3 reasoning, link
+  inspector, per-entity timeline, ATT&CK and kill-chain coverage, full screen,
+  and a 3D orbit view. Analysts can narrow the analysis without touching the
+  record — hide (client-side), exclude an alert or a whole rule (server-side
+  rebuild, saved per case), or filter on any `llm_payload` field — and the
+  `dedup hidden` switch folds soft-dedup witnesses out of the canvas and the
+  Alerts tab as a view, never as a scope.
+- **The case workspace shows real data.** `GET /cases/{id}/alerts` and
+  `GET /cases/{id}/timeline` back the linked-alerts rail and the timeline, the
+  header renders the engine's campaign summary instead of its observation dump,
+  and the Attack Chain tab reads `aisoc_cases` like the rest of the case
+  surface instead of 404-ing on every engine case.
+- **TKG second opinion tab.** An advisory, read-only evaluation of a case
+  against a Soorin Temporal Knowledge Graph: frozen payload hash, deterministic
+  evidence floor, per-alert attribution naming whether the send side or the
+  graph side owns a missing alert, an optional judge that may only raise the
+  floor, and one immutable row per run. Re-run is a cancellable job with a live
+  stepper, and it also pushes the alerts the graph does not know about when
+  `AISOC_TKG_ALLOW_SEND` is on. Docs:
+  `apps/docs/docs/console/case-tkg-evaluation.md`.
+- **A TKG run scores the canonical alerts before the witnesses queue up.** Each
+  run sends and evaluates in two passes: canonical members first — resolved,
+  pushed, waited on and **stored as a verdict** — then the soft-dedup witnesses,
+  which re-score and supersede it (`canonical_only_verdict` marks the interim
+  row). A case whose set is mostly witnesses no longer waits on the graph's
+  whole queue to produce a verdict.
+- **The stepper names the pass it is sending in.** A run evaluates the distinct
+  alerts first and the soft-dedup witnesses second, and the live panel now shows
+  `Pass 1 of 2 — canonical alerts · 3 alerts` / `Pass 2 of 2 — duplicate
+  witnesses · 1009 alerts`, with the wait step labelled `canonical` or
+  `duplicates`. Previously both passes shared one unlabelled "materialise"
+  stage, so a long witness queue looked like a stalled canonical pass.
+- **The "wait for the graph" stage is bounded and independently cancellable.**
+  `POST /cases/{id}/tkg-evaluation/run/{run_id}/skip-wait` (panel: **Stop
+  waiting & score**) ends that stage only; `AISOC_TKG_WAIT_TIMEOUT_S` (default
+  600 s per pass) does the same on its own. Both continue to judge and store what
+  is resolved and record `materialise_wait_skipped` / `materialise_wait_timeout`,
+  so a queue the graph never drains costs coverage instead of the whole result.
+  The stepper now shows the remaining wait (`wave 12 · 73 queued · 8m 42s of
+  waiting left`), which explains why `wave` keeps rising while the queued count
+  does not.
+- **The funnel's triage savings are measured.** `GET /metrics/funnel` gained a
+  `triage` block computed from the Investigation Ledger, the Operations Funnel
+  strip a seventh **Triage Automation** tile, and the Efficiency Report a
+  matching row; the worker logs the same split once per interval.
+
+### Added
+
+- **A TKG run shows its own result while it runs.** The panel used to sit on the
+  last stored evaluation until the run finished, so minutes of resolving and
+  sending produced no visible number and a cancel threw the work away. The job
+  now publishes a provisional evaluation after every few resolved alerts — the
+  same rubric as the stored row — and the verdict, confidence, four-step chain,
+  diagnosis and attribution table render it live (`live · partial`). Sends are
+  mirrored per alert (`sent · processing` appears in the row before the next one
+  goes), and **Cancel run** / a failed run now persist what was already scored
+  as a `partial` row (`run_stopped_partial`) instead of storing nothing.
+
+### Fixed
+
+- **Soft deduplication no longer drops live Case membership.**
+  `services/api/app/services/exact_dedupe.py` now preserves `case_id` for
+  losers that already belong to a graph-engine, agentic-funnel, or manual case;
+  the soft-dedup row stays in its Deduplicated funnel state without breaking the
+  operational Case. In Legacy display-fingerprint mode, Case array cleanup and
+  `case_id = NULL` are applied only to unlinked losers, while cased losers keep
+  their original membership. Canonical alert selection and entity/occurrence
+  merge behavior are unchanged. Regression coverage lives in
+  `services/api/tests/test_exact_dedupe.py`.
+- **A graph-engine case's MITRE list is rebuilt from its alerts.** The engine
+  writes `aisoc_cases.mitre_techniques` once, at case creation, from the
+  observations it saw then; alerts are re-assigned and re-normalised afterwards,
+  so `GET /cases/{id}` returned techniques nothing in the case carried — case
+  `15b4790b…` listed 17 while its 98 evidence alerts carry 12 (`T1027`, `T1490`,
+  `T1218.011`, `T1204.002`, `T1021.001` appeared on no alert). The endpoint now
+  unions the techniques of the canonical members plus their soft-dedup
+  witnesses, which is exactly the set the correlation graph scores.
+- **A case header no longer shows two different rule counts.** The engine's
+  description is text written when the case opened, and `CaseSummary` rendered
+  its counts as current facts — so one block read `9 rules` (live, from the
+  alerts store) next to `17 distinct rules` (snapshot) and a headline claiming
+  `114 alert(s)` for a case that holds 9 members plus soft-dedup witnesses. The
+  header now derives alerts and rules from the live case record and the headline
+  keeps only the campaign window. Every frozen engine count is gone: no
+  `73 observations` / `114 alerts` line, and the engine's rule roll-up
+  (`Rules (17 distinct)` for a case whose alerts carry nine) is dropped from
+  **Engine details**, which now lists the live rule breakdown instead — so the
+  header matches the counts the list card shows.
+- **The correlation modal's Evidence rail steps aside again.** The auto-hide
+  timer was gated on a `max-width: 1279px` window, so on a normal desktop the
+  rail never closed and the Evidence button looked stuck on. It now closes
+  itself 10 seconds after the modal opens at every width, and a click on
+  Evidence pins it for the rest of the session.
+- **A duplicate-heavy case is evaluated instead of refused.** `AISOC_TKG_MAX_ALERTS`
+  counted every row in the case set, so a campaign holding three distinct alerts
+  and several hundred soft-dedup witnesses came back `ineligible /
+  too_many_alerts` before the canonical pass even started. The cap now counts
+  distinct alerts only: witnesses ride along, the second pass still sends them,
+  and the stored detail names the cap and the distinct count.
+- **A TKG run can no longer hang on a queue the graph will not drain.** The wait
+  was open-ended (`max_waves = 0`, no time cap), so a stuck materialisation left
+  the run at `wave 290` for half an hour and `Cancel run` — which stores nothing —
+  was the only way out. The wait is now capped and skippable without discarding
+  the work, and `Cancel run` is documented as the hard stop.
+- **The correlation engine no longer loses or duplicates evidence.** A cycle
+  that rewrote a ledger row could drop a cased alert out of its own case graph,
+  a later cycle could re-offer a fully cased campaign as a new candidate,
+  `alert_ids` could drift from `alerts.case_id` in either direction, and
+  `AISOC_CORRELATION_MIN_CASE_ALERTS=1` opened "campaigns" holding one copy of
+  one detection. Ownership is claimed once, the ledger upsert unions its ids,
+  case membership is reconciled inside the claim transaction, and a new case
+  needs two canonical alerts.
+- **Scoring no longer correlates a tenant with itself.** Ambient values are
+  detected relatively as well as absolutely, and a pair whose shared keys are
+  all ambient is vetoed instead of summing to exactly θ.
+- **Auto-triage dedup works again.** The cost-governor fingerprint is computed
+  over an evidence signature (rule, severity, connector, primary entities,
+  techniques) rather than the whole `raw_alert`, so a repeated alert reuses the
+  cached verdict and skips the deep investigation instead of buying a second
+  LLM call and a duplicate case.
+- **`case.rules` is a rule-name → count map everywhere**, with the missing
+  `JSONB` column added by migration 084, so the correlation endpoint no longer
+  answers 500 for a case the engine has not filled yet.
+
 ### Fixed
 
 - **Alert/case Investigate poll 404 after agents restart.** Investigation

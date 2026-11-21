@@ -29,6 +29,7 @@ import {
   type AttackChainTimeline,
   type AttackChainWindow,
   type Case,
+  type CaseAlertItem,
   type CaseAttackPath,
   type CaseSeverity,
   type CaseStatus,
@@ -39,7 +40,10 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { InvestigationLedger } from './InvestigationLedger';
+import { CaseSummary } from './CaseSummary';
 import { CaseInvestigationBriefPanel } from './CaseInvestigationBriefPanel';
+import { CaseCorrelationModal } from './CaseCorrelationModal';
+import { TkgEvaluationPanel } from './TkgEvaluationPanel';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 
 type WorkspaceTab =
@@ -47,6 +51,7 @@ type WorkspaceTab =
   | 'investigation'
   | 'attack-path'
   | 'attack-chain'
+  | 'tkg'
   | 'ledger'
   | 'report';
 
@@ -55,6 +60,7 @@ const VALID_TABS: readonly WorkspaceTab[] = [
   'investigation',
   'attack-path',
   'attack-chain',
+  'tkg',
   'ledger',
   'report',
 ];
@@ -98,10 +104,13 @@ const TIMELINE_ICON: Record<string, string> = {
   created: 'new',
   assigned: 'asn',
   status: 'sts',
+  status_change: 'sts',
   note: 'note',
   agent: 'ai',
   comment: 'cmt',
   alert: 'alrt',
+  alert_linked: 'alrt',
+  task: 'task',
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -233,6 +242,67 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
   );
 
   const caseRecord: Case | undefined = data;
+
+  // Case activity timeline — synthesized by the API from the case's own state
+  // transitions, comments, tasks and linked alerts. The case payload carries no
+  // timeline of its own, so the timeline remains tenant-scoped and live.
+  const { data: timelineData, mutate: mutateTimeline } = useSWR<{ events: CaseTimelineEvent[] }>(
+    caseRecord ? ['case-timeline', caseRecord.id || caseId] : null,
+    () => casesApi.getTimeline(caseRecord?.id || caseId),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+
+  // Linked alerts with title / severity / verdict / time. Same tenant-scoped
+  // source the header's linked-alert count comes from.
+  const { data: caseAlertsData } = useSWR<CaseAlertItem[]>(
+    caseRecord ? ['case-alerts', caseRecord.id || caseId] : null,
+    () => casesApi.getAlerts(caseRecord?.id || caseId),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+
+  // Merge the API's synthesized stream with any optimistic entries already
+  // attached to the case record.
+  const sortedTimeline = useMemo(() => {
+    const byId = new Map<string, CaseTimelineEvent>();
+    for (const e of timelineData?.events ?? []) byId.set(e.id, e);
+    for (const e of caseRecord?.timeline ?? []) {
+      if (!byId.has(e.id)) byId.set(e.id, e);
+    }
+    return [...byId.values()].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+  }, [timelineData, caseRecord]);
+
+  const linkedAlerts = useMemo<CaseAlertItem[]>(() => {
+    const meta = new Map(
+      (Array.isArray(caseAlertsData) ? caseAlertsData : []).map((alert) => [alert.id, alert]),
+    );
+    const ids = caseRecord?.alertIds ?? [];
+    const seen = new Set<string>();
+    const rows: CaseAlertItem[] = [];
+    for (const id of ids) {
+      const alert = meta.get(id);
+      if (alert) {
+        rows.push(alert);
+        seen.add(id);
+      }
+    }
+    for (const [id, alert] of meta) {
+      if (!seen.has(id)) rows.push(alert);
+    }
+    for (const id of ids) {
+      if (!seen.has(id)) rows.push({ id, title: '', severity: '' });
+    }
+    return rows.sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [caseAlertsData, caseRecord]);
+
+  // Correlation view for the case's own evidence — the same inspect surface a
+  // candidate gets, rebuilt from this case's alerts by the correlation engine.
+  const [correlationOpen, setCorrelationOpen] = useState(false);
 
   // ─── Investigation state ───────────────────────────────────────────────────
   const [investigating, setInvestigating] = useState(false);
@@ -415,8 +485,9 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     try {
       await casesApi.update(caseRecord.id, { status });
       toast.success(`Status set to ${STATUS_LABEL[status]}`);
-    } catch {
-      toast(`Demo: status set to ${STATUS_LABEL[status]} locally (writes disabled)`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Backend offline';
+      toast.error(`Could not update status: ${message}`);
     } finally {
       setStatusUpdating(false);
     }
@@ -440,6 +511,9 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     setNewComment('');
     try {
       await casesApi.addComment(caseRecord.id, trimmed);
+      // Pull the authoritative stream back in so the optimistic entry is
+      // replaced by the persisted one (and its server-side timestamp).
+      void mutateTimeline();
       toast.success('Comment added');
     } catch {
       toast('Saved locally (writes disabled in demo)');
@@ -462,6 +536,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     setNewTask('');
     try {
       await casesApi.addTask(caseRecord.id, optimistic);
+      void mutateTimeline();
       toast.success('Task added');
     } catch {
       toast('Saved locally (writes disabled in demo)');
@@ -526,11 +601,6 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     );
   }
 
-  const sortedTimeline = [...(caseRecord.timeline ?? [])].sort(
-    (a, b) =>
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  );
-
   const tasks = caseRecord.tasks ?? [];
   const tasksDone = tasks.filter((t) => t.status === 'done').length;
   const tasksProgress = tasks.length === 0 ? 0 : Math.round((tasksDone / tasks.length) * 100);
@@ -574,11 +644,11 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             <h1 className="mt-2 text-xl font-semibold text-white">
               {caseRecord.title}
             </h1>
-            {caseRecord.description && (
-              <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                {caseRecord.description}
-              </p>
-            )}
+            <CaseSummary
+              description={caseRecord.description}
+              rules={caseRecord.rules}
+              alertCount={caseRecord.alertCount}
+            />
             {caseRecord.mitre && caseRecord.mitre.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
                 <span className="text-slate-500">MITRE ATT&CK:</span>
@@ -645,6 +715,25 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                 <span className="h-3 w-3 animate-spin rounded-full border border-teal-20/30 border-t-indigo-400" />
               )}
               {summaryDownloading ? 'Generating…' : 'Summary'}
+            </button>
+            {/*
+              The correlation modal a candidate gets, for a case that already
+              exists: same scored graph, same L1/L2/L3 reasoning, same MITRE and
+              kill-chain coverage — plus a saved alert scope, because a case is
+              read by more people than the analyst who triaged it.
+            */}
+            <button
+              onClick={() => setCorrelationOpen(true)}
+              disabled={!caseRecord}
+              className={clsx(
+                'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors',
+                !caseRecord
+                  ? 'cursor-not-allowed border-slate-700/40 bg-slate-800/40 text-slate-500'
+                  : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20',
+              )}
+              title="Open the scored correlation graph for this case (same view as a candidate)"
+            >
+              Correlation graph
             </button>
           </div>
         </div>
@@ -722,6 +811,16 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                   timeline
                 </span>
               </span>
+            ) : tab === 'tkg' ? (
+              <span className="inline-flex items-center gap-1">
+                TKG
+                <span
+                  className="rounded bg-emerald-500/15 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-500/30"
+                  title="Second opinion from the Soorin Temporal Knowledge Graph — advisory, never changes the case"
+                >
+                  2nd opinion
+                </span>
+              </span>
             ) : (
               tab
             )}
@@ -753,6 +852,13 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       {/* Attack-chain tab — ranked temporal timeline of related alerts */}
       {activeTab === 'attack-chain' && (
         <AttackChainPanel caseId={caseRecord.id || caseId} />
+      )}
+
+      {/* TKG tab — advisory second opinion from the Soorin knowledge graph.
+          Read-only toward the graph and toward the case: an unreachable or
+          unconfigured TKG renders its reason codes instead of an error page. */}
+      {activeTab === 'tkg' && (
+        <TkgEvaluationPanel caseId={caseRecord.id || caseId} />
       )}
 
       {/* Ledger tab — persistent, replayable agent decision log */}
@@ -807,25 +913,76 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* Left: Linked alerts + IOCs */}
         <aside className="lg:col-span-3 space-y-4">
-          <Panel title={`Linked alerts (${caseRecord.alertIds?.length ?? 0})`}>
-            {(caseRecord.alertIds ?? []).length === 0 ? (
+          <Panel title={`Linked alerts (${linkedAlerts.length})`}>
+            {linkedAlerts.length === 0 ? (
               <EmptyState
                 title="No alerts linked"
                 description="Link alerts from the alerts feed."
               />
             ) : (
-              <ul className="space-y-1.5">
-                {(caseRecord.alertIds ?? []).map((id) => (
-                  <li key={id}>
-                    <Link
-                      href={`/alerts?focus=${encodeURIComponent(id)}`}
-                      className="flex items-center justify-between rounded-md border border-slate-800/80 bg-slate-900/40 px-2.5 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-700 hover:bg-slate-800/40"
-                    >
-                      <span className="font-mono">{id}</span>
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500">open</span>
-                    </Link>
-                  </li>
-                ))}
+              <ul className="max-h-[30rem] space-y-1.5 overflow-y-auto pr-1">
+                {linkedAlerts.map((alert) => {
+                  // Verdict ladder: analyst disposition first, then the funnel
+                  // stage, then the raw alert status. The old rail hardcoded
+                  // "open" for every row, which was wrong for any closed alert.
+                  const verdict = (
+                    alert.disposition ||
+                    alert.funnelStage ||
+                    alert.status ||
+                    ''
+                  ).replace(/_/g, ' ');
+                  const severity = alert.severity as CaseSeverity;
+                  return (
+                    <li key={alert.id}>
+                      <Link
+                        href={`/alerts?focus=${encodeURIComponent(alert.id)}`}
+                        title={[alert.title, alert.summary, alert.id]
+                          .filter(Boolean)
+                          .join('\n')}
+                        className="block rounded-md border border-slate-800/80 bg-slate-900/40 px-2.5 py-2 text-xs transition-colors hover:border-slate-700 hover:bg-slate-800/40"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span
+                            className={clsx(
+                              'text-slate-200',
+                              alert.title ? 'line-clamp-2' : 'font-mono text-[10px] break-all',
+                            )}
+                          >
+                            {alert.title || alert.id}
+                          </span>
+                          {severity && SEVERITY_BADGE[severity] && (
+                            <span
+                              className={clsx(
+                                'flex-none rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1',
+                                SEVERITY_BADGE[severity],
+                              )}
+                            >
+                              {severity}
+                            </span>
+                          )}
+                        </div>
+                        {alert.summary && (
+                          <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">
+                            {alert.summary}
+                          </p>
+                        )}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
+                          {verdict && <span className="font-mono uppercase">{verdict}</span>}
+                          {typeof alert.confidence === 'number' && (
+                            <span>conf {alert.confidence}</span>
+                          )}
+                          {alert.createdAt && (
+                            <span className="ml-auto" suppressHydrationWarning>
+                              {formatDistanceToNow(new Date(alert.createdAt), {
+                                addSuffix: true,
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Panel>
@@ -941,6 +1098,15 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
         </aside>
       </div>
       </div>
+      )}
+
+      {correlationOpen && caseRecord && (
+        <CaseCorrelationModal
+          caseId={caseRecord.id || caseId}
+          caseTitle={caseRecord.title}
+          caseNumber={caseRecord.caseNumber ?? null}
+          onClose={() => setCorrelationOpen(false)}
+        />
       )}
     </div>
   );

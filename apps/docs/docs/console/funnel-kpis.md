@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: Funnel KPIs and pipeline health
-description: How AiSOC turns raw telemetry into a six-tile operations funnel, an efficiency report, and a five-stage pipeline-health rail on the dashboard — backed by /metrics/funnel and /health/pipeline.
+description: How AiSOC turns raw telemetry into a seven-tile operations funnel, an efficiency report, and a five-stage pipeline-health rail on the dashboard — backed by /metrics/funnel and /health/pipeline.
 ---
 
 # Funnel KPIs and pipeline health
@@ -18,9 +18,10 @@ The new `funnel-kpis` and `efficiency-and-pipeline` widgets render at the top of
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Welcome                                                             │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Operations Funnel  ─ 6 tiles                                        │
+│  Operations Funnel  ─ 7 tiles                                        │
 │  Events of Interest  · Correlation Inst.  · Alerts Generated         │
 │  Signal / Noise      · MTTD               · Analyst Queue            │
+│  Triage Automation   (cached vs. fresh LLM)                          │
 ├──────────────────────────────────────────────────┬───────────────────┤
 │  Efficiency Report                               │  Pipeline Health  │
 │  Correlation efficiency                          │  Ingest           │
@@ -31,9 +32,9 @@ The new `funnel-kpis` and `efficiency-and-pipeline` widgets render at the top of
 └──────────────────────────────────────────────────┴───────────────────┘
 ```
 
-## `FunnelKpiBar` — six tiles, one period
+## `FunnelKpiBar` — seven tiles, one period
 
-The bar renders six tiles in fixed order. Each tile carries an absolute value and, where the API returns one, a period-over-period delta:
+The bar renders seven tiles in fixed order — the six pipeline tiles, then the funnel's own savings. Each tile carries an absolute value and, where the API returns one, a period-over-period delta:
 
 | Tile | Value | Delta direction |
 |---|---|---|
@@ -43,21 +44,23 @@ The bar renders six tiles in fixed order. Each tile carries an absolute value an
 | Signal / Noise | `1 − (FP / dispositioned alerts)` | up is good |
 | MTTD | mean `created_at → first_seen_at` across alerts in window | **down is good** |
 | Analyst Queue | active alerts in `new`/`triaging`/`in_progress` | **down is good** |
+| Triage Automation | `dedup_rate` of alert triage — share answered from cache / outcome memory instead of a fresh LLM call; sub-line shows `reused/total from cache` | none (no prior-window split) |
 
 Delta direction matters because the same percent change has the opposite meaning on MTTD or Queue: a +20% Analyst Queue is bad, a +20% Alerts Generated is good. The component encodes this so the green/red coloring is correct without the operator having to think about it.
 
 Loading and error states are deliberately quiet:
 
-- **Loading** — six skeleton tiles with the same labels and shape as the loaded view, so the layout never jumps.
+- **Loading** — seven skeleton tiles with the same labels and shape as the loaded view, so the layout never jumps.
 - **Error** — a single "Funnel metrics unavailable" line replaces the tiles; the rest of the dashboard keeps rendering. `useSWR` is configured with `shouldRetryOnError: false` so a 5xx doesn't melt the API.
 
 ## `EfficiencyReport` — how well the pipeline converts
 
-Three bars, all clamped to `[0, 1]` so the visualization never overflows:
+Four bars, the first three clamped to `[0, 1]` so the visualization never overflows:
 
 1. **Correlation efficiency** = `alerts / correlation_instances`. Clamped to `1.0`. Tells you how much of your correlation work turned into an actual alert.
 2. **Alert yield** = `alerts / events_of_interest`. Always tiny — `0.00208` is healthy. Tells you what fraction of raw signal made it to an analyst.
 3. **MITRE coverage** = `covered / total`. Surfaces "42 / 201 · 20.9%" — the count of distinct MITRE tactic + technique IDs (`Txxxx` and `TAxxxx`) referenced by detection rules with at least one alert in the window, divided by the configured total (see [Tunables](#tunables)).
+4. **Triage automation** = `(deduplicated + suppressed) / total` of the `triage` block — how much of the auto-triage workload never reached the LLM. Shown as "1220/1412 · 88.1%". The same number appears as the seventh `FunnelKpiBar` tile; the card spells out the counts, the tile keeps it in the one-glance row.
 
 The `EfficiencyReport` and `FunnelKpiBar` deliberately share an SWR cache key (`funnel-metrics:<period>`) so both widgets de-dupe on a single call to `GET /api/v1/metrics/funnel`.
 
@@ -100,6 +103,17 @@ Returns:
   "correlation_efficiency": 0.777,
   "alert_yield": 0.00208,
   "mitre_coverage": { "covered": 71, "total": 100, "ratio": 0.71 },
+  "triage": {
+    "total": 1412,
+    "newly_triaged": 168,
+    "new_llm": 160,
+    "deterministic": 8,
+    "deduplicated": 1220,
+    "suppressed": 24,
+    "other": 0,
+    "dedup_rate": 0.881,
+    "llm_calls_saved": 1244
+  },
   "deltas": {
     "events_of_interest": 0.037,
     "correlation_instances": 0.012,
@@ -119,6 +133,7 @@ Key implementation notes (`services/api/app/api/v1/endpoints/metrics.py`):
 - `mttd_seconds` reuses the exact same `AVG(EXTRACT EPOCH FROM (created_at - first_seen_at))` expression as the existing SOC metrics endpoint so the two never disagree.
 - `signal_to_noise` is `1 − (FP count / total dispositioned)` — alerts with `disposition` in `false_positive` divided by alerts with any disposition. Returns `0.0` when there is no dispositioned alert (no work done yet).
 - Deltas are signed fractions, not percent: `0.05` means +5%. The previous-period window is the same duration immediately before the current one.
+- `triage` is the SOC funnel's savings, measured from the Investigation Ledger rather than an in-process counter: the auto-triage worker writes one run per alert with `model_used = kafka:auto_triage:<tier>` (`llm`, `deterministic`, `cached`, `memory`, `override`), so the split survives restarts. `newly_triaged = llm + deterministic`; `deduplicated` = cost-governor cache hit on identical evidence; `suppressed` = outcome-memory or analyst-override auto-resolution. `dedup_rate = (deduplicated + suppressed) / (newly_triaged + deduplicated + suppressed)` and `llm_calls_saved` is their count — the number the funnel exists to raise. The same split is logged once per interval by the worker as `auto_triage_worker.triage_summary` (interval: `AISOC_AGENT_METRICS_INTERVAL_SECONDS`, default 3600).
 
 ### `GET /api/v1/health/pipeline`
 

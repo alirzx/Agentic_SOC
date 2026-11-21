@@ -177,7 +177,7 @@ Source: [`services/agents/app/`](https://github.com/SoorinSecurity/Agentic_SOC/t
 | `PLAYBOOK_STORE_DIR` | `/data/playbooks` | Filesystem path for executable playbook DSL files |
 | `PLAYBOOK_PACK_ROOT` | `/data/playbook-packs` | Root directory for community playbook packs |
 | `AISOC_PLAYBOOK_RESUME` | `false` | Enables resumable playbook approvals: a run parked at an `approval` step creates a Runbook gate task, and `POST /api/v1/playbooks/runs/{id}/resume` accepts a decision. When off, parked runs create no task and the endpoint answers 503 — the pre-resume behaviour, which is honest but useless. Gates both halves, so they cannot disagree. |
-| `AISOC_AGENTS_TENANT_SIGNING_KEY` | — | HMAC key (≥32 bytes) the API signs its internal agents calls with. Without it, analyst feedback and playbook resumes are not sent (never sent unsigned). |
+| `AISOC_AGENTS_TENANT_SIGNING_KEY` | — | HMAC key (≥32 bytes) the API signs its internal agents calls with. **Set the same value on the API and the agents service.** Without it on the API, analyst feedback and playbook resumes are not sent and `/api/v1/contextual/*` (the Ambient Copilot) answers `503 Agents tenant authentication is not configured`; without it on agents, signed calls are rejected. The local dev bootstrap (`docs/ahmadi/start-dev-local.ps1`) sets a dev-only value for both. |
 | `ATTCK_DATA_PATH` | — | Path to a local MITRE ATT&CK STIX bundle (falls back to the bundled snapshot) |
 | `OTEL_SERVICE_NAME` | `aisoc-agents` | Service name in OTel traces |
 | `AISOC_VERSION` | `0.1.0` | Reported in OTel resource attributes |
@@ -422,6 +422,58 @@ HONEYTOKEN_DATABASE_URL=${DATABASE_URL}
 HONEYTOKEN_ALERT_WEBHOOK_SECRET=$(openssl rand -hex 32)
 PURPLE_TEAM_DATABASE_URL=${DATABASE_URL}
 PURPLE_TEAM_CALDERA_API_KEY=...
+
+# --- Correlation engine (v2.0) ---
+# Same database as the API (the engine reads `alerts.llm_payload` and writes
+# its own correlation columns; case creation goes through the API).
+DATABASE_URL=${DATABASE_URL}
+API_SERVICE_URL=http://localhost:8000
+# API key scoped to `cases:write:correlation` (API Keys page). Required outside
+# development; empty in development resolves to the demo tenant.
+AISOC_CORRELATION_API_TOKEN=aisoc_...
+AISOC_CORRELATION_OWNER=graph_engine
+AISOC_CORRELATION_LEGACY_OWNER=legacy
+AISOC_CORRELATION_THETA=3
+AISOC_CORRELATION_LOOKBACK_HOURS=72
+AISOC_CORRELATION_MIN_CASE_ALERTS=2
+AISOC_CORRELATION_POLL_SECONDS=60
+AISOC_CORRELATION_CLAIM_TTL_MINUTES=60
+AISOC_CORRELATION_WORKER_ENABLED=true
+AISOC_CORRELATION_KAFKA_ENABLED=false
+# API only: draw observations as role edges between their own entities instead
+# of hub nodes with entity leaves. Per-request override:
+# `?observations=edge|node` on /cases/{id}/correlation and /cases/candidates/{key}.
+AISOC_CORRELATION_GRAPH_EDGES=false
+AISOC_INTERNAL_TOKEN=${INTERNAL_TOKEN}
+
+# --- Soorin TKG second opinion (case workspace → TKG tab) ---
+# Read-only toward the graph: the API calls graph/overview, knowledge/resolve and
+# knowledge/context only. Ingestion is a separate, operator-run script.
+# Unset values are not an error — the panel renders "not configured".
+AISOC_FEATURE_TKG_EVALUATION=true
+AISOC_TKG_URL=http://192.168.0.55:2516
+AISOC_TKG_EMAIL=${TKG_EMAIL}
+AISOC_TKG_PASSWORD=${TKG_PASSWORD}
+AISOC_TKG_KB_ID=01a1e46e-4874-7052-97b6-4717a860e793
+AISOC_TKG_TENANT=tenant-blue
+AISOC_TKG_SOURCE_SYSTEM=splunk
+AISOC_TKG_SOURCE_INSTANCE=splunk-e2e
+AISOC_TKG_TIMEOUT_S=20
+# Distinct alerts per evaluation. Soft-dedup witnesses are not counted: a case
+# with three real alerts and hundreds of repeats is still a three-alert case.
+AISOC_TKG_MAX_ALERTS=40
+AISOC_TKG_BUDGET_MS=20000
+AISOC_TKG_CACHE_TTL_S=900
+# Comma-separated TKG document ids holding synthetic/seed data. Facts from
+# these can corroborate a case but never confirm it (confidence capped at 55).
+AISOC_TKG_SYNTHETIC_DOC_IDS=
+
+# Setup/lab only: let the case panel push alerts the graph does not know about.
+# Off by default — enabling it makes one endpoint able to write to the TKG.
+AISOC_TKG_ALLOW_SEND=false
+AISOC_TKG_SOURCE_NAME=agentic-soc-manual-20261116
+AISOC_TKG_SEND_DELAY_S=1.0
+AISOC_TKG_SEND_MAX_ALERTS=25
 
 # --- Web ---
 NEXT_PUBLIC_API_URL=http://localhost:8000

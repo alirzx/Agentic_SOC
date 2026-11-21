@@ -398,8 +398,8 @@ class Settings(BaseSettings):
     # this default mirrors the compose default so ``aisoc serve`` works on a
     # fresh clone with zero configuration.
     DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc_dev_secret@localhost:5432/aisoc"  # type: ignore[assignment]
-    DATABASE_POOL_SIZE: int = 20
-    DATABASE_MAX_OVERFLOW: int = 10
+    DATABASE_POOL_SIZE: int = 50  # Increased for development environment (multi-service stack)
+    DATABASE_MAX_OVERFLOW: int = 20  # Allow overflow for concurrent requests
     # Recycle pooled connections before managed Postgres idle-closes them.
     # Fly Postgres autostop + idle TCP teardown made stale pool entries the
     # dominant source of ``ConnectionDoesNotExistError`` 500s on the hosted
@@ -638,6 +638,50 @@ class Settings(BaseSettings):
     # The flag is honored by ``services/api/app/core/airgap.py`` —
     # any HTTP outbound code path can call ``enforce_airgap_for_url(url)``
     # to assert before issuing a request.
+    # ------------------------------------------------------------------
+    # Soorin TKG second opinion (docs/plans/case-tkg-evaluation).
+    #
+    # The case panel can ask the tenant's Soorin Temporal Knowledge Graph for a
+    # second opinion: resolve each member alert's identity, read its facts and
+    # compare the graph's verdict with the correlation engine's. Read-only —
+    # this API never writes to the TKG (ingestion lives in a standalone script).
+    # Unset credentials are not an error: the panel renders "not configured".
+    # ------------------------------------------------------------------
+    AISOC_FEATURE_TKG_EVALUATION: bool = True
+    AISOC_TKG_URL: str = ""  # e.g. http://192.168.0.55:2516
+    AISOC_TKG_EMAIL: str = ""
+    AISOC_TKG_PASSWORD: str = ""
+    AISOC_TKG_KB_ID: str = ""  # KB uuid shown in the TKG console URL
+    AISOC_TKG_TENANT: str = "tenant-blue"  # TKG binding the alerts were ingested under
+    AISOC_TKG_SOURCE_SYSTEM: str = "splunk"
+    AISOC_TKG_SOURCE_INSTANCE: str = "splunk-e2e"
+    AISOC_TKG_TIMEOUT_S: float = 20.0
+    AISOC_TKG_MAX_ALERTS: int = 40
+    AISOC_TKG_BUDGET_MS: int = 20000
+    #: Deprecated and ignored: a run waits for every queued alert until the
+    #: operator cancels it, so a time cap only ever cut a slow graph short. Kept
+    #: so existing .env files still parse.
+    AISOC_TKG_MATERIALISE_WAIT_S: float = 60.0
+    #: How often a waiting run re-probes a slice of the still-queued alerts.
+    #: Ceiling for one "wait for the graph" stage. The panel can stop the wait
+    #: itself and the run then scores what is resolved; this is only the backstop
+    #: so a queue that will never drain cannot hide the verdict. ``0`` = no cap.
+    AISOC_TKG_WAIT_TIMEOUT_S: float = 600.0
+    AISOC_TKG_MATERIALISE_POLL_S: float = 5.0
+    AISOC_TKG_CACHE_TTL_S: int = 900
+    # Comma-separated TKG document ids whose facts are synthetic/seed data.
+    # Their facts can corroborate a case but never confirm it (confidence cap).
+    AISOC_TKG_SYNTHETIC_DOC_IDS: str = ""
+
+    # Manual escape hatch: allow the case panel to push a case's *missing*
+    # alerts into the graph. Off by default — this API is read-only toward the
+    # TKG, and enabling it means an endpoint can create statements. Intended for
+    # first-time setup and lab testing, when a case's alerts were never ingested.
+    AISOC_TKG_ALLOW_SEND: bool = False
+    AISOC_TKG_SOURCE_NAME: str = "agentic-soc-manual-20261116"
+    AISOC_TKG_SEND_DELAY_S: float = 1.0
+    AISOC_TKG_SEND_MAX_ALERTS: int = 25
+
     # ------------------------------------------------------------------
     # EASM (External Attack Surface Management) — Tier 3.6.
     # ------------------------------------------------------------------

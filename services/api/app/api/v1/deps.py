@@ -261,6 +261,35 @@ def require_permission(permission: str):
     return _check
 
 
+#: Scopes accepted by the correlation-to-case writer. The dedicated
+#: ``cases:write:correlation`` scope lets an operator provision the correlation
+#: engine with a key that cannot create arbitrary cases through ``POST /cases``;
+#: ``cases:write`` is honoured for existing service keys and human tokens.
+CORRELATION_WRITE_SCOPES: tuple[str, ...] = ("cases:write:correlation", "cases:write", "cases:*", "*")
+
+
+def require_correlation_writer():
+    """Dependency for ``POST /cases/from-correlation``.
+
+    API keys must carry ``cases:write:correlation`` (or the broader
+    ``cases:write``); JWT users are checked against the normal ``cases:write``
+    role permission so an analyst cannot be locked out of a service-only path.
+    """
+
+    async def _check(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> CurrentUser:
+        if current_user.scopes is not None:
+            if not any(scope in current_user.scopes for scope in CORRELATION_WRITE_SCOPES):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="API key missing scope: cases:write:correlation",
+                )
+            return current_user
+        current_user.require_permission("cases:write")
+        return current_user
+
+    return _check
+
+
 def require_runbook_enabled() -> None:
     """Dependency: 404 every Runbook route while the feature flag is off.
 

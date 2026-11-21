@@ -2458,7 +2458,7 @@ async def _mirror_cases_to_aisoc(session, tenant: Tenant) -> int:
                     title, description, severity, status,
                     assignee, mitre_techniques, alert_ids,
                     opened_at, resolved_at, closed_at,
-                    created_at, updated_at, created_by, tags
+                    created_at, updated_at, created_by, tags, creation_method
                 ) VALUES (
                     CAST(:id AS UUID), CAST(:tenant_id AS UUID), :case_number,
                     :title, :description, :severity, :status,
@@ -2466,7 +2466,7 @@ async def _mirror_cases_to_aisoc(session, tenant: Tenant) -> int:
                     CAST(:alert_ids AS UUID[]),
                     :opened_at, :resolved_at, :closed_at,
                     :created_at, :updated_at, :created_by,
-                    CAST(:tags AS JSONB)
+                    CAST(:tags AS JSONB), 'system'
                 )
                 ON CONFLICT (id) DO UPDATE SET case_number = EXCLUDED.case_number
                 """

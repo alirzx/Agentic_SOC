@@ -236,12 +236,112 @@ function extraNotableFields(alert: Alert): ReadonlyArray<{ key: string; label: s
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children: React.ReactNode;
+  /** Optional control on the heading row (e.g. a copy button for the body). */
+  action?: React.ReactNode;
+}) {
   return (
     <div className="bg-dark-60 border border-[#374151]/60 rounded-xl p-5 min-w-0 overflow-hidden">
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">{title}</h3>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</h3>
+        {action}
+      </div>
       {children}
     </div>
+  );
+}
+
+/**
+ * Copies a whole payload to the clipboard.
+ *
+ * The raw event and the LLM payload are JSON blobs analysts paste into tickets
+ * and chat; selecting them by hand out of a scrolling `<pre>` is error-prone
+ * (and drag-selection misses the tail of a 400 KB payload).
+ */
+/**
+ * Copy without requiring a secure context.
+ *
+ * `navigator.clipboard` only exists on HTTPS or localhost; the console is also
+ * served over plain HTTP on a LAN address (e.g. http://192.168.x.x:5000), where
+ * it is undefined and the browser reports "Clipboard is not available". The
+ * hidden-textarea + `execCommand('copy')` path still works there and is only
+ * reached when the async API is missing or refuses the write.
+ */
+async function writeClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Permission denied or an insecure context: fall back below.
+    }
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  // Off-screen rather than `display:none` — a hidden element cannot be selected.
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-10000px';
+  textarea.style.left = '-10000px';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+
+  const selection = document.getSelection();
+  const previousRange =
+    selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+  let copied = false;
+  try {
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  } finally {
+    document.body.removeChild(textarea);
+    if (previousRange && selection) {
+      selection.removeAllRanges();
+      selection.addRange(previousRange);
+    }
+  }
+
+  if (!copied) throw new Error('copy failed');
+}
+
+function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    writeClipboard(text)
+      .then(() => {
+        setCopied(true);
+        toast.success('Copied to clipboard');
+        window.setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => toast.error('Could not copy to the clipboard'));
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={`Copy the ${label.toLowerCase()} JSON to the clipboard`}
+      className={clsx(
+        'shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors',
+        copied
+          ? 'border-green-500/50 bg-green-500/10 text-green-300'
+          : 'border-[#374151] text-gray-300 hover:border-gray-500 hover:text-gray-100'
+      )}
+    >
+      {copied ? 'Copied' : label}
+    </button>
   );
 }
 
@@ -1560,6 +1660,14 @@ export function AlertDetailView({
     SEVERITY_CONFIG.info;
   const stsCfg = STATUS_CONFIG[alert.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.new;
   const ruleTitle = rawField(alert, 'orig_rule_title');
+  // Serialised once per render so the copy button and the <pre> always hold
+  // byte-identical text — formatting the payload twice invited drift.
+  const rawEventText = JSON.stringify(
+    alert.rawEvent || { message: 'Raw event data not available for this alert.' },
+    null,
+    2
+  );
+  const llmPayloadText = alert.llmPayload ? JSON.stringify(alert.llmPayload, null, 2) : '';
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -1831,9 +1939,9 @@ export function AlertDetailView({
       )}
 
       {activeTab === 'raw' && (
-        <Section title="Raw Event Data">
+        <Section title="Raw Event Data" action={<CopyButton text={rawEventText} label="Copy raw JSON" />}>
           <pre className="text-xs text-gray-400 font-mono bg-dark-80/60 rounded-lg p-4 overflow-x-auto">
-            {JSON.stringify(alert.rawEvent || { message: 'Raw event data not available for this alert.' }, null, 2)}
+            {rawEventText}
           </pre>
         </Section>
       )}
@@ -1846,9 +1954,9 @@ export function AlertDetailView({
       )}
 
       {activeTab === 'llm' && alert.llmPayload && (
-        <Section title="LLM Payload">
-          <pre className="text-xs text-gray-400 font-mono bg-dark-80/60 rounded-lg p-4 overflow-x-auto">
-            {JSON.stringify(alert.llmPayload, null, 2)}
+        <Section title="LLM Payload" action={<CopyButton text={llmPayloadText} label="Copy payload" />}>
+          <pre className="text-xs text-gray-400 font-mono rounded-lg bg-dark-80/60 p-4 overflow-x-auto">
+            {llmPayloadText}
           </pre>
         </Section>
       )}

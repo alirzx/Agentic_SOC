@@ -50,6 +50,7 @@ const sidebars: SidebarsConfig = {
         "console/queue",
         "console/rule-tuning",
         "console/investigation-rail",
+        "console/case-tkg-evaluation",
         "console/runbook",
         "console/public-replay",
       ],

@@ -47,6 +47,10 @@ VALID_SCOPES: frozenset[str] = frozenset(
         "alerts:delete",
         "cases:read",
         "cases:write",
+        # Narrower writer used by the correlation engine: it may submit a
+        # pre-correlated evidence bundle to /cases/from-correlation but cannot
+        # create or mutate cases through the general case endpoints.
+        "cases:write:correlation",
         "cases:delete",
         "playbooks:read",
         "playbooks:write",

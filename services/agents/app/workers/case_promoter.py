@@ -22,7 +22,6 @@ import structlog
 
 from app.agents.dispositions import (
     AUTO_CLOSEABLE_DISPOSITIONS,
-    FALSE_POSITIVE,
     NEEDS_REVIEW,
     TRUE_POSITIVE,
     normalize_disposition,
@@ -47,6 +46,11 @@ from app.workers.campaign_case import (
 logger = structlog.get_logger()
 
 _TAG_FP = "false_positive"
+#: Ownership tag for the parallel-run lock (doc §7.1). The graph correlation
+#: engine claims ``graph_engine``; this worker claims ``legacy``. Whoever wins
+#: the atomic UPDATE owns the alert. Without the lock both engines could put
+#: the same alert in two different cases.
+_LEGACY_OWNER = os.getenv("AISOC_CORRELATION_LEGACY_OWNER", "legacy")
 _TAG_PROMOTED = "agentic-promoted"
 _TAG_REPORTABLE = "reportable"
 _LOOKBACK_HOURS = int(os.getenv("AISOC_AGENT_CASE_LINK_LOOKBACK_HOURS", "48"))
@@ -286,6 +290,18 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
     if isinstance(message, dict) and isinstance(message.get("alert"), dict):
         alert = message["alert"]
     raw = state.raw_alert or {}
+    
+    # Guard: Skip promotion for deduplicated alerts (soft-collapsed duplicates).
+    # These are losers from dedup that should not create new cases.
+    funnel_stage = alert.get("funnel_stage") or raw.get("funnel_stage")
+    if funnel_stage == "deduplicated":
+        logger.debug(
+            "case_promoter.skip_deduplicated",
+            alert_id=raw.get("id"),
+            reason="loser alert already marked as deduplicated"
+        )
+        return None
+    
     severity = str(alert.get("severity") or raw.get("severity") or "medium")
     verdict = normalize_disposition(str(state.verdict or NEEDS_REVIEW), default=NEEDS_REVIEW)
     if not should_promote(verdict=verdict, severity=severity, confidence=float(state.confidence or 0.0)):
@@ -347,6 +363,36 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                 )
                 if existing:
                     return str(existing)
+
+                # Atomic ownership claim. If the graph correlation engine got
+                # here first this returns no row and we leave the alert alone.
+                # The column only exists from migration 074 onwards, so a
+                # deployment mid-upgrade degrades to the previous behaviour.
+                try:
+                    claimed = await conn.fetchval(
+                        """
+                        UPDATE alerts
+                           SET correlation_owner = $3,
+                               correlation_claimed_at = now(),
+                               correlation_state = 'claimed',
+                               updated_at = now()
+                         WHERE id = $1 AND tenant_id = $2
+                           AND correlation_owner IS NULL
+                        RETURNING id
+                        """,
+                        alert_uuid,
+                        state.tenant_id,
+                        _LEGACY_OWNER,
+                    )
+                except Exception:  # noqa: BLE001 — pre-074 schema
+                    claimed = alert_uuid
+                if claimed is None:
+                    logger.info(
+                        "case_promoter.skipped_owned",
+                        alert_id=alert_id,
+                        owner="other_engine",
+                    )
+                    return None
 
                 # Durable Fusion incident → reuse its linked Case when present.
                 fusion_incident_id = None
@@ -555,14 +601,20 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                 if created_new:
                     await conn.execute(
                         """
+                        -- ``creation_method`` (migration 075) is how a case is
+                        -- attributed to this engine. Both engines run in
+                        -- parallel; without it the API default ('manual')
+                        -- would mislabel every funnel case.
                         INSERT INTO aisoc_cases (
                             id, tenant_id, title, description, severity, status,
                             mitre_techniques, alert_ids, tags,
-                            opened_at, created_at, updated_at, created_by
+                            opened_at, created_at, updated_at, created_by,
+                            creation_method
                         ) VALUES (
                             $1, $2, $3, $4, $5, 'new',
                             $6::jsonb, $7::uuid[], $8::jsonb,
-                            $9, $9, $9, 'agentic-funnel'
+                            $9, $9, $9, 'agentic-funnel',
+                            'agentic_funnel'
                         )
                         """,
                         case_id,
@@ -616,6 +668,7 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
                            ),
                            status = CASE WHEN status IN ('new', 'triaging') THEN 'in_progress' ELSE status END,
                            funnel_stage = $5,
+                           correlation_state = 'cased',
                            updated_at = now()
                      WHERE tenant_id = $2 AND id = ANY($3::uuid[])
                     """,
@@ -700,4 +753,21 @@ async def promote_to_case(state: InvestigationState, *, message: dict[str, Any] 
         return str(case_id)
     except Exception as exc:  # noqa: BLE001 — never wedge triage
         logger.warning("case_promoter.failed", alert_id=alert_id, error=str(exc))
+        # Release the ownership claim so CorrelationEngine can retry this alert
+        try:
+            async with pool.acquire() as _conn:
+                await _conn.execute(
+                    """
+                    UPDATE alerts
+                       SET correlation_owner = NULL,
+                           correlation_state = 'error',
+                           updated_at = now()
+                     WHERE id = $1 AND tenant_id = $2 AND correlation_owner = $3
+                    """,
+                    alert_uuid,
+                    state.tenant_id,
+                    _LEGACY_OWNER,
+                )
+        except Exception:  # noqa: BLE001
+            pass
         return None

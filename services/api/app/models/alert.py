@@ -93,6 +93,8 @@ class Alert(Base):
 
     # Relations
     case_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    # How this alert was attached to the case: 'engine' | 'suggestion' | 'manual' | 'graph_correlation_manual'
+    attached_via: Mapped[str | None] = mapped_column(String(50), nullable=True)
     parent_alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     child_alert_ids: Mapped[list] = mapped_column(JSONB, default=list)
     is_merged: Mapped[bool] = mapped_column(default=False)

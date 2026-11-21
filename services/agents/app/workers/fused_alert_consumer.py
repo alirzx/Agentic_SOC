@@ -17,8 +17,9 @@ Tier selection is cost- and determinism-aware, in this order (each degrades
 safely to the deterministic tier, which needs no LLM key — the air-gapped /
 no-key / CI default):
 
-1. cost-governor ``DEDUPLICATED`` → reuse the cached verdict (a flood of
-   identical alerts costs one triage, not N);
+1. cost-governor ``DEDUPLICATED`` → reuse the cached verdict and skip the
+   deep investigation (a flood of identical alerts costs one triage and one
+   investigation, not N of each);
 2. governor ``CIRCUIT_OPEN`` / ``AISOC_DETERMINISTIC`` / no LLM key →
    deterministic heuristic triage (``run_triage``);
 3. otherwise → LLM auto-triage (``run_auto_triage``), falling back to
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import os
 import uuid
@@ -73,6 +75,23 @@ WORKFLOW_VERSION = "auto-triage-v1"
 # Bounded retries before dead-lettering a poison alert (issue #571).
 _MAX_ATTEMPTS = int(os.getenv("AISOC_AGENT_MAX_ATTEMPTS", "3"))
 _RETRY_BACKOFF_S = float(os.getenv("AISOC_AGENT_RETRY_BACKOFF_S", "0.5"))
+
+# Periodic funnel-savings summary (deduplicated vs. newly triaged). One log per
+# interval, so the funnel's effect is measurable from the service log without a
+# metrics backend; the same split is persisted per run (``investigation_runs``
+# ``model_used = kafka:auto_triage:<tier>``) for the API/UI.
+_SUMMARY_INTERVAL_S = int(os.getenv("AISOC_AGENT_METRICS_INTERVAL_SECONDS", "3600"))
+_SUMMARY_COUNTERS = (
+    "triaged",
+    "llm",
+    "deterministic",
+    "deduplicated",
+    "outcome_suppressed",
+    "cases_promoted",
+    "fp_tagged",
+    "dead_lettered",
+    "errors",
+)
 
 _METRICS = {
     "triaged": 0,
@@ -116,6 +135,72 @@ def _memory_writeback_enabled() -> bool:
     return _truthy("AISOC_AGENT_MEMORY_WRITEBACK")
 
 
+# Alert fields that identify *which* signal this is. Everything else on the
+# raw alert is either per-row (``id``), per-firing (``source_event_ids``,
+# timestamps, scores) or enrichment added at triage time (``asset_context``,
+# ``unified_risk``) — none of it may participate in the dedup signature, or
+# two firings of the same rule on the same host would never collapse.
+_SIGNATURE_ENTITY_FIELDS = (
+    "hostname",
+    "username",
+    "src_ip",
+    "dst_ip",
+    "domain",
+    "file_hash",
+    "url",
+)
+
+
+def funnel_savings_window(delta: dict[str, int]) -> dict[str, Any]:
+    """Turn a counter delta into the funnel's per-interval savings summary.
+
+    ``newly_triaged`` = fresh triages (LLM or deterministic heuristic);
+    ``reused`` = alerts answered without a new LLM call (cost-governor cache
+    hit, outcome-memory suppression, analyst override). ``dedup_rate`` is the
+    share of everything the worker considered that it did NOT pay an LLM for.
+    """
+    window: dict[str, Any] = {key: int(delta.get(key, 0)) for key in _SUMMARY_COUNTERS}
+    window["newly_triaged"] = window["llm"] + window["deterministic"]
+    window["reused"] = window["deduplicated"] + window["outcome_suppressed"]
+    considered = window["newly_triaged"] + window["reused"]
+    window["dedup_rate"] = round(window["reused"] / considered, 4) if considered else 0.0
+    window["llm_calls_saved"] = window["reused"]
+    return window
+
+
+def _norm_text(value: Any) -> str:
+    return " ".join(str(value if value is not None else "").split()).lower()
+
+
+def evidence_signature(state: InvestigationState) -> str:
+    """Canonical, replay-stable evidence key for dedup + outcome memory.
+
+    The cost-governor cache exists so a flood of identical alerts costs one
+    triage, not N (the SOC funnel's promise). Hashing ``state.raw_alert``
+    whole defeated that: it carries the per-row ``id`` (unique by
+    construction), the vendor event ids of *this* firing, the full evidence
+    blob and the enrichment added at triage time, so every alert mapped to a
+    different fingerprint and every alert paid for its own LLM call.
+
+    Hash only what decides the triage: rule title, severity, connector,
+    primary entities and ATT&CK techniques.
+    """
+    raw = state.raw_alert or {}
+    techniques = raw.get("mitre_techniques") or []
+    if not isinstance(techniques, list):
+        techniques = [techniques]
+    title = raw.get("title") or str(state.alert_summary or "").split(" — ")[0]
+    key = {
+        "tenant_id": str(state.tenant_id),
+        "title": _norm_text(title),
+        "severity": _norm_text(raw.get("severity")),
+        "connector_type": _norm_text(raw.get("connector_type")),
+        "mitre_techniques": sorted({_norm_text(t).upper() for t in techniques if str(t).strip()}),
+        **{field: _norm_text(raw.get(field)) for field in _SIGNATURE_ENTITY_FIELDS},
+    }
+    return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
+
+
 def _coerce_uuid(value: Any, *, fallback: str) -> uuid.UUID:
     try:
         return uuid.UUID(str(value))
@@ -157,6 +242,9 @@ def build_state(
         summary = f"{summary} — {message['narrative']}"[:1000] if summary else str(message["narrative"])[:1000]
     raw_alert = {
         "id": alert_row_id,
+        # Rule/title text: the dedup signature and provenance read it directly
+        # (``alert_summary`` may have the fusion narrative appended).
+        "title": alert.get("title"),
         "severity": alert.get("severity"),
         "src_ip": alert.get("src_ip"),
         "dst_ip": alert.get("dst_ip"),
@@ -214,6 +302,7 @@ class FusedAlertTriageWorker:
         self._max_attempts = max(1, max_attempts)
         self._consumer: Any | None = None
         self._producer: Any | None = None  # lazily created for the DLQ
+        self._summary_task: asyncio.Task | None = None
         self._running = False
         # Phase B4 — environment-specific noise reduction applied post-fusion →
         # pre-triage. None = disabled (no rules file / flag off).
@@ -234,6 +323,7 @@ class FusedAlertTriageWorker:
         )
         await self._consumer.start()
         self._running = True
+        self._summary_task = asyncio.create_task(self._report_funnel_savings())
         logger.info("auto_triage_worker.started", topic=self._topic, group=self._group_id)
         try:
             async for msg in self._consumer:
@@ -323,8 +413,39 @@ class FusedAlertTriageWorker:
         except Exception as exc:  # noqa: BLE001 — never wedge the loop on a DLQ failure
             logger.error("auto_triage_worker.dlq_send_failed", alert_id=alert_id, error=str(exc))
 
+    async def _report_funnel_savings(self) -> None:
+        """Log the funnel's per-interval savings: deduplicated vs. newly triaged.
+
+        Counters are process-wide and monotonic, so each tick logs the *delta*
+        for the window (default one hour). ``dedup_rate`` is the share of this
+        interval's alerts that were answered without a new LLM triage — the
+        number the SOC funnel exists to move.
+        """
+        interval = max(60, _SUMMARY_INTERVAL_S)
+        previous = dict(_METRICS)
+        try:
+            while self._running:
+                await asyncio.sleep(interval)
+                current = dict(_METRICS)
+                delta = {key: current[key] - previous.get(key, 0) for key in current}
+                previous = current
+                logger.info(
+                    "auto_triage_worker.triage_summary",
+                    interval_s=interval,
+                    **funnel_savings_window(delta),
+                )
+        except asyncio.CancelledError:  # pragma: no cover — shutdown path
+            pass
+        except Exception as exc:  # noqa: BLE001 — reporting must never kill triage
+            logger.warning("auto_triage_worker.triage_summary_failed", error=str(exc))
+
     async def stop(self) -> None:
         self._running = False
+        if self._summary_task is not None:
+            self._summary_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._summary_task
+            self._summary_task = None
         if self._consumer is not None:
             await self._consumer.stop()
             self._consumer = None
@@ -437,7 +558,9 @@ class FusedAlertTriageWorker:
         await self._enrich_asset_context(state)
 
         governor = get_governor()
-        fingerprint = governor.evidence_fingerprint(str(state.tenant_id), state.raw_alert)
+        # Canonical evidence key — NOT the raw alert (whose per-row id would
+        # make every alert unique and defeat the funnel's dedup cache).
+        fingerprint = evidence_signature(state)
 
         # Wave 1 — forward auto-suppression: if this signature has a trusted
         # prior benign/FP outcome, auto-resolve the repeat WITHOUT re-triage
@@ -458,11 +581,13 @@ class FusedAlertTriageWorker:
         tier: str
         cost_usd = 0.0
         tokens = 0
+        reused_verdict = False
         if decision.decision is Decision.DEDUPLICATED and decision.cached_verdict:
             _METRICS["deduplicated"] += 1
             verdict = decision.cached_verdict.get("verdict")
             confidence = float(decision.cached_verdict.get("confidence", 0.0))
             tier = "cached"
+            reused_verdict = True
         else:
             cfg = None if tenant_resolution_error is not None else await self._resolve_tenant_llm(state.tenant_id)
             use_llm = decision.use_llm and not is_deterministic_mode() and cfg is not None
@@ -511,6 +636,13 @@ class FusedAlertTriageWorker:
             except Exception as exc:  # noqa: BLE001 — governance accounting is best-effort
                 logger.debug("auto_triage_worker.governor_record_failed", error=str(exc))
 
+        # A deduplicated alert reproduces the verdict the identical evidence
+        # already produced. When that verdict was auto-closeable the original
+        # run ended auto-closed, so keep the same terminal state here instead
+        # of reopening (and re-escalating) something already closed as benign.
+        if reused_verdict and normalize_disposition(str(verdict or ""), default="") in AUTO_CLOSEABLE_DISPOSITIONS:
+            state.status = AgentStatus.COMPLETED
+
         # Phase 2 — unified provisional risk (does not authorize Case/response).
         self._attach_unified_risk(state, message=message, confidence=float(confidence or 0.0))
 
@@ -555,15 +687,29 @@ class FusedAlertTriageWorker:
                 severity=sev,
                 confidence=float(confidence or 0.0),
             ):
-                await self._set_funnel_stage(state, INVESTIGATING)
-                if tenant_resolution_error is None:
-                    await self._maybe_escalate(state)
-                else:
-                    logger.warning(
-                        "auto_triage_worker.escalation_skipped",
-                        reason="canonical_tenant_unresolved",
-                        error=str(tenant_resolution_error),
+                if reused_verdict:
+                    # The funnel promise: identical evidence is investigated
+                    # once. Re-running the graph here would pay twice for the
+                    # same investigation and produce a duplicate case.
+                    logger.info(
+                        "auto_triage_worker.escalation_reused",
+                        run_id=str(state.run_id),
+                        verdict=verdict,
+                        severity=sev,
+                        confidence=confidence,
                     )
+                else:
+                    await self._set_funnel_stage(state, INVESTIGATING)
+                    if tenant_resolution_error is None:
+                        await self._maybe_escalate(state)
+                    else:
+                        logger.warning(
+                            "auto_triage_worker.escalation_skipped",
+                            reason="canonical_tenant_unresolved",
+                            error=str(tenant_resolution_error),
+                        )
+                # Case promotion is DB-only (the campaign key maps these
+                # alerts onto the case the first sighting created).
                 case_id = await self._maybe_promote_case(state, message)
             else:
                 case_id = None

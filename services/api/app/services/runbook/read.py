@@ -257,7 +257,7 @@ async def load_runbook(
     if subject_type == "alert":
         triage_rows = (
             await db.execute(
-                _TRIAGE_READ.bindparams(tid=tenant_id, sid_text=str(subject_id))
+                _TRIAGE_READ.bindparams(tid=tenant_id, sid_text=subject_id)
             )
         ).fetchall()
         for row in triage_rows:

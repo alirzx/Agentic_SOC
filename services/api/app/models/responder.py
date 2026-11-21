@@ -115,7 +115,8 @@ class AgentApproval(Base):
         ForeignKey("investigation_runs.id", ondelete="SET NULL"),
         nullable=True,
     )
-    case_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # UUID to match ``aisoc_cases.id`` / ``alerts.case_id`` (migration 074).
+    case_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     requested_by: Mapped[str] = mapped_column(String(120), default="agent")

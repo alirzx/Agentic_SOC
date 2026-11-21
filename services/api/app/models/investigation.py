@@ -47,7 +47,10 @@ class InvestigationRun(Base):
         nullable=False,
         index=True,
     )
-    case_id: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    # UUID to match ``alerts.case_id`` and ``aisoc_cases.id``. Storing it as
+    # text made joins against the case table fail silently (migration 074
+    # converts the column; this keeps the ORM in sync).
+    case_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     alert_summary: Mapped[str | None] = mapped_column(Text)
     raw_alert: Mapped[dict | None] = mapped_column(JSONB)
     model_used: Mapped[str | None] = mapped_column(String(100))

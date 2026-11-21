@@ -55,7 +55,12 @@ router = APIRouter(prefix="/saved-views", tags=["saved-views"])
 # Mirrors the CHECK constraint on the table. Keep the two in lockstep:
 # adding "dashboards" or "hunts" later requires both the migration and
 # this allowlist.
-_VALID_VIEW_TYPES = {"alerts", "cases", "investigations", "playbooks"}
+_VALID_VIEW_TYPES = {
+    "alerts",
+    "cases",
+    "investigations",
+    "playbooks",
+}
 
 # Reasonable upper bounds — saved views are per-user UI state, not a
 # data store. Past these limits something is wrong (either a bug or

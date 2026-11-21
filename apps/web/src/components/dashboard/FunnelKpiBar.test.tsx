@@ -79,6 +79,17 @@ const SAMPLE_FUNNEL = {
     analyst_queue_depth: 0.2,
   },
   generated_at: '2026-05-13T10:00:00Z',
+  triage: {
+    total: 42,
+    newly_triaged: 30,
+    new_llm: 10,
+    deterministic: 32,
+    deduplicated: 24,
+    suppressed: 6,
+    other: 12,
+    dedup_rate: 0.714,
+    llm_calls_saved: 30,
+  },
 };
 
 const SAMPLE_PIPELINE = {
@@ -100,7 +111,7 @@ describe('FunnelKpiBar', () => {
     swrLoading.clear();
   });
 
-  it('renders six tiles with formatted values and signed deltas', () => {
+  it('renders seven tiles with formatted values and signed deltas', () => {
     swrData.set(FUNNEL_KEY, SAMPLE_FUNNEL);
     render(<FunnelKpiBar period="24h" />);
 
@@ -112,6 +123,8 @@ describe('FunnelKpiBar', () => {
     expect(screen.getByText('83%')).toBeInTheDocument();
     expect(screen.getByText('8m')).toBeInTheDocument();
     expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('71.4%')).toBeInTheDocument();
+    expect(screen.getByText('30/42 from cache')).toBeInTheDocument();
 
     // Positive Δ on EOI / alerts means up; negative on alerts is shown with a minus.
     expect(screen.getByText('+12%')).toBeInTheDocument();
@@ -122,9 +135,10 @@ describe('FunnelKpiBar', () => {
     swrLoading.add(FUNNEL_KEY);
     render(<FunnelKpiBar period="24h" />);
     expect(screen.getByText(/Operations Funnel/i)).toBeInTheDocument();
-    // Six labels still render even in the skeleton state.
+    // Seven labels still render even in the skeleton state.
     expect(screen.getByText('Events of Interest')).toBeInTheDocument();
     expect(screen.getByText('MTTD')).toBeInTheDocument();
+    expect(screen.getByText('Triage Automation')).toBeInTheDocument();
   });
 
   it('renders a graceful error message when the funnel call fails', () => {
@@ -142,7 +156,7 @@ describe('EfficiencyReport', () => {
     swrLoading.clear();
   });
 
-  it('renders correlation efficiency, alert yield, and MITRE coverage', () => {
+  it('renders correlation, yield, MITRE, and triage efficiency', () => {
     swrData.set(FUNNEL_KEY, SAMPLE_FUNNEL);
     render(<EfficiencyReport period="24h" />);
 
@@ -151,6 +165,8 @@ describe('EfficiencyReport', () => {
     expect(screen.getByText('48%')).toBeInTheDocument();
     expect(screen.getByText('3.4%')).toBeInTheDocument();
     expect(screen.getByText(/42\/201/)).toBeInTheDocument();
+    expect(screen.getByText('Triage automation')).toBeInTheDocument();
+    expect(screen.getByText('30/42 • 71.4%')).toBeInTheDocument();
   });
 
   it('falls back to a helpful empty state when the call errors', () => {

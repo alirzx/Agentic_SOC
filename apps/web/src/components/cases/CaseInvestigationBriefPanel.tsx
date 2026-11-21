@@ -5,10 +5,12 @@
  */
 
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { casesApi, type CaseInvestigationBrief } from '@/lib/api';
+
+/** How many pieces of evidence the brief shows before deferring to the rail. */
+const EVIDENCE_HIGHLIGHTS = 3;
 
 const OUTCOME_STYLE: Record<string, string> = {
   incident: 'border-red-500/40 bg-red-500/10 text-red-200',
@@ -59,7 +61,8 @@ function BriefBody({ brief }: { brief: CaseInvestigationBrief }) {
         <div>
           <h2 className="text-sm font-semibold text-white">Investigation brief</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            What we did, key evidence / alert reports, and the resulting outcome.
+            What we did, the strongest evidence highlights, and the resulting outcome. Per-alert
+            detail lives in <span className="text-slate-400">Linked alerts</span>.
           </p>
         </div>
         <div className={clsx('rounded-lg border px-3 py-2 text-right', outcomeCls)}>
@@ -99,7 +102,7 @@ function BriefBody({ brief }: { brief: CaseInvestigationBrief }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <BriefColumn title="What we did">
           {brief.what_we_did.length === 0 ? (
             <p className="text-[11px] text-slate-600">No actions recorded yet.</p>
@@ -115,48 +118,36 @@ function BriefBody({ brief }: { brief: CaseInvestigationBrief }) {
           )}
         </BriefColumn>
 
-        <BriefColumn title="Evidence & reports">
+        {/*
+          Highlights only. This column used to list every alert's report (and a
+          third column listed every alert again), which made the same seven
+          alerts appear three times on one screen. The per-alert detail —
+          title, severity, verdict, confidence, rationale — now lives in the
+          `Linked alerts` rail, so this column keeps the first few pieces of
+          evidence and points at the rail for the rest.
+        */}
+        <BriefColumn title="Key evidence">
           {brief.evidence.length === 0 ? (
             <p className="text-[11px] text-slate-600">No evidence snippets yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {brief.evidence.map((e, i) => (
-                <li key={`${e.kind}-${i}`} className="text-xs">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-500">
-                    {e.kind}
-                    {e.source ? ` · ${e.source}` : ''}
-                  </p>
-                  <p className="text-slate-300 mt-0.5 line-clamp-4">{e.text}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </BriefColumn>
-
-        <BriefColumn title="Linked alert reports">
-          {brief.alerts.length === 0 ? (
-            <p className="text-[11px] text-slate-600">No linked alerts.</p>
-          ) : (
-            <ul className="space-y-2">
-              {brief.alerts.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    href={`/alerts/${a.id}`}
-                    className="block rounded-md border border-slate-800/80 bg-slate-950/40 px-2.5 py-2 hover:border-slate-600 transition-colors"
-                  >
-                    <p className="text-xs text-slate-200 line-clamp-2">{a.title}</p>
-                    <p className="mt-1 text-[10px] font-mono uppercase text-slate-500">
-                      {a.severity}
-                      {a.disposition ? ` · ${a.disposition}` : ''}
-                      {a.funnel_stage ? ` · ${a.funnel_stage.replace(/_/g, ' ')}` : ''}
+            <>
+              <ul className="space-y-2">
+                {brief.evidence.slice(0, EVIDENCE_HIGHLIGHTS).map((e, i) => (
+                  <li key={`${e.kind}-${i}`} className="text-xs">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                      {e.kind}
+                      {e.source ? ` · ${e.source}` : ''}
                     </p>
-                    {a.summary ? (
-                      <p className="mt-1 text-[11px] text-slate-400 line-clamp-3">{a.summary}</p>
-                    ) : null}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+                    <p className="text-slate-300 mt-0.5 line-clamp-3">{e.text}</p>
+                  </li>
+                ))}
+              </ul>
+              {brief.evidence.length > EVIDENCE_HIGHLIGHTS && (
+                <p className="mt-2 text-[11px] text-slate-600">
+                  +{brief.evidence.length - EVIDENCE_HIGHLIGHTS} more in Linked alerts
+                </p>
+              )}
+            </>
           )}
         </BriefColumn>
       </div>

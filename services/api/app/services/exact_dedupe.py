@@ -9,6 +9,8 @@ Legacy display fingerprint (``alert_display_key``) remains for shadow mode and
 when V2 is disabled.
 
 Cases from the agentic funnel that share title+severity are still hard-merged.
+Alerts already linked to a Case keep their membership during deduplication.
+Unlinked alerts may have legacy Case cleanup applied in display-fingerprint mode.
 """
 
 from __future__ import annotations
@@ -169,39 +171,68 @@ async def _mark_alerts_deduplicated(
     preserve_case_membership: bool = True,
     logical_key: str | None = None,
 ) -> None:
-    """Soft-collapse losers into the Deduplicated funnel column (keep the row).
+    """Soft-collapse losers while preserving linked Case membership.
 
-    V2 preserves case membership so Case/Tier-2 aggregation does not lose
-    alerts. Legacy mode may still clear ``case_id`` when
-    ``preserve_case_membership=False``.
+    V2 preserves case membership for every loser. Legacy mode distinguishes
+    cased losers (keep ``case_id``) from uncased losers (clear and remove from
+    their Case alert arrays defensively).
     """
     if not loser_ids:
         return
     for i in range(0, len(loser_ids), _DELETE_CHUNK):
         chunk = loser_ids[i : i + _DELETE_CHUNK]
         ids = [str(x) for x in chunk]
-        if not preserve_case_membership:
-            await db.execute(
+
+        if preserve_case_membership:
+            update_ids = ids
+            clear_case_ids: list[str] = []
+        else:
+            loser_case_check = await db.execute(
                 text(
                     """
-                    UPDATE aisoc_cases
-                       SET alert_ids = ARRAY(
-                             SELECT x FROM unnest(alert_ids) AS t(x)
-                              WHERE NOT (x = ANY(CAST(:ids AS uuid[])))
-                           ),
-                           updated_at = now()
+                    SELECT id, case_id FROM alerts
                      WHERE tenant_id = :tid
-                       AND alert_ids && CAST(:ids AS uuid[])
+                       AND id = ANY(CAST(:ids AS uuid[]))
                     """
                 ).bindparams(tid=tenant_id, ids=ids)
             )
-        case_clause = "" if preserve_case_membership else "case_id = NULL,"
+            clear_case_ids = [
+                str(row["id"])
+                for row in loser_case_check.mappings().all()
+                if row["case_id"] is None
+            ]
+            update_ids = ids
+
+            if clear_case_ids:
+                await db.execute(
+                    text(
+                        """
+                        UPDATE aisoc_cases
+                           SET alert_ids = ARRAY(
+                                 SELECT x FROM unnest(alert_ids) AS t(x)
+                                  WHERE NOT (x = ANY(CAST(:ids AS uuid[])))
+                               ),
+                               updated_at = now()
+                         WHERE tenant_id = :tid
+                           AND alert_ids && CAST(:ids AS uuid[])
+                        """
+                    ).bindparams(tid=tenant_id, ids=clear_case_ids)
+                )
+
+        extra = json.dumps(
+            [
+                "deduplicated",
+                f"deduplicated_into:{canonical_id}",
+                "occurrence_of_logical_alert",
+            ]
+        )
+
         await db.execute(
             text(
                 f"""
                 UPDATE alerts
                    SET funnel_stage = 'deduplicated',
-                       {case_clause}
+                       {('case_id = NULL,' if clear_case_ids else '')}
                        tags = COALESCE(tags, '[]'::jsonb) || CAST(:extra AS jsonb),
                        updated_at = now()
                  WHERE tenant_id = :tid
@@ -210,16 +241,31 @@ async def _mark_alerts_deduplicated(
                 """
             ).bindparams(
                 tid=tenant_id,
-                ids=ids,
-                extra=json.dumps(
-                    [
-                        "deduplicated",
-                        f"deduplicated_into:{canonical_id}",
-                        "occurrence_of_logical_alert",
-                    ]
-                ),
+                ids=clear_case_ids if clear_case_ids else update_ids,
+                extra=extra,
             )
         )
+
+        if clear_case_ids:
+            cased_ids = [item for item in ids if item not in clear_case_ids]
+            if cased_ids:
+                await db.execute(
+                    text(
+                        """
+                        UPDATE alerts
+                           SET funnel_stage = 'deduplicated',
+                               tags = COALESCE(tags, '[]'::jsonb) || CAST(:extra AS jsonb),
+                               updated_at = now()
+                         WHERE tenant_id = :tid
+                           AND id = ANY(CAST(:ids AS uuid[]))
+                           AND funnel_stage IS DISTINCT FROM 'deduplicated'
+                        """
+                    ).bindparams(
+                        tid=tenant_id,
+                        ids=cased_ids,
+                        extra=extra,
+                    )
+                )
         await db.execute(
             text(
                 """

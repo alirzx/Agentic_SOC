@@ -3,7 +3,7 @@
 /**
  * FunnelKpiBar
  * ============
- * Six-tile KPI strip that mirrors the reference SOC console's funnel widget.
+ * Seven-tile KPI strip that mirrors the reference SOC console's funnel widget.
  *
  * Tiles, left to right:
  *   1. Events of Interest          (24h delta)
@@ -12,6 +12,7 @@
  *   4. Signal / Noise              (24h delta — higher is better)
  *   5. MTTD                        (24h delta — lower is better)
  *   6. Analyst Queue Depth         (24h delta — lower is better)
+ *   7. Triage Automation           (no delta — dedup share of triaged alerts)
  *
  * Data source: `GET /api/v1/metrics/funnel?period=…` ({@link metricsApi.getFunnel}).
  * Polls every 60 s with stale-while-revalidate.
@@ -22,7 +23,7 @@
 import type { ReactNode } from 'react';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
-import { ArrowDown, ArrowUp, Bell, Timer, Users } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bell, RefreshCw, Timer, Users } from 'lucide-react';
 import { metricsApi, type FunnelMetrics } from '@/lib/api';
 import { Card, CardHeader, IconBadge, Pill, type AccentName } from './ui';
 
@@ -137,7 +138,10 @@ const TILE_LABELS = [
   'Signal / Noise',
   'MTTD',
   'Analyst Queue',
+  'Triage Automation',
 ] as const;
+
+const TILE_GRID = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-4';
 
 export function FunnelKpiBar({
   period = '24h',
@@ -193,7 +197,7 @@ export function FunnelKpiBar({
           action={<Pill>Last {period}</Pill>}
           className="mb-5"
         />
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className={TILE_GRID}>
           {TILE_LABELS.map((l) => (
             <LoadingTile key={l} label={l} />
           ))}
@@ -202,7 +206,9 @@ export function FunnelKpiBar({
     );
   }
 
-  const { deltas } = data;
+  const { deltas, triage } = data;
+  const triageTotal = triage?.total ?? 0;
+  const triageReused = triage ? triage.deduplicated + triage.suppressed : 0;
 
   return (
     <Card className="p-6">
@@ -213,7 +219,7 @@ export function FunnelKpiBar({
         className="mb-5"
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className={TILE_GRID}>
         <Tile
           label="Events of Interest"
           value={formatNumber(data.events_of_interest)}
@@ -259,6 +265,18 @@ export function FunnelKpiBar({
           unit="open"
           accent="violet"
           icon={<Users className="h-4 w-4" strokeWidth={1.75} />}
+        />
+        <Tile
+          label="Triage Automation"
+          value={triageTotal > 0 ? formatPercent(triage?.dedup_rate ?? 0) : '—'}
+          delta={null}
+          unit={
+            triageTotal > 0
+              ? `${formatNumber(triageReused)}/${formatNumber(triageTotal)} from cache`
+              : 'no triage runs'
+          }
+          accent="teal"
+          icon={<RefreshCw className="h-4 w-4" strokeWidth={1.75} />}
         />
       </div>
     </Card>

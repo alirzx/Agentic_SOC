@@ -18,6 +18,8 @@ from app.api.v1.endpoints import (
     auth,
     autonomy_policy,
     business_context,
+    case_graph_views,
+    case_tkg_evaluation,
     cases,
     community,
     compliance,
@@ -47,6 +49,7 @@ from app.api.v1.endpoints import (
     insights,
     investigations,
     knowledge_base,
+    kpi,
     lake,
     llm_credentials,
     llm_status,
@@ -93,6 +96,7 @@ api_router.include_router(alerts.router)
 # JSON envelope counterpart to the agent service's NDJSON stream.
 api_router.include_router(alert_explain.router)
 api_router.include_router(cases.router)
+api_router.include_router(case_graph_views.router)
 api_router.include_router(soc_funnel.router)
 # Attack-chain timeline (T3.3 — v8.0 parallel team plan).
 # Backs apps/web/src/app/(app)/cases/[id]/attack-chain/page.tsx with a
@@ -331,3 +335,16 @@ api_router.include_router(graph_ws.router)
 # upgrade and SSE request, deriving the tenant from the verified claim so the
 # fan-out edge is no longer unauthenticated.
 api_router.include_router(realtime.router)
+
+# KPI Level 1 Metrics — Case quality and correlation engine effectiveness.
+# /kpi/cases/{id}/evaluate records ground-truth evaluations (correct/incorrect)
+# /kpi/cases/{id}/false-alerts marks specific alerts as irrelevant
+# /kpi/metrics returns the latest calculated KPIs (precision, recall, purity, etc.)
+# /kpi/metrics/history returns trend data for dashboards
+api_router.include_router(kpi.router)
+
+# Soorin TKG second opinion — docs/plans/case-tkg-evaluation.
+# POST /cases/{id}/tkg-evaluation resolves each alert's identity in the TKG,
+# reads its facts and compares the graph's verdict with the correlation engine's.
+# Read-only toward the TKG and advisory toward the case.
+api_router.include_router(case_tkg_evaluation.router)

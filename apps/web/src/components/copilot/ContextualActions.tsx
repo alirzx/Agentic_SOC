@@ -70,6 +70,13 @@ export interface ContextualActionsProps {
 
 // ─── Action catalogue (with SWR cache) ──────────────────────────────────────
 
+/**
+ * Set once the API says it is not configured for agents calls. Module scope, not
+ * component state: the failure is a deployment property, and a remount (every
+ * case-modal open) must not ask again.
+ */
+let catalogueUnavailable = false;
+
 async function fetchCatalogue(): Promise<ContextualActionsCatalogue> {
   return contextualApi.listActions();
 }
@@ -85,8 +92,13 @@ export function ContextualActions({
   className,
   eyebrow,
 }: ContextualActionsProps) {
+  // A 503 here is configuration, not a transient failure: the API signs its
+  // agents calls and refuses to send unsigned ones, so retrying can only fail
+  // the same way. Stop after the first answer instead of firing a request on
+  // every mount (the modal open/close loop used to produce one per open).
+  const [unavailable, setUnavailable] = useState(catalogueUnavailable);
   const { data: catalogue } = useSWR<ContextualActionsCatalogue>(
-    'contextual-catalogue',
+    unavailable ? null : 'contextual-catalogue',
     fetchCatalogue,
     {
       // The catalogue is server-driven config. It rarely changes, so cache
@@ -94,6 +106,13 @@ export function ContextualActions({
       revalidateOnFocus: false,
       revalidateIfStale: false,
       dedupingInterval: 60_000,
+      shouldRetryOnError: false,
+      onError: (error) => {
+        if ((error as { status?: number })?.status === 503) {
+          catalogueUnavailable = true;
+          setUnavailable(true);
+        }
+      },
     },
   );
 

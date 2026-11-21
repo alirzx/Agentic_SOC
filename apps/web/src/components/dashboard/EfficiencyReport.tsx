@@ -8,6 +8,8 @@
  *   • Correlation efficiency  = alerts / correlation_instances   (clamped 0..1)
  *   • Alert yield             = alerts / events_of_interest      (clamped 0..1)
  *   • MITRE coverage          = covered / total
+ *   • Triage automation       = deduplicated / alerts the auto-triage worker
+ *                               considered (the SOC funnel's LLM savings)
  *
  * Backed by `GET /api/v1/metrics/funnel`. Designed to sit next to
  * {@link FunnelKpiBar} on the operations dashboard. The report intentionally
@@ -42,6 +44,15 @@ function fmtPct(ratio: number): string {
   if (!Number.isFinite(ratio)) return '—';
   const pct = clamp01(ratio) * 100;
   return `${pct.toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+function fmtCount(n: number): string {
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) >= 1_000_000)
+    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (Math.abs(n) >= 1_000)
+    return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(Math.round(n));
 }
 
 function fmtCoverage(covered: number, total: number): string {
@@ -141,6 +152,7 @@ export function EfficiencyReport({
           <LoadingBar label="Correlation efficiency" />
           <LoadingBar label="Alert yield" />
           <LoadingBar label="MITRE coverage" />
+          <LoadingBar label="Triage automation" />
         </div>
       ) : (
         <div className="space-y-5">
@@ -168,6 +180,16 @@ export function EfficiencyReport({
               data.mitre_coverage.covered,
               data.mitre_coverage.total,
             )}
+          />
+          <BarRow
+            label="Triage automation"
+            description="Repeat alerts answered from cache instead of a new LLM triage"
+            value={data.triage?.dedup_rate ?? 0}
+            display={
+              data.triage && data.triage.total > 0
+                ? `${fmtCount(data.triage.deduplicated + data.triage.suppressed)}/${fmtCount(data.triage.total)} • ${fmtPct(data.triage.dedup_rate)}`
+                : '—'
+            }
           />
         </div>
       )}

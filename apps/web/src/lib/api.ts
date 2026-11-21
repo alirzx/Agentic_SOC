@@ -1780,6 +1780,26 @@ export interface CaseTimelineEvent {
   actor?: string;
 }
 
+/**
+ * One alert attached to a case, as the workspace's left rail renders it.
+ * Backed by ``GET /api/v1/cases/{id}/alerts``, which joins the case's
+ * ``alert_ids`` back to the ``alerts`` table — the raw UUIDs alone carry no
+ * title, severity or verdict.
+ */
+export interface CaseAlertItem {
+  id: string;
+  title: string;
+  severity: string;
+  status?: string | null;
+  /** Analyst verdict (`true_positive` | `false_positive` | `escalate` | …). */
+  disposition?: string | null;
+  funnelStage?: string | null;
+  confidence?: number | null;
+  createdAt?: string | null;
+  /** One-line triage rationale (`ai_summary`, else the narrative). */
+  summary?: string | null;
+}
+
 export interface CaseTask {
   id: string;
   title: string;
@@ -1788,6 +1808,33 @@ export interface CaseTask {
   dueAt?: string;
   createdAt: string;
 }
+
+/**
+ * How a case came into existence — mirrors the `aisoc_cases.creation_method`
+ * CHECK constraint (migrations 075 + 076). Two case-creation engines run in
+ * parallel, so this is the only reliable way to tell an engine-made case from
+ * a legacy-promoter or human-made one:
+ *
+ * - `graph_correlation`        v2.0 graph correlation engine, created as-is
+ * - `graph_correlation_manual` analyst accepted the grouping but edited it
+ * - `agentic_funnel`           legacy `case_promoter` / funnel backfill
+ * - `manual`                   human via `POST /api/v1/cases`
+ * - `system`                   seed / automation path
+ */
+export type CaseCreationMethod =
+  | 'graph_correlation'
+  | 'graph_correlation_manual'
+  | 'agentic_funnel'
+  | 'manual'
+  | 'system';
+
+export const CASE_CREATION_METHODS: readonly CaseCreationMethod[] = [
+  'graph_correlation',
+  'graph_correlation_manual',
+  'agentic_funnel',
+  'manual',
+  'system',
+];
 
 export interface Case {
   id: string;
@@ -1807,10 +1854,14 @@ export interface Case {
   alertIds?: string[];
   /** Cached count from the backend so the UI doesn't have to re-aggregate. */
   alertCount?: number;
+  /** Rule name → count of occurrences in member alerts. */
+  rules?: Record<string, number>;
   tags?: string[];
   mitre?: string[];
   resolution?: string;
   createdBy?: string;
+  /** Origin of the case — see {@link CaseCreationMethod}. */
+  creationMethod?: CaseCreationMethod;
   createdAt: string;
   updatedAt: string;
   closedAt?: string;
@@ -1984,6 +2035,12 @@ export interface CaseFilters {
   severity?: string;
   assignee?: string;
   search?: string;
+  /**
+   * Filter by case-creation origin (`aisoc_cases.creation_method`). Passed
+   * straight through to `GET /api/v1/cases?creation_method=…`, which is backed
+   * by the `(tenant_id, creation_method)` index.
+   */
+  creation_method?: CaseCreationMethod | 'all';
   page?: number;
   pageSize?: number;
 }
@@ -1997,6 +2054,13 @@ export interface CaseFilters {
  * detail page crashes with a runtime TypeError when components call
  * `.map()` on `tags` directly.
  */
+function toCreationMethod(raw: unknown): CaseCreationMethod | undefined {
+  return typeof raw === 'string' &&
+    (CASE_CREATION_METHODS as readonly string[]).includes(raw)
+    ? (raw as CaseCreationMethod)
+    : undefined;
+}
+
 function normalizeCase(raw: unknown): Case {
   const r = (raw ?? {}) as Record<string, unknown>;
   const tagsRaw = r.tags;
@@ -2023,6 +2087,18 @@ function normalizeCase(raw: unknown): Case {
     ? (r.mitre_techniques as unknown[]).map((x) => String(x))
     : Array.isArray(r.mitre)
       ? (r.mitre as unknown[]).map((x) => String(x))
+      : undefined;
+
+  // ``rules`` is a rule-name → alert-count roll-up. Counts arrive as JSON
+  // numbers, but a proxy or an older build can hand back strings, and the UI
+  // indexes this map directly, so coerce once here instead of at every read.
+  const rules =
+    r.rules && typeof r.rules === 'object' && !Array.isArray(r.rules)
+      ? (Object.fromEntries(
+          Object.entries(r.rules as Record<string, unknown>)
+            .map(([name, count]) => [name, Number(count)] as const)
+            .filter(([name, count]) => name.length > 0 && Number.isFinite(count))
+        ) as Record<string, number>)
       : undefined;
 
   const createdAt =
@@ -2057,8 +2133,10 @@ function normalizeCase(raw: unknown): Case {
       (r.alert_count as number | undefined) ??
       (r.alertCount as number | undefined) ??
       (alertIds ? alertIds.length : undefined),
+    creationMethod: toCreationMethod(r.creation_method ?? r.creationMethod),
     tags,
     mitre,
+    rules,
     resolution: (r.resolution as string | undefined) ?? undefined,
     createdBy:
       (r.created_by as string | undefined) ?? (r.createdBy as string | undefined),
@@ -2134,6 +2212,8 @@ export const casesApi = {
     for (const [key, value] of Object.entries(filters)) {
       if (value === undefined || value === null || value === '') continue;
       if (key === 'page' || key === 'pageSize' || key === 'search') continue;
+      // `all` is the console's "no filter" sentinel, never a backend value.
+      if (key === 'creation_method' && value === 'all') continue;
       if (key === 'status' && typeof value === 'string' && value !== 'all') {
         params.status =
           UI_TO_BACKEND_STATUS[value as CaseStatus] ?? value;
@@ -2201,6 +2281,26 @@ export const casesApi = {
 
   getTimeline: (id: string) =>
     request<{ events: CaseTimelineEvent[] }>(`/api/v1/cases/${id}/timeline`),
+
+  /** Alerts linked to a case with title / severity / verdict / timestamp. */
+  getAlerts: async (id: string): Promise<CaseAlertItem[]> => {
+    const raw = await request<unknown>(`/api/v1/cases/${id}/alerts`);
+    const rows = Array.isArray(raw) ? raw : [];
+    return rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        id: String(r.id ?? ''),
+        title: String(r.title ?? ''),
+        severity: String(r.severity ?? 'medium').toLowerCase(),
+        status: (r.status as string | null | undefined) ?? null,
+        disposition: (r.disposition as string | null | undefined) ?? null,
+        funnelStage: (r.funnel_stage as string | null | undefined) ?? null,
+        confidence: typeof r.confidence === 'number' ? r.confidence : null,
+        createdAt: (r.created_at as string | null | undefined) ?? null,
+        summary: (r.summary as string | null | undefined) ?? null,
+      };
+    });
+  },
 
   addTask: (id: string, task: Partial<CaseTask>) =>
     request<CaseTask>(`/api/v1/cases/${id}/tasks`, {
@@ -2670,6 +2770,24 @@ export interface FunnelMetrics {
   };
   /** ISO-8601 server timestamp. */
   generated_at: string;
+  /**
+   * Auto-triage savings for the window (measured from the Investigation
+   * Ledger, one run per alert: `model_used = kafka:auto_triage:<tier>`).
+   * `deduplicated` = cost-governor cache hit, `suppressed` = outcome-memory /
+   * analyst-override auto-resolution — both skipped the LLM.
+   */
+  triage?: {
+    total: number;
+    newly_triaged: number;
+    new_llm: number;
+    deterministic: number;
+    deduplicated: number;
+    suppressed: number;
+    other: number;
+    /** 0..1: share of considered alerts answered without a new LLM triage. */
+    dedup_rate: number;
+    llm_calls_saved: number;
+  };
 }
 
 /**
@@ -6036,7 +6154,9 @@ export type SavedViewType =
   | 'alerts'
   | 'cases'
   | 'investigations'
-  | 'playbooks';
+  | 'playbooks'
+  /** Parked views of one case's correlation graph (Views tab in the modal). */
+  | 'correlation_graph';
 
 /** A saved-view row as returned by the API. */
 export interface SavedView {
@@ -6100,6 +6220,66 @@ export const savedViewsApi = {
     request<Record<string, never>>(`/api/v1/saved-views/${id}`, {
       method: 'DELETE',
     }),
+};
+
+// ─── Case Correlation Graph Views ──────────────────────────────────────────
+
+/**
+ * Named snapshot of a case correlation graph view state: camera position,
+ * focused nodes, hidden/removed nodes, collapsed clusters, etc.
+ */
+export interface CaseGraphView {
+  id: string;
+  case_id: string;
+  name: string;
+  view_state: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CaseGraphViewCreate {
+  name: string;
+  view_state: Record<string, unknown>;
+}
+
+export interface CaseGraphViewUpdate {
+  name?: string;
+  view_state?: Record<string, unknown>;
+}
+
+export const caseGraphViewsApi = {
+  /**
+   * List saved views for a case's correlation graph.
+   * Sorted by updated_at DESC server-side.
+   */
+  list: (caseId: string) =>
+    request<CaseGraphView[]>(`/api/v1/cases/${encodeURIComponent(caseId)}/graph-views`),
+
+  /** Save a snapshot of the current graph view state. */
+  create: (caseId: string, payload: CaseGraphViewCreate) =>
+    request<CaseGraphView>(`/api/v1/cases/${encodeURIComponent(caseId)}/graph-views`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** Update a saved view (rename or change the state). */
+  update: (caseId: string, viewId: string, payload: CaseGraphViewUpdate) =>
+    request<CaseGraphView>(
+      `/api/v1/cases/${encodeURIComponent(caseId)}/graph-views/${encodeURIComponent(viewId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  /** Delete a saved view. */
+  delete: (caseId: string, viewId: string) =>
+    request<Record<string, never>>(
+      `/api/v1/cases/${encodeURIComponent(caseId)}/graph-views/${encodeURIComponent(viewId)}`,
+      {
+        method: 'DELETE',
+      }
+    ),
 };
 
 // ─── Realtime / WebSocket helpers ────────────────────────────────────────────

@@ -3,9 +3,11 @@
 from app.db.database import Base
 from app.models.agentic_evaluation import AgenticCaseEvaluation, AgenticEvaluationRun
 from app.models.agentic_shadow import AgenticShadowRun
+from app.models.aisoc_case import AiSOCCase
 from app.models.alert import Alert
 from app.models.asset import AlertAssetCorrelation, Asset, AssetVulnerability
 from app.models.case import Case, CaseTask, CaseTimeline
+from app.models.case_graph_view import CaseGraphView
 from app.models.connector import Connector
 from app.models.detection_proposal import DetectionEvalBaseline, DetectionRuleProposal
 from app.models.detection_rule import DetectionRule
@@ -46,6 +48,7 @@ from app.models.saved_hunt import SavedHunt
 from app.models.saved_view import SavedView
 from app.models.tenant import ApiKey, Tenant, User
 from app.models.threat_intel import ThreatActor, ThreatIntelFeed, ThreatIntelIOC
+from app.models.tkg_evaluation import CaseTkgEvaluation
 
 __all__ = [
     "Base",
@@ -55,6 +58,7 @@ __all__ = [
     "AgenticShadowRun",
     "AgenticEvaluationRun",
     "AgenticCaseEvaluation",
+    "AiSOCCase",
     "Alert",
     "AlertAssetCorrelation",
     "AlertIdentityLink",
@@ -106,6 +110,7 @@ __all__ = [
     "ThreatActor",
     "ThreatIntelFeed",
     "ThreatIntelIOC",
+    "CaseTkgEvaluation",
     "UserRiskProfile",
     "ExternalAsset",
     "ExternalAssetDrift",

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -64,7 +65,7 @@ _MISSION_CONTROL_PIPELINE = r"""
 | foreach *
     [ eval rule_specific_json=if(
         isnotnull('<<FIELD>>')
-        AND NOT match("<<FIELD>>", "^(_.*|date_.*|info_.*|orig_.*|annotations.*|risk_.*|all_risk_objects|tag.*|source.*|host|index|time|splunk_server|timeendpos|timestartpos|eventtype|search_name|rule_.*|notable_.*|event_id|event_hash|contributing_events_search|entity|entity_type|normalized_risk_object|severity|urgency|status|status_label|owner|disposition|detection_type|security_domain|threat_object|threat_object_type|rule_specific_json)$"),
+        AND NOT match("<<FIELD>>", "^(_.*|date_.*|extracted_source|extracted_linecount|linecount|extracted_eventtype|extracted_host|extracted_index|extracted_splunk_server|eventtype_color|extracted_sourcetype|bkt|cd|indextime|serial|si|punct|splunk_server|info_min_time|info_max_time|info_search_time|orig_action_name|orig_index|orig_rid|orig_rule_description|orig_rule_title|orig_investigation_type|orig_security_domain|orig_sid|orig_time|orig_queue_id|annotations.*|risk_.*|all_risk_objects|tag.*|source_guid|source_event_id|source|sourceType|sourcetype|host|index|time|raw|splunk_server|timeendpos|timestartpos|eventtype|search_name|rule_.*|notable_.*|event_id|event_hash|contributing_events_search|entity|entity_type|normalized_risk_object|severity|urgency|status|status_label|owner|disposition|detection_type|security_domain|threat_object|threat_object_type|rule_specific_json)$"),
         json_set_exact(rule_specific_json, "<<FIELD>>", '<<FIELD>>'),
         rule_specific_json) ]
 | eval search_name=coalesce(search_name, source)
@@ -130,6 +131,7 @@ _MISSION_CONTROL_PIPELINE = r"""
         first(source_guid) as source_guid first(source_event_id) as source_event_id
         first(detection_id) as detection_id first(orig_sid) as orig_sid first(orig_rid) as orig_rid
         first(event_id) as event_id first(host) as host
+        first(orig_index) as orig_index
         by notable_id
 | eval annotation_mitre_attack = mvdedup(_j_attack), annotation_analytic_story = mvdedup(_j_story),
        annotation_cve = mvdedup(_j_cve), annotation_cis20 = mvdedup(_j_cis20),
@@ -243,7 +245,7 @@ _MISSION_CONTROL_PIPELINE = r"""
        annotations_nist=mvdedup(annotation_nist),
        annotations_type=mvdedup(annotation_type),
        annotations_type_list=mvdedup(annotation_type_list)
-| table _time event_epoch event_time_source notable_id source_guid source_event_id detection_id
+| table _time event_epoch event_time_source notable_id orig_index source_guid source_event_id detection_id
         orig_sid orig_rid event_id rule_id search_name orig_rule_title orig_rule_description
         severity urgency status owner disposition detection_type security_domain entity entity_type
         risk_object risk_object_type risk_score annotations annotations_mitre_attack
@@ -303,12 +305,62 @@ _DEFAULT_SIMPLE_CUSTOM_SPL = (
     " | sort 0 - _time"
 )
 
+#: Fields that name the machine an **event** happened on, in the order the
+#: canonical alert should prefer them. ``host`` is deliberately absent: on a
+#: Splunk notable ``host`` is index/search-head metadata, not victim identity.
+_EVENT_HOST_FIELDS: tuple[str, ...] = ("dvc", "dest", "dest_nt_host", "Computer", "hostname")
+
+_PLACEHOLDER_VALUES: frozenset[str] = frozenset(
+    {"", "-", "_", "n/a", "na", "none", "null", "unknown", "unspecified", "attacker", "victim"}
+)
+
+
+def _scalar_text(value: Any) -> str | None:
+    """First scalar of a possibly-multivalued Splunk field, trimmed."""
+    scalar = _first_scalar(value)
+    if scalar is None:
+        return None
+    text = str(scalar).strip()
+    return text or None
+
+
+def _event_host(row: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Return ``(field, value)`` for the host the event happened on."""
+    for field in _EVENT_HOST_FIELDS:
+        text = _scalar_text(row.get(field))
+        if text is not None and text.lower() not in _PLACEHOLDER_VALUES:
+            return field, text
+    return None, None
+
+
+def _as_ip(value: Any) -> str | None:
+    """Return a canonical IP or ``None`` when the field contains a hostname."""
+    text = _scalar_text(value)
+    if text is None:
+        return None
+    candidate = text.strip("[]")
+    if candidate.lower().startswith("::ffff:"):
+        candidate = candidate[7:]
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return None
+
+
 # Fields the notable pipeline never puts into ``rule_specific_json`` — the Python
 # payload builder applies the same exclusion so both modes agree on what counts
 # as a rule-specific alert field.
 _ALERT_FIELD_EXCLUDE_RE = re.compile(
-    r"^(_.*|date_.*|info_.*|orig_.*|annotations.*|risk_.*|all_risk_objects|tag.*|source.*|host"
-    r"|index|time|splunk_server|timeendpos|timestartpos|eventtype|search_name|rule_.*|notable_.*"
+    r"^(_.*|date_.*"
+    r"|extracted_source|extracted_linecount|linecount|extracted_eventtype|extracted_host"
+    r"|extracted_index|extracted_splunk_server|eventtype_color|extracted_sourcetype"
+    r"|bkt|cd|indextime|serial|si|punct|splunk_server"
+    r"|info_min_time|info_max_time|info_search_time"
+    r"|orig_action_name|orig_index|orig_rid|orig_rule_description|orig_rule_title"
+    r"|orig_investigation_type|orig_security_domain|orig_sid|orig_time|orig_queue_id"
+    r"|annotations.*|risk_.*|all_risk_objects|tag.*"
+    r"|source_guid|source_event_id|source|sourceType|sourcetype"
+    r"|host|index|time|raw|splunk_server|timeendpos|timestartpos|eventtype|search_name|rule_.*|notable_.*"
     r"|event_id|event_hash|contributing_events_search|entity|entity_type|normalized_risk_object"
     r"|severity|urgency|status|status_label|owner|disposition|detection_type|security_domain"
     r"|threat_object|threat_object_type|rule_specific_json|llm_payload|runbook_provenance)$"
@@ -1536,6 +1588,10 @@ class SplunkConnector(BaseConnector):
         if window.get("earliest") is None and window.get("latest") is None:
             caveats.append("time_window_unavailable")
 
+        event_host_field, event_host = _event_host(row)
+        if event_host is None:
+            caveats.append("event_host_unavailable")
+
         return {
             "alert_id": _first_scalar(
                 row.get("source_guid") or row.get("source_event_id") or row.get("notable_id")
@@ -1550,7 +1606,9 @@ class SplunkConnector(BaseConnector):
             "risk_score": row.get("risk_score"),
             "risk_object": row.get("risk_object"),
             "risk_object_type": row.get("risk_object_type"),
-            "entity": _first_scalar(row.get("entity") or row.get("dvc") or row.get("dest") or row.get("host")),
+            # host is index/search-head metadata on ES notable rows. Prefer the
+            # actual event host without falling back to it for that field.
+            "entity": _scalar_text(row.get("entity")) or event_host,
             "entity_type": row.get("entity_type"),
             "detection_type": row.get("detection_type"),
             "security_domain": row.get("orig_security_domain") or row.get("security_domain"),
@@ -1574,7 +1632,15 @@ class SplunkConnector(BaseConnector):
             },
             "investigation_hint": row.get("contributing_events_search"),
             "alert_fields": alert_fields,
-            "_meta": {"provider": "splunk", "mode": "simple", "caveats": caveats},
+            "_meta": {
+                "provider": "splunk",
+                "mode": "simple",
+                "caveats": caveats,
+                "event_host": event_host,
+                "event_host_field": event_host_field,
+                "indexer_host": _scalar_text(row.get("host")) or _scalar_text(row.get("splunk_server")),
+                "host_source": "alert_field" if event_host else "unknown",
+            },
         }
 
     def _attach_flow_metadata(self, row: dict[str, Any]) -> None:
@@ -1647,17 +1713,14 @@ class SplunkConnector(BaseConnector):
                 or ""
             )
         )
-        hostname = _first_scalar(
-            row.get("dvc") or row.get("dest") or row.get("host") or row.get("asset")
-        )
-        if hostname is not None:
-            hostname = str(hostname)
-        src_ip = _first_scalar(row.get("src") or row.get("src_ip"))
-        if src_ip is not None:
-            src_ip = str(src_ip)
+        # Victim host first (dvc/dest/dest_nt_host/Computer/hostname). ``host``
+        # stays only as a compatibility fallback, never as the primary identity.
+        _, event_host = _event_host(row)
+        hostname = event_host or _scalar_text(row.get("asset")) or _scalar_text(row.get("host"))
+        # ``src`` may contain a hostname in DNS/3CX analytics; only canonical IPs belong in src_ip.
+        src_ip = _as_ip(row.get("src")) or _as_ip(row.get("src_ip"))
         created_at = row.get("_time")
-        if not row.get("notable_id"):
-            row["notable_id"] = external_id
+        # Do not mutate ``row`` here: it is the raw probe returned to the caller.
         mitre = _mitre_techniques_from_row(row)
         if mitre and not row.get("annotations_mitre_attack"):
             row["annotations_mitre_attack"] = mitre

@@ -663,11 +663,13 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                     """
                     INSERT INTO aisoc_cases (
                         id, tenant_id, title, description, severity, status,
-                        alert_ids, tags, opened_at, created_at, updated_at, created_by
+                        alert_ids, tags, opened_at, created_at, updated_at, created_by,
+                        creation_method
                     ) VALUES (
                         :id, :tid, :title, :description, :severity, 'new',
                         CAST(:alert_ids AS UUID[]), CAST(:tags AS JSONB),
-                        :now, :now, :now, 'agentic-funnel-backfill'
+                        :now, :now, :now, 'agentic-funnel-backfill',
+                        'agentic_funnel'
                     )
                     """
                 ).bindparams(

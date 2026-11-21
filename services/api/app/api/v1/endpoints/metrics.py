@@ -24,7 +24,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, func, select, text
 
 from app.api.v1.deps import AuthUser, DBSession
@@ -33,6 +33,7 @@ from app.models.alert import Alert
 from app.models.case import Case
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
+from app.models.investigation import InvestigationRun
 from app.models.remediation import RemediationGateLog
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,32 @@ class FunnelDeltas(BaseModel):
     analyst_queue_depth: float
 
 
+class TriageEfficiency(BaseModel):
+    """Auto-triage outcomes for the window — new LLM triages vs. deduplicated repeats.
+
+    Source of truth is the Investigation Ledger: the agents' auto-triage worker
+    records every alert as a run with ``model_used = kafka:auto_triage:<tier>``
+    (``llm``, ``deterministic``, ``cached``, ``memory``, ``override``), so these
+    counts are measured from durable rows rather than an in-process counter
+    that resets on restart.
+
+    ``deduplicated`` are cost-governor cache hits (identical evidence already
+    triaged); ``suppressed`` are auto-resolutions from outcome memory or an
+    analyst override. Both skipped the LLM, so ``llm_calls_saved`` is their sum
+    and ``dedup_rate`` is their share of every alert the worker considered.
+    """
+
+    total: int = 0
+    newly_triaged: int = 0
+    new_llm: int = 0
+    deterministic: int = 0
+    deduplicated: int = 0
+    suppressed: int = 0
+    other: int = 0
+    dedup_rate: float = 0.0
+    llm_calls_saved: int = 0
+
+
 class FunnelMetrics(BaseModel):
     """Tenant funnel + efficiency for the selected period.
 
@@ -158,6 +185,9 @@ class FunnelMetrics(BaseModel):
     # ``repeat_suppression_rate`` = suppressed / (alerts_generated + suppressed).
     repeat_alerts_suppressed: int = 0
     repeat_suppression_rate: float = 0.0
+    # SOC-funnel savings: how many alerts were deduplicated instead of paying
+    # for a fresh LLM triage in this window.
+    triage: TriageEfficiency = Field(default_factory=TriageEfficiency)
 
 
 # ────────────────────────── v1.5 Pipeline-health models ───────────────────────
@@ -813,6 +843,67 @@ async def _events_of_interest_from_alerts(db, tenant_id, start, end) -> int:
     return int(val or 0)
 
 
+async def _triage_efficiency(db, tenant_id, start, end) -> TriageEfficiency:
+    """Bucket this window's auto-triage ledger runs by tier.
+
+    Reads ``investigation_runs.model_used`` (``kafka:auto_triage:<tier>``) so
+    the split survives restarts and reflects what the worker actually did.
+    Returns zeros when the table is unavailable (pre-migration) instead of
+    failing the funnel strip.
+    """
+    buckets = {"llm": 0, "deterministic": 0, "cached": 0, "memory": 0, "override": 0}
+    other = 0
+    try:
+        rows = (
+            await db.execute(
+                select(InvestigationRun.model_used, func.count())
+                .where(
+                    and_(
+                        InvestigationRun.tenant_id == tenant_id,
+                        InvestigationRun.started_at >= start,
+                        InvestigationRun.started_at < end,
+                        InvestigationRun.model_used.like("kafka:auto_triage:%"),
+                    )
+                )
+                .group_by(InvestigationRun.model_used)
+            )
+        ).all()
+    except Exception as exc:  # noqa: BLE001 — analytics table optional; never break the funnel
+        logger.warning(
+            "triage efficiency skipped: %s",
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return TriageEfficiency()
+
+    for model_used, count in rows:
+        tier = str(model_used or "").rsplit(":", 1)[-1]
+        if tier in buckets:
+            buckets[tier] += int(count or 0)
+        else:
+            other += int(count or 0)
+
+    deduplicated = buckets["cached"]
+    suppressed = buckets["memory"] + buckets["override"]
+    newly_triaged = buckets["llm"] + buckets["deterministic"]
+    reused = deduplicated + suppressed
+    considered = newly_triaged + reused
+    return TriageEfficiency(
+        total=considered,
+        newly_triaged=newly_triaged,
+        new_llm=buckets["llm"],
+        deterministic=buckets["deterministic"],
+        deduplicated=deduplicated,
+        suppressed=suppressed,
+        other=other,
+        dedup_rate=round(reused / considered, 4) if considered else 0.0,
+        llm_calls_saved=reused,
+    )
+
+
 async def _repeat_alerts_suppressed(db, tenant_id, start, end) -> int:
     """Measured count of repeat alerts auto-suppressed from prior outcome memory
     in [start, end). Tenant-scoped at the query layer. Returns 0 when the table
@@ -964,7 +1055,10 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     denom = alerts_generated + suppressed
     suppression_rate = round(suppressed / denom, 4) if denom else 0.0
 
+    triage = await _triage_efficiency(db, tenant_id, start, end)
+
     return {
+        "triage": triage,
         "events_of_interest": int(events_of_interest),
         "correlation_instances": int(correlation_instances),
         "alerts_generated": int(alerts_generated),
@@ -1117,6 +1211,7 @@ async def get_funnel_metrics(
             generated_at=now,
             repeat_alerts_suppressed=0,
             repeat_suppression_rate=0.0,
+            triage=TriageEfficiency(),
         )
 
     deltas = FunnelDeltas(
@@ -1143,4 +1238,5 @@ async def get_funnel_metrics(
         generated_at=now,
         repeat_alerts_suppressed=current.get("repeat_alerts_suppressed", 0),
         repeat_suppression_rate=current.get("repeat_suppression_rate", 0.0),
+        triage=current.get("triage") or TriageEfficiency(),
     )

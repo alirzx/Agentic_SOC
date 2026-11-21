@@ -19,6 +19,15 @@ function isAttackChainKey(key: unknown): boolean {
   return false;
 }
 
+function isCaseStreamKey(key: unknown): key is unknown[] {
+  return Array.isArray(key) && (key[0] === 'case-timeline' || key[0] === 'case-alerts');
+}
+
+/** The investigation-brief panel has its own fetch and its own test file. */
+function isCaseBriefKey(key: unknown): boolean {
+  return Array.isArray(key) && key[0] === 'case-brief';
+}
+
 function isAttackPathKey(key: unknown): boolean {
   return typeof key === 'string' && key.startsWith('case:') && key.endsWith(':attack-path');
 }
@@ -33,6 +42,26 @@ vi.mock('swr', () => ({
         isLoading:
           swrState.attackChainLoading ||
           (swrState.attackChainData === undefined && !swrState.attackChainError),
+        mutate: vi.fn(async () => undefined),
+      };
+    }
+    if (isCaseBriefKey(key)) {
+      // Returning a case-shaped payload here made the brief panel crash on
+      // `brief.what_we_did.length`; it renders nothing without its own data.
+      return {
+        data: undefined,
+        error: undefined,
+        isLoading: false,
+        mutate: vi.fn(async () => undefined),
+      };
+    }
+    if (isCaseStreamKey(key)) {
+      // The timeline / linked-alert streams the workspace now fetches. These
+      // tests don't exercise them; resolve empty so no real request is made.
+      return {
+        data: key[1] === 'case-timeline' ? { events: [] } : [],
+        error: undefined,
+        isLoading: false,
         mutate: vi.fn(async () => undefined),
       };
     }

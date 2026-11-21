@@ -54,6 +54,19 @@ const nextConfig = {
   turbopack: {
     root: path.resolve(__dirname, '..', '..'),
   },
+  // Allow remote browsers to reach the Next dev server for asset/HMR requests
+  // during local debugging over LAN or VM networking. Without this, assets and
+  // the HMR websocket are rejected with 403/handshake failures.
+  allowedDevOrigins: (() => {
+    const values = [
+      'localhost',
+      '127.0.0.1',
+      process.env.NEXT_PUBLIC_HOSTNAME,
+      process.env.HOST,
+      process.env.HOSTNAME
+    ].filter(Boolean);
+    return Array.from(new Set(values));
+  })(),
   // Mock data in views uses shapes that diverge from the strict typed API
   // contracts. We rely on per-package type-checks (pnpm --filter <pkg> tsc)
   // for correctness; during the production build we skip Next.js's strict

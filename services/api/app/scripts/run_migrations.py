@@ -199,7 +199,11 @@ async def main() -> None:
         logger.warning("migrations dir not found: %s", MIGRATIONS_DIR)
         return
 
-    files = sorted(p for p in MIGRATIONS_DIR.iterdir() if p.suffix == ".sql")
+    files = sorted(
+        p
+        for p in MIGRATIONS_DIR.iterdir()
+        if p.suffix == ".sql" and not p.name.endswith("_down.sql")
+    )
     logger.info("Found %d migration files", len(files))
 
     try:
