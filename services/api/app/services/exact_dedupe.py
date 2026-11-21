@@ -1,4 +1,14 @@
-"""Collapse repeated logical alerts and cases within a tenant.
+"""LEGACY RETIREMENT: exact case merge/delete is explicit opt-in only.
+
+Automatic case creation and membership belong to `services/correlation`. Alert
+soft-dedup remains compatible, while exact case merge/delete mutations require
+`AISOC_CORRELATION_CASE_WRITER_ONLY=0` plus `AISOC_AGENT_AUTO_CASE=1`.
+
+CASE KIND (not creation): merges/deletes duplicate cases; it never opened one.
+Case merge/delete stays retired. Alert soft-dedup remains, and the correlation
+engine treats dedup losers as evidence, never as case members.
+
+Collapse repeated logical alerts and cases within a tenant.
 
 Layer-2 (``AISOC_ALERT_DEDUP_V2``, default on): entity-aware
 ``alert_logical_key`` — excludes severity/disposition; different hosts/users
@@ -16,6 +26,7 @@ Unlinked alerts may have legacy Case cleanup applied in display-fingerprint mode
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 from typing import Any
@@ -24,6 +35,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _AGENTIC_CREATORS = ("agentic-funnel", "agentic-funnel-backfill")
+
+
+def legacy_case_mutations_enabled() -> bool:
+    """Legacy exact-dedupe case mutation opt-in."""
+    writer_only = os.getenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "1").strip().lower()
+    if writer_only not in {"0", "false", "no", "off"}:
+        return False
+    return os.getenv("AISOC_AGENT_AUTO_CASE", "0").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 _PRIMARY_ALERT_RE = re.compile(
     r"Primary alert:\s*[0-9a-fA-F-]{36}",
     re.IGNORECASE,
@@ -203,7 +227,7 @@ async def _mark_alerts_deduplicated(
             ]
             update_ids = ids
 
-            if clear_case_ids:
+            if clear_case_ids and legacy_case_mutations_enabled():
                 await db.execute(
                     text(
                         """
@@ -540,6 +564,17 @@ async def dedupe_exact_cases(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Merge/delete exact-duplicate cases; keep one per content group."""
+    if not dry_run and not legacy_case_mutations_enabled():
+        return {
+            "ok": False,
+            "error": "legacy_writer_disabled",
+            "cases_deleted": 0,
+            "cases_kept": 0,
+            "alerts_relinked_batches": 0,
+            "deleted_ids": [],
+            "dry_run": dry_run,
+        }
+
     has_refs = (
         await db.execute(text("SELECT to_regclass('public.case_external_refs') IS NOT NULL"))
     ).scalar()

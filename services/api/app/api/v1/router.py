@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     community,
     compliance,
     connectors,
+    correlation_rules,
     costs,
     data_lifecycle,
     deployment,
@@ -105,6 +106,7 @@ api_router.include_router(soc_funnel.router)
 # plus the side-by-side entity graph the right column renders.
 api_router.include_router(attack_chain.router)
 api_router.include_router(connectors.router)
+api_router.include_router(correlation_rules.router)
 # Hosted OAuth one-click for connectors (Workstream 2 of AI Stack plan).
 # /oauth/start mints a state nonce + 302 to the provider; /oauth/callback
 # swaps the code, encrypts tokens via the credential vault, and lands the

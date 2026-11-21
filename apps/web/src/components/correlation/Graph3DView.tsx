@@ -11,6 +11,7 @@ import {
   type ClusterSummary,
 } from '@/lib/graphCommunities';
 import { layoutGraph3D } from '@/lib/graph3dLayout';
+import { graphPalette, useGraphTheme, type GraphPalette } from '@/lib/graphTheme';
 import type { CandidateGraph, CandidateGraphNode } from '@/hooks/useCaseCandidates';
 
 /**
@@ -80,7 +81,7 @@ interface Graph3DViewProps {
   onClusters?: (clusters: ClusterSummary[]) => void;
   /** Row the analyst clicked in the entity list; drawn with a teal halo. */
   activeId?: string | null;
-  /** Name plates for nodes and links, hidden by default in 3D. */
+  /** Names for nodes and links. On by default, as they are on the 2D canvas. */
   showLabels?: boolean;
   onToggleLabels?: () => void;
   /**
@@ -148,14 +149,14 @@ function makeShapeTexture(shape: { points?: number[]; round?: boolean }): THREE.
 }
 
 /** A thin turquoise ring, drawn once and reused for the selected node. */
-function makeRingTexture(): THREE.Texture {
+function makeRingTexture(color: string): THREE.Texture {
   const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.strokeStyle = '#5eead4';
+    ctx.strokeStyle = color;
     ctx.lineWidth = 9;
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, size / 2 - 9, 0, Math.PI * 2);
@@ -189,7 +190,8 @@ function makeLabelSprite(
   title: string,
   subtitle: string,
   color: string,
-  worldHeight: number
+  worldHeight: number,
+  palette: GraphPalette
 ): THREE.Sprite {
   const canvas = document.createElement('canvas');
   const width = 480;
@@ -208,7 +210,7 @@ function makeLabelSprite(
     ctx.arcTo(0, height, 0, 0, radius);
     ctx.arcTo(0, 0, width, 0, radius);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
+    ctx.fillStyle = palette.plateFill;
     ctx.fill();
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
@@ -220,12 +222,12 @@ function makeLabelSprite(
     ctx.fill();
 
     ctx.font = '600 34px ui-sans-serif, system-ui, -apple-system, sans-serif';
-    ctx.fillStyle = '#e5e7eb';
+    ctx.fillStyle = palette.ink;
     ctx.textBaseline = 'middle';
     ctx.fillText(fitText(ctx, title, width - 64), 52, 44);
 
     ctx.font = '24px ui-sans-serif, system-ui, -apple-system, sans-serif';
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = palette.inkMuted;
     ctx.fillText(fitText(ctx, subtitle, width - 44), 22, 96);
   }
 
@@ -246,7 +248,11 @@ function makeLabelSprite(
  * the only thing that gets a plate; everything else is text with a dark halo so
  * it stays readable over nodes and links.
  */
-function makeTextSprite(text: string, worldHeight: number): THREE.Sprite {
+function makeTextSprite(
+  text: string,
+  worldHeight: number,
+  palette: GraphPalette
+): THREE.Sprite {
   const width = 384;
   const height = 96;
   const ratio = 2;
@@ -262,9 +268,9 @@ function makeTextSprite(text: string, worldHeight: number): THREE.Sprite {
     const fitted = fitText(ctx, text, width - 20);
     ctx.lineWidth = 6;
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(2, 6, 23, 0.92)';
+    ctx.strokeStyle = palette.halo;
     ctx.strokeText(fitted, width / 2, height / 2);
-    ctx.fillStyle = '#e5e7eb';
+    ctx.fillStyle = palette.ink;
     ctx.fillText(fitted, width / 2, height / 2);
   }
 
@@ -296,10 +302,13 @@ export function Graph3DView({
   onToggleCluster,
   onClusters,
   activeId = null,
-  showLabels = false,
+  showLabels = true,
   onToggleLabels,
   onClearView,
 }: Graph3DViewProps) {
+  // three.js paints outside the stylesheet: the scene, the name plates and the
+  // selection rings take their colours from the palette, not from a class.
+  const palette = graphPalette(useGraphTheme());
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   /** Left-drag pans instead of orbiting. Also available as Shift+drag. */
@@ -407,17 +416,17 @@ export function Graph3DView({
     for (const node of busiest) {
       const point = data.positions.get(node.id);
       if (!point) continue;
-      const sprite = makeTextSprite(node.text, data.height);
+      const sprite = makeTextSprite(node.text, data.height, palette);
       sprite.position.set(point.x, point.y + data.height * 0.9, point.z);
       group.add(sprite);
     }
     const strongest = [...data.links].sort((a, b) => b.weight - a.weight).slice(0, LINK_CAP);
     for (const link of strongest) {
-      const sprite = makeTextSprite(link.text, data.height * 0.7);
+      const sprite = makeTextSprite(link.text, data.height * 0.7, palette);
       sprite.position.set(link.x, link.y, link.z);
       group.add(sprite);
     }
-  }, [showLabels, labelEpoch, graph]);
+  }, [showLabels, labelEpoch, graph, palette]);
 
   // Follow the entity list selection without rebuilding the scene, so the
   // camera the row click just moved stays where it is.
@@ -453,7 +462,7 @@ export function Graph3DView({
       const ring = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: data.texture,
-          color: '#5eead4',
+          color: palette.selectionBorder,
           transparent: true,
           opacity: 0.8,
           depthTest: false,
@@ -464,7 +473,7 @@ export function Graph3DView({
       ring.scale.setScalar(data.radius);
       data.group.add(ring);
     }
-  }, [activeClusterIds, labelEpoch]);
+  }, [activeClusterIds, labelEpoch, palette]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -517,7 +526,7 @@ export function Graph3DView({
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0b1220');
+    scene.background = new THREE.Color(palette.surface);
     const camera = new THREE.PerspectiveCamera(
       55,
       (container.clientWidth || 800) / (container.clientHeight || 600),
@@ -656,8 +665,20 @@ export function Graph3DView({
       // mark; entities follow the 2D sizing table.
       // A silhouette covers less of its sprite box than a square did, so the
       // mark is sized up a notch to keep the same visual weight.
+      //
+      // The size is expressed against the scene's framing radius instead of in
+      // fixed world units. A fixed 9-unit mark is a readable dot on a 19-node
+      // campaign and a sub-pixel speck on a 900-node one; tying it to the radius
+      // keeps the apparent size the same whatever the layout spreads to, and the
+      // floor is what stops a leaf from disappearing when the camera is far out.
+      // Observations barely lead the largest entity now: in 2D the hexagon is
+      // clearly wider than a house, but a flat point sprite at that ratio read as
+      // a blob that swallowed the entities it was supposed to point at.
+      const scale = Math.max(1, sphere.radius / 150);
       const size =
-        kind === 'observation' ? 11 : Math.min(9, Math.max(4.2, (meta?.height ?? 26) * 0.19));
+        kind === 'observation'
+          ? 20 * scale
+          : Math.min(24, Math.max(11, (meta?.height ?? 26) * 0.5)) * scale;
       const material = new THREE.PointsMaterial({
         map: makeShapeTexture({ points: meta?.points, round: meta?.round }),
         size,
@@ -681,6 +702,8 @@ export function Graph3DView({
       if (members.length > 0) clouds.push(buildCloud(kind, members));
     }
 
+    const kindOf = new Map(nodes.map((node) => [node.id, node.kind]));
+
     // ── links: coloured by the community the source belongs to, faint enough
     // that the node clouds stay the subject ────────────────────────────────────
     // Picking a link needs the object handle and its id order (two vertices per
@@ -699,8 +722,20 @@ export function Graph3DView({
           new THREE.Vector3(from.x, from.y, from.z),
           new THREE.Vector3(to.x, to.y, to.z),
         ]);
+        // Colour follows the 2D language: a bubble's community when the scene is
+        // big enough to draw bubbles, otherwise the kind of the entity the link
+        // ends on (`USES_IP` blue, `INVOLVES_USER` pink, …) with the score teal
+        // for an observation↔observation pair. The flat grey fallback was what
+        // every link on a campaign below the 40-node bubble cut got, so the whole
+        // scene read black-and-white.
+        const sourceKind = kindOf.get(edge.source);
+        const targetKind = kindOf.get(edge.target);
+        const entityKind = sourceKind === 'observation' ? targetKind : sourceKind;
         const color = new THREE.Color(
-          clusterColor.get(membership.get(edge.source) ?? '') ?? '#334155'
+          clusterColor.get(membership.get(edge.source) ?? '') ??
+            (edge.kind === 'CORRELATION'
+              ? palette.scoreLine
+              : colorFor(String(entityKind ?? '')) || '#64748b')
         );
         colors.set([color.r, color.g, color.b, color.r, color.g, color.b], index * 6);
       });
@@ -709,7 +744,11 @@ export function Graph3DView({
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       linkLines = new THREE.LineSegments(
         geometry,
-        new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.22 })
+        new THREE.LineBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: palette.linkOpacity,
+        })
       );
       linkLines.userData.ids = links.map((edge) => edge.id);
       scene.add(linkLines);
@@ -719,7 +758,7 @@ export function Graph3DView({
     // never look the same.
     const edgeHighlight = new THREE.LineSegments(
       new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-      new THREE.LineBasicMaterial({ color: '#5eead4', transparent: true, opacity: 1 })
+      new THREE.LineBasicMaterial({ color: palette.selectionBorder, transparent: true, opacity: 1 })
     );
     edgeHighlight.visible = false;
     edgeHighlight.renderOrder = 2;
@@ -844,7 +883,8 @@ export function Graph3DView({
           ? `${bubble.members.length} nodes · collapsed`
           : bubble.subtitle,
         bubble.color,
-        labelHeight
+        labelHeight,
+        palette
       );
       label.userData.community = bubble.community;
       labelTargets.push(label);
@@ -864,8 +904,8 @@ export function Graph3DView({
     const highlightRadius = 15;
     const highlight = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: makeRingTexture(),
-        color: '#5eead4',
+        map: makeRingTexture(palette.selectionBorder),
+        color: palette.selectionBorder,
         transparent: true,
         opacity: 0.95,
         depthTest: false,
@@ -882,7 +922,7 @@ export function Graph3DView({
     scene.add(clusterRingGroup);
     clusterRingsRef.current = {
       group: clusterRingGroup,
-      texture: makeRingTexture(),
+      texture: makeRingTexture(palette.selectionBorder),
       radius: highlightRadius * 0.85,
       positions,
     };
@@ -1075,7 +1115,7 @@ export function Graph3DView({
         attribute.setXYZ(1, pair[1].x, pair[1].y, pair[1].z);
         attribute.needsUpdate = true;
         (edgeHighlight.material as THREE.LineBasicMaterial).color.set(
-          selected ? '#5eead4' : '#e2e8f0'
+          selected ? palette.selectionBorder : palette.hover
         );
         edgeHighlight.visible = true;
       } else {
@@ -1146,7 +1186,7 @@ export function Graph3DView({
     // `colorFor` is a pure kind→colour lookup; rebuilding the scene on identity
     // changes would restart the camera for no reason.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph, hiddenIds, removedIds, drawnNodeIds, drawnEdgeIds, compact]);
+  }, [graph, hiddenIds, removedIds, drawnNodeIds, drawnEdgeIds, compact, palette]);
 
   useEffect(() => {
     autoRotateRef.current = autoRotate;
@@ -1167,25 +1207,29 @@ export function Graph3DView({
   }, []);
 
   return (
-    <div className="relative min-h-0 flex-1 bg-[#0b1220]">
+    <div className="relative min-h-0 flex-1 bg-dark-80">
       <div ref={containerRef} className="h-full w-full" />
 
       {drawnNodeIds && drawnNodeIds.size === 0 && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#0b1220]/80 px-6 text-center text-sm text-gray-400">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-dark-80/80 px-6 text-center text-sm text-gray-400">
           Nothing matches the current filters — widen the kind switches or the
           neighbour budget in the toolbar.
         </div>
       )}
 
       <div className="pointer-events-none absolute left-3 top-2 text-[11px] text-gray-400">
-        <span className="rounded bg-black/40 px-1.5 py-0.5">
+        <span className="rounded bg-dark-40/70 px-1.5 py-0.5">
           {(graph.nodes ?? []).length} nodes · 3D
         </span>
-        <span className="ml-2 hidden text-gray-600 sm:inline">
-          drag to orbit · shift+drag or Pan to move · scroll to zoom · click a node or a
-          link to inspect
-        </span>
       </div>
+
+      {/* The controls own the top-right corner, so the hint line sits with the
+          counts at the bottom — the same place the 2D canvas puts them. Sharing
+          the top row made a narrow canvas run the buttons through the words. */}
+      <p className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-gray-600">
+        drag to orbit · shift+drag or Pan to move · scroll to zoom · click a node or a link
+        to inspect
+      </p>
 
       <div className="absolute right-3 top-2 flex items-center gap-1 text-[11px]">
         <button
@@ -1196,7 +1240,7 @@ export function Graph3DView({
           className={
             showLabels
               ? 'rounded border border-teal-500/40 bg-teal-500/10 px-2 py-1 text-teal-200'
-              : 'rounded border border-[#374151] px-2 py-1 text-gray-300 hover:border-gray-500'
+              : 'rounded border border-[#374151] bg-dark-70/85 px-2 py-1 text-gray-300 backdrop-blur-sm hover:border-gray-500'
           }
         >
           Labels
@@ -1209,7 +1253,7 @@ export function Graph3DView({
           className={
             panMode
               ? 'rounded border border-teal-500/40 bg-teal-500/10 px-2 py-1 text-teal-200'
-              : 'rounded border border-[#374151] px-2 py-1 text-gray-300 hover:border-gray-500'
+              : 'rounded border border-[#374151] bg-dark-70/85 px-2 py-1 text-gray-300 backdrop-blur-sm hover:border-gray-500'
           }
         >
           Pan
@@ -1221,12 +1265,16 @@ export function Graph3DView({
           className={
             autoRotate
               ? 'rounded border border-teal-500/40 bg-teal-500/10 px-2 py-1 text-teal-200'
-              : 'rounded border border-[#374151] px-2 py-1 text-gray-300 hover:border-gray-500'
+              : 'rounded border border-[#374151] bg-dark-70/85 px-2 py-1 text-gray-300 backdrop-blur-sm hover:border-gray-500'
           }
         >
           Auto-rotate
         </button>
-        <div role="group" aria-label="3D zoom" className="flex overflow-hidden rounded border border-[#374151]">
+        <div
+          role="group"
+          aria-label="3D zoom"
+          className="flex overflow-hidden rounded border border-[#374151] bg-dark-70/85 backdrop-blur-sm"
+        >
           <button
             type="button"
             onClick={() => zoomByRef.current?.(1 / 1.25)}
@@ -1259,7 +1307,7 @@ export function Graph3DView({
             type="button"
             onClick={onClearView}
             title="Undo Focus, expansion, Hide and Remove — back to the whole campaign."
-            className="rounded border border-[#374151] px-2 py-1 text-gray-300 hover:border-teal-500/60 hover:text-teal-200"
+            className="rounded border border-[#374151] bg-dark-70/85 px-2 py-1 text-gray-300 backdrop-blur-sm hover:border-teal-500/60 hover:text-teal-200"
           >
             Clear view
           </button>
@@ -1275,7 +1323,7 @@ export function Graph3DView({
 
       {hovered && (
         <div
-          className="pointer-events-none absolute z-10 max-w-[280px] rounded-md border border-[#374151] bg-black/80 px-2 py-1 text-[11px] shadow-xl"
+          className="pointer-events-none absolute z-10 max-w-[280px] rounded-md border border-[#374151] bg-dark-70/95 px-2 py-1 text-[11px] shadow-xl"
           style={{ left: hovered.x + 12, top: hovered.y + 12 }}
           role="tooltip"
         >

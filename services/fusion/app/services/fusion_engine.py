@@ -1,11 +1,15 @@
 """
 Core fusion engine: orchestrates deduplication → correlation → ML scoring.
+
+CASE KIND (not a case writer): emits ``FusedAlert`` rows and, only with the
+legacy correlator opted in, incident ids. No ``aisoc_cases`` write originates
+here — automatic cases come from ``services/correlation``.
 """
 
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 
@@ -191,15 +195,34 @@ class FusionEngine:
                     alert=alert,
                 )
 
-        # --- Step 2: Correlation ---
-        correlated, incident = await self._correlator.correlate(alert)
-
-        decision = FusionDecision.CORRELATED if correlated else FusionDecision.NEW_INCIDENT
+        # --- Step 2: Legacy incident correlation (feature-gated) ---
+        if settings.legacy_fusion_correlator_enabled:
+            correlated, incident = await self._correlator.correlate(alert)
+            decision = FusionDecision.CORRELATED if correlated else FusionDecision.NEW_INCIDENT
+            incident_id = incident.id
+        else:
+            correlated = False
+            incident = IncidentSummary(
+                id=uuid4(),
+                tenant_id=alert.tenant_id,
+                title=f"Standalone: {alert.title}",
+                severity=alert.severity,
+                alert_count=1,
+                alert_ids=[str(alert.id)],
+                src_ips=[alert.src_ip] if alert.src_ip else [],
+                hostnames=[alert.hostname] if alert.hostname else [],
+                usernames=[alert.username] if alert.username else [],
+                mitre_tactics=list(alert.mitre_tactics),
+                mitre_techniques=list(alert.mitre_techniques),
+                correlation_keys=[],
+            )
+            decision = FusionDecision.NEW_ALERT
+            incident_id = None
 
         fused = FusedAlert(
             id=alert.id,
             tenant_id=alert.tenant_id,
-            incident_id=incident.id,
+            incident_id=incident_id,
             fusion_decision=decision,
             duplicate_of=None,
             alert=alert,
@@ -304,7 +327,7 @@ class FusionEngine:
             "Alert fusion complete",
             alert_id=str(alert.id),
             decision=decision,
-            incident_id=str(incident.id),
+            incident_id=str(incident_id) if incident_id is not None else None,
             incident_alert_count=incident.alert_count,
             anomaly_score=fused.anomaly_score,
             priority_score=fused.priority_score,

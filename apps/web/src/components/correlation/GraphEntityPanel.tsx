@@ -208,7 +208,7 @@ export function GraphEntityPanel({
     <aside
       aria-label="Graph entities"
       className={clsx(
-        'flex min-h-0 w-full flex-col bg-[#0b1220]',
+        'flex min-h-0 w-full flex-col bg-dark-80',
         className
       )}
     >
@@ -393,7 +393,7 @@ export function GraphEntityPanel({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Filter by value or type…"
           aria-label="Filter entities"
-          className="w-full rounded border border-[#374151] bg-black/30 px-2 py-1 text-xs text-gray-200 placeholder:text-gray-600 focus:border-teal-500/60 focus:outline-none"
+          className="w-full rounded border border-[#374151] bg-dark-40 px-2 py-1 text-xs text-gray-200 placeholder:text-gray-600 focus:border-teal-500/60 focus:outline-none"
         />
         <div className="mt-1.5 flex flex-wrap gap-1 text-[11px]">
           <button

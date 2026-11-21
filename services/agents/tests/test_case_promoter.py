@@ -35,15 +35,20 @@ def test_needs_review_promotes_high_or_confident_medium():
     assert should_promote(verdict="needs_review", severity="low", confidence=0.9) is False
 
 
-def test_auto_case_flag_defaults_on_and_can_disable(monkeypatch):
+def test_auto_case_flag_defaults_off_and_can_be_explicit(monkeypatch):
+    monkeypatch.delenv("AISOC_CORRELATION_CASE_WRITER_ONLY", raising=False)
     monkeypatch.delenv("AISOC_AGENT_AUTO_CASE", raising=False)
-    assert auto_case_enabled() is True
-    monkeypatch.setenv("AISOC_AGENT_AUTO_CASE", "0")
     assert auto_case_enabled() is False
-    monkeypatch.setenv("AISOC_AGENT_AUTO_CASE", "false")
+
+    monkeypatch.setenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "0")
+    monkeypatch.setenv("AISOC_AGENT_AUTO_CASE", "0")
     assert auto_case_enabled() is False
     monkeypatch.setenv("AISOC_AGENT_AUTO_CASE", "1")
     assert auto_case_enabled() is True
+
+    monkeypatch.setenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "1")
+    monkeypatch.setenv("AISOC_AGENT_AUTO_CASE", "1")
+    assert auto_case_enabled() is False
 
 
 @pytest.mark.asyncio

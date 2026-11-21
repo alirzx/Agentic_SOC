@@ -110,7 +110,7 @@ export function CandidateInspectModal({
           )}
           <button
             onClick={onClose}
-            className="rounded-md border border-gray-500/30 bg-gray-500/10 px-2.5 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-500/20"
+            className="rounded-md border border-[#374151] bg-dark-40 px-2.5 py-1 text-xs font-medium text-gray-200 transition-colors hover:border-gray-500 hover:text-gray-100"
           >
             Close
           </button>

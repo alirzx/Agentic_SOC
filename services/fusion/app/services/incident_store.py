@@ -1,4 +1,12 @@
-"""Durable Postgres store for Fusion correlation incidents.
+"""LEGACY RETIREMENT: incident cache for the opt-in fusion correlator only.
+
+No aisoc_cases or correlation_owner mutation belongs here. Automatic case
+creation remains owned by `services/correlation`.
+
+CASE KIND (not a case writer): incident cache only. It stores a ``case_id``
+written by others and never creates a case, so no case kind originates here.
+
+Durable Postgres store for Fusion correlation incidents.
 
 Redis remains the hot-path correlator cache. This store:
 * upserts incident rows so restart / Redis TTL cannot erase membership;

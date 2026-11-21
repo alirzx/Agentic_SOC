@@ -51,6 +51,10 @@ class Settings(BaseSettings):
         default=0.55,
         alias="AISOC_CORRELATION_SCORE_THRESHOLD",
     )
+    legacy_fusion_correlator_enabled: bool = Field(
+        default=False,
+        alias="AISOC_LEGACY_FUSION_CORRELATOR",
+    )
 
     # Phase A1 — archive every normalized OCSF event into the ClickHouse event
     # lake (app/services/lake_writer.py). Independent of promotion: an event

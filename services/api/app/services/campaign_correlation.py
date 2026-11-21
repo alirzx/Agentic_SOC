@@ -1,4 +1,15 @@
-"""Explainable campaign-case correlation for funnel backfill (campaign-corr:v2).
+"""LEGACY RETIREMENT: campaign key and case recommendation logic only.
+
+Automatic case creation belongs to `services/correlation`; this module is kept
+for compatibility and scoring. It must not become an independent case writer.
+
+CASE KINDS (retired): the scoring/selection half of the funnel's
+"attack-campaign" case (plus its risk "supporting context" attachment). It never
+wrote a case row itself. Campaign membership now comes from
+`services/correlation` (weighted entity keys + L1/L2/L3); single-alert incidents
+and risk-supporter attachment are not produced any more.
+
+Explainable campaign-case correlation for funnel backfill (campaign-corr:v2).
 
 Rejects false campaigns that previously linked alerts merely because they were
 high-severity / same Splunk source / same loose OR(host|ip|user) window.

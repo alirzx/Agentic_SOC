@@ -126,7 +126,8 @@ services:
       KAFKA_AUTO_OFFSET_RESET: earliest
       KAFKA_CONSUMER_GROUP: aisoc-agents-triage-splunk-v1
       AISOC_AGENT_ESCALATE_TO_GRAPH: "1"
-      AISOC_AGENT_AUTO_CASE: "1"
+      AISOC_CORRELATION_CASE_WRITER_ONLY: "1"
+      AISOC_AGENT_AUTO_CASE: "0"
       AISOC_AUTO_CLOSE_THRESHOLD: "0.85"
       # Same vault key as connectors so Splunk evidence tool can resolve creds.
       AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-tchVA6r43RGw2KPHtiwB3iKVd_pxWyp10XZTFgyOWOI=}

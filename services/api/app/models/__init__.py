@@ -8,6 +8,10 @@ from app.models.alert import Alert
 from app.models.asset import AlertAssetCorrelation, Asset, AssetVulnerability
 from app.models.case import Case, CaseTask, CaseTimeline
 from app.models.case_graph_view import CaseGraphView
+from app.models.correlation_rule_identity import (
+    CorrelationRuleIdentityMap,
+    CorrelationRuleResolutionAudit,
+)
 from app.models.connector import Connector
 from app.models.detection_proposal import DetectionEvalBaseline, DetectionRuleProposal
 from app.models.detection_rule import DetectionRule
@@ -67,6 +71,8 @@ __all__ = [
     "Case",
     "CaseTask",
     "CaseTimeline",
+    "CorrelationRuleIdentityMap",
+    "CorrelationRuleResolutionAudit",
     "Connector",
     "DetectionRule",
     "DetectionRuleProposal",

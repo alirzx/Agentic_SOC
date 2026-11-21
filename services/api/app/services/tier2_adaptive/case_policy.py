@@ -1,4 +1,15 @@
-"""P4 — Case management policy for Tier-2 Adaptive Investigation.
+"""LEGACY RETIREMENT: Tier-2 direct case writes are explicit opt-in only.
+
+`services/correlation` owns automatic case creation. This module may retain
+recommendation/policy decisions, but mutation requires
+`AISOC_CORRELATION_CASE_WRITER_ONLY=0` plus `AISOC_AGENT_AUTO_CASE=1`.
+
+CASE KINDS (retired): Tier-2 adaptive `create` / `extend` decisions that opened
+or grew a case from entity + temporal correlation. `services/correlation` owns
+both now: new cases come from graph components, and extension happens in
+`POST /cases/from-correlation` by `tags->>'campaign_key'`.
+
+P4 — Case management policy for Tier-2 Adaptive Investigation.
 
 Removes the mandatory IP dependency from Case creation and extension.
 Decisions: create | extend | standalone | review.
@@ -7,6 +18,7 @@ Decisions: create | extend | standalone | review.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -28,6 +40,20 @@ from app.services.tier2_adaptive.correlation import (
 from app.services.tier2_adaptive.entities import EntityExtractionResult, extract_alert_entities
 
 CASE_POLICY_VERSION = "case-policy:v1"
+
+
+def legacy_case_writes_enabled() -> bool:
+    """Legacy direct Tier-2 case writer opt-in."""
+    writer_only = os.getenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "1").strip().lower()
+    if writer_only not in {"0", "false", "no", "off"}:
+        return False
+    return os.getenv("AISOC_AGENT_AUTO_CASE", "0").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
 
 # In-process idempotency / concurrency locks keyed by tenant+campaign.
 _CASE_LOCKS: dict[str, threading.Lock] = {}
@@ -264,6 +290,9 @@ async def apply_case_decision(
 
     Shadow/disabled callers should invoke ``decide_case_action`` only.
     """
+    if not legacy_case_writes_enabled():
+        return decision, None
+
     from sqlalchemy import text
 
     row = _alert_dict(alert)

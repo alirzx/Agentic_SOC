@@ -919,7 +919,11 @@ class FusedAlertTriageWorker:
             logger.warning("auto_triage_worker.escalation_failed", run_id=str(state.run_id), error=str(exc))
 
     async def _maybe_promote_case(self, state: InvestigationState, message: dict[str, Any]) -> str | None:
-        """Turn escalated TPs into Cases with linked alerts + SPL checklists."""
+        """LEGACY writer call; `case_promoter.auto_case_enabled()` enforces retirement gates.
+
+        CASE KIND (retired): the escalated-true-positive case (sibling alerts +
+        SPL checklist). `services/correlation` does not produce this kind.
+        """
         try:
             case_id = await case_promoter.promote_to_case(state, message=message)
             if case_id:

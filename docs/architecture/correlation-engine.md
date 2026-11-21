@@ -207,11 +207,13 @@ process** (404 until one runs) and is not persisted history.
 
 ## 7. Owned alerts and case creation
 
-Both case creators claim an alert atomically (`correlation_owner`: `legacy` or
-`graph_engine`) with `FOR UPDATE SKIP LOCKED`, so one alert can never land in
-two cases. Stale claims are retried after
-`AISOC_CORRELATION_CLAIM_TTL_MINUTES`; `correlation_state='error'` is retried on
-the next cycle.
+The engine claims an alert atomically (`correlation_owner` = its
+`AISOC_CORRELATION_OWNER`, default `graph_engine`) with `FOR UPDATE SKIP LOCKED`,
+so one alert can never land in two cases. Rows claimed by the retired promoter
+still carry `legacy`; both values are honoured when ownership is checked.
+
+Stale claims are retried after `AISOC_CORRELATION_CLAIM_TTL_MINUTES`;
+`correlation_state='error'` is retried on the next cycle.
 
 `_claim` never resurrects consumed work: `funnel_stage='deduplicated'` and the
 terminal `cased` / `deduplicated_into_case` states are skipped, so a
@@ -239,7 +241,30 @@ processed strongest-first and a winner is assigned to the first component that
 needs it, so the same two alerts cannot be written into two cases.
 
 Every case records which writer produced it (`aisoc_cases.creation_method`,
-migration 075): `graph_correlation`, `agentic_funnel`, `manual`, `system`.
+migration 075): `correlation-engine` for this engine, `manual` for cases an
+analyst opens through `POST /api/v1/cases`, and `agentic_funnel` on the cases
+left behind by the retired backfill.
+
+### Case kinds this engine produces
+
+Automatic case creation has a single owner, so the retired producers stay
+switched off rather than running in parallel: an alert claimed by two engines is
+an alert in two cases. What this engine reproduces, and what it deliberately
+does not, is fixed:
+
+| Case kind | Legacy producer | Produced now? |
+| --- | --- | --- |
+| Multi-alert campaign from shared entities (host / user / IP / domain / hash / process GUID) | agentic funnel | **Yes** — this engine, `creation_method='correlation-engine'` |
+| Single-alert "incident" case | agentic funnel (`case_kind='incident'`) | **No** — `AISOC_CORRELATION_MIN_CASE_ALERTS=2` |
+| Investigation checklist / Splunk SPL pivot tasks (`aisoc_case_tasks`) | agentic funnel, agent case promoter | **No** — one system timeline comment only |
+| Escalated-true-positive case from triage | agent case promoter | **No** |
+| Tier-2 "IP pivot" campaign + runbook `case_created` | `tier2_ip_pivot` | **Partially** — an IP is a weighted key, but there is no pivot-specific runbook step |
+| Tier-2 adaptive `create` / `extend` | `tier2_adaptive.case_policy` | **Partially** — creation here, extension through `tags->>'campaign_key'` |
+| Campaign repair, duplicate case merge, fusion incidents | `campaign_reconcile`, `exact_dedupe`, fusion correlator | n/a — none of them created a case through this engine |
+
+The 0.55 / 0.70 legacy thresholds versus θ and the key weights, plus the
+per-producer retirement notes, live in
+[`services/correlation/README.md`](../../services/correlation/README.md#case-kinds-produced-vs-deliberately-retired).
 
 ### Coverage repair
 

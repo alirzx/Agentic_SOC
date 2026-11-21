@@ -33,6 +33,7 @@ import fcose from 'cytoscape-fcose';
 
 import type { CandidateObservation, CandidateTimelineEvent } from '@/hooks/useCaseCandidates';
 import { edgeLengthFor, repulsionFor } from '@/lib/forceParams';
+import { graphPalette, useGraphTheme, type GraphTheme } from '@/lib/graphTheme';
 import { expandRadii, MAX_EXPAND_LAYERS, selectBudgetedEdges } from '@/lib/graphBudget';
 import type { ClusterSummary } from '@/lib/graphCommunities';
 import { applyMagnetism, type MagneticEdge } from '@/lib/magneticLayout';
@@ -238,12 +239,15 @@ export const KIND_BY_NAME: Record<string, KindMeta> = Object.fromEntries(
 );
 
 /**
- * A colour mixed toward white, for the hover tint of a link.
+ * A link's colour pushed away from the canvas, for the hover tint.
+ *
+ * On the dark canvas that means lighter (toward white); on the light one it
+ * means darker, because a lighter line on white is a line that disappeared.
  *
  * cytoscape hands back computed colours as `rgb(r, g, b)`; hex is accepted too
  * so the helper is usable on a literal when one is handy.
  */
-function tintTowardWhite(value: string, amount = 0.45): string {
+function hoverTint(value: string, theme: GraphTheme): string {
   const rgb = value.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
   const channels = rgb
     ? [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
@@ -252,7 +256,9 @@ function tintTowardWhite(value: string, amount = 0.45): string {
         if (hex.length !== 6) return [148, 163, 184];
         return [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16));
       })();
-  const mix = channels.map((channel) => Math.round(channel + (255 - channel) * amount));
+  const target = theme === 'light' ? 0 : 255;
+  const amount = theme === 'light' ? 0.35 : 0.45;
+  const mix = channels.map((channel) => Math.round(channel + (target - channel) * amount));
   return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`;
 }
 
@@ -634,6 +640,10 @@ export function CandidateGraphView({
   timeline,
   observations,
 }: CandidateGraphViewProps) {
+  // The canvas cannot read the theme's CSS tokens, so the palette is handed to
+  // cytoscape explicitly; a theme switch rebuilds the styles in place.
+  const theme = useGraphTheme();
+  const palette = graphPalette(theme);
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   // Node positions survive a rebuild. Hiding one entity from the list or the
@@ -736,7 +746,9 @@ export function CandidateGraphView({
   // Labels are zoom-driven on the canvas (always on unless the analyst hides
   // them) and off by default in 3D, where each name costs a texture.
   const [labels2d, setLabels2d] = useState(true);
-  const [labels3d, setLabels3d] = useState(false);
+  // The 3D scene opens with its names on, like the 2D canvas: a picture of
+  // anonymous marks is not a correlation graph an analyst can read.
+  const [labels3d, setLabels3d] = useState(true);
   const magneticPassRef = useRef<(() => void) | null>(null);
   const [autoTidy, setAutoTidy] = useState(true);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -1321,6 +1333,9 @@ export function CandidateGraphView({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    // The canvas itself is transparent; the theme's surface shows through it, and
+    // it has to be the exact colour the label halos are painted in.
+    containerRef.current.style.backgroundColor = palette.surface;
     if (elements.length === 0) {
       reportRenderError(null);
       return;
@@ -1354,11 +1369,11 @@ export function CandidateGraphView({
               'background-opacity': 0.9,
               label: 'data(label)',
               'font-size': 10,
-              color: '#e5e7eb',
+              color: palette.ink,
               'text-valign': 'bottom',
               'text-margin-y': 6,
               'text-outline-width': 2,
-              'text-outline-color': '#0b1220',
+              'text-outline-color': palette.surface,
               'text-wrap': 'wrap',
               'text-max-width': '112px',
               // Below this zoom the labels collapse into mush; hiding them keeps
@@ -1367,7 +1382,7 @@ export function CandidateGraphView({
               width: 30,
               height: 30,
               'border-width': 2,
-              'border-color': '#0b1220',
+              'border-color': palette.surface,
             } as never,
           },
           // One silhouette per kind, taken from KIND_META so the legend chip and
@@ -1389,7 +1404,7 @@ export function CandidateGraphView({
             style: {
               'border-style': 'dashed',
               'border-width': 2,
-              'border-color': '#94a3b8',
+              'border-color': palette.inkMuted,
             } as never,
           },
           {
@@ -1400,8 +1415,8 @@ export function CandidateGraphView({
               'transition-timing-function': 'ease-in-out',
               width: 1,
               // Anything a projection adds without a rule of its own still has to
-              // be readable on #0b1220; #334155 was not.
-              'line-color': '#475569',
+              // be readable on the canvas; #334155 was not.
+              'line-color': palette.edge,
               'curve-style': 'bezier',
               'target-arrow-shape': 'none',
               opacity: 0.7,
@@ -1410,14 +1425,14 @@ export function CandidateGraphView({
           {
             selector: 'edge[kind = "CORRELATION"]',
             style: {
-              'line-color': '#2dd4bf',
+              'line-color': palette.scoreLine,
               width: 'mapData(score, 1, 12, 1.5, 6)',
               opacity: 0.85,
               label: 'data(label)',
               'font-size': 8,
-              color: '#5eead4',
+              color: palette.scoreInk,
               'text-outline-width': 2,
-              'text-outline-color': '#0b1220',
+              'text-outline-color': palette.surface,
             } as never,
           },
           // Key edges: width is the weight that key added to L1 (3/2/1), so a
@@ -1441,7 +1456,7 @@ export function CandidateGraphView({
           {
             selector: 'edge[kind = "CONTRIBUTES_KEY"]',
             style: {
-              'line-color': '#94a3b8',
+              'line-color': palette.inkMuted,
               width: 'mapData(weight, 1, 3, 1, 3)',
               opacity: 0.6,
             } as never,
@@ -1493,9 +1508,9 @@ export function CandidateGraphView({
               opacity: 0.9,
               label: 'data(label)',
               'font-size': 8,
-              color: '#e2e8f0',
+              color: palette.actionInk,
               'text-outline-width': 2,
-              'text-outline-color': '#0b1220',
+              'text-outline-color': palette.surface,
             } as never,
           },
           {
@@ -1524,8 +1539,8 @@ export function CandidateGraphView({
           {
             selector: 'edge.selected',
             style: {
-              'line-color': '#f8fafc',
-              'target-arrow-color': '#f8fafc',
+              'line-color': palette.edgeStrong,
+              'target-arrow-color': palette.edgeStrong,
               width: 3.5,
               opacity: 1,
               'z-index': 99,
@@ -1537,7 +1552,7 @@ export function CandidateGraphView({
           },
           {
             selector: 'node.focused',
-            style: { 'border-width': 4, 'border-color': '#f8fafc' } as never,
+            style: { 'border-width': 4, 'border-color': palette.edgeStrong } as never,
           },
           {
             // Selection made in the entity list, visible on the canvas: an
@@ -1545,11 +1560,11 @@ export function CandidateGraphView({
             // colour, so the analyst can still tell a host from a user.
             selector: 'node.entity-selected',
             style: {
-              'underlay-color': '#2dd4bf',
+              'underlay-color': palette.selection,
               'underlay-opacity': 0.32,
               'underlay-padding': 7,
               'border-width': 3,
-              'border-color': '#5eead4',
+              'border-color': palette.selectionBorder,
             } as never,
           },
           {
@@ -1563,11 +1578,11 @@ export function CandidateGraphView({
             // views.
             selector: 'node.entity-active',
             style: {
-              'underlay-color': '#2dd4bf',
+              'underlay-color': palette.selection,
               'underlay-opacity': 0.45,
               'underlay-padding': 10,
               'border-width': 4,
-              'border-color': '#5eead4',
+              'border-color': palette.selectionBorder,
             } as never,
           },
           {
@@ -1576,11 +1591,11 @@ export function CandidateGraphView({
             // cluster is a set and hundreds of full-strength halos glare.
             selector: 'node.cluster-active',
             style: {
-              'underlay-color': '#2dd4bf',
+              'underlay-color': palette.selection,
               'underlay-opacity': 0.28,
               'underlay-padding': 7,
               'border-width': 3,
-              'border-color': '#5eead4',
+              'border-color': palette.selectionBorder,
             } as never,
           },
           // The reveal animation hides elements with a class rather than taking
@@ -1890,7 +1905,7 @@ export function CandidateGraphView({
 
     cy.on('mouseover', 'edge', (event) => {
       const element = event.target;
-      element.data('hoverColor', tintTowardWhite(element.style('line-color')));
+      element.data('hoverColor', hoverTint(element.style('line-color'), theme));
       element.addClass('hovered');
     });
     cy.on('mouseout', 'edge', (event) => {
@@ -1920,6 +1935,8 @@ export function CandidateGraphView({
     graph,
     magnetic,
     liveLayout,
+    palette,
+    theme,
   ]);
 
   // Mark the edge the parent is inspecting. The panel below the canvas and the
@@ -2589,7 +2606,7 @@ export function CandidateGraphView({
     const box = cy.elements().boundingBox();
     const widest = Math.max(box.w, box.h, 1);
     const scale = Math.min(2, Math.max(0.5, 8000 / widest));
-    const dataUrl = cy.png({ full: true, scale, bg: '#0b1220' });
+    const dataUrl = cy.png({ full: true, scale, bg: palette.surface });
     downloadDataUrl(dataUrl, `correlation-2d-${stamp}.png`);
   };
 
@@ -2889,7 +2906,7 @@ export function CandidateGraphView({
                 <div
                   role="dialog"
                   aria-label="Graph settings"
-                  className="absolute right-0 top-full z-30 mt-1 flex w-[300px] max-w-[calc(100vw-2rem)] flex-col items-stretch gap-1.5 rounded-md border border-[#374151] bg-[#0b1220]/95 p-2.5 shadow-2xl backdrop-blur-sm"
+                  className="absolute right-0 top-full z-30 mt-1 flex w-[300px] max-w-[calc(100vw-2rem)] flex-col items-stretch gap-1.5 rounded-md border border-[#374151] bg-dark-70/95 p-2.5 shadow-2xl backdrop-blur-sm"
                 >
                   <span className="w-full text-[10px] uppercase tracking-wide text-gray-500">
                     Graph settings
@@ -3284,7 +3301,7 @@ export function CandidateGraphView({
         />
         ) : (
         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div ref={containerRef} className="h-full w-full bg-[#0b1220]" />
+        <div ref={containerRef} className="h-full w-full bg-dark-80" />
 
         {/* The same corner the 3D overlay uses: view controls belong inside the
             graph, not in a row above the entity list. */}
@@ -3298,7 +3315,7 @@ export function CandidateGraphView({
               'rounded border px-2 py-1 backdrop-blur-sm transition-colors',
               labels2d
                 ? 'border-teal-500/40 bg-teal-500/10 text-teal-200'
-                : 'border-[#374151] bg-[#0b1220]/85 text-gray-300 hover:border-gray-500'
+                : 'border-[#374151] bg-dark-70/85 text-gray-300 hover:border-gray-500'
             )}
           >
             Labels
@@ -3306,7 +3323,7 @@ export function CandidateGraphView({
           <div
             role="group"
             aria-label="Graph zoom"
-            className="flex overflow-hidden rounded border border-[#374151] bg-[#0b1220]/85 backdrop-blur-sm"
+            className="flex overflow-hidden rounded border border-[#374151] bg-dark-70/85 backdrop-blur-sm"
           >
             <button
               type="button"
@@ -3331,7 +3348,7 @@ export function CandidateGraphView({
             type="button"
             onClick={fit}
             title="Frame every drawn node (and bubble) in the view."
-            className="rounded border border-[#374151] bg-[#0b1220]/85 px-2 py-1 text-gray-300 backdrop-blur-sm transition-colors hover:border-gray-500"
+            className="rounded border border-[#374151] bg-dark-70/85 px-2 py-1 text-gray-300 backdrop-blur-sm transition-colors hover:border-gray-500"
           >
             Fit
           </button>
@@ -3339,7 +3356,7 @@ export function CandidateGraphView({
             type="button"
             onClick={() => resetLayout()}
             title="Discard manual dragging and recompute the engine's layout."
-            className="rounded border border-[#374151] bg-[#0b1220]/85 px-2 py-1 text-gray-300 backdrop-blur-sm transition-colors hover:border-gray-500"
+            className="rounded border border-[#374151] bg-dark-70/85 px-2 py-1 text-gray-300 backdrop-blur-sm transition-colors hover:border-gray-500"
           >
             Reset
           </button>
@@ -3356,7 +3373,7 @@ export function CandidateGraphView({
                 'rounded border px-2 py-1 backdrop-blur-sm transition-colors',
                 revealPlayback === 'playing'
                   ? 'border-teal-500/40 bg-teal-500/10 text-teal-200'
-                  : 'border-[#374151] bg-[#0b1220]/85 text-gray-300 hover:border-teal-500/60 hover:text-teal-200'
+                  : 'border-[#374151] bg-dark-70/85 text-gray-300 hover:border-teal-500/60 hover:text-teal-200'
               )}
             >
               {revealPlayback === 'playing' ? '⏸ Pause' : revealPlayback === 'done' ? '↻ Replay' : '▶ Play'}
@@ -3366,7 +3383,7 @@ export function CandidateGraphView({
             type="button"
             onClick={clearView}
             title="Undo Focus, expansion, Hide and Remove in one click — back to the whole campaign, framed."
-            className="rounded border border-[#374151] bg-[#0b1220]/85 px-2 py-1 text-gray-300 backdrop-blur-sm transition-colors hover:border-teal-500/60 hover:text-teal-200"
+            className="rounded border border-[#374151] bg-dark-70/85 px-2 py-1 text-gray-300 backdrop-blur-sm transition-colors hover:border-teal-500/60 hover:text-teal-200"
           >
             Clear view
           </button>
@@ -3379,7 +3396,7 @@ export function CandidateGraphView({
               'rounded border px-2 py-1 backdrop-blur-sm transition-colors',
               show3d
                 ? 'border-teal-500/40 bg-teal-500/10 text-teal-200'
-                : 'border-[#374151] bg-[#0b1220]/85 text-gray-300 hover:border-gray-500'
+                : 'border-[#374151] bg-dark-70/85 text-gray-300 hover:border-gray-500'
             )}
           >
             3D
@@ -3387,7 +3404,7 @@ export function CandidateGraphView({
         </div>
 
         {renderError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0b1220]/90 px-6 text-center text-sm text-red-300">
+          <div className="absolute inset-0 flex items-center justify-center bg-dark-80/90 px-6 text-center text-sm text-red-300">
             {renderError}
           </div>
         )}

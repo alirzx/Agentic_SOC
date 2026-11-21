@@ -1,4 +1,15 @@
-"""Tier-2 Investigate preflight: src/dest IP check → 24h siblings → Case.
+"""LEGACY RETIREMENT: Tier-2 IP pivot direct case writes are explicit opt-in.
+
+Automatic case creation belongs to `services/correlation`. This workflow may
+return candidate/recommendation context but does not mutate aisoc_cases unless
+legacy opt-in is explicitly enabled.
+
+CASE KINDS (retired): "Tier-2 IP pivot" campaigns assembled from src/dest IP
+siblings within 24h, plus a runbook `case_created` emission. An IP is a weighted
+key in `services/correlation`, so IP-sharing bundles still cluster there, but no
+pivot-specific runbook step is produced.
+
+Tier-2 Investigate preflight: src/dest IP check → 24h siblings → Case.
 
 Analyst workflow this encodes:
 
@@ -12,6 +23,7 @@ Analyst workflow this encodes:
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -30,6 +42,19 @@ from app.services.campaign_case import (
 )
 
 logger = structlog.get_logger()
+
+
+def legacy_case_writes_enabled() -> bool:
+    """Legacy IP-pivot direct case writer opt-in."""
+    writer_only = os.getenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "1").strip().lower()
+    if writer_only not in {"0", "false", "no", "off"}:
+        return False
+    return os.getenv("AISOC_AGENT_AUTO_CASE", "0").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 
 _SIBLING_CAP = 64
 _DEFAULT_HOURS = 24
@@ -342,8 +367,10 @@ async def aggregate_into_case(
     seed: Any,
     alert_ids: list[uuid.UUID],
     ips: ExtractedIps,
-) -> tuple[uuid.UUID, bool, bool]:
-    """Create or extend an open Tier-2 / campaign case. Returns (case_id, created, extended)."""
+) -> tuple[uuid.UUID | None, bool, bool]:
+    """Legacy create/extend path. Returns no case when writer-only mode is active."""
+    if not legacy_case_writes_enabled():
+        return None, False, False
     seed_id = seed.id if hasattr(seed, "id") else uuid.UUID(str(seed["id"]))
     existing_case = getattr(seed, "case_id", None) if hasattr(seed, "case_id") else None
     title = str(getattr(seed, "title", None) or (seed.get("title") if isinstance(seed, dict) else "") or "IP campaign")
@@ -1013,10 +1040,16 @@ async def run_tier2_investigate_preflight(
             alert_ids=related_ids,
             ips=ips,
         )
-        notes.append(
-            f"Tier-2 pivot: {len(related_ids)} alert(s) on "
-            f"dest={ips.dest_ips or '-'} src={ips.src_ips or '-'} → case {case_id}"
-        )
+        if case_id is not None:
+            notes.append(
+                f"Tier-2 pivot: {len(related_ids)} alert(s) on "
+                f"dest={ips.dest_ips or '-'} src={ips.src_ips or '-'} → case {case_id}"
+            )
+        else:
+            notes.append(
+                f"Tier-2 pivot: {len(related_ids)} alert(s) remain candidate evidence; "
+                "automatic case creation is handled by the correlation engine"
+            )
     else:
         notes.append(
             f"Tier-2 IP check complete — no related alerts in {hours}h "
@@ -1083,8 +1116,8 @@ async def run_tier2_investigate_preflight(
 def tier2_step_catalog() -> list[dict[str, str]]:
     """Static catalog for the Runbook UI before any run has executed."""
     try:
-        from app.services.tier2_adaptive.feature_flags import tier2_adaptive_enabled
         from app.services.tier2_adaptive.engine import adaptive_step_catalog
+        from app.services.tier2_adaptive.feature_flags import tier2_adaptive_enabled
 
         if tier2_adaptive_enabled():
             return adaptive_step_catalog()

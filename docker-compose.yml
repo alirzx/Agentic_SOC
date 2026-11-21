@@ -371,6 +371,49 @@ services:
       - aisoc
     restart: unless-stopped
 
+  # Graph correlation engine (v2.0). Runs in parallel with the legacy
+  # agentic-funnel promoter; the `correlation_owner` atomic lock on `alerts`
+  # prevents the two engines from putting one alert in two cases.
+  correlation:
+    build:
+      context: ./services/correlation
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-correlation:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-correlation
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+      # The API runs the SQL migrations on boot (090/091 create the rule
+      # registry + audit tables). Waiting for /readyz means the engine never
+      # starts a cycle against a schema that lacks them.
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8010:8010"
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      API_SERVICE_URL: http://api:8000
+      AISOC_GRAPH_ENABLED: "true"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_dev_secret
+      AISOC_CORRELATION_OWNER: graph_engine
+      AISOC_CORRELATION_THETA: "3"
+      AISOC_CORRELATION_POLL_SECONDS: "60"
+      AISOC_CORRELATION_LOOKBACK_HOURS: "72"
+      # API key with the cases:write:correlation scope. Empty resolves to the
+      # demo tenant through the API's dev-mode auth, which only exists outside
+      # ENVIRONMENT=production: a production deployment MUST set this value or
+      # every case write is rejected with 401.
+      AISOC_CORRELATION_API_TOKEN: ${AISOC_CORRELATION_API_TOKEN:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
   agents:
     build:
       context: ./services/agents

@@ -160,7 +160,9 @@ class _ExactDedupeDb:
 
 
 @pytest.mark.asyncio
-async def test_legacy_dedup_preserves_cased_losers_and_clears_uncased_losers():
+async def test_legacy_dedup_preserves_cased_losers_and_clears_uncased_losers(monkeypatch):
+    monkeypatch.setenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "0")
+    monkeypatch.setenv("AISOC_AGENT_AUTO_CASE", "1")
     uncased_id = uuid4()
     cased_id = uuid4()
     cased_case_id = uuid4()

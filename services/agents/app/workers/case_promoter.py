@@ -1,4 +1,16 @@
-"""Promote escalated alerts into ``aisoc_cases`` with linked siblings + tasks.
+"""LEGACY RETIREMENT: automatic promotion remains for explicit rollback only.
+
+`services/correlation` owns automatic case creation through
+`POST /api/v1/cases/from-correlation`. This module is feature-gated by
+`AISOC_CORRELATION_CASE_WRITER_ONLY=1` and is not an independent writer.
+
+CASE KINDS (retired): escalated true-positive cases built from a triage verdict,
+with linked sibling alerts and a per-alert investigation checklist
+(``aisoc_case_tasks``, including Splunk SPL pivots). `services/correlation`
+produces the campaign shape from ``llm_payload`` only; triage-driven cases and
+that checklist are not produced any more.
+
+Promote escalated alerts into ``aisoc_cases`` with linked siblings + tasks.
 
 Closes the agentic funnel gap after auto-triage: true_positive / high-severity
 needs_review alerts become Cases. Cases are **attack campaigns** (shared
@@ -63,8 +75,11 @@ _SEVERITY_FLOOR = {
 
 
 def auto_case_enabled() -> bool:
-    """On by default; disable with ``AISOC_AGENT_AUTO_CASE=0``."""
-    return os.getenv("AISOC_AGENT_AUTO_CASE", "1").strip().lower() not in {
+    """Legacy writer opt-in only; correlation engine writer-only mode wins."""
+    writer_only = os.getenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "1").strip().lower()
+    if writer_only not in {"0", "false", "no", "off"}:
+        return False
+    return os.getenv("AISOC_AGENT_AUTO_CASE", "0").strip().lower() not in {
         "0",
         "false",
         "no",

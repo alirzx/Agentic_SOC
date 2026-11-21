@@ -1,4 +1,15 @@
-"""Reconcile false megacases created by legacy loose campaign linking.
+"""LEGACY RETIREMENT: manual-only repair for megacases built by old campaign linking.
+
+This module never runs automatically. `services/correlation` is the only
+automatic source of case membership; the only caller here is the analyst-facing
+``POST /api/v1/cases/{case_id}/reconcile-correlation`` endpoint, which defaults
+to ``dry_run=true``. It is kept as a repair tool for cases that the retired
+loose ``OR(host|ip|user)`` linking already created.
+
+CASE KIND (repair only): no case-creation shape. It unlinks alerts that fail the
+retired v2 campaign gate from an existing case; no other kind is produced here.
+
+Reconcile false megacases created by legacy loose campaign linking.
 
 Re-scores every alert membership with ``campaign_correlation.score_campaign_link``
 against the seed (oldest / primary) alert. Alerts that fail the v2 gate are

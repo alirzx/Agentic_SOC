@@ -195,6 +195,42 @@ Source: [`services/agents/app/`](https://github.com/SoorinSecurity/Agentic_SOC/t
 
 ---
 
+## Correlation service (`services/correlation`)
+
+Source: [`services/correlation/app/core/config.py`](https://github.com/SoorinSecurity/Agentic_SOC/tree/main/services/correlation/app/core)
+
+The graph correlation engine is the **only** automatic case creator. It reads
+`alerts.llm_payload`, resolves identity fields through the rule identity
+registry, and writes cases through `POST /api/v1/cases/from-correlation`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc_secret@localhost:5432/aisoc` | Postgres DSN; the `+asyncpg` driver suffix is stripped for the asyncpg pool |
+| `API_SERVICE_URL` | `http://localhost:8888` | Base URL of the FastAPI service that owns case writes |
+| `AISOC_CORRELATION_API_TOKEN` | — | API key carrying `cases:write:correlation`. **Required when `ENVIRONMENT=production`**: the dev-mode tenant fallback does not exist there, so an empty token makes every case write fail with `401` |
+| `AISOC_CORRELATION_OWNER` | `graph_engine` | Owner label recorded on the atomic alert claim |
+| `AISOC_CORRELATION_THETA` | `3` | Score threshold above which alerts are folded into one component |
+| `AISOC_CORRELATION_MIN_CASE_ALERTS` | `2` | Distinct canonical alerts required before a case is opened |
+| `AISOC_CORRELATION_LOOKBACK_HOURS` | `72` | Window of uncased alerts the engine considers |
+| `AISOC_CORRELATION_POLL_SECONDS` | `60` | Cycle cadence |
+| `AISOC_CORRELATION_CLAIM_TTL_MINUTES` | `60` | How long a crashed cycle's alert claim is honoured |
+| `AISOC_CORRELATION_WORKER_ENABLED` | `true` | `false` serves the HTTP API without running the background loop |
+| `AISOC_GRAPH_ENABLED`, `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | `true`, `bolt://localhost:7687`, `neo4j`, `neo4j` | Optional entity-graph projection; the engine degrades to Postgres when disabled or unavailable |
+
+### Retiring the legacy case writers
+
+The legacy producers (agentic funnel backfill, Tier-2 IP pivot, Tier-2 case
+policy, exact-dedupe case merge, agent case promoter, fusion incident
+correlator) keep their code for rollback but stop writing automatically.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_CORRELATION_CASE_WRITER_ONLY` | `1` | `1` disables every legacy automatic case writer regardless of the flags below. Set `0` only for a deliberate rollback |
+| `AISOC_AGENT_AUTO_CASE` | `0` | Legacy rollback opt-in for the agent/funnel/Tier-2 writers; only effective when `AISOC_CORRELATION_CASE_WRITER_ONLY=0` |
+| `AISOC_LEGACY_FUSION_CORRELATOR` | `false` | Re-enables fusion incident grouping (Redis/Postgres incident cache). It never writes `aisoc_cases` |
+
+---
+
 ## Realtime service (`services/realtime`)
 
 Source: [`services/realtime/src/index.ts`](https://github.com/SoorinSecurity/Agentic_SOC/blob/main/services/realtime/src/index.ts)

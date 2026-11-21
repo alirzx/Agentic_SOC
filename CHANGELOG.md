@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Rule identity registry for correlation.** Migrations `090`/`091` add
+  `correlation_rule_identity_maps` (tenant rows override global rows; exact
+  match beats tenant pattern, which beats global pattern, which beats the
+  shape-aware generic fallback) plus `correlation_rule_resolution_audits`, which
+  records every resolved rule with its filtered values. The API exposes
+  tenant-scoped list/create/patch/delete, `/correlation/rules/resolve` and
+  `/correlation/rules/audits`; the engine reads the registry once per cycle and
+  audits each alert's resolution. Migrations seed exact maps for the four
+  corpus rules plus a global `ESCU - *` fallback whose `dest` field stays a
+  victim host (`host`), never an IP.
+- **One automatic case writer.** The legacy producers (agentic funnel backfill,
+  Tier-2 IP pivot and case policy, exact-dedupe case merge, agent case promoter,
+  fusion incident correlator) now keep their code behind
+  `AISOC_CORRELATION_CASE_WRITER_ONLY` (default `1`) and
+  `AISOC_AGENT_AUTO_CASE` (default `0`); `AISOC_LEGACY_FUSION_CORRELATOR`
+  (default `false`) gates fusion incident grouping. `services/correlation` is
+  the only path that creates cases, through `POST
+  /api/v1/cases/from-correlation`.
 - **Graph correlation engine v2.0** (`services/correlation`) — a second,
   independent case-creation path running in parallel with the legacy
   agentic-funnel promoter. It reads `alerts.llm_payload` only, extracts a closed

@@ -1,4 +1,13 @@
-"""
+"""LEGACY RETIREMENT: incident grouping is disabled by default.
+
+Automatic case creation belongs to `services/correlation` through
+`POST /api/v1/cases/from-correlation`. This correlator remains only behind
+`AISOC_LEGACY_FUSION_CORRELATOR=1`; it must not write aisoc_cases or correlation_owner.
+
+CASE KIND (not a case writer): groups alerts into ``fusion_incidents`` / Redis
+incidents, never ``aisoc_cases``. ``services/correlation`` does not produce
+incidents; this grouping is not part of the canonical case pipeline.
+
 Alert correlation engine: groups related alerts into incidents using entity and
 MITRE ATT&CK context stored in Redis, with optional durable Postgres restore.
 """

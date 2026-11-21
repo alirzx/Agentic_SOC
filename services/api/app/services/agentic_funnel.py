@@ -1,4 +1,17 @@
-"""Agentic SOC funnel — backfill + reportable queue for existing alerts.
+"""LEGACY RETIREMENT: funnel backfill case writes are explicit opt-in only.
+
+`services/correlation` owns automatic case creation through
+`POST /api/v1/cases/from-correlation`. The remaining classification/read logic
+is retained for compatibility behind `AISOC_CORRELATION_CASE_WRITER_ONLY=1`.
+
+CASE KINDS (retired): this backfill produced two shapes of `aisoc_cases` — a
+multi-alert "attack-campaign" case (shared host / IP / user inside the temporal
+window) and a single-alert "incident" case for one eligible seed — each with an
+investigation checklist in `aisoc_case_tasks`. `services/correlation` reproduces
+the campaign shape only: one-alert incidents and task checklists are not
+produced any more.
+
+Agentic SOC funnel — backfill + reportable queue for existing alerts.
 
 Turns a noisy 24h alert pile into:
 * FP-tagged noise (low / info, or disposition already false_positive)
@@ -10,6 +23,7 @@ Turns a noisy 24h alert pile into:
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import uuid
@@ -49,6 +63,19 @@ FUNNEL_MAX_WINDOW_HOURS = 720
 # concurrent UI refreshes from re-scanning the whole alerts table too often.
 _AUTO_DEDUPE_INTERVAL_S = 15.0
 _last_auto_dedupe_monotonic: dict[str, float] = {}
+
+
+def legacy_case_writes_enabled() -> bool:
+    """Legacy backfill writer opt-in; canonical writer-only mode wins."""
+    writer_only = os.getenv("AISOC_CORRELATION_CASE_WRITER_ONLY", "1").strip().lower()
+    if writer_only not in {"0", "false", "no", "off"}:
+        return False
+    return os.getenv("AISOC_AGENT_AUTO_CASE", "0").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 
 
 def _window_since(hours: int) -> datetime:
@@ -489,6 +516,14 @@ async def run_backfill(db: AsyncSession, *, tenant_id: uuid.UUID, hours: int = 2
                 "campaign_seed_ineligible",
                 alert_id=str(alert_id),
                 reason=seed_why,
+            )
+            continue
+
+        if not legacy_case_writes_enabled():
+            skipped += 1
+            logger.debug(
+                "agentic_funnel.legacy_case_writer_disabled",
+                alert_id=str(alert_id),
             )
             continue
 

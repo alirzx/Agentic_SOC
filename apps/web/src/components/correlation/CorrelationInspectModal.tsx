@@ -672,7 +672,7 @@ export function CorrelationInspectModal({
           <div className="mt-4 flex justify-end">
             <button
               onClick={onClose}
-              className="rounded-lg border border-gray-500/30 bg-gray-500/10 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-500/20"
+              className="rounded-lg border border-[#374151] bg-dark-40 px-3 py-1.5 text-sm font-medium text-gray-200 transition-colors hover:border-gray-500 hover:text-gray-100"
             >
               Close
             </button>
@@ -724,7 +724,7 @@ export function CorrelationInspectModal({
       ref={graphPanelRef}
       className={
         graphFullscreen === 'css'
-          ? 'fixed inset-2 z-[70] flex min-h-0 flex-col overflow-hidden rounded-lg border border-[#374151] bg-[#0b1220] shadow-2xl'
+          ? 'fixed inset-2 z-[70] flex min-h-0 flex-col overflow-hidden rounded-lg border border-[#374151] bg-dark-80 shadow-2xl'
           : 'flex h-full min-h-0 flex-col'
       }
     >
