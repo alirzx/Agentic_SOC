@@ -195,6 +195,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The 3D correlation graph opens with names off.** The label layer used to
+  default to on, which turned a campaign with dedup shown into a wall of text
+  sprites over the marks. The toolbar's **Labels** button turns them back on for
+  the session; the 2D canvas default is unchanged.
 - **Three-layer alert deduplication (v2).** Soft Funnel collapse no longer
   keys on `title|severity|rule|disposition` (which merged distinct hosts).
   Layer-2 uses entity-aware `alert:v1:` fingerprints + a 15-minute window

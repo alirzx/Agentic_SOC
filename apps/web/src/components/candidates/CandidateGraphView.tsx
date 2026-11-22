@@ -746,9 +746,10 @@ export function CandidateGraphView({
   // Labels are zoom-driven on the canvas (always on unless the analyst hides
   // them) and off by default in 3D, where each name costs a texture.
   const [labels2d, setLabels2d] = useState(true);
-  // The 3D scene opens with its names on, like the 2D canvas: a picture of
-  // anonymous marks is not a correlation graph an analyst can read.
-  const [labels3d, setLabels3d] = useState(true);
+  // The 3D scene opens with its names off: a dense campaign with dedup shown
+  // turns 150 name sprites into a wall of text over the marks, and the orbit is
+  // readable without them. The toolbar's Labels button turns them on.
+  const [labels3d, setLabels3d] = useState(false);
   const magneticPassRef = useRef<(() => void) | null>(null);
   const [autoTidy, setAutoTidy] = useState(true);
   const [renderError, setRenderError] = useState<string | null>(null);

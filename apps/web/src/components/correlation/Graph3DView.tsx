@@ -81,7 +81,7 @@ interface Graph3DViewProps {
   onClusters?: (clusters: ClusterSummary[]) => void;
   /** Row the analyst clicked in the entity list; drawn with a teal halo. */
   activeId?: string | null;
-  /** Names for nodes and links. On by default, as they are on the 2D canvas. */
+  /** Names for nodes and links. Off by default in 3D; the toolbar turns them on. */
   showLabels?: boolean;
   onToggleLabels?: () => void;
   /**
@@ -302,7 +302,7 @@ export function Graph3DView({
   onToggleCluster,
   onClusters,
   activeId = null,
-  showLabels = true,
+  showLabels = false,
   onToggleLabels,
   onClearView,
 }: Graph3DViewProps) {
