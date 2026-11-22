@@ -32,7 +32,6 @@ import {
 } from '@/components/candidates/CandidateGraphView';
 import { EntityDetailCard } from '@/components/correlation/GraphEntityPanel';
 import { buildEntityTimeline } from '@/lib/entityTimeline';
-import { createPortal } from 'react-dom';
 
 import { MAX_EXPAND_LAYERS } from '@/lib/graphBudget';
 
@@ -719,6 +718,13 @@ export function CorrelationInspectModal({
   // `flex`/`fixed` and `h-full`/`inset-2` are competing utilities and the
   // stylesheet — not the class order — decides; emitting only one variant of
   // each keeps the maximised panel filling the viewport instead of collapsing.
+  //
+  // The panel is deliberately never portaled: moving it to another DOM parent
+  // (the overlay used to `createPortal` it into `document.body`) unmounts the
+  // subtree, and the graph came back in 2D with every local view state lost
+  // whenever the analyst maximised or left full screen. `fixed` is enough —
+  // the modal's `backdrop-blur` makes its root the containing block, and an
+  // ancestor between the panel and that block cannot clip a fixed element.
   const graphPanel = (
     <div
       ref={graphPanelRef}
@@ -1383,10 +1389,7 @@ export function CorrelationInspectModal({
               </div>
             ) : (
               <div className="min-h-0 flex-1 overflow-hidden">
-                {activeTab === 'graph' &&
-                  (graphFullscreen === 'css' && typeof document !== 'undefined'
-                    ? createPortal(graphPanel, document.body)
-                    : graphPanel)}
+                {activeTab === 'graph' && graphPanel}
 
                 {activeTab === 'timeline' && (
                   <div className="h-full overflow-y-auto px-5 py-4">

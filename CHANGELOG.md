@@ -101,6 +101,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Maximising the correlation graph no longer drops the 3D view back to 2D.**
+  The CSS full-screen overlay rendered the graph panel through
+  `createPortal(..., document.body)`, and moving a portal to another DOM parent
+  unmounts the subtree: `CandidateGraphView` came back with its default
+  `show3d = false`, the 3D camera, labels and every local hide/collapse state
+  reset on both Maximise and Exit full screen. The panel now stays mounted in
+  its own position and is positioned with `fixed` for the overlay, so the
+  projection the analyst chose survives the transition.
 - **3D correlation graph Fit now fills the canvas.** The camera distance came
   from a fixed multiple of the bounding radius, which spans the empty gaps
   between bubbles, so a campaign sat in the middle of the canvas with large
