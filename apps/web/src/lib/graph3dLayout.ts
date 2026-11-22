@@ -97,6 +97,109 @@ export function layoutGraph3D(
   return result;
 }
 
+export interface FitCameraOptions {
+  /** The points the frame must contain. */
+  points: readonly NodePosition3D[];
+  /** The orbit target: the camera always looks at this point. */
+  centre: NodePosition3D;
+  /** Unit vector from the centre to the camera. */
+  direction: NodePosition3D;
+  /** Vertical field of view, in degrees. */
+  fovDegrees: number;
+  /** Viewport width / height. */
+  aspect: number;
+  /**
+   * Fraction of the viewport half-axis the points may fill. Under 1 leaves a
+   * margin; 1 touches the edge exactly.
+   */
+  fill?: number;
+  /** World-space radius added around each point — a node mark's half size. */
+  pad?: number;
+}
+
+const dot = (a: NodePosition3D, b: NodePosition3D) =>
+  a.x * b.x + a.y * b.y + a.z * b.z;
+
+const cross = (a: NodePosition3D, b: NodePosition3D): NodePosition3D => ({
+  x: a.y * b.z - a.z * b.y,
+  y: a.z * b.x - a.x * b.z,
+  z: a.x * b.y - a.y * b.x,
+});
+
+function unit(vector: NodePosition3D): NodePosition3D {
+  const length = Math.hypot(vector.x, vector.y, vector.z) || 1;
+  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
+}
+
+/**
+ * Camera distance at which every point fits the frame at the requested fill.
+ *
+ * The orbit view used to frame itself from the bounding radius (a fixed
+ * multiple of it), which is the wrong quantity: those bounds span the empty gaps
+ * between bubbles as well as the bubbles themselves, so a campaign floated in
+ * the middle third of the canvas and Fit read as a zoom-out.
+ *
+ * The projection is solved instead of approximated: each point is projected into
+ * the camera's own axes at a trial distance, and its mark is padded by `pad`
+ * (marks are camera-facing sprites of fixed world width, so the padding is a
+ * share of the depth). The camera always looks at `centre` from the same
+ * direction, so the view axes are constant and only the depth changes with the
+ * distance — which makes the fit monotonic and a bisection exact to well under a
+ * pixel.
+ */
+export function fitCameraDistance(options: FitCameraOptions): number {
+  const fill = options.fill ?? 0.92;
+  const pad = options.pad ?? 0;
+  const halfVertical = Math.tan((Math.max(1, options.fovDegrees) * Math.PI) / 360);
+  const aspect = Math.max(0.01, options.aspect);
+  const direction = unit(options.direction);
+  // Any up vector that is not the view direction; the frame is symmetric, so
+  // only the magnitudes of the projected coordinates matter.
+  const up =
+    Math.abs(direction.y) > 0.99 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const right = unit(cross(up, direction));
+  const upAxis = cross(direction, right);
+
+  const offsets = options.points.map((point) => {
+    const offset = {
+      x: point.x - options.centre.x,
+      y: point.y - options.centre.y,
+      z: point.z - options.centre.z,
+    };
+    return {
+      x: dot(offset, right),
+      y: dot(offset, upAxis),
+      depth: dot(offset, direction),
+      radius: Math.hypot(offset.x, offset.y, offset.z),
+    };
+  });
+  if (offsets.length === 0) return 1;
+
+  const fits = (distance: number) =>
+    offsets.every((offset) => {
+      const depth = distance - offset.depth;
+      if (depth <= 1e-6) return false;
+      const padNdc = pad / (depth * halfVertical);
+      return (
+        Math.abs(offset.x) / (depth * halfVertical * aspect) + padNdc <= fill &&
+        Math.abs(offset.y) / (depth * halfVertical) + padNdc <= fill
+      );
+    });
+
+  // Start from "just outside the furthest point" and open up until it fits, then
+  // bisect. The distance that fits is unique because every term falls as the
+  // camera backs away.
+  let high = Math.max(...offsets.map((offset) => offset.radius)) + 1;
+  for (let guard = 0; guard < 64 && !fits(high); guard += 1) high *= 2;
+  let low = 0;
+  for (let step = 0; step < 48; step += 1) {
+    const middle = (low + high) / 2;
+    if (fits(middle)) high = middle;
+    else low = middle;
+  }
+  return high;
+}
+
 /**
  * Typical distance between neighbouring nodes in a finished layout.
  *

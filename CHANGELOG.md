@@ -101,6 +101,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **3D correlation graph Fit now fills the canvas.** The camera distance came
+  from a fixed multiple of the bounding radius, which spans the empty gaps
+  between bubbles, so a campaign sat in the middle of the canvas with large
+  margins and Fit read as a zoom-out. `fitCameraDistance`
+  (`apps/web/src/lib/graph3dLayout.ts`) projects the drawn nodes at a trial
+  distance and bisects for the one where the outermost mark lands at 92% of the
+  viewport, and the scene re-frames on container resize until the analyst moves
+  the camera (the modal was still animating when the first frame was solved).
 - **3D correlation graph marks scale with node density, not just scene size.**
   A campaign with dedup switched off (174/224 nodes) used to paint the same
   mark size as a 31-node one, so bubbles collapsed into a wall of overlapping

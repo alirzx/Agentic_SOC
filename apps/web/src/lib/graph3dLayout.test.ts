@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 
-import { layoutGraph3D, estimateNodeSpacing } from './graph3dLayout';
+import { fitCameraDistance, layoutGraph3D, estimateNodeSpacing } from './graph3dLayout';
 
 const distance3D = (
   a: { x: number; y: number; z: number },
@@ -77,6 +78,71 @@ describe('layoutGraph3D', () => {
     expect(gap).toBeGreaterThan(0);
     // The quartile cannot exceed the longest leg of the layout.
     expect(gap).toBeLessThan(distance3D(positions.get('a1')!, positions.get('b1')!));
+  });
+
+  it('frames every point inside the requested fill', () => {
+    const points = Array.from({ length: 60 }, (_, index) => ({
+      x: Math.cos(index) * 120,
+      y: Math.sin(index * 1.7) * 90,
+      z: Math.cos(index * 0.6) * 150,
+    }));
+    const centre = { x: 0, y: 0, z: 0 };
+    const direction = { x: 0.45, y: 0.35, z: 1 };
+    const distance = fitCameraDistance({
+      points,
+      centre,
+      direction,
+      fovDegrees: 55,
+      aspect: 1.6,
+      fill: 0.92,
+    });
+
+    // Verified through three's own projection rather than by repeating the
+    // implementation's arithmetic.
+    const camera = new THREE.PerspectiveCamera(55, 1.6, 1, 100000);
+    const dir = new THREE.Vector3(0.45, 0.35, 1).normalize();
+    camera.position.set(0, 0, 0).addScaledVector(dir, distance);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    const probe = new THREE.Vector3();
+    let widest = 0;
+    for (const point of points) {
+      probe.set(point.x, point.y, point.z).project(camera);
+      widest = Math.max(widest, Math.abs(probe.x), Math.abs(probe.y));
+    }
+    expect(widest).toBeGreaterThan(0.9);
+    expect(widest).toBeLessThanOrEqual(0.92 + 1e-3);
+  });
+
+  it('frames tighter on a wide canvas than on a tall one', () => {
+    const points = [
+      { x: -300, y: -20, z: 0 },
+      { x: 300, y: 20, z: 0 },
+    ];
+    const centre = { x: 0, y: 0, z: 0 };
+    const direction = { x: 0, y: 0, z: 1 };
+    const wide = fitCameraDistance({ points, centre, direction, fovDegrees: 55, aspect: 2 });
+    const tall = fitCameraDistance({ points, centre, direction, fovDegrees: 55, aspect: 0.5 });
+    expect(tall).toBeGreaterThan(wide);
+  });
+
+  it('backs off to leave room for the marks around each point', () => {
+    const points = [
+      { x: -100, y: 0, z: 0 },
+      { x: 100, y: 0, z: 0 },
+    ];
+    const centre = { x: 0, y: 0, z: 0 };
+    const direction = { x: 0, y: 0, z: 1 };
+    const bare = fitCameraDistance({ points, centre, direction, fovDegrees: 55, aspect: 1 });
+    const padded = fitCameraDistance({
+      points,
+      centre,
+      direction,
+      fovDegrees: 55,
+      aspect: 1,
+      pad: 12,
+    });
+    expect(padded).toBeGreaterThan(bare);
   });
 
   it('gives a busy bubble more room per node than a small one', () => {

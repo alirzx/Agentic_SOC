@@ -10,7 +10,7 @@ import {
   describeCluster,
   type ClusterSummary,
 } from '@/lib/graphCommunities';
-import { estimateNodeSpacing, layoutGraph3D } from '@/lib/graph3dLayout';
+import { estimateNodeSpacing, fitCameraDistance, layoutGraph3D } from '@/lib/graph3dLayout';
 import { graphPalette, useGraphTheme, type GraphPalette } from '@/lib/graphTheme';
 import type { CandidateGraph, CandidateGraphNode } from '@/hooks/useCaseCandidates';
 
@@ -105,6 +105,48 @@ interface Hovered3D {
   y: number;
   label: string;
   kind: string;
+}
+
+/**
+ * World-space width of one node's mark.
+ *
+ * Shared by the node clouds and the camera framing, which has to know how far a
+ * mark reaches past its centre — a frame built from node centres alone clipped
+ * the outermost mark on a small campaign.
+ *
+ * Observations are the subject of the campaign, so they stay the largest mark;
+ * entities follow the 2D sizing table. A silhouette covers less of its sprite
+ * box than a square did, so the mark is sized up a notch to keep the same visual
+ * weight. The size is expressed against the scene's framing radius instead of in
+ * fixed world units: a fixed 9-unit mark is a readable dot on a 19-node campaign
+ * and a sub-pixel speck on a 900-node one, and the floor is what stops a leaf
+ * from disappearing when the camera is far out.
+ *
+ * A mark may not outgrow the room between neighbouring nodes either — and how
+ * much overlap is still readable depends on how many marks share the scene. On a
+ * 31-node campaign the shapes may touch (that is the size the 2D view uses and
+ * it reads fine), but at 174/224 nodes with dedup off the same ratio painted a
+ * solid block of hexagons that hid its own links. So the allowance falls from
+ * 1.35× the measured gap on a quiet campaign to 0.85× on a busy one: past ~120
+ * nodes the marks shrink, the links lengthen relative to them, and every node
+ * stays individually clickable.
+ */
+function markWorldSize(
+  kind: string,
+  shapeHeight: number | undefined,
+  sceneRadius: number,
+  nodeGap: number,
+  nodeCount: number
+): number {
+  const growth = Math.max(1, Math.min(1.8, sceneRadius / 150));
+  const base =
+    kind === 'observation'
+      ? 20 * growth
+      : Math.min(24, Math.max(11, (shapeHeight ?? 26) * 0.5)) * growth;
+  const busy = Math.min(1, Math.max(0, (nodeCount - 120) / 230));
+  const capRatio = (1.35 - 0.5 * busy) * (kind === 'observation' ? 1.1 : 1);
+  const cap = Math.max(6, nodeGap * capRatio);
+  return Math.min(base, cap);
 }
 
 /**
@@ -566,29 +608,86 @@ export function Graph3DView({
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDownCapture, true);
 
-    // One frame around every node sets the camera distance and the orbit target.
+    // One frame around every node sets the orbit target; the distance comes
+    // from what the nodes actually project to, further down.
     const bounds = new THREE.Box3();
     for (const node of nodes) {
       const position = positions.get(node.id)!;
       bounds.expandByPoint(new THREE.Vector3(position.x, position.y, position.z));
     }
     const sphere = bounds.getBoundingSphere(new THREE.Sphere());
-    const eye = sphere.radius * 2.1;
+
+    /** The viewing angle the initial frame and Fit restore. */
+    const EYE_DIRECTION = new THREE.Vector3(0.45, 0.35, 1).normalize();
+    /**
+     * How much of each viewport axis the drawn nodes (marks included) may fill.
+     * Just under 1 keeps the outline of the outermost bubble from being clipped.
+     */
+    const FRAME_FILL = 0.92;
+    // Half the largest mark: a node's *centre* may not sit at the frame edge, or
+    // its silhouette is cut in half (the 31-node campaign showed exactly that
+    // before this was added).
+    const markRadius = Math.max(
+      0,
+      ...[...new Set(nodes.map((node) => node.kind))].map(
+        (kind) =>
+          markWorldSize(kind, shapeFor?.(kind)?.height, sphere.radius, nodeGap, nodes.length) /
+          2
+      )
+    );
+
+    // A fixed multiple of the bounding radius was the wrong frame. Those bounds
+    // span the empty gaps between bubbles as well as the bubbles themselves, so
+    // a campaign floated in the middle third of the canvas and Fit read as a
+    // zoom-out (and switching views reset the camera to that same loose frame).
+    // `fitCameraDistance` solves for the distance at which every node — mark
+    // included — lands at FRAME_FILL of the viewport; see its comment for why the
+    // projection is solved rather than approximated.
+    const frameDistance = () =>
+      fitCameraDistance({
+        points: nodes.map((node) => positions.get(node.id)!),
+        centre: sphere.center,
+        direction: EYE_DIRECTION,
+        fovDegrees: camera.fov,
+        aspect: camera.aspect,
+        fill: FRAME_FILL,
+        pad: markRadius,
+      });
+    const applyFrame = (distance: number) => {
+      camera.position.copy(sphere.center).addScaledVector(EYE_DIRECTION, distance);
+      controls.target.copy(sphere.center);
+      controls.minDistance = Math.max(0.4, sphere.radius * 0.004);
+      controls.maxDistance = distance * 3;
+      controls.update();
+    };
+    // The modal is still animating when the scene mounts, so the container — and
+    // with it the camera's aspect — changes after the first frame. While the
+    // analyst has not touched the camera, a resize re-frames the scene; after
+    // that it only corrects the aspect, so a deliberate zoom is never undone.
+    let cameraMoved = false;
+    const onControlsStart = () => {
+      cameraMoved = true;
+    };
+    controls.addEventListener('start', onControlsStart);
+    const resetView = () => {
+      applyFrame(frameDistance());
+      cameraMoved = false;
+    };
+    resetViewRef.current = resetView;
+
     const remembered = cameraStateRef.current;
     if (remembered && remembered.graph === graph) {
       camera.position.copy(remembered.position);
       controls.target.copy(remembered.target);
-    } else {
-      camera.position.set(eye * 0.45, eye * 0.35, eye);
-      controls.target.copy(sphere.center);
-    }
-    controls.update();
-    const resetView = () => {
-      camera.position.set(eye * 0.45, eye * 0.35, eye);
-      controls.target.copy(sphere.center);
+      controls.minDistance = Math.max(0.4, sphere.radius * 0.004);
+      controls.maxDistance = Math.max(
+        sphere.radius * 4,
+        camera.position.distanceTo(controls.target) * 3
+      );
       controls.update();
-    };
-    resetViewRef.current = resetView;
+    } else {
+      resetView();
+    }
 
     // Dolly along the camera→target axis. Scroll wheel zoom only works while the
     // pointer is over the canvas, so the toolbar's − / + buttons need the same
@@ -596,10 +695,9 @@ export function Graph3DView({
     // canvas zoom rather than a pan.
     // Close enough to read one small bubble: 12% of the whole scene's radius
     // stopped the camera in open space, so a 9-node cluster could never fill the
-    // frame.
-    controls.minDistance = Math.max(0.8, sphere.radius * 0.004);
-    controls.maxDistance = eye * 4;
+    // frame. The limits themselves are set by `applyFrame`.
     const zoomBy = (factor: number) => {
+      cameraMoved = true;
       const offset = camera.position.clone().sub(controls.target);
       const distance = offset.length();
       if (distance === 0) return;
@@ -617,6 +715,7 @@ export function Graph3DView({
     const focusNode = (id: string) => {
       const position = positions.get(id);
       if (!position) return;
+      cameraMoved = true;
       const point = new THREE.Vector3(position.x, position.y, position.z);
       const direction = camera.position.clone().sub(controls.target);
       if (direction.lengthSq() === 0) direction.set(0.45, 0.35, 1);
@@ -668,36 +767,7 @@ export function Graph3DView({
       geometry.setAttribute('position', new THREE.BufferAttribute(coords, 3));
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       const meta = shapeFor?.(kind);
-      // Observations are the subject of the campaign, so they stay the largest
-      // mark; entities follow the 2D sizing table.
-      // A silhouette covers less of its sprite box than a square did, so the
-      // mark is sized up a notch to keep the same visual weight.
-      //
-      // The size is expressed against the scene's framing radius instead of in
-      // fixed world units. A fixed 9-unit mark is a readable dot on a 19-node
-      // campaign and a sub-pixel speck on a 900-node one; tying it to the radius
-      // keeps the apparent size the same whatever the layout spreads to, and the
-      // floor is what stops a leaf from disappearing when the camera is far out.
-      // Observations barely lead the largest entity now: in 2D the hexagon is
-      // clearly wider than a house, but a flat point sprite at that ratio read as
-      // a blob that swallowed the entities it was supposed to point at.
-      const growth = Math.max(1, Math.min(1.8, sphere.radius / 150));
-      const base =
-        kind === 'observation'
-          ? 20 * growth
-          : Math.min(24, Math.max(11, (meta?.height ?? 26) * 0.5)) * growth;
-      // A mark may not outgrow the room between neighbouring nodes — and how
-      // much overlap is still readable depends on how many marks share the
-      // scene. On a 31-node campaign the shapes may touch (that is the size the
-      // 2D view uses and it reads fine), but at 174/224 nodes with dedup off the
-      // same ratio painted a solid block of hexagons that hid its own links.
-      // So the allowance falls from 1.35× the measured gap on a quiet campaign to
-      // 0.85× on a busy one: past ~120 nodes the marks shrink, the links lengthen
-      // relative to them, and every node stays individually clickable.
-      const busy = Math.min(1, Math.max(0, (nodes.length - 120) / 230));
-      const capRatio = (1.35 - 0.5 * busy) * (kind === 'observation' ? 1.1 : 1);
-      const cap = Math.max(6, nodeGap * capRatio);
-      const size = Math.min(base, cap);
+      const size = markWorldSize(kind, meta?.height, sphere.radius, nodeGap, nodes.length);
       const material = new THREE.PointsMaterial({
         map: makeShapeTexture({ points: meta?.points, round: meta?.round }),
         size,
@@ -836,6 +906,7 @@ export function Graph3DView({
     focusClusterRef.current = (community: string) => {
       const bubble = bubbles.find((entry) => entry.community === community);
       if (!bubble) return;
+      cameraMoved = true;
       const direction = camera.position.clone().sub(controls.target);
       if (direction.lengthSq() === 0) direction.set(0.45, 0.35, 1);
       direction.normalize();
@@ -1114,6 +1185,10 @@ export function Graph3DView({
       renderer.setSize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      // A fit solved against the wrong aspect is the reason the campaign used to
+      // sit in the middle third of the canvas: the frame was laid out for a
+      // portrait canvas and then shown in a landscape one.
+      if (!cameraMoved) applyFrame(frameDistance());
     };
     const observer =
       typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
@@ -1156,6 +1231,7 @@ export function Graph3DView({
         position: camera.position.clone(),
         target: controls.target.clone(),
       };
+      controls.removeEventListener('start', onControlsStart);
       controls.dispose();
       controlsRef.current = null;
       resetViewRef.current = null;
