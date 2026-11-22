@@ -101,6 +101,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **3D correlation graph marks scale with node density, not just scene size.**
+  A campaign with dedup switched off (174/224 nodes) used to paint the same
+  mark size as a 31-node one, so bubbles collapsed into a wall of overlapping
+  silhouettes that hid their own links. `Graph3DView` now caps a mark against
+  the measured gap between neighbouring nodes (`estimateNodeSpacing` in
+  `apps/web/src/lib/graph3dLayout.ts`), and the allowance tightens from 1.35×
+  that gap on a quiet campaign to 0.85× past ~350 nodes; busy bubbles also get
+  slightly more room per node, so links visibly lengthen. Small campaigns keep
+  exactly the sizes they had.
 - **Soft deduplication no longer drops live Case membership.**
   `services/api/app/services/exact_dedupe.py` now preserves `case_id` for
   losers that already belong to a graph-engine, agentic-funnel, or manual case;
