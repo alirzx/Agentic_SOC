@@ -10,9 +10,15 @@ function loginHref(pathname: string): string {
   return `/login?next=${encodeURIComponent(next)}`;
 }
 
+function workspacesHref(pathname: string): string {
+  const next = pathname && pathname !== '/workspaces' ? pathname : '/dashboard';
+  return `/workspaces?next=${encodeURIComponent(next)}`;
+}
+
 /**
- * Blocks the SOC console until a live (unexpired) session exists.
- * Expired tokens are cleared and the operator is sent back to /login.
+ * Blocks the SOC console until a live (unexpired) session exists and a
+ * workspace has been selected. Expired tokens clear and send the operator
+ * back to /login; missing workspace selection sends them to /workspaces.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -20,8 +26,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    if (authApi.isAuthenticated()) {
+    const allow = () => {
+      if (!authApi.hasSelectedWorkspace()) {
+        setAllowed(false);
+        router.replace(workspacesHref(pathname));
+        return;
+      }
       setAllowed(true);
+    };
+
+    if (authApi.isAuthenticated()) {
+      allow();
       return;
     }
     if (isDemoMode()) {
@@ -29,7 +44,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const timer = window.setInterval(() => {
         if (authApi.isAuthenticated()) {
           window.clearInterval(timer);
-          setAllowed(true);
+          allow();
           return;
         }
         if (Date.now() - started > 4000) {

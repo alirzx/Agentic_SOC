@@ -125,6 +125,7 @@ const sidebars: SidebarsConfig = {
       label: "Operations",
       items: [
         "operations/security",
+        "operations/workspaces",
         "operations/credentials",
         "operations/secrets",
         "operations/airgap",

@@ -86,11 +86,13 @@ from app.api.v1.endpoints import (
     threat_intel,
     translation,
     waitlist,
+    workspaces,
 )
 
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth.router)
+api_router.include_router(workspaces.router)
 api_router.include_router(api_keys.router)
 api_router.include_router(alerts.router)
 # Structured AI explainer (POST /alerts/{id}/explain) — single-shot

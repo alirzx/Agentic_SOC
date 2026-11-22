@@ -50,7 +50,7 @@ from app.models.responder import (
 from app.models.runbook_task import RunbookTask
 from app.models.saved_hunt import SavedHunt
 from app.models.saved_view import SavedView
-from app.models.tenant import ApiKey, Tenant, User
+from app.models.tenant import ApiKey, Tenant, User, WorkspaceMembership
 from app.models.threat_intel import ThreatActor, ThreatIntelFeed, ThreatIntelIOC
 from app.models.tkg_evaluation import CaseTkgEvaluation
 
@@ -58,6 +58,7 @@ __all__ = [
     "Base",
     "Tenant",
     "User",
+    "WorkspaceMembership",
     "ApiKey",
     "AgenticShadowRun",
     "AgenticEvaluationRun",

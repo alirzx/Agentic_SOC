@@ -42,6 +42,7 @@ from app.core.config import runbook_enabled as runbook_feature_enabled
 from app.core.security import decode_token, has_permission, hash_api_key, session_is_expired
 from app.db.database import get_db
 from app.models.tenant import ApiKey, User
+from app.services.workspaces import user_has_membership
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -54,6 +55,10 @@ class CurrentUser:
     ``scopes`` is only populated when authenticated via an API key; it
     holds the explicit permission strings granted to that key.  When ``None``
     the user's role-based permissions apply.
+
+    ``tenant_id`` is the *active workspace* (tenant). When ``workspace_selected``
+    is False the value is the user's home tenant and console data routes should
+    redirect the client to the workspace picker.
 
     Permission resolution order:
       1. API-key scopes (explicit list)
@@ -68,12 +73,17 @@ class CurrentUser:
         role: str,
         email: str,
         scopes: list[str] | None = None,
+        *,
+        home_tenant_id: uuid.UUID | None = None,
+        workspace_selected: bool = True,
     ) -> None:
         self.user_id = user_id
         self.tenant_id = tenant_id
         self.role = role
         self.email = email
         self.scopes = scopes  # None → role-based; list → API-key scoped
+        self.home_tenant_id = home_tenant_id or tenant_id
+        self.workspace_selected = workspace_selected
 
     def require_permission(self, permission: str) -> None:
         if self.scopes is not None:
@@ -178,6 +188,8 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
         role=role,
         email=email,
         scopes=api_key.scopes or [],
+        home_tenant_id=api_key.tenant_id,
+        workspace_selected=True,
     )
 
 
@@ -189,6 +201,10 @@ async def get_current_user(
 
     Accepts both JWT tokens and aisoc_ API keys.
 
+    JWT ``tenant_id`` is honoured only when ``workspace_selected`` is true and
+    the user has a ``workspace_memberships`` row for that tenant. Otherwise the
+    home tenant is used with ``workspace_selected=False``.
+
     In development mode an unauthenticated request resolves to a deterministic
     demo user (see ``app.api.v1.dev_auth``). Production requires a bearer token.
     """
@@ -199,6 +215,8 @@ async def get_current_user(
                 tenant_id=DEMO_TENANT_ID,
                 role=DEMO_USER_ROLE,
                 email=DEMO_USER_EMAIL,
+                home_tenant_id=DEMO_TENANT_ID,
+                workspace_selected=True,
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -237,11 +255,28 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    claim_selected = bool(payload.get("workspace_selected"))
+    claim_tenant_raw = payload.get("tenant_id")
+    active_tenant = user.tenant_id
+    workspace_selected = False
+    if claim_selected and claim_tenant_raw:
+        try:
+            claimed = uuid.UUID(str(claim_tenant_raw))
+        except (TypeError, ValueError):
+            claimed = None
+        if claimed is not None and await user_has_membership(
+            db, user_id=user.id, tenant_id=claimed
+        ):
+            active_tenant = claimed
+            workspace_selected = True
+
     return CurrentUser(
         user_id=user.id,
-        tenant_id=user.tenant_id,
+        tenant_id=active_tenant,
         role=user.role,
         email=user.email,
+        home_tenant_id=user.tenant_id,
+        workspace_selected=workspace_selected,
     )
 
 

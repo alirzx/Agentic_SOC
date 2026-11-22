@@ -54,9 +54,12 @@ function LoginInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (authApi.isAuthenticated()) {
+    if (!authApi.isAuthenticated()) return;
+    if (authApi.hasSelectedWorkspace()) {
       router.replace(next);
+      return;
     }
+    router.replace(`/workspaces?next=${encodeURIComponent(next)}`);
   }, [next, router]);
 
   const submit = async (event: React.FormEvent) => {
@@ -68,7 +71,7 @@ function LoginInner() {
     try {
       await authApi.login(email.trim(), password);
       setPhase('success');
-      router.replace(next);
+      router.replace(`/workspaces?next=${encodeURIComponent(next)}`);
     } catch (err) {
       console.error('[login] failed', err);
       setPhase('error');

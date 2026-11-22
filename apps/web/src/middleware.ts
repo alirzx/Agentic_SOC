@@ -5,6 +5,7 @@ const SESSION_COOKIE = 'aisoc.session';
 
 const PROTECTED_PREFIXES = [
   '/dashboard',
+  '/workspaces',
   '/alerts',
   '/soc-funnel',
   '/cases',

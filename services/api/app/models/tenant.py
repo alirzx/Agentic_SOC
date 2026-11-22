@@ -1,9 +1,14 @@
-"""Tenant, User, and ApiKey ORM models."""
+"""Tenant, User, ApiKey, and workspace membership ORM models.
+
+Product language uses "workspace"; the isolation unit remains ``tenants``.
+A user may belong to many workspaces via ``workspace_memberships``.
+``User.tenant_id`` is the home/default workspace (back-compat).
+"""
 
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +39,9 @@ class Tenant(Base):
     connectors: Mapped[list["Connector"]] = relationship("Connector", back_populates="tenant", lazy="noload")  # type: ignore[name-defined]
     external_assets: Mapped[list["ExternalAsset"]] = relationship("ExternalAsset", back_populates="tenant", lazy="noload")  # type: ignore[name-defined]
     external_asset_drift: Mapped[list["ExternalAssetDrift"]] = relationship("ExternalAssetDrift", back_populates="tenant", lazy="noload")  # type: ignore[name-defined]
+    memberships: Mapped[list["WorkspaceMembership"]] = relationship(
+        "WorkspaceMembership", back_populates="tenant", lazy="noload"
+    )
 
 
 class User(Base):
@@ -57,6 +65,30 @@ class User(Base):
     )
 
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
+    memberships: Mapped[list["WorkspaceMembership"]] = relationship(
+        "WorkspaceMembership", back_populates="user", lazy="noload"
+    )
+
+
+class WorkspaceMembership(Base):
+    """Links a user to a tenant (workspace) with a membership role."""
+
+    __tablename__ = "workspace_memberships"
+    __table_args__ = (UniqueConstraint("user_id", "tenant_id", name="workspace_memberships_user_tenant_uq"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default="member")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="memberships")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="memberships")
 
 
 class ApiKey(Base):

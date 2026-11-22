@@ -351,6 +351,8 @@ export interface AuthUser {
   username?: string | null;
   role: string;
   tenant_id: string;
+  home_tenant_id?: string;
+  workspace_selected?: boolean;
   is_active?: boolean;
   preferences?: Record<string, unknown>;
 }
@@ -360,6 +362,16 @@ export interface TokenResponse {
   refresh_token: string;
   token_type: string;
   expires_in: number;
+  workspace_selected?: boolean;
+}
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  membership_role: string;
+  is_home: boolean;
+  is_active: boolean;
 }
 
 export interface LoginResult extends TokenResponse {
@@ -406,13 +418,38 @@ export const authApi = {
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+        // Force workspace picker before any stale override is reused.
+        window.localStorage.removeItem(ACTIVE_TENANT_KEY);
       } catch {
         /* ignore */
       }
     }
     const user = await request<AuthUser>('/api/v1/auth/me');
-    persistAuth(tokens, user);
-    return { ...tokens, user };
+    persistAuth(tokens, { ...user, workspace_selected: false });
+    return { ...tokens, user: { ...user, workspace_selected: false } };
+  },
+
+  /**
+   * Bind the session JWT to a workspace the user belongs to, then refresh
+   * the cached AuthUser + active tenant header.
+   */
+  async selectWorkspace(tenantId: string): Promise<LoginResult> {
+    const tokens = await request<TokenResponse>('/api/v1/auth/select-workspace', {
+      method: 'POST',
+      body: JSON.stringify({ tenant_id: tenantId }),
+    });
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+      } catch {
+        /* ignore */
+      }
+    }
+    setActiveTenantId(tenantId);
+    const user = await request<AuthUser>('/api/v1/auth/me');
+    const bound: AuthUser = { ...user, workspace_selected: true, tenant_id: tenantId };
+    persistAuth(tokens, bound);
+    return { ...tokens, user: bound };
   },
 
   logout(): void {
@@ -421,9 +458,27 @@ export const authApi = {
       window.localStorage.removeItem(AUTH_TOKEN_KEY);
       window.localStorage.removeItem(AUTH_REFRESH_KEY);
       window.localStorage.removeItem(AUTH_USER_KEY);
+      window.localStorage.removeItem(ACTIVE_TENANT_KEY);
       clearSessionCookie();
     } catch {
       /* ignore */
+    }
+  },
+
+  hasSelectedWorkspace(): boolean {
+    const user = authApi.currentUser();
+    if (user?.workspace_selected) return true;
+    if (typeof window === 'undefined') return false;
+    try {
+      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!token) return false;
+      const part = token.split('.')[1];
+      if (!part) return false;
+      const padded = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
+      const payload = JSON.parse(atob(padded)) as { workspace_selected?: boolean };
+      return Boolean(payload.workspace_selected);
+    } catch {
+      return false;
     }
   },
 
@@ -479,6 +534,25 @@ export const authApi = {
     } catch { /* ignore */ }
     return user;
   },
+};
+
+// ─── Workspaces (tenant-backed) ─────────────────────────────────────────────
+
+export const workspacesApi = {
+  list: () => request<WorkspaceSummary[]>('/api/v1/workspaces'),
+  create: (name: string) =>
+    request<WorkspaceSummary>('/api/v1/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  me: () =>
+    request<{
+      id: string | null;
+      name: string | null;
+      slug: string | null;
+      workspace_selected: boolean;
+      home_tenant_id: string;
+    }>('/api/v1/workspaces/me'),
 };
 
 // ─── Tenants & MSSP ─────────────────────────────────────────────────────────

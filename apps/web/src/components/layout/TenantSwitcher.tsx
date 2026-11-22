@@ -85,7 +85,7 @@ export function TenantSwitcher({ className }: TenantSwitcherProps) {
           'inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-card/40 px-2.5 py-1 text-xs text-fg-subtle',
           className,
         )}
-        aria-label="Loading tenant"
+        aria-label="Loading workspace"
       >
         <svg
           className="h-3.5 w-3.5 animate-spin"
@@ -123,7 +123,7 @@ export function TenantSwitcher({ className }: TenantSwitcherProps) {
   if (!canSwitch) {
     return (
       <div
-        title={error ?? `Tenant: ${current.name}`}
+        title={error ?? `Workspace: ${current.name}`}
         className={clsx(
           'inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-card/60 px-2.5 py-1 text-xs text-fg-secondary',
           className,
@@ -145,7 +145,7 @@ export function TenantSwitcher({ className }: TenantSwitcherProps) {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`Active tenant: ${current.name}. Click to switch.`}
+        aria-label={`Active workspace: ${current.name}. Click to switch.`}
         className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-card/60 px-2.5 py-1 text-xs text-fg-secondary transition-colors hover:border-brand-500/40 hover:bg-surface-card hover:text-fg-primary focus:border-brand-500/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
       >
         <TenantIcon />
@@ -175,11 +175,11 @@ export function TenantSwitcher({ className }: TenantSwitcherProps) {
         <div
           ref={menuRef}
           role="dialog"
-          aria-label="Switch tenant"
+          aria-label="Switch workspace"
           className="absolute right-0 z-30 mt-1.5 w-72 overflow-hidden rounded-md border border-surface-border bg-surface-raised shadow-lg ring-1 ring-black/5"
         >
           <div className="border-b border-surface-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
-            Switch tenant
+            Switch workspace
             <span className="ml-2 text-fg-muted normal-case">
               · {available.length} available
             </span>
@@ -191,7 +191,7 @@ export function TenantSwitcher({ className }: TenantSwitcherProps) {
                 ref={filterInputRef}
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="Filter tenants…"
+                placeholder="Filter workspaces…"
                 className="w-full rounded-md border border-surface-border bg-surface-card px-2 py-1 text-sm text-fg-primary placeholder:text-fg-subtle focus:border-brand-500/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
               />
             </div>

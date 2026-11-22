@@ -14,10 +14,10 @@ import {
   getActiveTenantId,
   msspApi,
   setActiveTenantId,
-  tenantsApi,
+  workspacesApi,
   type AuthUser,
   type ChildTenant,
-  type MyTenant,
+  type WorkspaceSummary,
 } from '@/lib/api';
 
 export interface TenantOption {
@@ -25,20 +25,20 @@ export interface TenantOption {
   id: string;
   /** Human-readable display name. */
   name: string;
-  /** What kind of tenant this is (parent / child / standalone). */
+  /** What kind of tenant this is (parent / child / standalone / workspace). */
   role: 'parent' | 'child' | 'standalone';
 }
 
 interface TenantContextValue {
-  /** Tenant the active session is currently operating against. */
+  /** Workspace the active session is currently operating against. */
   current: TenantOption | null;
-  /** Every tenant the operator can flip to (incl. `current`). */
+  /** Every workspace the operator can flip to (incl. `current`). */
   available: TenantOption[];
   /** The signed-in user's *org-level* role (analyst / responder / admin / …). */
   userRole: string | null;
-  /** Switch the active tenant. Triggers an SWR-level cache invalidation upstream. */
+  /** Switch the active workspace (rebinds JWT + reloads). */
   setTenant: (tenantId: string) => void;
-  /** True while we're loading the tenant list (e.g. on first paint). */
+  /** True while we're loading the workspace list (e.g. on first paint). */
   loading: boolean;
   /** Last error, if any — surfaced through the TopBar role badge tooltip. */
   error: string | null;
@@ -46,32 +46,24 @@ interface TenantContextValue {
 
 const TenantContext = createContext<TenantContextValue | null>(null);
 
-function toOption(t: MyTenant | (ChildTenant & { domain?: string | null })): TenantOption {
-  // Normalise the two API response shapes (MyTenant vs ChildTenant) into one
-  // dropdown-friendly type. ChildTenant.mssp_role is always 'child' (by the
-  // /mssp/children query filter) but we coerce defensively.
-  const role: TenantOption['role'] =
-    t.mssp_role === 'parent' || t.mssp_role === 'child'
-      ? t.mssp_role
-      : 'standalone';
-  return { id: t.id, name: t.name, role };
+function fromWorkspace(ws: WorkspaceSummary): TenantOption {
+  return { id: ws.id, name: ws.name, role: 'standalone' };
+}
+
+function fromChild(t: ChildTenant): TenantOption {
+  return {
+    id: t.id,
+    name: t.name,
+    role: t.mssp_role === 'parent' || t.mssp_role === 'child' ? t.mssp_role : 'standalone',
+  };
 }
 
 /**
- * Tracks the active tenant + every tenant the user can flip to (W5).
+ * Tracks the active workspace + every workspace the user can flip to.
  *
- * For a standalone tenant user, `available` is `[current]` and the
- * TenantSwitcher renders as a read-only RoleBadge. For an MSSP parent
- * operator, `available` lists `[parent, ...children]` and the switcher
- * actually opens.
- *
- * Switching writes the new tenant ID through `setActiveTenantId()` so the
- * shared `request()` helper picks it up on the *next* API call — callers
- * that need to refetch should listen for `window.dispatchEvent('aisoc:tenant-switched')`
- * and call SWR `mutate(() => true)`. Today we hard-reload the page (see
- * `setTenant()` below) which is the safest option given how many SWR keys
- * are tenant-scoped — a future iteration can wire that into a dedicated
- * SWR cache reset.
+ * Memberships come from ``GET /workspaces``. MSSP children are still merged
+ * in for parent operators. Switching calls ``authApi.selectWorkspace`` so the
+ * API ``CurrentUser.tenant_id`` rebinds, then hard-reloads to flush SWR.
  */
 export function TenantProvider({ children }: { children: ReactNode }) {
   const [current, setCurrent] = useState<TenantOption | null>(null);
@@ -84,55 +76,37 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function load() {
-      // The user record is in localStorage (post-login) so we can populate
-      // `userRole` and a fallback `current` synchronously without waiting on
-      // the network. This avoids a flicker of "loading…" in the TopBar for
-      // returning users.
       const user: AuthUser | null = authApi.currentUser();
       if (!cancelled) setUserRole(user?.role ?? null);
 
-      // No bearer token → don't bother hitting protected endpoints; the
-      // TopBar will simply render without the badge. This is the demo-page /
-      // logged-out fallback.
       if (!authApi.isAuthenticated()) {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
         return;
       }
 
       try {
-        // Fetch the canonical tenant record first; this is the only one we
-        // truly need to render the badge. Children come second and any
-        // failure there is non-fatal (e.g. /mssp/children 403 for a
-        // tenant-level user).
-        const me = await tenantsApi.me();
+        const memberships = await workspacesApi.list();
         if (cancelled) return;
-        const meOption = toOption(me);
+        const list: TenantOption[] = memberships.map(fromWorkspace);
 
-        // Carry the user's previously-selected tenant forward, but only if
-        // it's still resolvable. Anything stale falls back to "me".
-        const activeId = getActiveTenantId();
-        let activeOption = meOption;
-
-        let children: ChildTenant[] = [];
-        if (me.mssp_role === 'parent') {
-          try {
-            children = await msspApi.listChildren();
-          } catch {
-            // Non-fatal: an MSSP parent without children is valid; a 403 here
-            // just means the user lacks `mssp:read` and we render the badge
-            // alone.
-            children = [];
+        // MSSP parents may also flip into child tenants they manage.
+        try {
+          const children = await msspApi.listChildren();
+          for (const child of children) {
+            if (!list.some((t) => t.id === child.id)) {
+              list.push(fromChild(child));
+            }
           }
+        } catch {
+          /* non-fatal for non-MSSP users */
         }
         if (cancelled) return;
 
-        const childOptions = children.map(toOption);
-        const list: TenantOption[] = [meOption, ...childOptions];
-        if (activeId) {
-          const match = list.find((t) => t.id === activeId);
-          if (match) activeOption = match;
+        const activeId = getActiveTenantId();
+        let activeOption = list.find((t) => t.id === activeId) ?? list[0] ?? null;
+        if (user?.tenant_id) {
+          const bound = list.find((t) => t.id === user.tenant_id);
+          if (bound) activeOption = bound;
         }
 
         setAvailable(list);
@@ -140,14 +114,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : 'Failed to load tenant';
+        const message = err instanceof Error ? err.message : 'Failed to load workspaces';
         setError(message);
-        // We still want a usable badge — synthesise a `current` from the
-        // cached auth user so the TopBar isn't blank.
         if (user) {
           const fallback: TenantOption = {
             id: user.tenant_id,
-            name: 'My tenant',
+            name: 'My workspace',
             role: 'standalone',
           };
           setCurrent(fallback);
@@ -165,21 +137,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setTenant = useCallback((tenantId: string) => {
-    setActiveTenantId(tenantId);
-    // Find the new tenant inside our resolved list before navigating, so the
-    // post-reload paint already has the right context.
-    setCurrent((prev) => {
-      const next = available.find((t) => t.id === tenantId);
-      return next ?? prev;
-    });
-    if (typeof window !== 'undefined') {
-      // Hard reload is intentionally conservative: every SWR cache key has
-      // the old tenant scope baked in, and patching every consumer to
-      // re-key on `current.id` is a future workstream. Reloading guarantees
-      // a clean read.
-      window.dispatchEvent(new CustomEvent('aisoc:tenant-switched', { detail: { tenantId } }));
-      window.location.reload();
-    }
+    void (async () => {
+      try {
+        await authApi.selectWorkspace(tenantId);
+        setActiveTenantId(tenantId);
+        setCurrent((prev) => {
+          const next = available.find((t) => t.id === tenantId);
+          return next ?? prev;
+        });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('aisoc:tenant-switched', { detail: { tenantId } }));
+          window.location.reload();
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to switch workspace';
+        setError(message);
+      }
+    })();
   }, [available]);
 
   const value = useMemo<TenantContextValue>(
