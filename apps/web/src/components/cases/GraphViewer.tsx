@@ -18,6 +18,7 @@ import cytoscape, { Core } from 'cytoscape'
 import fcose from 'cytoscape-fcose'
 import useSWR from 'swr'
 import { clsx } from 'clsx'
+import { safeFetcher } from '@/lib/fetcher'
 import toast from 'react-hot-toast'
 
 // Register layout algorithm
@@ -80,11 +81,7 @@ export function GraphViewer({
   // Fetch graph data
   const { data: graphData, error: graphError, isLoading } = useSWR<GraphResponse>(
     caseId ? `/api/v1/cases/${caseId}/graph` : null,
-    async (url) => {
-      const res = await fetch(url)
-      if (!res.ok) throw new Error('Failed to fetch graph')
-      return res.json()
-    },
+    safeFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60000 }
   )
 

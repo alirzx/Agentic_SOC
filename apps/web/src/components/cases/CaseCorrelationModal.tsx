@@ -26,6 +26,7 @@ import {
   type GraphObservationMode,
 } from '@/hooks/useCaseCandidates';
 import { CorrelationInspectModal } from '@/components/correlation/CorrelationInspectModal';
+import { browserAuthHeaders } from '@/lib/fetcher';
 
 interface CaseCorrelationModalProps {
   caseId: string;
@@ -89,7 +90,7 @@ export function CaseCorrelationModal({
     try {
       const response = await fetch(`/api/v1/cases/${encodeURIComponent(caseId)}/correlation/scope`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: browserAuthHeaders(),
         body: JSON.stringify({
           excluded_alert_ids: scope.excluded_alert_ids,
           filters: scope.filters,
@@ -131,7 +132,9 @@ export function CaseCorrelationModal({
       setSearchNamesLoading(false);
     } else {
       // Fetch rules (rule_names) from the case detail endpoint
-      fetch(`/api/v1/cases/${encodeURIComponent(caseId)}`)
+      fetch(`/api/v1/cases/${encodeURIComponent(caseId)}`, {
+        headers: browserAuthHeaders(),
+      })
         .then((res) => res.json())
         .then((data) => {
           setSearchNames(data.rules ?? []);

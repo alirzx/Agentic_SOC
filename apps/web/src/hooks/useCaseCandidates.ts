@@ -3,6 +3,7 @@
  */
 
 import useSWR from 'swr';
+import { safeFetcher } from '@/lib/fetcher';
 
 export interface CandidateEntity {
   kind: string;
@@ -312,16 +313,7 @@ export interface CandidatesFilter {
   offset?: number;
 }
 
-const fetcher = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    const message = `HTTP ${response.status}`;
-    const error = new Error(message) as any;
-    error.status = response.status;
-    throw error;
-  }
-  return response.json();
-};
+const fetcher = safeFetcher;
 
 export function buildCandidatesQuery(filters?: CandidatesFilter): string {
   const params = new URLSearchParams();

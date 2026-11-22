@@ -18,6 +18,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { format, parseISO } from 'date-fns'
 import { clsx } from 'clsx'
+import { safeFetcher } from '@/lib/fetcher'
 import toast from 'react-hot-toast'
 
 interface TimelineEvent {
@@ -96,11 +97,7 @@ export function TimelineViewer({
   // Fetch timeline data
   const { data: timelineData, error: timelineError, isLoading } = useSWR<TimelineResponse>(
     caseId ? `/api/v1/cases/${caseId}/timeline` : null,
-    async (url) => {
-      const res = await fetch(url)
-      if (!res.ok) throw new Error('Failed to fetch timeline')
-      return res.json()
-    },
+    safeFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60000 }
   )
 

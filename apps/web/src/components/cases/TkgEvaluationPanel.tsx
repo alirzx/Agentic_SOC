@@ -1082,7 +1082,19 @@ export function TkgEvaluationPanel({ caseId, engineVerdict }: { caseId: string; 
 
       {loading && !evaluation && <p className="text-xs text-slate-500">Loading last evaluation…</p>}
 
-      {neverRun && !evaluation && !running && (
+      {health && !health.configured && (
+        <p className="rounded border border-amber-500/25 bg-amber-500/[0.05] p-2 text-xs text-amber-100/90">
+          TKG credentials are not set on the API (
+          <code className="text-amber-200/90">AISOC_TKG_URL</code>,{' '}
+          <code className="text-amber-200/90">EMAIL</code>,{' '}
+          <code className="text-amber-200/90">PASSWORD</code>,{' '}
+          <code className="text-amber-200/90">KB_ID</code>
+          ). The Soorin TKG service can be up while AiSOC still cannot call it — add those env vars to the API
+          runtime override and recreate the API container.
+        </p>
+      )}
+
+      {neverRun && !evaluation && !running && health?.configured !== false && (
         <p className="text-xs text-slate-500">
           No evaluation yet. Running one resolves each member alert in the TKG and stores the verdict with the
           exact payload it was judged on.

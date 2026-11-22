@@ -651,6 +651,8 @@ class Settings(BaseSettings):
     AISOC_TKG_URL: str = ""  # e.g. http://192.168.0.55:2516
     AISOC_TKG_EMAIL: str = ""
     AISOC_TKG_PASSWORD: str = ""
+    #: Optional static bearer (console session token). Skips email/password login.
+    AISOC_TKG_TOKEN: str = ""
     AISOC_TKG_KB_ID: str = ""  # KB uuid shown in the TKG console URL
     AISOC_TKG_TENANT: str = "tenant-blue"  # TKG binding the alerts were ingested under
     AISOC_TKG_SOURCE_SYSTEM: str = "splunk"

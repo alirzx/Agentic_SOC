@@ -105,8 +105,12 @@ CREATE INDEX IF NOT EXISTS idx_runbook_tasks_playbook_run
 -- ============================================================
 -- 3. permissions: playbooks:approve
 -- ============================================================
-INSERT INTO permissions (name, description, category) VALUES
-    ('playbooks:approve', 'Approve or reject playbook approval gates', 'playbooks')
+-- Explicit id: some installs lost the uuid DEFAULT on permissions.id
+-- (DEFAULT uuid_generate_v4() / extension drift), which otherwise yields
+-- "null value in column id violates not-null constraint" and rolls back
+-- the whole file — including CREATE playbook_runs.
+INSERT INTO permissions (id, name, description, category) VALUES
+    (gen_random_uuid(), 'playbooks:approve', 'Approve or reject playbook approval gates', 'playbooks')
 ON CONFLICT (name) DO NOTHING;
 
 -- Grants mirror services/api/app/core/security.py: role leads and tenant admins

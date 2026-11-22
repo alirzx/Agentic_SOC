@@ -92,10 +92,14 @@ class TkgConfig:
     source_name: str = "agentic-soc-manual-20261116"
     #: Operator opt-in for the write path; read-only evaluation ignores it.
     allow_send: bool = False
+    #: Optional static bearer (e.g. a console session token). When set, login is skipped.
+    bearer_token: str = ""
 
     @property
     def configured(self) -> bool:
-        return bool(self.base_url and self.email and self.password and self.kb_id)
+        has_login = bool(self.email and self.password)
+        has_token = bool(self.bearer_token)
+        return bool(self.base_url and self.kb_id and (has_login or has_token))
 
 
 def config_from_settings(settings: Any | None = None) -> TkgConfig:
@@ -116,6 +120,7 @@ def config_from_settings(settings: Any | None = None) -> TkgConfig:
         timeout_s=float(getattr(settings, "AISOC_TKG_TIMEOUT_S", DEFAULT_TIMEOUT_S) or DEFAULT_TIMEOUT_S),
         source_name=(getattr(settings, "AISOC_TKG_SOURCE_NAME", "") or "agentic-soc-manual-20261116").strip(),
         allow_send=bool(getattr(settings, "AISOC_TKG_ALLOW_SEND", False)),
+        bearer_token=(getattr(settings, "AISOC_TKG_TOKEN", "") or "").strip(),
     )
 
 
@@ -158,6 +163,10 @@ class TkgClient:
         graph was busy for a second".
         """
 
+        if self.cfg.bearer_token:
+            self._token = self.cfg.bearer_token
+            self._token_at = time.monotonic()
+            return self._token
         if not (self.cfg.base_url and self.cfg.email and self.cfg.password):
             raise TkgError(R_TKG_UNREACHABLE, "TKG credentials are not configured")
         response: httpx.Response | None = None
@@ -205,7 +214,7 @@ class TkgClient:
         except httpx.HTTPError as exc:
             raise TkgError(R_TKG_UNREACHABLE, f"{method} {path} failed: {exc}") from exc
 
-        if response.status_code == 401 and retry_auth:
+        if response.status_code == 401 and retry_auth and not self.cfg.bearer_token:
             self._token = None
             return await self._request(method, path, json=json, retry_auth=False)
         if response.status_code >= 400:

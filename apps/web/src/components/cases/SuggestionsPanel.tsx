@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
+import { browserAuthHeaders, safeFetcher } from '@/lib/fetcher';
 
 interface SuggestionCard {
   alert_id: string;
@@ -38,19 +39,13 @@ export function SuggestionsPanel({
 
   const { data: suggestions, isLoading, error, mutate } = useSWR<
     SuggestionCard[]
-  >(
-    caseId ? `/api/v1/cases/${caseId}/suggestions` : null,
-    async (url: string) => {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to fetch suggestions');
-      return res.json();
-    }
-  );
+  >(caseId ? `/api/v1/cases/${caseId}/suggestions` : null, safeFetcher);
 
   const handlePreviewImpact = async (alertId: string) => {
     try {
       const res = await fetch(
-        `/api/v1/cases/${caseId}/suggestions/${alertId}/impact`
+        `/api/v1/cases/${caseId}/suggestions/${alertId}/impact`,
+        { headers: browserAuthHeaders() }
       );
       if (!res.ok) throw new Error('Failed to preview impact');
 
@@ -68,7 +63,7 @@ export function SuggestionsPanel({
     try {
       const res = await fetch(`/api/v1/cases/${caseId}/alerts/attach`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: browserAuthHeaders(),
         body: JSON.stringify({ alert_ids: [alertId] }),
       });
 
