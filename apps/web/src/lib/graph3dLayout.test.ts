@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { layoutGraph3D } from './graph3dLayout';
+import { layoutGraph3D, estimateNodeSpacing } from './graph3dLayout';
 
 const distance3D = (
   a: { x: number; y: number; z: number },
@@ -69,5 +69,25 @@ describe('layoutGraph3D', () => {
     const tightSpan = distance3D(tight.get('a1')!, tight.get('b1')!);
     const wideSpan = distance3D(wide.get('a1')!, wide.get('b1')!);
     expect(wideSpan).toBeGreaterThan(tightSpan);
+  });
+
+  it('reports a positive gap between neighbouring nodes', () => {
+    const positions = layoutGraph3D(ids, communityOf);
+    const gap = estimateNodeSpacing(positions, ids);
+    expect(gap).toBeGreaterThan(0);
+    // The quartile cannot exceed the longest leg of the layout.
+    expect(gap).toBeLessThan(distance3D(positions.get('a1')!, positions.get('b1')!));
+  });
+
+  it('gives a busy bubble more room per node than a small one', () => {
+    const small = ['s1', 's2', 's3', 's4'];
+    const large = Array.from({ length: 60 }, (_, index) => `l${index}`);
+    const smallMap = new Map(small.map((id) => [id, 'c0']));
+    const largeMap = new Map(large.map((id) => [id, 'c0']));
+    const smallGap = estimateNodeSpacing(layoutGraph3D(small, smallMap), small);
+    const largeGap = estimateNodeSpacing(layoutGraph3D(large, largeMap), large);
+    expect(largeGap).toBeGreaterThan(0);
+    // A bubble of 60 must not keep the density of a bubble of 4.
+    expect(largeGap).toBeLessThan(smallGap);
   });
 });

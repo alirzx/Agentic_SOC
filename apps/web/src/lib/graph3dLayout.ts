@@ -24,9 +24,21 @@ export interface Layout3DOptions {
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
-/** Radius of one community's own sphere, grown by its member count. */
+/**
+ * Radius of one community's own sphere, grown by its member count.
+ *
+ * The cube root keeps the density of a bubble constant as it fills up, which is
+ * what a plain packing would do — but a mark has a floor below which it stops
+ * being clickable, so a 84-node bubble needs visibly more air per node than a
+ * 12-node one, not the same. The relief term is that extra air: it grows the
+ * bubbles (and, because the shell is sized from the widest bubble, the gaps
+ * between them) only once a community is already busy, so a small campaign
+ * looks exactly as it did before.
+ */
 function clusterRadius(size: number): number {
-  return 18 + 14 * Math.cbrt(Math.max(1, size));
+  const shell = Math.cbrt(Math.max(1, size));
+  const relief = 1 + 0.12 * Math.max(0, shell - 2);
+  return 18 + 14 * shell * relief;
 }
 
 export function layoutGraph3D(
@@ -83,4 +95,50 @@ export function layoutGraph3D(
   });
 
   return result;
+}
+
+/**
+ * Typical distance between neighbouring nodes in a finished layout.
+ *
+ * The orbit view needs this to size a mark: the mark must stay narrower than
+ * the room the layout gives it, or a campaign with dedup switched off paints a
+ * ball of overlapping silhouettes that hides both its nodes and its links.
+ *
+ * Sampled, not exact. The full pairwise matrix is 810k distance tests on a
+ * 900-node campaign, and the mark only needs the order of magnitude, so every
+ * `sampleSize`-th node is measured against all of them. Distances are in the
+ * layout's own world units and scale with the scene, so callers should express
+ * a mark size as a fraction of this rather than as an absolute number.
+ */
+export function estimateNodeSpacing(
+  positions: ReadonlyMap<string, NodePosition3D>,
+  ids: readonly string[],
+  sampleSize = 220
+): number {
+  const points: NodePosition3D[] = [];
+  for (const id of ids) {
+    const point = positions.get(id);
+    if (point) points.push(point);
+  }
+  if (points.length < 2) return 0;
+
+  const step = Math.max(1, Math.ceil(points.length / sampleSize));
+  const nearest: number[] = [];
+  for (let index = 0; index < points.length; index += step) {
+    const from = points[index];
+    let best = Infinity;
+    for (let other = 0; other < points.length; other += 1) {
+      if (other === index) continue;
+      const to = points[other];
+      const distance = Math.hypot(from.x - to.x, from.y - to.y, from.z - to.z);
+      if (distance < best) best = distance;
+    }
+    if (Number.isFinite(best)) nearest.push(best);
+  }
+  if (nearest.length === 0) return 0;
+
+  nearest.sort((a, b) => a - b);
+  // The lower quartile rather than the median: the cap exists to protect the
+  // tightest corner of the scene, not the average bubble.
+  return nearest[Math.floor(nearest.length * 0.25)];
 }

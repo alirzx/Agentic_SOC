@@ -10,7 +10,7 @@ import {
   describeCluster,
   type ClusterSummary,
 } from '@/lib/graphCommunities';
-import { layoutGraph3D } from '@/lib/graph3dLayout';
+import { estimateNodeSpacing, layoutGraph3D } from '@/lib/graph3dLayout';
 import { graphPalette, useGraphTheme, type GraphPalette } from '@/lib/graphTheme';
 import type { CandidateGraph, CandidateGraphNode } from '@/hooks/useCaseCandidates';
 
@@ -504,6 +504,13 @@ export function Graph3DView({
       .map((edge) => ({ source: edge.source, target: edge.target }));
     const membership = clusterGraph(allIds, structure);
     const positions = layoutGraph3D(allIds, membership, { spread: compact ? 0.72 : 1 });
+    // How much room the layout actually gives a node. Marks are capped against
+    // it below, so a 31-node campaign and a 224-node one both stay readable
+    // instead of the busy one collapsing into a wall of overlapping shapes.
+    const nodeGap = estimateNodeSpacing(
+      positions,
+      nodes.map((node) => node.id)
+    );
 
     // Under the same 40-node cut the 2D canvas uses, there are no bubbles — so
     // 3D shows no names either rather than inventing clusters of its own.
@@ -674,11 +681,23 @@ export function Graph3DView({
       // Observations barely lead the largest entity now: in 2D the hexagon is
       // clearly wider than a house, but a flat point sprite at that ratio read as
       // a blob that swallowed the entities it was supposed to point at.
-      const scale = Math.max(1, sphere.radius / 150);
-      const size =
+      const growth = Math.max(1, Math.min(1.8, sphere.radius / 150));
+      const base =
         kind === 'observation'
-          ? 20 * scale
-          : Math.min(24, Math.max(11, (meta?.height ?? 26) * 0.5)) * scale;
+          ? 20 * growth
+          : Math.min(24, Math.max(11, (meta?.height ?? 26) * 0.5)) * growth;
+      // A mark may not outgrow the room between neighbouring nodes — and how
+      // much overlap is still readable depends on how many marks share the
+      // scene. On a 31-node campaign the shapes may touch (that is the size the
+      // 2D view uses and it reads fine), but at 174/224 nodes with dedup off the
+      // same ratio painted a solid block of hexagons that hid its own links.
+      // So the allowance falls from 1.35× the measured gap on a quiet campaign to
+      // 0.85× on a busy one: past ~120 nodes the marks shrink, the links lengthen
+      // relative to them, and every node stays individually clickable.
+      const busy = Math.min(1, Math.max(0, (nodes.length - 120) / 230));
+      const capRatio = (1.35 - 0.5 * busy) * (kind === 'observation' ? 1.1 : 1);
+      const cap = Math.max(6, nodeGap * capRatio);
+      const size = Math.min(base, cap);
       const material = new THREE.PointsMaterial({
         map: makeShapeTexture({ points: meta?.points, round: meta?.round }),
         size,
