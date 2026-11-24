@@ -173,9 +173,11 @@ class ExplainResponse(BaseModel):
 
 
 def _run_to_summary(run: InvestigationRun) -> RunSummary:
+    # ``InvestigationRun.case_id`` is a UUID column (aligned with aisoc_cases.id);
+    # the public ledger schema keeps case_id as a string for the web console.
     return RunSummary(
         id=run.id,
-        case_id=run.case_id,
+        case_id=str(run.case_id),
         status=run.status,
         model_used=run.model_used,
         iterations=run.iterations,

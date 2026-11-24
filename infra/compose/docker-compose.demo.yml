@@ -225,12 +225,28 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     ports:
       - "${AISOC_BIND_ADDR:-0.0.0.0}:${AISOC_AGENTS_PORT:-8887}:8084"
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
       CORE_API_URL: http://api:8000
+      # Phase B1 — auto-triage every fused alert off the Kafka stream.
+      # Without these, funnel stages stay stuck at `ingested`.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_ALERTS_FUSED: aisoc.alerts.fused
+      KAFKA_AUTO_OFFSET_RESET: latest
+      AISOC_AGENT_ESCALATE_TO_GRAPH: ${AISOC_AGENT_ESCALATE_TO_GRAPH:-1}
+      # Case creation belongs to the correlation engine (see `correlation`
+      # service below). Keep the legacy agent promoter retired.
+      AISOC_CORRELATION_CASE_WRITER_ONLY: ${AISOC_CORRELATION_CASE_WRITER_ONLY:-1}
+      AISOC_AGENT_AUTO_CASE: ${AISOC_AGENT_AUTO_CASE:-0}
+      # Copilot default: triage/investigate automatic; response actions gated.
+      AGENTIC_SOC_ENABLED: ${AGENTIC_SOC_ENABLED:-false}
+      AGENTIC_SOC_SHADOW_MODE: ${AGENTIC_SOC_SHADOW_MODE:-true}
+      AGENTIC_SOC_AUTO_RESPONSE: ${AGENTIC_SOC_AUTO_RESPONSE:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
@@ -261,6 +277,39 @@ services:
       AISOC_AGENTS_TENANT_SIGNING_KEY: ${AISOC_AGENTS_TENANT_SIGNING_KEY:-}
       AISOC_AGENTS_ALLOW_UNSIGNED_TENANT_HEADER: ${AISOC_AGENTS_ALLOW_UNSIGNED_TENANT_HEADER:-0}
       ENV: development
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  # Canonical automatic case writer (v2.0). Graph projection is optional on the
+  # slim demo stack (no Neo4j) — Postgres correlation still creates cases.
+  correlation:
+    image: ghcr.io/beenuar/aisoc-correlation:${AISOC_TAG:-latest}
+    build:
+      context: services/correlation
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple/}
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-https://archive.debian.petiak.ir/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://mirror.dogado.de/debian-security}
+    container_name: aisoc-demo-correlation
+    pull_policy: missing
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:${AISOC_CORRELATION_PORT:-8010}:8010"
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      API_SERVICE_URL: http://api:8000
+      AISOC_GRAPH_ENABLED: ${AISOC_GRAPH_ENABLED:-false}
+      AISOC_CORRELATION_OWNER: graph_engine
+      AISOC_CORRELATION_THETA: ${AISOC_CORRELATION_THETA:-3}
+      AISOC_CORRELATION_POLL_SECONDS: ${AISOC_CORRELATION_POLL_SECONDS:-60}
+      AISOC_CORRELATION_LOOKBACK_HOURS: ${AISOC_CORRELATION_LOOKBACK_HOURS:-72}
+      AISOC_CORRELATION_API_TOKEN: ${AISOC_CORRELATION_API_TOKEN:-}
     networks:
       - aisoc-demo
     restart: unless-stopped
