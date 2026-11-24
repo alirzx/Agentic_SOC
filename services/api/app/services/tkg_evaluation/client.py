@@ -14,11 +14,12 @@ import asyncio
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
+from app.services.tkg.binding import Binding
 from app.services.tkg_evaluation.constants import (
     DEFAULT_TIMEOUT_S,
     R_TKG_AUTH,
@@ -93,7 +94,8 @@ class TkgConfig:
     #: Operator opt-in for the write path; read-only evaluation ignores it.
     allow_send: bool = False
     #: Optional static bearer (e.g. a console session token). When set, login is skipped.
-    bearer_token: str = ""
+    bearer_token: str = field(default="", repr=False)
+    binding: Binding | None = None
 
     @property
     def configured(self) -> bool:
@@ -139,6 +141,7 @@ class TkgClient:
         self._client = httpx.AsyncClient(
             base_url=cfg.base_url,
             timeout=cfg.timeout_s,
+            trust_env=False,
             transport=transport,
             headers={"Accept": "application/json"},
         )
@@ -206,6 +209,15 @@ class TkgClient:
         json: Any | None = None,
         retry_auth: bool = True,
     ) -> Any:
+        if self.cfg.binding is not None:
+            from app.db.database import AsyncSessionLocal
+            from sqlalchemy import text
+
+            async with AsyncSessionLocal() as db:
+                active = await db.scalar(text("SELECT enabled FROM workspace_tkg_bindings WHERE id=:id AND tenant_id=:tenant AND evaluation"),
+                                         {"id": self.cfg.binding.id, "tenant":self.cfg.binding.tenant_id})
+            if not active:
+                raise TkgError(R_TKG_AUTH, "binding unavailable")
         token = self._token or await self._login()
         try:
             response = await self._client.request(method, path, json=json, headers={"Authorization": f"Bearer {token}"})
@@ -219,7 +231,7 @@ class TkgClient:
             return await self._request(method, path, json=json, retry_auth=False)
         if response.status_code >= 400:
             code = _failure_code(response.status_code, path=path)
-            detail = f"{method} {path} -> HTTP {response.status_code}: {response.text[:200]}"
+            detail = f"{method} {path} -> HTTP {response.status_code}"
             if code == R_TKG_KB_MISSING:
                 detail = f"knowledge base {self.cfg.kb_id} was not found on the TKG"
             raise TkgError(code, detail, status=response.status_code)
@@ -241,8 +253,8 @@ class TkgClient:
             "tenant_id": self.cfg.tenant_id,
             "source_system": self.cfg.source_system,
             "source_instance": self.cfg.source_instance,
-            "entity_type": "SplunkNotable",
-            "authority_name": "splunk_notable_id",
+            "entity_type": "SecurityAlert" if self.cfg.binding else "SplunkNotable",
+            "authority_name": "soc_alert_row_id" if self.cfg.binding else "splunk_notable_id",
             "source_identifier": str(notable_id),
         }
         return await self._request("POST", f"/api/v1/kbs/{self.cfg.kb_id}/knowledge/resolve", json=body)

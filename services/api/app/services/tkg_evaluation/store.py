@@ -54,7 +54,7 @@ async def load_alerts(db: Any, tenant_id: UUID, case_id: UUID, alert_ids: list[s
     rows = (
         await db.execute(
             text(
-                "SELECT id, title, severity, event_time, rule_name, mitre_techniques, llm_payload, "
+                "SELECT id, title, severity, event_time, rule_name, mitre_techniques, llm_payload, connector_id, connector_type, raw_event, rule_id, source_event_ids, ocsf_class_uid, "
                 "       funnel_stage, correlation_state, occurrence_count, case_id "
                 "FROM alerts WHERE tenant_id = :tenant_id "
                 "  AND (case_id = :case_id OR id::text = ANY(:cached))"
@@ -84,7 +84,7 @@ async def load_alerts(db: Any, tenant_id: UUID, case_id: UUID, alert_ids: list[s
         loser_rows = (
             await db.execute(
                 text(
-                    "SELECT id, title, severity, event_time, rule_name, mitre_techniques, llm_payload, "
+                    "SELECT id, title, severity, event_time, rule_name, mitre_techniques, llm_payload, connector_id, connector_type, raw_event, rule_id, source_event_ids, ocsf_class_uid, "
                     "       funnel_stage, correlation_state, occurrence_count, case_id "
                     "FROM alerts a CROSS JOIN unnest(CAST(:winners AS text[])) AS w(winner) "
                     "WHERE a.tenant_id = :tenant_id "

@@ -268,6 +268,11 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
         model=model_name,
         base_url=gateway.get("base_url_normalized_sanitized"),
     )
+    from app.integrations.tkg.recon import verify_grant
+    from app.integrations.tkg.tools import grant
+
+    # The background task inherits this context. A request body never supplies it.
+    scope = grant.set(verify_grant(request.headers.get("X-AiSOC-TKG-Grant"), tenant_id, alert_id))
     task = asyncio.create_task(
         _run_investigation(
             run_id=run_id,
@@ -280,6 +285,7 @@ async def investigate_alert(req: AlertInvestigateRequest, request: Request) -> A
             investigation_case_id=case_id,
         )
     )
+    grant.reset(scope)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return pending

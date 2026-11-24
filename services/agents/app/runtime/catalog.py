@@ -170,6 +170,9 @@ def build_tool_registry() -> SocToolRegistry:
                 allowed_agents=frozenset({"decision", "response"}),
             )
         )
+    from app.integrations.tkg.tools import register
+
+    register(registry)
     return registry
 
 

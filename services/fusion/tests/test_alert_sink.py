@@ -158,7 +158,7 @@ async def test_new_alert_is_inserted_with_canonical_id_and_provenance():
 
 
 @pytest.mark.asyncio
-async def test_unknown_tenant_retries_demo_tenant():
+async def test_unknown_tenant_fails_without_reassignment():
     other = uuid.UUID("11111111-1111-1111-1111-111111111111")
     fused = _fused()
     fused.alert.tenant_id = other
@@ -197,14 +197,13 @@ async def test_unknown_tenant_retries_demo_tenant():
 
     sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(fused)
-    assert result.outcome is PersistOutcome.INSERTED
-    assert sink._pool.conn.calls[0][1][1] == other
-    assert sink._pool.conn.calls[1][1][1] == TENANT
-    assert json.loads(sink._pool.conn.calls[1][1][23]) == ["WIN-DC01"]
+    assert result.outcome is PersistOutcome.FAILED
+    assert not result.durable
+    assert [args[1] for _, args in sink._pool.conn.calls] == [other]
 
 
 @pytest.mark.asyncio
-async def test_dedup_hit_returns_duplicate():
+async def test_unconfirmed_conflict_does_not_claim_durability():
     pool = _StubPool(row=None)  # WHERE NOT EXISTS / ON CONFLICT filtered it out
     sink = AlertSink("postgresql://x")
     sink._pool = pool
@@ -214,9 +213,9 @@ async def test_dedup_hit_returns_duplicate():
 
     sink.lookup_display_duplicate = _no_display  # type: ignore[method-assign]
     result = await sink.persist(_fused())
-    assert result.outcome is PersistOutcome.DUPLICATE
-    assert result.alert_id == str(_fused().id)  # canonical id still known
-    assert result.durable is True
+    assert result.outcome is PersistOutcome.FAILED
+    assert result.alert_id is None
+    assert not result.durable
 
 
 @pytest.mark.asyncio

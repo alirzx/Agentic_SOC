@@ -1,0 +1,237 @@
+"""Read-only tools for one authenticated investigation. Authority is held outside model state."""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+from contextvars import ContextVar
+from datetime import date, datetime
+from typing import Annotated
+from uuid import UUID
+
+import httpx
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.runtime.tools import SOCTool, ToolContext, ToolPermissionDenied
+
+from .binding import Binding, BindingError
+
+Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)]
+Limit = Annotated[int, Field(ge=1, le=20)]
+Moment = date | datetime
+
+
+class Limits(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="AISOC_TKG_RECON_",extra="ignore")
+    enabled: bool = False
+    preflight_enabled: bool = True
+    loop_enabled: bool = False
+    max_iterations: int = Field(2, ge=1, le=5)
+    max_llm_calls: int = Field(3, ge=1, le=6)
+    max_cost_usd: float = Field(.05, gt=0, le=1)
+    max_tool_calls: int = Field(8, ge=1, le=24)
+    timeout_seconds: float = Field(45, ge=1, le=180)
+    tool_timeout_seconds: float = Field(4, gt=0, le=20)
+    max_hops: int = Field(2, ge=1, le=4)
+    max_entities: int = Field(12, ge=1, le=64)
+    max_results: int = Field(3, ge=1, le=10)
+    context_bytes: int = Field(24000, ge=1024, le=100000)
+    max_bindings: int = Field(4, ge=1, le=12)
+
+
+class Args(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class Resolve(Args):
+    """Resolve the authenticated investigation's durable alert."""
+
+
+class Context(Args):
+    entity: UUID
+    at: Moment | None = None
+    as_of: Moment | None = None
+    limit: Limit = 5
+
+
+class Search(Args):
+    q: Short
+    top_k: Limit = 3
+    as_of: Moment | None = None
+
+
+class Timeline(Args):
+    entity: UUID
+    since: date | None = None
+    until: date | None = None
+    as_of: Moment | None = None
+    predicate: Short | None = None
+    limit: Limit = 5
+
+
+class Neighbors(Context):
+    predicate: Short | None = None
+    object_type: Short | None = None
+
+
+SCHEMAS = {"resolve_entity":Resolve,"get_entity_context":Context,"search_history":Search,
+           "get_timeline":Timeline,"get_neighbors":Neighbors}
+active = ContextVar("tkg_recon_session",default=None)
+grant = ContextVar("tkg_verified_alert_scope",default=None)
+
+
+class ReadTool(SOCTool):
+    risk_level = "read"
+    requires_approval = False
+    allowed_agents = frozenset({"ReconAgent"})
+    allowed_roles = frozenset({"analyst","system"})
+    permission = "READ_SECURITY_DATA"
+    timeout_seconds = 5
+    audit_required = True
+
+    def __init__(self, name):
+        self.short = name
+        self.name = "tkg." + name
+        self.description = "Read workspace-authorized TKG evidence: " + name
+        self.input_schema = SCHEMAS[name].model_json_schema()
+
+    async def execute(self, input, context: ToolContext):
+        session = active.get()
+        if not session or str(session.workspace) != context.tenant_id:
+            raise ToolPermissionDenied("tkg_workspace_unavailable")
+        args = SCHEMAS[self.short].model_validate(input).model_dump(mode="json",exclude_none=True)
+        return await session.execute(self.short,args)
+
+
+def register(registry):
+    for name in SCHEMAS:
+        registry.register(ReadTool(name))
+
+
+class ReadError(ValueError):
+    pass
+
+
+class Session:
+    def __init__(self, pool, http, workspace, alert_id, connector, bindings, limits):
+        self.pool, self.http = pool, http
+        self.workspace, self.alert_id, self.connector = workspace, alert_id, connector
+        self.bindings, self.limits = bindings, limits
+        self.calls = self.used_bytes = 0
+        self.depth = {}
+        self.seen = set()
+        self.rpc_ready = set()
+        self.evidence = []
+
+    async def post(self,b,path,body):
+        if self.calls >= self.limits.max_tool_calls:
+            raise ReadError("call_budget")
+        self.calls += 1
+        live = await self.pool.fetchval("SELECT enabled FROM workspace_tkg_bindings WHERE tenant_id=$1 AND id=$2",
+                                        self.workspace,b.id)
+        if not live:
+            raise ReadError("binding_disabled")
+        async with self.http.stream("POST", f"{b.origin()}/api/v1/kbs/{b.kb_id}/{path}",
+                                    json=body,headers={"Authorization":"Bearer "+b.credential("reader")}) as r:
+            if r.status_code != 200:
+                raise ReadError(f"http_{r.status_code}")
+            buf = bytearray()
+            async for part in r.aiter_bytes():
+                buf.extend(part)
+                if len(buf)>131072:
+                    raise ReadError("response_truncated")
+            doc = json.loads(buf)
+            if not isinstance(doc,dict):
+                raise ReadError("invalid_response")
+            return doc
+
+    async def rpc(self,b,method,params):
+        body = {"jsonrpc":"2.0","id":self.calls+1,"method":method,"params":params}
+        reply = await self.post(b,"mcp",body)
+        if reply.get("jsonrpc")!="2.0" or reply.get("id")!=body["id"] or not isinstance(reply.get("result"),dict):
+            raise ReadError("mcp_error")
+        return reply["result"]
+
+    def remember(self,b,entity,depth):
+        try:
+            key = (b.id,str(UUID(str(entity))))
+        except ValueError:
+            return
+        if key in self.depth or len(self.depth)<self.limits.max_entities:
+            self.depth[key] = min(depth,self.depth.get(key,depth))
+
+    async def lookup(self,b,name,args):
+        if name=="resolve_entity":
+            body = dict(tenant_id=b.tkg_tenant,source_system=b.source_system,source_instance=b.source_instance,
+                        entity_type="SecurityAlert",authority_name="soc_alert_row_id",source_identifier=str(self.alert_id))
+            doc = await self.post(b,"knowledge/resolve",body)
+            if doc.get("schema_version")!="soorin.identity-resolution.v1" or doc.get("knowledge_base_id")!=str(b.kb_id) or doc.get("tenant_id")!=b.tkg_tenant:
+                raise ReadError("invalid_scope_or_version")
+            candidates = doc.get("candidates")
+            if doc.get("automatic") is True and doc.get("status")=="resolved" and isinstance(candidates,list) and len(candidates)==1:
+                entry = candidates[0]
+                if entry.get("has_conflict") is False and not entry.get("graph_conflict") and not entry.get("candidates_truncated"):
+                    self.remember(b,entry.get("entity_id"),0)
+            return doc
+        if name=="search_history":
+            return await self.post(b,"search",{**args,"top_k":min(args["top_k"],self.limits.max_results)})
+        if name=="get_entity_context":
+            doc = await self.post(b,"knowledge/context",{"tenant_id":b.tkg_tenant,**args})
+            if doc.get("schema_version")!="soorin.knowledge-context.v2" or doc.get("tenant_id")!=b.tkg_tenant or doc.get("knowledge_base_id")!=str(b.kb_id):
+                raise ReadError("invalid_scope_or_version")
+            return doc
+        tool = {"get_timeline":"timeline","get_neighbors":"neighbors"}[name]
+        if b.id not in self.rpc_ready:
+            hello = await self.rpc(b,"initialize",{"protocolVersion":"2025-06-18","capabilities":{},
+                                                   "clientInfo":{"name":"aisoc-recon","version":"1"}})
+            listed = await self.rpc(b,"tools/list",{})
+            names = {t["name"] for t in listed.get("tools",[]) if isinstance(t,dict)}
+            if hello.get("protocolVersion")!="2025-06-18" or not {"neighbors","timeline"}<=names or "remember" in names:
+                raise ReadError("invalid_read_pat_capabilities")
+            self.rpc_ready.add(b.id)
+        result = await self.rpc(b,"tools/call",{"name":tool,"arguments":args})
+        if result.get("isError"):
+            raise ReadError("mcp_tool_failed")
+        doc = result.get("structuredContent")
+        if not isinstance(doc,dict):
+            raise ReadError("structured_evidence_unavailable")
+        if doc.get("kb_id")!=str(b.kb_id) or doc.get("entity_id")!=args["entity"]:
+            raise ReadError("mcp_scope_mismatch")
+        if tool=="neighbors":
+            for fact in doc.get("facts",[]):
+                self.remember(b,fact.get("other_id"),self.depth[b.id,args["entity"]]+1)
+        return doc
+
+    async def execute(self,name,args):
+        results = []
+        for b in self.bindings:
+            entity = args.get("entity")
+            if name=="resolve_entity" and (b.connector_id!=self.connector or b.source_system!="splunk"):
+                continue
+            if entity and (b.id,entity) not in self.depth:
+                continue
+            key = (b.id,name,json.dumps(args,sort_keys=True))
+            item = {"binding_id":str(b.id),"kb_id":str(b.kb_id),"source_id":str(b.source_id),
+                    "source_system":b.source_system,"source_instance":b.source_instance,"tool":"tkg."+name}
+            try:
+                if key in self.seen or (name=="get_neighbors" and self.depth[b.id,entity]>=self.limits.max_hops):
+                    raise ReadError("visited_or_depth_limit")
+                self.seen.add(key)
+                async with asyncio.timeout(self.limits.tool_timeout_seconds):
+                    doc = await self.lookup(b,name,args)
+                data = json.dumps(doc,sort_keys=True).encode()
+                if self.used_bytes+len(data)>self.limits.context_bytes:
+                    raise ReadError("context_truncated")
+                self.used_bytes += len(data)
+                item.update(status=doc.get("status") or doc.get("retrieval_status") or "ok",
+                            sha256=hashlib.sha256(data).hexdigest(),data=doc)
+            except (ReadError,BindingError) as exc:
+                item["status"] = str(exc)
+            except (TimeoutError,httpx.TransportError):
+                item["status"] = "unavailable"
+            except (ValueError,TypeError,AttributeError,KeyError):
+                item["status"] = "invalid_response"
+            results.append(item)
+        self.evidence.extend(results)
+        return results

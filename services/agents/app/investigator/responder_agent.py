@@ -102,6 +102,9 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
             "Prioritise the Suggested next steps above when building "
             "recommended_actions and containment_steps."
         )
+    from app.integrations.tkg.recon import history_prompt
+
+    prompt += history_prompt(state)
     bundle_append = format_bundle_prompt_append(state.context_bundle)
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"

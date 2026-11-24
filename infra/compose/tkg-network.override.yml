@@ -1,0 +1,48 @@
+# Server 55 demo project. Mount role-specific operator-managed secret directories.
+services:
+  api:
+    networks: [aisoc_tkg]
+    environment:
+      AISOC_TKG_ORIGIN_SERVER55: ${AISOC_TKG_ORIGIN_SERVER55:-http://soorin-tkg:1516}
+    volumes:
+      - type: bind
+        source: ${AISOC_TKG_READER_DIR:-/etc/aisoc/tkg/reader}
+        target: /run/secrets/tkg/reader
+        read_only: true
+        bind: {create_host_path: false}
+  agents:
+    networks: [aisoc_tkg]
+    environment:
+      AISOC_TKG_ORIGIN_SERVER55: ${AISOC_TKG_ORIGIN_SERVER55:-http://soorin-tkg:1516}
+      AISOC_TKG_RECON_ENABLED: ${AISOC_TKG_RECON_ENABLED:-false}
+      AISOC_TKG_RECON_PREFLIGHT_ENABLED: ${AISOC_TKG_RECON_PREFLIGHT_ENABLED:-true}
+      AISOC_TKG_RECON_LOOP_ENABLED: ${AISOC_TKG_RECON_LOOP_ENABLED:-false}
+    volumes:
+      - type: bind
+        source: ${AISOC_TKG_READER_DIR:-/etc/aisoc/tkg/reader}
+        target: /run/secrets/tkg/reader
+        read_only: true
+        bind: {create_host_path: false}
+  tkg-sync:
+    profiles: [tkg-sync]
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
+    build: {context: services/api}
+    command: [python, -m, app.services.tkg.worker, run]
+    restart: on-failure
+    networks: [aisoc-demo, aisoc_tkg]
+    mem_limit: 256m
+    cpus: 0.5
+    environment:
+      DATABASE_URL: ${AISOC_TKG_WORKER_DATABASE_URL:-}
+      AISOC_TKG_ORIGIN_SERVER55: ${AISOC_TKG_ORIGIN_SERVER55:-http://soorin-tkg:1516}
+      AISOC_TKG_AUTO_INGEST_ENABLED: ${AISOC_TKG_AUTO_INGEST_ENABLED:-false}
+    volumes:
+      - type: bind
+        source: ${AISOC_TKG_INGEST_DIR:-/etc/aisoc/tkg/ingest}
+        target: /run/secrets/tkg/ingest
+        read_only: true
+        bind: {create_host_path: false}
+networks:
+  aisoc_tkg:
+    external: true
+    name: aisoc-tkg

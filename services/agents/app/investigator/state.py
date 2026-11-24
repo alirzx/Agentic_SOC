@@ -73,6 +73,7 @@ class ReconFindings(BaseModel):
     """Output of ReconAgent."""
 
     iocs: list[dict[str, Any]] = Field(default_factory=list)
+    history: dict[str, Any] = Field(default_factory=dict)
     related_incidents: list[str] = Field(default_factory=list)
     threat_actors: list[str] = Field(default_factory=list)
     attack_surface: dict[str, Any] = Field(default_factory=dict)

@@ -89,6 +89,9 @@ async def _attribute_one(
     candidate = candidates[0] if candidates else {}
     status = str(resolved.get("status") or "unknown")
     envelope["status"] = status
+    if (status != "resolved" or len(candidates) != 1 or resolved.get("automatic") is False
+            or candidate.get("has_conflict") or candidate.get("graph_conflict") or candidate.get("candidates_truncated")):
+        return envelope
     envelope["entity_id"] = candidate.get("entity_id")
     envelope["canonical_key"] = candidate.get("canonical_key")
 

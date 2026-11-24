@@ -23,6 +23,10 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import text
+
+from app.services.tkg.evaluation import workspace_config
+from app.services.tkg.projection import freeze
 from app.services.tkg_evaluation import constants as C
 from app.services.tkg_evaluation.client import TkgClient, TkgError, config_from_settings
 from app.services.tkg_evaluation.sender import RecordError, build_curated_record
@@ -45,7 +49,7 @@ async def sync_missing_alerts(
     """Resolve each alert; push the ones the graph does not know about."""
 
     started = datetime.now(UTC)
-    cfg = config_from_settings(settings_obj)
+    cfg = config_from_settings(settings_obj) if client is not None else await workspace_config(db, tenant_id, settings_obj)
     if not cfg.configured:
         return {"ok": False, "reason": C.R_TKG_NOT_CONFIGURED, "dry_run": dry_run}
 
@@ -56,6 +60,30 @@ async def sync_missing_alerts(
     excluded, _filters = await load_case_scope(db, case_id, tenant_id)
     alerts = await load_alerts(db, tenant_id, case_id, [str(value) for value in case["alert_ids"]], set(excluded))
     alerts = alerts[: max(1, limit)]
+
+    if cfg.binding:
+        invalid = []
+        planned = []
+        for row in alerts:
+            try:
+                freeze(row, cfg.binding)
+            except RecordError as exc:
+                invalid.append({"alert_id":str(row["id"]), "error":exc.code})
+                continue
+            planned.append({"alert_id":str(row["id"])})
+        if not dry_run and not cfg.allow_send:
+            return {"ok":False, "dry_run":False, "reason":"tkg_send_disabled"}
+        if not dry_run:
+            await db.execute(text("""SELECT tkg_enqueue(a,b) FROM alerts a JOIN workspace_tkg_bindings b
+                ON (a.tenant_id,a.connector_id)=(b.tenant_id,b.connector_id)
+                WHERE a.tenant_id=:tenant AND b.enabled AND b.evaluation AND b.id=:binding
+                AND a.id = ANY(CAST(:ids AS uuid[]))"""),
+                {"tenant":tenant_id,"binding":cfg.binding.id,"ids":[UUID(r["alert_id"]) for r in planned]})
+            await db.commit()
+        return {"ok":True,"dry_run":dry_run,"would_send":planned if dry_run else [],
+                "invalid":invalid,"allow_send":cfg.allow_send,
+                "counts":{"eligible":len(planned),"invalid":len(invalid)},
+                "detail": "Eligible deliveries are processed by the TKG sync worker."}
 
     own_client = client is None
     tkg = client or TkgClient(cfg)

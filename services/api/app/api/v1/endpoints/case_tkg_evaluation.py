@@ -27,8 +27,9 @@ from app.api.v1.deps import AuthUser, DBSession
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.models.tkg_evaluation import CaseTkgEvaluation
+from app.services.tkg.evaluation import workspace_config
 from app.services.tkg_evaluation import progress
-from app.services.tkg_evaluation.client import TkgClient, TkgError, config_from_settings
+from app.services.tkg_evaluation.client import TkgClient, TkgError
 from app.services.tkg_evaluation.constants import PROFILE
 from app.services.tkg_evaluation.runner import persist_provisional, run_evaluation
 from app.services.tkg_evaluation.sync import sync_missing_alerts
@@ -138,7 +139,10 @@ class TkgRunSnapshot(BaseModel):
 _TASKS: dict[str, asyncio.Task[None]] = {}
 
 
-def _ensure_enabled() -> None:
+def _ensure_enabled(user) -> None:
+    if not user.explicit_workspace:
+        raise HTTPException(403, "Select an authorized workspace")
+    user.require_permission("cases:read")
     if not settings.AISOC_FEATURE_TKG_EVALUATION:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -151,11 +155,11 @@ def _ensure_enabled() -> None:
     response_model=TkgHealthResponse,
     summary="Readiness of the configured Soorin TKG",
 )
-async def tkg_health(user: AuthUser) -> TkgHealthResponse:
+async def tkg_health(user: AuthUser, db: DBSession) -> TkgHealthResponse:
     """Cheap probe so the UI can show why the button is unavailable."""
 
-    _ensure_enabled()
-    cfg = config_from_settings(settings)
+    _ensure_enabled(user)
+    cfg = await workspace_config(db, user.tenant_id, settings)
     if not cfg.configured:
         return TkgHealthResponse(
             enabled=True,
@@ -229,7 +233,7 @@ async def evaluate_case_with_tkg(
     user: AuthUser,
     payload: TkgEvaluationRequest | None = None,
 ) -> TkgEvaluationResponse:
-    _ensure_enabled()
+    _ensure_enabled(user)
     body = payload or TkgEvaluationRequest()
     try:
         result = await run_evaluation(
@@ -265,7 +269,7 @@ async def start_tkg_evaluation(
     to cancel a run that is taking too long.
     """
 
-    _ensure_enabled()
+    _ensure_enabled(user)
     body = payload or TkgEvaluationRequest()
     job = progress.start(case_id=case_id, tenant_id=user.tenant_id)
 
@@ -340,7 +344,7 @@ async def get_tkg_evaluation_run(
     run_id: str,
     user: AuthUser,
 ) -> TkgRunSnapshot:
-    _ensure_enabled()
+    _ensure_enabled(user)
     job = progress.get(run_id, case_id=case_id, tenant_id=user.tenant_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown run id.")
@@ -357,7 +361,7 @@ async def cancel_tkg_evaluation_run(
     run_id: str,
     user: AuthUser,
 ) -> TkgRunSnapshot:
-    _ensure_enabled()
+    _ensure_enabled(user)
     job = progress.cancel(run_id, case_id=case_id, tenant_id=user.tenant_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown run id.")
@@ -381,7 +385,7 @@ async def skip_tkg_evaluation_wait(
     control that still stores nothing.
     """
 
-    _ensure_enabled()
+    _ensure_enabled(user)
     job = progress.skip_waiting(run_id, case_id=case_id, tenant_id=user.tenant_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown run id.")
@@ -398,7 +402,7 @@ async def latest_case_tkg_evaluation(
     db: DBSession,
     user: AuthUser,
 ) -> TkgEvaluationResponse:
-    _ensure_enabled()
+    _ensure_enabled(user)
     row = (
         await db.execute(
             select(CaseTkgEvaluation)
@@ -435,8 +439,10 @@ async def sync_case_alerts_to_tkg(
     written unless ``dry_run`` is false *and* ``AISOC_TKG_ALLOW_SEND`` is true.
     """
 
-    _ensure_enabled()
+    _ensure_enabled(user)
     body = payload or TkgSyncRequest()
+    if not body.dry_run:
+        user.require_permission("cases:write")
     result = await sync_missing_alerts(
         db,
         tenant_id=user.tenant_id,
@@ -460,7 +466,7 @@ async def list_case_tkg_evaluations(
     user: AuthUser,
     limit: int = 20,
 ) -> list[TkgEvaluationResponse]:
-    _ensure_enabled()
+    _ensure_enabled(user)
     rows = (
         await db.execute(
             select(CaseTkgEvaluation)

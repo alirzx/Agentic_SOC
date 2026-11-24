@@ -20,6 +20,7 @@ from app.services.tkg_evaluation import constants as C
 from app.services.tkg_evaluation import progress
 from app.services.tkg_evaluation.attribution import aggregate, attribute_alerts
 from app.services.tkg_evaluation.bundle import build_bundle
+from app.services.tkg.evaluation import workspace_config
 from app.services.tkg_evaluation.client import TkgClient, TkgError, config_from_settings
 from app.services.tkg_evaluation.judge import LlmCall
 from app.services.tkg_evaluation.judge import judge as run_judge
@@ -806,7 +807,8 @@ async def run_evaluation(
     """
 
     started = time.perf_counter()
-    cfg = config_from_settings(settings_obj)
+    cfg = config_from_settings(settings_obj) if client is not None else await workspace_config(db, tenant_id, settings_obj)
+    scoped_binding = getattr(cfg, "binding", None)
     max_alerts = int(getattr(settings_obj, "AISOC_TKG_MAX_ALERTS", C.MAX_ALERTS) or C.MAX_ALERTS)
     budget_ms = int(getattr(settings_obj, "AISOC_TKG_BUDGET_MS", C.DEFAULT_BUDGET_MS) or C.DEFAULT_BUDGET_MS)
     ttl_s = int(getattr(settings_obj, "AISOC_TKG_CACHE_TTL_S", 900) or 0)
@@ -828,7 +830,7 @@ async def run_evaluation(
         if fingerprint:
             job.touch(message="checking the cache")
 
-    if not refresh and fingerprint:
+    if cfg.configured and not scoped_binding and not refresh and fingerprint:
         cached = await _cached(db, case_id, tenant_id, fingerprint, ttl_s)
         if cached:
             return cached
@@ -939,7 +941,7 @@ async def run_evaluation(
             payload["detail"] = "; ".join(check["detail"] for check in readiness.get("checks", []) if not check.get("ok"))
             return payload
 
-        alert_meta = {str(alert.get("notable_id") or alert["alert_id"]): alert for alert in bundle["payload"]["alerts"]}
+        alert_meta = {str(alert["alert_id"] if scoped_binding else alert.get("notable_id") or alert["alert_id"]): alert for alert in bundle["payload"]["alerts"]}
 
         if job is not None:
             job.touch(stage="resolve", total=len(bundle["payload"]["alerts"]), message=None)
@@ -1011,7 +1013,7 @@ async def run_evaluation(
             [
                 # Resolve the notable id the graph was fed with, not AiSOC's row
                 # id: the ingest used the Splunk notable id from the payload.
-                str(alert.get("notable_id") or alert["alert_id"])
+                str(alert["alert_id"] if scoped_binding else alert.get("notable_id") or alert["alert_id"])
                 for alert in bundle["payload"]["alerts"]
             ],
             synthetic_doc_ids=synthetic_ids,
@@ -1062,7 +1064,7 @@ async def run_evaluation(
                     pending=int(attribution.get("pending") or 0),
                     wait_left_s=int(wait_timeout_s) if wait_timeout_s > 0 else -1,
                 )
-            if send_missing and cfg.allow_send:
+            if send_missing and cfg.allow_send and not scoped_binding:
                 report = await _send_unknown_alerts(
                     tkg,
                     attribution={"alerts": [envelope for envelope in attribution["alerts"] if _phase_of(envelope) == label]},

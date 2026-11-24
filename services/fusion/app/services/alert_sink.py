@@ -35,9 +35,6 @@ from app.models.alert import FusedAlert
 
 logger = structlog.get_logger()
 
-_DEMO_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
-
-
 class PersistOutcome(str, Enum):
     """Distinguishable outcomes of a persist attempt (issue #568).
 
@@ -175,7 +172,7 @@ class AlertSink:
             await self.start()
         return self._pool
 
-    async def persist(self, fused: FusedAlert, *, retry_demo: bool = True) -> PersistResult:
+    async def persist(self, fused: FusedAlert) -> PersistResult:
         """Insert one fused alert, returning a structured :class:`PersistResult`.
 
         The canonical alert id is ``fused.id`` (deterministic — issue #568), so
@@ -215,7 +212,7 @@ class AlertSink:
                     event_time=alert.event_time,
                     original_id=display_hit,
                 )
-                await self._clear_persist_failed(alert.connector_id)
+                await self._clear_persist_failed(alert.connector_id, alert.tenant_id)
                 logger.info(
                     "alert_sink.display_dedup",
                     existing_id=display_hit,
@@ -260,41 +257,32 @@ class AlertSink:
             if row is None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
                 existing = await self.lookup_dedup(alert.tenant_id, alert.fingerprint())
+                if existing is None:
+                    await self._bump_persist_failed(alert.connector_id, alert.tenant_id)
+                    return PersistResult(PersistOutcome.FAILED)
                 # Legacy rows used a random uuid4 with the same hash; RBA must
                 # link to that stored id, not the fusion-minted uuid5.
-                await self._clear_persist_failed(alert.connector_id)
+                await self._clear_persist_failed(alert.connector_id, alert.tenant_id)
                 return PersistResult(
                     PersistOutcome.DUPLICATE,
-                    existing or canonical_id,
+                    existing,
                 )
-            await self._clear_persist_failed(alert.connector_id)
+            await self._clear_persist_failed(alert.connector_id, alert.tenant_id)
             return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
         except asyncpg.ForeignKeyViolationError:
             logger.warning("alert_sink.unknown_tenant", tenant_id=str(alert.tenant_id))
-            if retry_demo and alert.tenant_id != _DEMO_TENANT_ID:
-                retried = fused.model_copy(deep=True)
-                retried.tenant_id = _DEMO_TENANT_ID
-                retried.alert.tenant_id = _DEMO_TENANT_ID
-                retried.alert.id = retried.alert.deterministic_id()
-                retried.id = retried.alert.id
-                logger.warning(
-                    "alert_sink.unknown_tenant_retry_demo",
-                    from_tenant=str(alert.tenant_id),
-                )
-                return await self.persist(retried, retry_demo=False)
-            await self._bump_persist_failed(alert.connector_id)
+            await self._bump_persist_failed(alert.connector_id, alert.tenant_id)
             return PersistResult(PersistOutcome.FAILED, None)
         except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
             logger.error(
                 "alert_sink.persist_failed",
-                error=str(exc).replace("\r", " ").replace("\n", " ")[:500],
                 error_type=type(exc).__name__,
                 connector_id=str(alert.connector_id) if alert.connector_id else None,
             )
-            await self._bump_persist_failed(alert.connector_id)
+            await self._bump_persist_failed(alert.connector_id, alert.tenant_id)
             return PersistResult(PersistOutcome.FAILED, None)
 
-    async def _bump_persist_failed(self, connector_id) -> None:
+    async def _bump_persist_failed(self, connector_id, tenant_id) -> None:
         """Increment fusion_persist_failed on the connector row — fail-soft."""
         if connector_id is None:
             return
@@ -305,13 +293,13 @@ class AlertSink:
             async with pool.acquire() as conn:
                 await conn.execute(
                     "UPDATE connectors SET fusion_persist_failed = fusion_persist_failed + 1,"
-                    " updated_at = NOW() WHERE id = $1",
-                    connector_id,
+                    " updated_at = NOW() WHERE id = $1 AND tenant_id = $2",
+                    connector_id, tenant_id,
                 )
         except Exception:  # noqa: BLE001 — counter update must never wedge the sink
             pass
 
-    async def _clear_persist_failed(self, connector_id) -> None:
+    async def _clear_persist_failed(self, connector_id, tenant_id) -> None:
         """Zero fusion_persist_failed after a durable write — fail-soft.
 
         Mirrors ``error_count`` clearing on a successful connector poll so the
@@ -328,8 +316,8 @@ class AlertSink:
                 await conn.execute(
                     "UPDATE connectors SET fusion_persist_failed = 0,"
                     " updated_at = NOW()"
-                    " WHERE id = $1 AND fusion_persist_failed <> 0",
-                    connector_id,
+                    " WHERE id = $1 AND tenant_id = $2 AND fusion_persist_failed <> 0",
+                    connector_id, tenant_id,
                 )
         except Exception:  # noqa: BLE001 — counter update must never wedge the sink
             pass

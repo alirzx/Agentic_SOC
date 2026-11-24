@@ -81,6 +81,9 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
     )
     if explanation_append:
         prompt = f"{prompt}\n\n{explanation_append}"
+    from app.integrations.tkg.recon import history_prompt
+
+    prompt += history_prompt(state)
     bundle_append = format_bundle_prompt_append(state.context_bundle)
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"
@@ -162,7 +165,9 @@ async def run_recon(state_dict: dict[str, Any]) -> dict[str, Any]:
     state.status = "running"
 
     # 1. LLM-powered recon
-    llm_result = await _llm_recon(state)
+    from app.integrations.tkg.recon import assess_with_history
+
+    llm_result = await assess_with_history(state,_llm_recon)
 
     iocs: list[dict[str, Any]] = llm_result.get("iocs", [])
     # Also extract heuristically and merge
@@ -228,6 +233,7 @@ async def run_recon(state_dict: dict[str, Any]) -> dict[str, Any]:
             weight=0.8,
         )
     state.recon = ReconFindings(
+        history=state.recon.history,
         iocs=iocs,
         threat_actors=llm_result.get("threat_actors", []),
         attack_surface=llm_result.get("attack_surface", {}),

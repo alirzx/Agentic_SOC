@@ -83,6 +83,7 @@ class CurrentUser:
         self.email = email
         self.scopes = scopes  # None → role-based; list → API-key scoped
         self.home_tenant_id = home_tenant_id or tenant_id
+        self.explicit_workspace = workspace_selected
         self.workspace_selected = workspace_selected
 
     def require_permission(self, permission: str) -> None:
@@ -210,7 +211,7 @@ async def get_current_user(
     """
     if credentials is None:
         if is_dev_mode():
-            return CurrentUser(
+            demo = CurrentUser(
                 user_id=DEMO_USER_ID,
                 tenant_id=DEMO_TENANT_ID,
                 role=DEMO_USER_ROLE,
@@ -218,6 +219,8 @@ async def get_current_user(
                 home_tenant_id=DEMO_TENANT_ID,
                 workspace_selected=True,
             )
+            demo.explicit_workspace = False
+            return demo
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",

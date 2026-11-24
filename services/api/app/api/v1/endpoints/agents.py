@@ -42,9 +42,14 @@ _INVESTIGATE_TIMEOUT_SECONDS = float(os.getenv("AISOC_ALERT_INVESTIGATE_TIMEOUT"
 _EXPLAIN_TIMEOUT_SECONDS = float(os.getenv("AISOC_ALERT_EXPLAIN_TIMEOUT", "90"))
 
 
-def _tenant_headers(tenant_id: UUID) -> dict[str, str]:
+def _tenant_headers(tenant_id: UUID, *, tkg_alert: UUID | None = None) -> dict[str, str]:
     try:
-        return signed_tenant_headers(tenant_id)
+        headers = signed_tenant_headers(tenant_id)
+        if tkg_alert is not None:
+            import hmac
+            key = os.environ["AISOC_AGENTS_TENANT_SIGNING_KEY"].encode()
+            headers["X-AiSOC-TKG-Grant"] = hmac.digest(key,f"tkg-read-v1/{tenant_id}/{tkg_alert}".encode(),"sha256").hex()
+        return headers
     except AgentsTenantAuthError as exc:
         raise HTTPException(status_code=503, detail="Agents tenant authentication is not configured") from exc
 
@@ -467,7 +472,8 @@ async def investigate_alert(
     # GET /investigations/{id}. Keep this proxy snappy so Next.js never 500s.
     try:
         async with httpx.AsyncClient(timeout=_INVESTIGATE_TIMEOUT_SECONDS) as client:
-            resp = await client.post(url, json=payload, headers=_tenant_headers(current_user.tenant_id))
+            resp = await client.post(url, json=payload, headers=_tenant_headers(current_user.tenant_id,
+                tkg_alert=alert.id if current_user.explicit_workspace else None))
     except httpx.HTTPError as exc:
         logger.exception("agents.investigate.proxy_failed alert_id=%s", alert.id)
         raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
