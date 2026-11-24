@@ -235,9 +235,6 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
     # Deterministic evidence gate between investigation agents and final report.
     validation = validate_and_repair_report(state.report_md or "", state)
     state.report_md = validation.report_md
-    citations = state.recon.history.get("citations", [])
-    if citations:
-        state.report_md += "\n\n## Historical evidence references\n\n" + "\n".join(f"- {ref}" for ref in citations)
     state.report_html = _md_to_html(state.report_md, state.case_id)
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)

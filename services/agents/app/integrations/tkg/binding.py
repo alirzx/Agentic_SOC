@@ -1,7 +1,9 @@
 """Deployment-owned routes. A credential reference is derived from immutable UUIDs."""
+
 from __future__ import annotations
 
 import os
+import ssl
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -34,8 +36,15 @@ class Binding:
     def origin(self) -> str:
         origin = os.getenv("AISOC_TKG_ORIGIN_" + self.instance.upper(), "").rstrip("/")
         url = urlsplit(origin)
-        if (not url.hostname or url.username or url.password or url.path or url.query
-                or url.fragment or not (url.scheme == "https" or origin == "http://soorin-tkg:1516")):
+        if (
+            not url.hostname
+            or url.username
+            or url.password
+            or url.path
+            or url.query
+            or url.fragment
+            or not (url.scheme == "https" or origin == "http://soorin-tkg:1516")
+        ):
             raise BindingError("instance_origin_invalid")
         return origin
 
@@ -50,3 +59,7 @@ class Binding:
         if not token or not token.isascii() or any(c.isspace() for c in token):
             raise BindingError("binding_credential_invalid")
         return token
+
+
+def tls_context():
+    return ssl.create_default_context(cafile=os.getenv("AISOC_TKG_CA_FILE") or None)

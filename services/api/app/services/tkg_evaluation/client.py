@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from app.services.tkg.binding import Binding
+from app.services.tkg.binding import Binding, BindingError, tls_context
 from app.services.tkg_evaluation.constants import (
     DEFAULT_TIMEOUT_S,
     R_TKG_AUTH,
@@ -96,6 +96,7 @@ class TkgConfig:
     #: Optional static bearer (e.g. a console session token). When set, login is skipped.
     bearer_token: str = field(default="", repr=False)
     binding: Binding | None = None
+    evaluation_identity: str = "legacy_notable"
 
     @property
     def configured(self) -> bool:
@@ -142,6 +143,7 @@ class TkgClient:
             base_url=cfg.base_url,
             timeout=cfg.timeout_s,
             trust_env=False,
+            verify=tls_context() if cfg.binding else True,
             transport=transport,
             headers={"Accept": "application/json"},
         )
@@ -214,11 +216,19 @@ class TkgClient:
             from sqlalchemy import text
 
             async with AsyncSessionLocal() as db:
+                await db.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"),
+                                 {"tenant": str(self.cfg.binding.tenant_id)})
                 active = await db.scalar(text("SELECT enabled FROM workspace_tkg_bindings WHERE id=:id AND tenant_id=:tenant AND evaluation"),
                                          {"id": self.cfg.binding.id, "tenant":self.cfg.binding.tenant_id})
             if not active:
                 raise TkgError(R_TKG_AUTH, "binding unavailable")
-        token = self._token or await self._login()
+        if self.cfg.binding:
+            try:
+                token = self.cfg.binding.credential("reader")
+            except BindingError as exc:
+                raise TkgError(R_TKG_AUTH, str(exc)) from None
+        else:
+            token = self._token or await self._login()
         try:
             response = await self._client.request(method, path, json=json, headers={"Authorization": f"Bearer {token}"})
         except httpx.TimeoutException as exc:
@@ -253,11 +263,12 @@ class TkgClient:
             "tenant_id": self.cfg.tenant_id,
             "source_system": self.cfg.source_system,
             "source_instance": self.cfg.source_instance,
-            "entity_type": "SecurityAlert" if self.cfg.binding else "SplunkNotable",
-            "authority_name": "soc_alert_row_id" if self.cfg.binding else "splunk_notable_id",
+            "entity_type": "SecurityAlert" if self.cfg.evaluation_identity == "security_alert" else "SplunkNotable",
+            "authority_name": "soc_alert_row_id" if self.cfg.evaluation_identity == "security_alert" else "splunk_notable_id",
             "source_identifier": str(notable_id),
         }
-        return await self._request("POST", f"/api/v1/kbs/{self.cfg.kb_id}/knowledge/resolve", json=body)
+        result = await self._request("POST", f"/api/v1/kbs/{self.cfg.kb_id}/knowledge/resolve", json=body)
+        return self._validate_read_scope(result, "soorin.identity-resolution.v1")
 
     async def receipts(self) -> dict[str, Any]:
         """The KB's newest 100 ingestion receipts (status + ``failure_code``).
@@ -278,7 +289,18 @@ class TkgClient:
             "entity": str(entity_id),
             "limit": int(limit),
         }
-        return await self._request("POST", f"/api/v1/kbs/{self.cfg.kb_id}/knowledge/context", json=body)
+        result = await self._request("POST", f"/api/v1/kbs/{self.cfg.kb_id}/knowledge/context", json=body)
+        return self._validate_read_scope(result, "soorin.knowledge-context.v2")
+
+    def _validate_read_scope(self, result, version: str):
+        if self.cfg.binding and (
+            not isinstance(result, dict)
+            or result.get("schema_version") != version
+            or result.get("tenant_id") != self.cfg.tenant_id
+            or result.get("knowledge_base_id") != self.cfg.kb_id
+        ):
+            raise TkgError(R_TKG_AUTH, "response scope or schema mismatch")
+        return result
 
     # ------------------------------------------------------------------ write path
     #
@@ -292,6 +314,8 @@ class TkgClient:
         the KB path; ``/sources/{id}/token`` is a 404), otherwise creates one.
         """
 
+        if self.cfg.binding:
+            raise TkgError(R_TKG_AUTH, "workspace writes require the outbox")
         listing = await self._request("GET", f"/api/v1/kbs/{self.cfg.kb_id}/sources")
         for source in listing.get("sources") or []:
             if not isinstance(source, dict):

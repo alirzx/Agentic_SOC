@@ -1,6 +1,8 @@
 """Project source fields from a durable alert. Store the exact bytes before first I/O."""
+
 import json
-from datetime import datetime
+from datetime import UTC, datetime
+import re
 from uuid import UUID
 
 from app.services.tkg_evaluation.constants import PROFILE
@@ -18,6 +20,20 @@ def obj(value):
     if not isinstance(value, dict):
         raise RecordError("invalid_object")
     return value
+
+
+def source_time(value):
+    try:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return datetime.fromtimestamp(value, UTC).isoformat()
+        if isinstance(value, str) and re.fullmatch(r"\d{9,10}(?:\.\d{1,9})?", value):
+            return datetime.fromtimestamp(float(value), UTC).isoformat()
+        parsed = datetime.fromisoformat(value)
+        if parsed.utcoffset() is not None:
+            return parsed.isoformat()
+    except (TypeError, ValueError, OverflowError, OSError):
+        pass
+    raise RecordError("missing_or_invalid_source_time")
 
 
 def freeze(snapshot, binding):
@@ -54,28 +70,48 @@ def freeze(snapshot, binding):
         raise RecordError("missing_source_identity")
     occurrence = payload.get("event_time") or payload.get("alert_time") or original.get("_time")
     version = original.get("source_updated_at") or original.get("updated_at") or payload.get("source_updated_at")
-    for ts in (occurrence, version or occurrence):
-        try:
-            if datetime.fromisoformat(ts).utcoffset() is None:
-                raise ValueError
-        except (TypeError, ValueError):
-            raise RecordError("missing_or_invalid_source_time") from None
+    occurrence = source_time(occurrence)
+    if version is not None:
+        version = source_time(version)
+    if payload.get("event_time"):
+        payload["event_time"] = occurrence
+    if payload.get("alert_time"):
+        payload["alert_time"] = source_time(payload["alert_time"])
     rule = snapshot.get("rule_id") or original.get("detection_id")
-    if not any((rule, snapshot.get("rule_name"), payload.get("rule_name"), payload.get("entity"),
-                payload.get("alert_fields"), original.get("search_name"), original.get("src_ip"))):
+    if not any(
+        (
+            rule,
+            snapshot.get("rule_name"),
+            payload.get("rule_name"),
+            payload.get("entity"),
+            payload.get("alert_fields"),
+            original.get("search_name"),
+            original.get("src_ip"),
+        )
+    ):
         raise RecordError("no_event_information")
     record = {
-        "alert_row_id": row_id, "event_time": occurrence, "source_updated_at": version,
-        "tenant_id": binding.tkg_tenant, "source_system": binding.source_system,
-        "source_instance": binding.source_instance, "connector_id": str(binding.connector_id),
-        "notable_id": notable, "finding": {"uid": finding["uid"]} if finding.get("uid") else None,
-        "source_event_ids": list(dict.fromkeys(ids)), "rule_id": rule,
-        "rule_name": snapshot.get("rule_name"), "ocsf_class_uid": snapshot.get("ocsf_class_uid"),
-        "llm_payload": payload, "src_ip": original.get("src_ip"),
+        "alert_row_id": row_id,
+        "event_time": occurrence,
+        "source_updated_at": version,
+        "tenant_id": binding.tkg_tenant,
+        "source_system": binding.source_system,
+        "source_instance": binding.source_instance,
+        "connector_id": str(binding.connector_id),
+        "notable_id": notable,
+        "finding": {"uid": finding["uid"]} if finding.get("uid") else None,
+        "source_event_ids": list(dict.fromkeys(ids)),
+        "rule_id": rule,
+        "title": original.get("search_name") or snapshot.get("title"),
+        "rule_name": snapshot.get("rule_name"),
+        "ocsf_class_uid": snapshot.get("ocsf_class_uid"),
+        "llm_payload": payload,
+        "src_ip": original.get("src_ip"),
     }
     record = {k: v for k, v in record.items() if v is not None}
-    data = json.dumps({"profile": PROFILE, "record": record}, sort_keys=True,
-                      ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
+    data = json.dumps(
+        {"profile": PROFILE, "record": record}, sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+    ).encode()
     if len(data) > MAX_BODY_BYTES:
         raise RecordError("record_too_large")
     return data

@@ -411,6 +411,16 @@ def validate_and_repair_report(report_md: str, state: Any) -> ValidationResult:
     md = _soften_overclaims(md, inventory)
     if "## Evidence-to-Claim Validation" not in md:
         md = md.rstrip() + _appendix(checks, inventory)
+    from app.integrations.tkg.recon import references
+
+    refs = references(getattr(state.recon, "history", {}).get("evidence", [])) if getattr(state, "recon", None) else []
+    valid = set(refs)
+    # Strip unknown KB/fact pairs in the generated report before publishing.
+    uuid_pattern = r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
+    md = re.sub(fr"{uuid_pattern}/{uuid_pattern}",
+                lambda match: match[0] if match[0].lower() in valid else "[unverified historical reference]", md)
+    if refs:
+        md += "\n\n## Historical evidence references\n\n" + "\n".join(f"- {ref}" for ref in refs)
     return ValidationResult(
         inventory=inventory,
         checks=checks,

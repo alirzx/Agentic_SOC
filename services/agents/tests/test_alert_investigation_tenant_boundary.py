@@ -114,3 +114,85 @@ def test_only_one_alert_investigation_post_route():
     routes = [r for r in api.router.routes if getattr(r, "path", "") == "/api/v1/agents/investigate"
               and "POST" in (getattr(r, "methods", None) or set())]
     assert len(routes) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("signed_alert_matches", [True, False])
+async def test_alert_route_tkg_grant_reaches_only_matching_background_task(monkeypatch, signed_alert_matches):
+    import hmac
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.integrations.tkg.tools import grant
+
+    alert = UUID(int=61)
+    signature_alert = alert if signed_alert_matches else UUID(int=62)
+    signature = hmac.digest(SIGNING_KEY.encode(), f"tkg-read-v1/{TENANT_A}/{signature_alert}".encode(), "sha256").hex()
+    received = []
+
+    async def run(**_):
+        received.append(grant.get())
+        return SimpleNamespace(status="completed", error=None, responder=None, report_md="# Fixture")
+
+    monkeypatch.setattr(api, "InvestigatorOrchestrator", lambda: SimpleNamespace(run=run))
+    application = FastAPI()
+    application.include_router(api.router)
+    async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as client:
+        response = await client.post("/api/v1/agents/investigate",
+            headers={"X-Tenant-Id":TENANT_A,"X-AiSOC-Tenant-Signature":tenant_signature(TENANT_A,SIGNING_KEY),
+                     "X-AiSOC-TKG-Grant":signature},
+            json={"alertId":str(alert),"tenant_id":TENANT_B})
+    assert response.status_code == 200
+    await asyncio.gather(*list(api._background_tasks))
+    assert received == [(UUID(TENANT_A),alert) if signed_alert_matches else None]
+    assert grant.get() is None
+
+
+@pytest.mark.asyncio
+async def test_case_route_derives_alert_scope_in_background(monkeypatch):
+    import hmac
+    from contextlib import asynccontextmanager
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api import investigate
+    from app.integrations.tkg.tools import grant
+    from app.investigator import ledger
+
+    case, alert = UUID(int=71), UUID(int=72)
+    signature = hmac.digest(SIGNING_KEY.encode(), f"tkg-case-v1/{TENANT_A}/{case}".encode(), "sha256").hex()
+    received = []
+
+    class Database:
+        @asynccontextmanager
+        async def acquire(self):
+            yield self
+
+        transaction = acquire
+
+        async def execute(self, _, tenant):
+            assert tenant == TENANT_A
+
+        async def fetchval(self, sql, tenant, case_id):
+            assert "a.tenant_id=$1" in sql and "c.id=$2" in sql
+            assert (tenant, case_id) == (UUID(TENANT_A), case)
+            return alert
+
+    async def run(*_):
+        received.append(grant.get())
+
+    monkeypatch.setattr(ledger, "get_pool", AsyncMock(return_value=Database()))
+    monkeypatch.setattr(investigate, "_run_and_store", run)
+    monkeypatch.setenv("AISOC_TKG_RECON_ENABLED", "true")
+    monkeypatch.delenv("AISOC_INVESTIGATE_USE_ROUTER", raising=False)
+    app = FastAPI()
+    app.include_router(investigate.router)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(f"/api/v1/cases/{case}/investigate",
+            headers={"X-Tenant-Id":TENANT_A,"X-AiSOC-Tenant-Signature":tenant_signature(TENANT_A,SIGNING_KEY),
+                     "X-AiSOC-TKG-Grant":signature}, json={"tenant_id":TENANT_B,"alert_summary":"Synthetic case"})
+    assert response.status_code == 200
+    assert received == [(UUID(TENANT_A),alert)]
+    assert grant.get() is None

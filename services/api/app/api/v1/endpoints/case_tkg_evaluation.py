@@ -76,6 +76,7 @@ class TkgSyncResponse(BaseModel):
     rejected: list[dict[str, Any]] = Field(default_factory=list)
     failed: list[dict[str, Any]] = Field(default_factory=list)
     already_in_graph: list[dict[str, Any]] = Field(default_factory=list)
+    existing_deliveries: list[dict[str, Any]] = Field(default_factory=list)
     invalid: list[dict[str, Any]] = Field(default_factory=list)
     counts: dict[str, int] = Field(default_factory=dict)
     allow_send: bool = False
@@ -435,23 +436,26 @@ async def sync_case_alerts_to_tkg(
 ) -> TkgSyncResponse:
     """Manual escape hatch for a case whose alerts were never ingested.
 
-    Only alerts that do **not** resolve in the graph are eligible, and nothing is
-    written unless ``dry_run`` is false *and* ``AISOC_TKG_ALLOW_SEND`` is true.
+    The workspace outbox deduplicates eligible alerts. A write requires
+    ``dry_run=false``, write permission and ``AISOC_TKG_ALLOW_SEND=true``.
     """
 
     _ensure_enabled(user)
     body = payload or TkgSyncRequest()
     if not body.dry_run:
         user.require_permission("cases:write")
-    result = await sync_missing_alerts(
-        db,
-        tenant_id=user.tenant_id,
-        case_id=case_id,
-        dry_run=body.dry_run,
-        limit=body.limit,
-        delay=body.delay_s if body.delay_s is not None else settings.AISOC_TKG_SEND_DELAY_S,
-        settings_obj=settings,
-    )
+    try:
+        result = await sync_missing_alerts(
+            db,
+            tenant_id=user.tenant_id,
+            case_id=case_id,
+            dry_run=body.dry_run,
+            limit=body.limit,
+            delay=body.delay_s if body.delay_s is not None else settings.AISOC_TKG_SEND_DELAY_S,
+            settings_obj=settings,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Case not found.") from exc
     return TkgSyncResponse(**result)
 
 

@@ -1,0 +1,14 @@
+# Optional when the chosen HTTPS TKG origin chains to a private CA.
+x-tkg-ca: &tkg-ca
+  environment:
+    AISOC_TKG_CA_FILE: /run/ca/tkg.pem
+  volumes:
+    - type: bind
+      source: ${AISOC_TKG_CA_FILE_HOST:?Set the full trusted TKG CA bundle path}
+      target: /run/ca/tkg.pem
+      read_only: true
+      bind: {create_host_path: false}
+services:
+  api: *tkg-ca
+  agents: *tkg-ca
+  tkg-sync: *tkg-ca

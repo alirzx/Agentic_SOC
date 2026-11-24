@@ -52,7 +52,7 @@ from app.api.v1.deps import AuthUser, CurrentUser, DBSession, require_correlatio
 from app.core.config import settings
 from app.core.logging import safe_log_value
 from app.models.case import CaseCandidateDismissal
-from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers
+from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers, tkg_grant
 from app.services.alert_scope import (
     ScopeError,
     ScopeResult,
@@ -3734,6 +3734,8 @@ async def case_investigate(
     db: DBSession,
     user: AuthUser,
 ) -> dict[str, Any]:
+    if user.explicit_workspace:
+        user.require_permission("cases:read")
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     exists = (
         await db.execute(
@@ -3747,10 +3749,17 @@ async def case_investigate(
     # to the real tenant instead of falling back to the "default" placeholder,
     # which the demo seed no longer maps to any tenant (issue #601). The ledger
     # is scoped by tenant_id, so without this the whole run is never persisted.
+    headers = {}
+    if user.explicit_workspace:
+        try:
+            headers["X-AiSOC-TKG-Grant"] = tkg_grant(user.tenant_id, uuid.UUID(str(cid)), case=True)
+        except AgentsTenantAuthError as exc:
+            raise HTTPException(503, "Agents tenant authentication is not configured") from exc
     resp = await _agents_proxy(
         "POST",
         f"/api/v1/cases/{cid}/investigate",
         tenant_id=user.tenant_id,
+        headers=headers,
         json={"alert_summary": body.alert_summary or "", "tenant_id": str(user.tenant_id)},
     )
     if resp.status_code >= 400:

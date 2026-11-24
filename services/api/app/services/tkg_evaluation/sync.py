@@ -50,21 +50,39 @@ async def sync_missing_alerts(
 
     started = datetime.now(UTC)
     cfg = config_from_settings(settings_obj) if client is not None else await workspace_config(db, tenant_id, settings_obj)
-    if not cfg.configured:
-        return {"ok": False, "reason": C.R_TKG_NOT_CONFIGURED, "dry_run": dry_run}
-
     case = await load_case(db, case_id, tenant_id)
     if not case:
         raise LookupError("Case not found.")
+    if not cfg.configured:
+        return {"ok": False, "reason": C.R_TKG_NOT_CONFIGURED, "dry_run": dry_run}
 
     excluded, _filters = await load_case_scope(db, case_id, tenant_id)
     alerts = await load_alerts(db, tenant_id, case_id, [str(value) for value in case["alert_ids"]], set(excluded))
     alerts = alerts[: max(1, limit)]
 
     if cfg.binding:
+        if cfg.evaluation_identity != "security_alert":
+            return {"ok": False, "dry_run": dry_run, "reason": "legacy_binding_read_only"}
         invalid = []
         planned = []
+        previous = (await db.execute(text("""SELECT alert_row_id,state,receipt_id,receipt_status
+            FROM tkg_alert_deliveries WHERE tenant_id=:tenant AND binding_id=:binding
+            AND alert_row_id=ANY(CAST(:ids AS uuid[]))"""),
+            {"tenant": tenant_id, "binding": cfg.binding.id, "ids": [r["id"] for r in alerts]})).mappings().all()
+        existing = {str(item["alert_row_id"]): item for item in previous}
+        known = []
+        already_queued = []
         for row in alerts:
+            alert_id = str(row["id"])
+            current = existing.get(alert_id)
+            if current:
+                item = {"alert_id": alert_id, "status": current["state"],
+                        "receipt_id": str(current["receipt_id"]) if current["receipt_id"] else None}
+                if current["state"] == "bound":
+                    known.append(item)
+                else:
+                    already_queued.append(item)
+                continue
             try:
                 freeze(row, cfg.binding)
             except RecordError as exc:
@@ -82,7 +100,10 @@ async def sync_missing_alerts(
             await db.commit()
         return {"ok":True,"dry_run":dry_run,"would_send":planned if dry_run else [],
                 "invalid":invalid,"allow_send":cfg.allow_send,
-                "counts":{"eligible":len(planned),"invalid":len(invalid)},
+                "already_in_graph": known,
+                "existing_deliveries": already_queued,
+                "counts":{"eligible":len(planned),"invalid":len(invalid),"already_in_graph":len(known),
+                          "existing_deliveries":len(already_queued)},
                 "detail": "Eligible deliveries are processed by the TKG sync worker."}
 
     own_client = client is None

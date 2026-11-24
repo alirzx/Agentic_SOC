@@ -1,4 +1,5 @@
 """Read-only tools for one authenticated investigation. Authority is held outside model state."""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,12 +11,12 @@ from typing import Annotated
 from uuid import UUID
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.runtime.tools import SOCTool, ToolContext, ToolPermissionDenied
 
-from .binding import Binding, BindingError
+from .binding import BindingError
 
 Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)]
 Limit = Annotated[int, Field(ge=1, le=20)]
@@ -23,14 +24,16 @@ Moment = date | datetime
 
 
 class Limits(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AISOC_TKG_RECON_",extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="AISOC_TKG_RECON_", extra="ignore")
     enabled: bool = False
     preflight_enabled: bool = True
     loop_enabled: bool = False
     max_iterations: int = Field(2, ge=1, le=5)
     max_llm_calls: int = Field(3, ge=1, le=6)
-    max_cost_usd: float = Field(.05, gt=0, le=1)
+    max_output_tokens: int = Field(640, ge=128, le=1500)
+    max_cost_usd: float = Field(0.05, gt=0, le=1)
     max_tool_calls: int = Field(8, ge=1, le=24)
+    max_transport_requests: int = Field(16, ge=1, le=48)
     timeout_seconds: float = Field(45, ge=1, le=180)
     tool_timeout_seconds: float = Field(4, gt=0, le=20)
     max_hops: int = Field(2, ge=1, le=4)
@@ -75,17 +78,22 @@ class Neighbors(Context):
     object_type: Short | None = None
 
 
-SCHEMAS = {"resolve_entity":Resolve,"get_entity_context":Context,"search_history":Search,
-           "get_timeline":Timeline,"get_neighbors":Neighbors}
-active = ContextVar("tkg_recon_session",default=None)
-grant = ContextVar("tkg_verified_alert_scope",default=None)
+SCHEMAS = {
+    "resolve_entity": Resolve,
+    "get_entity_context": Context,
+    "search_history": Search,
+    "get_timeline": Timeline,
+    "get_neighbors": Neighbors,
+}
+active = ContextVar("tkg_recon_session", default=None)
+grant = ContextVar("tkg_verified_alert_scope", default=None)
 
 
 class ReadTool(SOCTool):
     risk_level = "read"
     requires_approval = False
     allowed_agents = frozenset({"ReconAgent"})
-    allowed_roles = frozenset({"analyst","system"})
+    allowed_roles = frozenset({"analyst", "system"})
     permission = "READ_SECURITY_DATA"
     timeout_seconds = 5
     audit_required = True
@@ -100,8 +108,8 @@ class ReadTool(SOCTool):
         session = active.get()
         if not session or str(session.workspace) != context.tenant_id:
             raise ToolPermissionDenied("tkg_workspace_unavailable")
-        args = SCHEMAS[self.short].model_validate(input).model_dump(mode="json",exclude_none=True)
-        return await session.execute(self.short,args)
+        args = SCHEMAS[self.short].model_validate(input).model_dump(mode="json", exclude_none=True)
+        return await session.execute(self.short, args)
 
 
 def register(registry):
@@ -118,120 +126,167 @@ class Session:
         self.pool, self.http = pool, http
         self.workspace, self.alert_id, self.connector = workspace, alert_id, connector
         self.bindings, self.limits = bindings, limits
-        self.calls = self.used_bytes = 0
+        self.calls = self.requests = self.used_bytes = 0
         self.depth = {}
         self.seen = set()
         self.rpc_ready = set()
         self.evidence = []
 
-    async def post(self,b,path,body):
-        if self.calls >= self.limits.max_tool_calls:
-            raise ReadError("call_budget")
-        self.calls += 1
-        live = await self.pool.fetchval("SELECT enabled FROM workspace_tkg_bindings WHERE tenant_id=$1 AND id=$2",
-                                        self.workspace,b.id)
+    async def post(self, b, path, body):
+        if self.requests >= self.limits.max_transport_requests:
+            raise ReadError("transport_budget")
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(self.workspace))
+            live = await conn.fetchval(
+                "SELECT enabled FROM workspace_tkg_bindings WHERE tenant_id=$1 AND id=$2",
+                self.workspace,
+                b.id,
+            )
         if not live:
             raise ReadError("binding_disabled")
-        async with self.http.stream("POST", f"{b.origin()}/api/v1/kbs/{b.kb_id}/{path}",
-                                    json=body,headers={"Authorization":"Bearer "+b.credential("reader")}) as r:
+        self.requests += 1
+        async with self.http.stream(
+            "POST", f"{b.origin()}/api/v1/kbs/{b.kb_id}/{path}", json=body, headers={"Authorization": "Bearer " + b.credential("reader")}
+        ) as r:
             if r.status_code != 200:
                 raise ReadError(f"http_{r.status_code}")
             buf = bytearray()
             async for part in r.aiter_bytes():
                 buf.extend(part)
-                if len(buf)>131072:
+                if len(buf) > 131072:
                     raise ReadError("response_truncated")
             doc = json.loads(buf)
-            if not isinstance(doc,dict):
+            if not isinstance(doc, dict):
                 raise ReadError("invalid_response")
             return doc
 
-    async def rpc(self,b,method,params):
-        body = {"jsonrpc":"2.0","id":self.calls+1,"method":method,"params":params}
-        reply = await self.post(b,"mcp",body)
-        if reply.get("jsonrpc")!="2.0" or reply.get("id")!=body["id"] or not isinstance(reply.get("result"),dict):
+    async def rpc(self, b, method, params):
+        body = {"jsonrpc": "2.0", "id": self.requests + 1, "method": method, "params": params}
+        reply = await self.post(b, "mcp", body)
+        if reply.get("jsonrpc") != "2.0" or reply.get("id") != body["id"] or not isinstance(reply.get("result"), dict):
             raise ReadError("mcp_error")
         return reply["result"]
 
-    def remember(self,b,entity,depth):
+    def remember(self, b, entity, depth):
         try:
-            key = (b.id,str(UUID(str(entity))))
+            key = (b.id, str(UUID(str(entity))))
         except ValueError:
             return
-        if key in self.depth or len(self.depth)<self.limits.max_entities:
-            self.depth[key] = min(depth,self.depth.get(key,depth))
+        if key in self.depth or len(self.depth) < self.limits.max_entities:
+            self.depth[key] = min(depth, self.depth.get(key, depth))
 
-    async def lookup(self,b,name,args):
-        if name=="resolve_entity":
-            body = dict(tenant_id=b.tkg_tenant,source_system=b.source_system,source_instance=b.source_instance,
-                        entity_type="SecurityAlert",authority_name="soc_alert_row_id",source_identifier=str(self.alert_id))
-            doc = await self.post(b,"knowledge/resolve",body)
-            if doc.get("schema_version")!="soorin.identity-resolution.v1" or doc.get("knowledge_base_id")!=str(b.kb_id) or doc.get("tenant_id")!=b.tkg_tenant:
+    async def lookup(self, b, name, args):
+        if name == "resolve_entity":
+            body = dict(
+                tenant_id=b.tkg_tenant,
+                source_system=b.source_system,
+                source_instance=b.source_instance,
+                entity_type="SecurityAlert",
+                authority_name="soc_alert_row_id",
+                source_identifier=str(self.alert_id),
+            )
+            doc = await self.post(b, "knowledge/resolve", body)
+            if (
+                doc.get("schema_version") != "soorin.identity-resolution.v1"
+                or doc.get("knowledge_base_id") != str(b.kb_id)
+                or doc.get("tenant_id") != b.tkg_tenant
+            ):
                 raise ReadError("invalid_scope_or_version")
             candidates = doc.get("candidates")
-            if doc.get("automatic") is True and doc.get("status")=="resolved" and isinstance(candidates,list) and len(candidates)==1:
+            if doc.get("automatic") is True and doc.get("status") == "resolved" and isinstance(candidates, list) and len(candidates) == 1:
                 entry = candidates[0]
                 if entry.get("has_conflict") is False and not entry.get("graph_conflict") and not entry.get("candidates_truncated"):
-                    self.remember(b,entry.get("entity_id"),0)
+                    self.remember(b, entry.get("entity_id"), 0)
             return doc
-        if name=="search_history":
-            return await self.post(b,"search",{**args,"top_k":min(args["top_k"],self.limits.max_results)})
-        if name=="get_entity_context":
-            doc = await self.post(b,"knowledge/context",{"tenant_id":b.tkg_tenant,**args})
-            if doc.get("schema_version")!="soorin.knowledge-context.v2" or doc.get("tenant_id")!=b.tkg_tenant or doc.get("knowledge_base_id")!=str(b.kb_id):
+        if name == "search_history":
+            data = await self.post(b, "search", {**args, "top_k": min(args["top_k"], self.limits.max_results)})
+            if not isinstance(data.get("results"), list):
+                raise ReadError("invalid_search_response")
+            return {"status": "candidates" if data["results"] else "empty", **data}
+        if name == "get_entity_context":
+            doc = await self.post(b, "knowledge/context", {"tenant_id": b.tkg_tenant, **args})
+            if (
+                doc.get("schema_version") != "soorin.knowledge-context.v2"
+                or doc.get("tenant_id") != b.tkg_tenant
+                or doc.get("knowledge_base_id") != str(b.kb_id)
+            ):
                 raise ReadError("invalid_scope_or_version")
             return doc
-        tool = {"get_timeline":"timeline","get_neighbors":"neighbors"}[name]
+        tool = {"get_timeline": "timeline", "get_neighbors": "neighbors"}[name]
         if b.id not in self.rpc_ready:
-            hello = await self.rpc(b,"initialize",{"protocolVersion":"2025-06-18","capabilities":{},
-                                                   "clientInfo":{"name":"aisoc-recon","version":"1"}})
-            listed = await self.rpc(b,"tools/list",{})
-            names = {t["name"] for t in listed.get("tools",[]) if isinstance(t,dict)}
-            if hello.get("protocolVersion")!="2025-06-18" or not {"neighbors","timeline"}<=names or "remember" in names:
+            hello = await self.rpc(
+                b,
+                "initialize",
+                {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "aisoc-recon", "version": "1"}},
+            )
+            listed = await self.rpc(b, "tools/list", {})
+            names = {t["name"] for t in listed.get("tools", []) if isinstance(t, dict)}
+            if hello.get("protocolVersion") != "2025-06-18" or not {"neighbors", "timeline"} <= names or "remember" in names:
                 raise ReadError("invalid_read_pat_capabilities")
             self.rpc_ready.add(b.id)
-        result = await self.rpc(b,"tools/call",{"name":tool,"arguments":args})
+        result = await self.rpc(b, "tools/call", {"name": tool, "arguments": args})
         if result.get("isError"):
             raise ReadError("mcp_tool_failed")
         doc = result.get("structuredContent")
-        if not isinstance(doc,dict):
+        if not isinstance(doc, dict):
             raise ReadError("structured_evidence_unavailable")
-        if doc.get("kb_id")!=str(b.kb_id) or doc.get("entity_id")!=args["entity"]:
+        if doc.get("schema_version") != "soorin.graph-evidence.v1" or doc.get("tool") != tool:
+            raise ReadError("structured_evidence_version")
+        if not isinstance(doc.get("truncated"), bool) or not isinstance(doc.get("facts"), list):
+            raise ReadError("invalid_graph_evidence")
+        for fact in doc["facts"]:
+            try:
+                UUID(str(fact["id"]))
+            except (ValueError, KeyError, TypeError):
+                raise ReadError("invalid_graph_fact") from None
+        if doc.get("kb_id") != str(b.kb_id) or doc.get("entity_id") != args["entity"]:
             raise ReadError("mcp_scope_mismatch")
-        if tool=="neighbors":
-            for fact in doc.get("facts",[]):
-                self.remember(b,fact.get("other_id"),self.depth[b.id,args["entity"]]+1)
+        if tool == "neighbors":
+            for fact in doc.get("facts", []):
+                self.remember(b, fact.get("other_id"), self.depth[b.id, args["entity"]] + 1)
         return doc
 
-    async def execute(self,name,args):
+    async def execute(self, name, args):
+        if self.calls >= self.limits.max_tool_calls:
+            return [{"tool": "tkg." + name, "status": "call_budget"}]
+        self.calls += 1
         results = []
         for b in self.bindings:
             entity = args.get("entity")
-            if name=="resolve_entity" and (b.connector_id!=self.connector or b.source_system!="splunk"):
+            if name == "resolve_entity" and (b.connector_id != self.connector or b.source_system != "splunk"):
                 continue
-            if entity and (b.id,entity) not in self.depth:
+            if entity and (b.id, entity) not in self.depth:
                 continue
-            key = (b.id,name,json.dumps(args,sort_keys=True))
-            item = {"binding_id":str(b.id),"kb_id":str(b.kb_id),"source_id":str(b.source_id),
-                    "source_system":b.source_system,"source_instance":b.source_instance,"tool":"tkg."+name}
+            key = (b.id, name, entity if name == "get_neighbors" else json.dumps(args, sort_keys=True))
+            item = {
+                "binding_id": str(b.id),
+                "kb_id": str(b.kb_id),
+                "source_id": str(b.source_id),
+                "source_system": b.source_system,
+                "source_instance": b.source_instance,
+                "tool": "tkg." + name,
+            }
             try:
-                if key in self.seen or (name=="get_neighbors" and self.depth[b.id,entity]>=self.limits.max_hops):
+                if key in self.seen or (name == "get_neighbors" and self.depth[b.id, entity] >= self.limits.max_hops):
                     raise ReadError("visited_or_depth_limit")
                 self.seen.add(key)
                 async with asyncio.timeout(self.limits.tool_timeout_seconds):
-                    doc = await self.lookup(b,name,args)
-                data = json.dumps(doc,sort_keys=True).encode()
-                if self.used_bytes+len(data)>self.limits.context_bytes:
+                    doc = await self.lookup(b, name, args)
+                data = json.dumps(doc, sort_keys=True).encode()
+                if self.used_bytes + len(data) > self.limits.context_bytes:
                     raise ReadError("context_truncated")
                 self.used_bytes += len(data)
-                item.update(status=doc.get("status") or doc.get("retrieval_status") or "ok",
-                            sha256=hashlib.sha256(data).hexdigest(),data=doc)
-            except (ReadError,BindingError) as exc:
+                item.update(
+                    status=doc.get("status") or doc.get("retrieval_status") or "ok", sha256=hashlib.sha256(data).hexdigest(), data=doc
+                )
+            except (ReadError, BindingError) as exc:
                 item["status"] = str(exc)
-            except (TimeoutError,httpx.TransportError):
+            except (TimeoutError, httpx.TransportError):
                 item["status"] = "unavailable"
-            except (ValueError,TypeError,AttributeError,KeyError):
+            except (ValueError, TypeError, AttributeError, KeyError):
                 item["status"] = "invalid_response"
             results.append(item)
+        if not results:
+            results.append({"tool": "tkg." + name, "status": "unverified_entity" if args.get("entity") else "no_source_binding"})
         self.evidence.extend(results)
         return results

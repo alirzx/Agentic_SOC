@@ -57,7 +57,10 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
     import json
 
     model = resolve_model_alias("recon")
-    llm = make_chat_model("recon", temperature=0)
+    from app.integrations.tkg.tools import active
+
+    session = active.get()
+    llm = make_chat_model("recon", temperature=0, max_tokens=session.limits.max_output_tokens if session else None)
 
     # Defence-in-depth: every field surfaced here can be attacker-influenced
     # (alert_summary often echoes log lines; raw_alert is verbatim event data).

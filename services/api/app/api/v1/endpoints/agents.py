@@ -24,7 +24,7 @@ from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.api.v1.endpoints.connectors import _fetch_catalog, _safe_log_val
 from app.models.alert import Alert
 from app.models.connector import Connector
-from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers
+from app.services.agents_tenant_auth import AgentsTenantAuthError, signed_tenant_headers, tkg_grant
 from app.services.alert_contextual_explanation import (
     build_explanation_record,
     explanation_for_agents,
@@ -46,9 +46,7 @@ def _tenant_headers(tenant_id: UUID, *, tkg_alert: UUID | None = None) -> dict[s
     try:
         headers = signed_tenant_headers(tenant_id)
         if tkg_alert is not None:
-            import hmac
-            key = os.environ["AISOC_AGENTS_TENANT_SIGNING_KEY"].encode()
-            headers["X-AiSOC-TKG-Grant"] = hmac.digest(key,f"tkg-read-v1/{tenant_id}/{tkg_alert}".encode(),"sha256").hex()
+            headers["X-AiSOC-TKG-Grant"] = tkg_grant(tenant_id, tkg_alert)
         return headers
     except AgentsTenantAuthError as exc:
         raise HTTPException(status_code=503, detail="Agents tenant authentication is not configured") from exc

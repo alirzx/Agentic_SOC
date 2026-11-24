@@ -35,4 +35,12 @@ def signed_tenant_headers(tenant_id: str | uuid.UUID) -> dict[str, str]:
     }
 
 
+def tkg_grant(tenant_id: uuid.UUID, resource_id: uuid.UUID, *, case: bool = False) -> str:
+    key = os.getenv(TENANT_SIGNING_KEY_ENV, "").encode()
+    if len(key) < 32:
+        raise AgentsTenantAuthError("agents_tenant_signing_key_not_configured")
+    purpose = "tkg-case-v1" if case else "tkg-read-v1"
+    return hmac.digest(key, f"{purpose}/{tenant_id}/{resource_id}".encode(), "sha256").hex()
+
+
 __all__ = ["AgentsTenantAuthError", "signed_tenant_headers"]

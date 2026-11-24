@@ -809,6 +809,7 @@ async def run_evaluation(
     started = time.perf_counter()
     cfg = config_from_settings(settings_obj) if client is not None else await workspace_config(db, tenant_id, settings_obj)
     scoped_binding = getattr(cfg, "binding", None)
+    use_row_id = getattr(cfg, "evaluation_identity", None) == "security_alert"
     max_alerts = int(getattr(settings_obj, "AISOC_TKG_MAX_ALERTS", C.MAX_ALERTS) or C.MAX_ALERTS)
     budget_ms = int(getattr(settings_obj, "AISOC_TKG_BUDGET_MS", C.DEFAULT_BUDGET_MS) or C.DEFAULT_BUDGET_MS)
     ttl_s = int(getattr(settings_obj, "AISOC_TKG_CACHE_TTL_S", 900) or 0)
@@ -941,7 +942,7 @@ async def run_evaluation(
             payload["detail"] = "; ".join(check["detail"] for check in readiness.get("checks", []) if not check.get("ok"))
             return payload
 
-        alert_meta = {str(alert["alert_id"] if scoped_binding else alert.get("notable_id") or alert["alert_id"]): alert for alert in bundle["payload"]["alerts"]}
+        alert_meta = {str(alert["alert_id"] if use_row_id else alert.get("notable_id") or alert["alert_id"]): alert for alert in bundle["payload"]["alerts"]}
 
         if job is not None:
             job.touch(stage="resolve", total=len(bundle["payload"]["alerts"]), message=None)
@@ -1013,7 +1014,7 @@ async def run_evaluation(
             [
                 # Resolve the notable id the graph was fed with, not AiSOC's row
                 # id: the ingest used the Splunk notable id from the payload.
-                str(alert["alert_id"] if scoped_binding else alert.get("notable_id") or alert["alert_id"])
+                str(alert["alert_id"] if use_row_id else alert.get("notable_id") or alert["alert_id"])
                 for alert in bundle["payload"]["alerts"]
             ],
             synthetic_doc_ids=synthetic_ids,
