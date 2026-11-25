@@ -228,7 +228,7 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
             events.append("search")
             assert body["q"] == "10.8.9.10" and body["top_k"] <= 3
             doc = dict(
-                results=[dict(document_id=semantic_doc, chunk_id=semantic_chunk,
+                results=[dict(document_id=semantic_doc, id=semantic_chunk,
                               text=f"A prior observation linked the same scheduled task to host={private}.")],
                 retrieval=dict(dense_executed=False, lexical_method="fallback", reranker_status="unavailable"),
             )
@@ -305,9 +305,11 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
         "final",
     ]
     history = state.recon.history
-    assert history["citations"] == [f"{b.kb_id}/{fact}", f"{b.kb_id}/{semantic_doc}"]
+    assert history["citations"] == [f"{b.kb_id}/{fact}", f"{b.kb_id}/{semantic_chunk}"]
     observation = next(item for item in history["evidence"] if item["tool"] == "tkg.search_history")
     assert "text" not in observation["data"]["results"][0]
+    assert observation["data"]["results"][0]["chunk_id"] == semantic_chunk
+    assert session.candidates["candidate-1"].chunk_id == UUID(semantic_chunk)
     assert (history["tool_calls"], history["tool_requests"], history["llm_calls"]) == (5, 7, 3)
     assert history["evidence"][-1]["data"]["truncated"]
 
@@ -391,3 +393,30 @@ async def test_mcp_setup_obeys_independent_transport_budget(binding):
         session.remember(b, entity, 0)
         assert (await session.execute("get_timeline", {"entity": entity, "limit": 1}))[0]["status"] == "transport_budget"
         assert session.calls == session.requests == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wire_shape", ["canonical", "legacy", "matching_alias", "conflicting_alias", "invalid_id"])
+async def test_search_wire_chunk_identity(binding, wire_shape):
+    b = binding
+    doc, chunk = str(uid(70)), str(uid(71))
+    row = {"document_id": doc, "text": "Synthetic evidence"}
+    if wire_shape != "legacy":
+        row["id"] = "invalid" if wire_shape == "invalid_id" else chunk
+    if wire_shape in {"legacy", "matching_alias", "conflicting_alias"}:
+        row["chunk_id"] = str(uid(72)) if wire_shape == "conflicting_alias" else chunk
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [row]}))
+    ) as http:
+        session = Session(Live(), http, b.tenant_id, uid(6), b.connector_id, [b], Limits())
+        observations = await session.execute("search_history", {"q": "synthetic", "top_k": 1})
+
+    if wire_shape in {"conflicting_alias", "invalid_id"}:
+        assert observations[0]["status"] == "invalid_search_response"
+        assert not session.candidates and not session.depth
+    else:
+        assert observations[0]["status"] == "candidates"
+        assert observations[0]["data"]["results"][0]["chunk_id"] == chunk
+        assert session.candidates["candidate-1"].chunk_id == UUID(chunk)
+        assert not session.depth  # Search is not identity resolution.

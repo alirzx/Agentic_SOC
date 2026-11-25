@@ -322,10 +322,23 @@ class Session:
             results = data.get("results")
             if not isinstance(results, list) or any(not isinstance(row, dict) for row in results):
                 raise ReadError("invalid_search_response")
+            # TKG's public ChunkView serializes the chunk UUID as "id".
+            # Normalize it for the internal candidate/evidence contract. Accept
+            # the legacy alias, but never allow two conflicting identities.
+            normalized = []
+            for row in results[: min(args["top_k"], self.limits.max_results)]:
+                try:
+                    chunk = UUID(str(row["id"] if "id" in row else row["chunk_id"]))
+                    if "chunk_id" in row and UUID(str(row["chunk_id"])) != chunk:
+                        raise ValueError("conflicting chunk identities")
+                    document = UUID(str(row["document_id"]))
+                except (KeyError, ValueError, TypeError):
+                    raise ReadError("invalid_search_response") from None
+                normalized.append({**row, "id": str(chunk), "chunk_id": str(chunk), "document_id": str(document)})
             return {
                 **data,
-                "status": "candidates" if results else "empty",
-                "results": results[: min(args["top_k"], self.limits.max_results)],
+                "status": "candidates" if normalized else "empty",
+                "results": normalized,
             }
         if name == "get_entity_context":
             doc = await self.post(b, "knowledge/context", {"tenant_id": b.tkg_tenant, **args})
