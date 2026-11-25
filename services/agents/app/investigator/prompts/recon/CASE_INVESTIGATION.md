@@ -1,1 +1,1 @@
-Use the authorized seed catalog to examine representative signals and connectors, with priority for relevant severe observations. Never infer case-wide coverage from examined roots alone.
+Use severity, event time, source category, and examination state to choose among the authorized seeds. Prefer evidence that broadens source coverage or distinguishes competing explanations. A retained source may still be unexamined, unresolved or awaiting materialization. Report which of those limits applies and keep seed examination distinct from the completeness of historical evidence.

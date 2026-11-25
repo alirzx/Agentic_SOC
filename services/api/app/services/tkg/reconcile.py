@@ -3,12 +3,14 @@
 import asyncio
 import logging
 import random
+import time
 
 import asyncpg
 import httpx
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from . import metrics
 from .binding import Binding, BindingError, tls_context
 from .worker import DeliveryError, receipt_state, request_json
 
@@ -20,7 +22,7 @@ WITH due AS (
     SELECT d.id FROM tkg_alert_deliveries d JOIN workspace_tkg_bindings b
       ON (b.id,b.tenant_id)=(d.binding_id,d.tenant_id)
     WHERE d.state='pending_materialization' AND d.receipt_id IS NOT NULL
-      AND d.reconcile_after <= now() AND b.enabled
+      AND d.reconcile_after <= now() AND b.enabled AND d.id <> ALL($3::uuid[])
     ORDER BY d.reconcile_after,d.id
     LIMIT $1 FOR UPDATE OF d SKIP LOCKED
 )
@@ -33,7 +35,7 @@ RETURNING d.id,d.tenant_id,d.binding_id,d.receipt_id,d.reconcile_fence,d.reconci
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AISOC_TKG_RECONCILE_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="AISOC_TKG_RECONCILE_", extra="ignore", env_ignore_empty=True)
     enabled: bool = False
     interval_seconds: int = Field(30, ge=1, le=300)
     batch_size: int = Field(30, ge=20, le=50)
@@ -41,12 +43,19 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = Field(10, ge=1, le=20)
     pending_warn_seconds: int = Field(300, ge=30, le=86400)
     pending_alert_seconds: int = Field(1800, ge=60, le=604800)
+    lease_seconds: float = Field(40, ge=15, le=180)
+    backoff_max_seconds: float = Field(900, ge=30, le=3600)
+    db_timeout_seconds: float = Field(10, ge=1, le=30)
     database_url: str = Field("", repr=False)
 
     @model_validator(mode="after")
     def check_age_thresholds(self):
         if self.pending_alert_seconds <= self.pending_warn_seconds:
             raise ValueError("pending alert age must exceed warning age")
+        if self.lease_seconds <= self.request_timeout_seconds + 2 * self.db_timeout_seconds:
+            raise ValueError("receipt lease must cover the request and both database operations")
+        if self.backoff_max_seconds < self.interval_seconds:
+            raise ValueError("receipt backoff ceiling must be at least the polling interval")
         return self
 
 
@@ -59,11 +68,11 @@ async def fetch_status(pool, http, row, settings):
         )
     if binding_row is None:
         return
-    binding = Binding.from_row(binding_row, row["tenant_id"])
+    started = time.monotonic()
     delay = float(settings.interval_seconds)
-    result = {}
     code = None
     try:
+        binding = Binding.from_row(binding_row, row["tenant_id"])
         url = f"{binding.origin()}/api/v1/kbs/{binding.kb_id}/knowledge/receipts/{row['receipt_id']}/status"
         result = await request_json(http, "GET", url, binding.credential("diagnostics"), timeout=settings.request_timeout_seconds)
         if result.get("receipt_id") != str(row["receipt_id"]) or result.get("source_id") != str(binding.source_id):
@@ -74,13 +83,14 @@ async def fetch_status(pool, http, row, settings):
             raise DeliveryError("invalid_receipt_status")
         state = receipt_state(status, processing)
         failed = processing in {"failed_recoverable", "retryable_failure"} or state == "quarantined"
-        code = "materialization_" + processing if failed and processing in {"failed_recoverable", "retryable_failure", "terminal_failure"} else None
+        if failed:
+            code = "materialization_" + processing if processing in {"failed_recoverable", "retryable_failure", "terminal_failure"} else "materialization_quarantined"
         failures = 0
-    except (DeliveryError, BindingError) as exc:
+    except (DeliveryError, BindingError, ValueError, TypeError, KeyError) as exc:
         state, status, processing = "pending_materialization", None, None
-        code = exc.code if isinstance(exc, DeliveryError) else "receipt_credential_unavailable"
+        code = exc.code if isinstance(exc, DeliveryError) else "receipt_binding_unavailable"
         failures = min(row["reconcile_failures"] + 1, 12)
-        delay = random.uniform(delay, max(delay, min(900, delay * 2**failures)))
+        delay = random.uniform(delay, min(settings.backoff_max_seconds, delay * 2**failures))
 
     async with pool.acquire() as conn:
         updated = await conn.execute(
@@ -88,23 +98,32 @@ async def fetch_status(pool, http, row, settings):
                   receipt_status=COALESCE($3,receipt_status),
                   receipt_delivery_state=COALESCE($4,receipt_delivery_state),
                   error_code=$5,reconcile_failures=$6,
-                  reconcile_after=now()+$7*interval '1 second',updated_at=now()
+                  reconcile_after=now()+$7::double precision*interval '1 second',updated_at=now()
                 WHERE id=$1 AND state='pending_materialization' AND reconcile_fence=$8
                   AND EXISTS (SELECT 1 FROM workspace_tkg_bindings b
                     WHERE b.id=tkg_alert_deliveries.binding_id AND b.tenant_id=tkg_alert_deliveries.tenant_id
                       AND b.enabled)""",
             row["id"], state, status, processing, code, failures, delay, row["reconcile_fence"],
         )
-    logger.info("tkg_receipt delivery=%s state=%s code=%s persisted=%s", row["id"], state, code, updated == "UPDATE 1")
+    logger.log(
+        logging.WARNING if code or updated != "UPDATE 1" else logging.INFO,
+        "tkg_receipt delivery=%s receipt=%s workspace=%s state=%s code=%s elapsed_ms=%s persisted=%s",
+        row["id"], row["receipt_id"], row["tenant_id"], state, code,
+        round((time.monotonic() - started) * 1000), updated == "UPDATE 1",
+    )
+    metrics.receipt_polls.labels("fenced" if updated != "UPDATE 1" else "poll_failure" if failures else state).inc()
+    metrics.receipt_seconds.observe(time.monotonic() - started)
 
 
 async def reconcile_batch(pool, http, settings):
-    # Claim only a wave at a time. The next poll never leases a long in-memory queue.
+    # A slow wave can span the polling interval. Do not reclaim its rows in this batch.
+    processed = []
     for remaining in range(settings.batch_size, 0, -settings.concurrency):
         async with pool.acquire() as conn:
-            rows = await conn.fetch(CLAIM, min(settings.concurrency, remaining), settings.request_timeout_seconds * 3 + 10)
+            rows = await conn.fetch(CLAIM, min(settings.concurrency, remaining), settings.lease_seconds, processed)
         if not rows:
             break
+        processed.extend(row["id"] for row in rows)
         async with asyncio.TaskGroup() as group:
             for row in rows:
                 group.create_task(fetch_status(pool, http, row, settings))
@@ -117,6 +136,9 @@ async def reconcile_batch(pool, http, settings):
         logging.WARNING if health["oldest"] >= settings.pending_warn_seconds else logging.INFO
     )
     logger.log(severity, "tkg_receipt_queue pending=%s oldest_seconds=%s", health["pending"], int(health["oldest"]))
+    metrics.queue.labels("receipts").set(health["pending"])
+    metrics.oldest.labels("receipts").set(float(health["oldest"]))
+    metrics.export("reconcile")
 
 
 async def main():
@@ -127,8 +149,9 @@ async def main():
         raise ValueError("AISOC_TKG_RECONCILE_DATABASE_URL is required")
     logging.basicConfig(level=logging.INFO)
     async with (
-        asyncpg.create_pool(settings.database_url.replace("postgresql+asyncpg://","postgresql://"), min_size=1,
-                            max_size=settings.concurrency, timeout=10, command_timeout=10) as pool,
+        asyncpg.create_pool(settings.database_url.replace("postgresql+asyncpg://", "postgresql://"), min_size=0,
+                            max_size=settings.concurrency, timeout=settings.db_timeout_seconds,
+                            command_timeout=settings.db_timeout_seconds) as pool,
         httpx.AsyncClient(trust_env=False, verify=tls_context(), timeout=settings.request_timeout_seconds) as http,
     ):
         delay = 1.0

@@ -315,7 +315,7 @@ class FusedAlertTriageWorker:
         if reset not in {"latest", "earliest", "none"}:
             raise ValueError("KAFKA_AUTO_OFFSET_RESET must be latest, earliest or none")
 
-        self._consumer = AIOKafkaConsumer(
+        consumer = AIOKafkaConsumer(
             self._topic,
             bootstrap_servers=self._bootstrap,
             group_id=self._group_id,
@@ -324,12 +324,13 @@ class FusedAlertTriageWorker:
             # mid-triage re-delivers the alert instead of dropping it.
             enable_auto_commit=False,
         )
-        await self._consumer.start()
-        self._running = True
-        self._summary_task = asyncio.create_task(self._report_funnel_savings())
-        logger.info("auto_triage_worker.started", topic=self._topic, group=self._group_id)
+        self._consumer = consumer
         try:
-            async for msg in self._consumer:
+            await consumer.start()
+            self._running = True
+            self._summary_task = asyncio.create_task(self._report_funnel_savings())
+            logger.info("auto_triage_worker.started", topic=self._topic, group=self._group_id)
+            async for msg in consumer:
                 if not self._running:
                     break
                 # Commit ONLY after a durable outcome (verdict + ledger written)
@@ -346,9 +347,24 @@ class FusedAlertTriageWorker:
                 else:
                     await self._process_with_retry(message)
                 # Stop on commit or DLQ failure. Continuing could commit past this record.
-                await self._consumer.commit({TopicPartition(msg.topic, msg.partition): msg.offset + 1})
+                await consumer.commit({TopicPartition(msg.topic, msg.partition): msg.offset + 1})
         finally:
             await self.stop()
+
+    async def supervise(self) -> None:
+        """Rejoin the consumer group after a failed delivery or commit."""
+        from aiokafka.errors import KafkaError
+
+        delay = 1.0
+        while True:
+            try:
+                await self.start()
+            except (KafkaError, OSError, RuntimeError) as exc:
+                logger.warning("auto_triage_worker.rejoining", error_type=type(exc).__name__, delay_seconds=delay)
+            else:
+                return
+            await asyncio.sleep(delay)
+            delay = min(30, delay * 2)
 
     async def _process_with_retry(self, message: Any) -> bool:
         """Triage one alert with bounded retries; dead-letter on exhaustion.

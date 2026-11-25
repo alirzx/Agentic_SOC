@@ -484,7 +484,7 @@ async def protect_model_options(options: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
+async def safe_ainvoke(llm: Any, messages: Iterable[Any], *, admit_provider_call=None, **kwargs: Any) -> Any:
     """Validate ``messages`` against the contract, then call ``llm.ainvoke``.
 
     All callsites in ``services/agents`` MUST route through this function
@@ -540,6 +540,8 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
             )
             return local_result
 
+    if admit_provider_call is not None:
+        admit_provider_call(model, provider_messages)
     t0 = time.monotonic()
     result = await llm.ainvoke(provider_messages, **provider_kwargs)
     latency_ms = (time.monotonic() - t0) * 1000.0

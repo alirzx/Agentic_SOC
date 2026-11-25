@@ -4,25 +4,28 @@ This workflow targets the existing `aisoc-demo` Compose project and preserves it
 
 ## Current server prerequisites
 
-- Source `main` synced with both remotes, clean worktree.
+- Approved source revision synced with the authorized remotes and a clean worktree.
 - Existing `.env` mode 0600, remote Privacy backend enabled and required; current SOC Bearer token and tenant signing key already match DLP. **Never regenerate the DLP master key or its registered SOC token for a routine SOC build.**
 - Gateway Caddy, FastAPI and TLS Redis healthy; external network `aisoc-privacy` exists.
 - Private CA at `/opt/soorin/secrets/dlp/soc-ca-bundle.pem`; runtime override `~/soc-deploy/runtime-security.override.yml`.
-- Four Compose inputs: `infra/compose/docker-compose.demo.yml`, `privacy-network.override.yml`, `privacy-ca.override.yml`, and the server-only runtime override.
-- Enough disk/memory for seven application builds. Build sequentially rather than concurrently on constrained hosts.
+- Baseline Compose inputs are the demo base, privacy networking, privacy CA and the server-only runtime override. TKG adds its own network and optional CA overlay before that final override.
+- Allow disk and memory for eight application builds, including Correlation. Build one at a time.
 
 ## Safe one-command stages
 
 ```bash
 cd /home/api/Agentic_SOC
 git status -sb
+bash scripts/server55_soc_build.sh config
 bash scripts/server55_soc_build.sh preflight
 bash scripts/server55_soc_build.sh build
 bash scripts/server55_soc_build.sh smoke
 bash scripts/server55_soc_build.sh images
 ```
 
-The helper deliberately has **no** destructive deployment or Compose `down` command. `build` tags the existing seven running application image IDs as `aisoc-rollback/<service>:before-<UTC timestamp>`, saves a private manifest under `~/soc_git_backups`, and builds one service at a time. The currently running application containers are not replaced. `smoke` uses disposable containers built from the new API and Agents images with their network and CA settings and checks TLS HTTPS, health, readiness and Bearer policy access. It does not send customer data or contact an LLM provider.
+`config` resolves Compose and prints a policy result with values hidden. `preflight` checks the existing `aisoc-demo` project, host credential mount paths and required networks. Set `SOC_COMPOSE_ENV` and `SOC_RUNTIME_OVERRIDE` to use explicitly selected protected files. Set `SOC_TKG_OVERLAY=on` for the private TKG network or `private-ca` when the TKG HTTPS endpoint uses a private CA. The default `off` uses the previous DLP-only workflow. The application flags in `.env.example` independently control history, planner, submission and receipt polling.
+
+`build` saves a private image inventory under `~/soc_git_backups`, tags existing application images for rollback and builds one service at a time. A first-time Correlation deployment records `absent` in that inventory. Sync and Reconciler use the one locally built API image and require no separate build. The project name, normal container names and DB, Redis and Kafka volumes remain in the existing SOC Compose project. When using an external runtime override, verify the API and both workers resolve to the same immutable release tag before activation. `smoke` uses the new API and Agents images to check DLP TLS, health, readiness and authenticated policies with synthetic inputs. Build and smoke are explicit operator stages. See the [TKG rollout and rollback sequence](SERVER55_TKG_QUALIFICATION.md#operator-preflight).
 
 ## Registry selection
 

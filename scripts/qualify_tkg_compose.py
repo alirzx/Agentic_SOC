@@ -15,17 +15,16 @@ SOC_OVERRIDES = (
 TKG_OVERRIDES = (
     "docker-compose.production.yml",
     "docker-compose.models-production.yml",
-    "docker-compose.models-isolated.yml",
     "docker-compose.tkg-network.override.yml",
 )
 
 
-def resolve(directory, files, env_file, project=None):
+def resolve(directory, files, env_file, project=None, *, profile="tkg-sync"):
     cmd = ["docker", "compose", "--project-directory", str(directory)]
     if env_file:
         cmd += ["--env-file", str(env_file.resolve())]
     if project:
-        cmd += ["-p", project, "--profile", "tkg-sync"]
+        cmd += ["-p", project, "--profile", profile]
     for path in files:
         cmd += ["-f", str(directory / path)]
     result = subprocess.run(cmd + ["config", "--format", "json"], capture_output=True, check=False, timeout=30)
@@ -50,6 +49,7 @@ def validate(before, after, tkg, *, private_ca):
         )
         require(all(m in current.get("volumes", []) for m in baseline.get("volumes", [])), f"{name}: an existing mount changed")
         require(current.get("depends_on") == baseline.get("depends_on"), f"{name}: dependency configuration changed")
+        require(current.get("command") == baseline.get("command"), f"{name}: service command changed")
     for name in ("api", "agents"):
         require("privacy_gateway" in services[name]["networks"], f"{name}: privacy attachment missing")
         require(
@@ -69,6 +69,10 @@ def validate(before, after, tkg, *, private_ca):
         "Unexpected TKG service attached to aisoc-tkg",
     )
     app = tkg["services"]["app"]
+    require(set(tkg["services"]) == {"app", "db", "models"}, "Unexpected hardened TKG model topology")
+    models = tkg["services"]["models"]
+    require("models" in app["networks"] and set(models["networks"]) == {"models"}, "Unified models are not private")
+    require(tkg["networks"]["models"].get("internal"), "TKG model network must be internal")
     require("soorin-tkg" in app["networks"]["aisoc_tkg"]["aliases"], "TKG DNS alias is missing")
     require(app["environment"].get("UTOPIA_BIND_ADDR") == "0.0.0.0:1516", "TKG internal listener mismatch")
     require(all(not v.get("ports") for k, v in tkg["services"].items() if k != "app"), "TKG dependency ports are published")
@@ -83,6 +87,11 @@ def validate(before, after, tkg, *, private_ca):
     )
     for name in ("tkg-sync", "tkg-reconcile"):
         require(not services[name].get("ports"), f"{name}: publishes a host port")
+        require(services[name]["image"] == services["api"]["image"] and not services[name].get("build"),
+                f"{name}: must reuse the API image")
+        require(services[name].get("cpus") and services[name].get("mem_limit"), f"{name}: missing resource limits")
+    require(services["agents"]["environment"].get("AISOC_TKG_RECON_PROFILE") in {"standard", "deep_case"},
+            "Invalid Recon profile")
     worker = services["tkg-sync"]["environment"]
     reconciler = services["tkg-reconcile"]["environment"]
     if reconciler.get("AISOC_TKG_RECONCILE_ENABLED", "").lower() in {"true", "1", "yes", "on"}:
@@ -116,8 +125,8 @@ def main():
     if args.private_ca:
         tkg_files += ("infra/compose/tkg-ca.override.yml",)
     before = resolve(soc, before_files, args.soc_env, "aisoc-demo")
-    after = resolve(soc, (*before_files, *tkg_files), args.soc_env, "aisoc-demo")
-    tkg = resolve(args.tkg_checkout.resolve(), TKG_OVERRIDES, args.tkg_env)
+    after = resolve(soc, (*SOC_OVERRIDES, *tkg_files, args.runtime_override.resolve()), args.soc_env, "aisoc-demo")
+    tkg = resolve(args.tkg_checkout.resolve(), TKG_OVERRIDES, args.tkg_env, "soorin-tkg-server55", profile="models")
     validate(before, after, tkg, private_ca=args.private_ca)
 
 

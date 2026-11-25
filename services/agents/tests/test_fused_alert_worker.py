@@ -114,6 +114,26 @@ async def test_kafka_poison_commit_requires_durable_dlq(monkeypatch, available):
     assert order == (["dlq", "commit"] if available else ["dlq"])
 
 
+async def test_kafka_supervisor_rejoins_after_commit_failure(monkeypatch):
+    from aiokafka.errors import CommitFailedError
+
+    worker = _worker()
+    events = []
+
+    async def start():
+        events.append("join")
+        if events == ["join"]:
+            raise CommitFailedError()
+
+    async def sleep(delay):
+        events.append(delay)
+
+    monkeypatch.setattr(worker, "start", start)
+    monkeypatch.setattr(worker_mod.asyncio, "sleep", sleep)
+    await worker.supervise()
+    assert events == ["join", 1.0, "join"]
+
+
 async def test_real_kafka_acknowledges_poison_before_committing(monkeypatch):
     import asyncio
     import contextlib

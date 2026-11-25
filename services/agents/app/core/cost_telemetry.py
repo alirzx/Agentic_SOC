@@ -69,8 +69,13 @@ _PRICING: dict[str, tuple[float, float]] = {
 _DEFAULT_PRICE = (0.001, 0.002)
 
 
+def model_token_prices(model: str) -> tuple[float, float] | None:
+    """Known per-thousand input and output prices for admission estimates."""
+    return _PRICING.get(model.lower())
+
+
 def _estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
-    in_price, out_price = _PRICING.get(model.lower(), _DEFAULT_PRICE)
+    in_price, out_price = model_token_prices(model) or _DEFAULT_PRICE
     return (prompt_tokens / 1000) * in_price + (completion_tokens / 1000) * out_price
 
 

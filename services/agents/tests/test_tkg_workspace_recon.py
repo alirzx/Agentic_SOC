@@ -14,7 +14,8 @@ from pydantic import ValidationError
 
 from app.integrations.tkg import recon
 from app.integrations.tkg.binding import Binding
-from app.integrations.tkg.tools import Limits, SCHEMAS, SearchCandidate, Session, active
+from app.integrations.tkg.budget import ModelBudget, ModelBudgetStop
+from app.integrations.tkg.tools import Limits, SCHEMAS, SearchCandidate, Session, active, case_grant
 from app.investigator.state import InvestigatorState
 from app.privacy.context import privacy_context
 from app.runtime.catalog import build_tool_registry
@@ -23,6 +24,71 @@ from app.runtime.tools import ToolContext, ToolPermissionDenied
 
 def uid(n):
     return UUID(int=n)
+
+
+def test_profile_overrides_and_budget_reserves_final_request(monkeypatch):
+    from langchain_core.messages import HumanMessage
+
+    monkeypatch.setenv("AISOC_TKG_RECON_PROFILE", "deep_case")
+    monkeypatch.setenv("AISOC_TKG_RECON_MAX_HOPS", "")
+    monkeypatch.setenv("AISOC_TKG_RECON_MAX_RESULTS", "4")
+    limits = Limits(max_model_tokens=25000, max_llm_calls=2)
+    assert (limits.max_hops, limits.max_results, limits.resolve_timeout_seconds) == (4, 4, 15)
+    budget = ModelBudget(limits)
+    with pytest.raises(ModelBudgetStop, match="model_price_unavailable"):
+        budget.admit("unqualified-alias", [HumanMessage(content="synthetic")], final=False)
+    with pytest.raises(ModelBudgetStop, match="model_token_budget"):
+        budget.admit("gpt-4o-mini", [HumanMessage(content="x" * 8000)], final=False)
+    budget.admit("gpt-4o-mini", [HumanMessage(content="synthetic")], final=False)
+    with pytest.raises(ModelBudgetStop, match="llm_budget"):
+        budget.admit("gpt-4o-mini", [HumanMessage(content="synthetic")], final=False)
+    budget.admit("gpt-4o-mini", [HumanMessage(content="synthetic")], final=True)
+    assert budget.provider_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_failing_final_assessment_is_never_restarted(binding, monkeypatch):
+    b = binding
+    state = InvestigatorState(tenant_id=str(b.tenant_id), case_id="fixture", alert_summary="Synthetic case")
+    session = Session(None, None, b.tenant_id, None, None, [], Limits(), seeds={}, case_total=4, case_eligible=0)
+    calls = 0
+
+    async def create(*_):
+        return session
+
+    async def assess(state):
+        nonlocal calls
+        calls += 1
+        assert state.recon.history["stop_reason"] == "no_authorized_seed"
+        raise RuntimeError("synthetic failed assessment")
+
+    monkeypatch.setenv("AISOC_TKG_RECON_ENABLED", "true")
+    monkeypatch.setattr(recon, "protected", lambda _: True)
+    monkeypatch.setattr(recon, "create_session", create)
+    grant_token = case_grant.set((b.tenant_id, uid(90)))
+    try:
+        with pytest.raises(RuntimeError, match="synthetic failed assessment"):
+            await recon.assess_with_history(state, assess)
+    finally:
+        case_grant.reset(grant_token)
+    assert calls == 1 and active.get() is None
+    assert state.recon.history["coverage"]["case_alerts"] == 4
+    assert state.recon.history["historical_status"] == "empty"
+
+
+def test_packing_retains_required_state_and_claims_require_visible_facts():
+    kept = []
+    packed = recon.pack_context(
+        {"stop_reason": "tool_budget", "coverage": {"examined_seeds": 1}, "alert": "x" * 1600},
+        [{"tool": "tkg.get_neighbors", "facts": [{"id": str(uid(8))}]}] * 2, 400, selected=kept,
+    )
+    assert "tool_budget" in packed and '"omitted":1' in packed and len(kept) == 1
+    fact, candidate = f"{uid(3)}/{uid(8)}", f"{uid(3)}/{uid(9)}"
+    history = {"citations": [fact, candidate], "citation_evidence": {fact: {"entities": [str(uid(4))], "knowledge_time": None}}}
+    assert recon.validate_historical_claims([{"claim": "Candidate assertion", "citations": [candidate]}], history) == []
+    assert recon.validate_historical_claims([{"claim": "Wrong entity", "citations": [fact], "entity_id": str(uid(5))}], history) == []
+    result = recon.validate_historical_claims([{"claim": "Observed relationship", "citations": [fact]}], history)
+    assert result[0]["status"] == "requires_analyst_review"
 
 
 @pytest.mark.asyncio
@@ -119,6 +185,7 @@ def binding(tmp_path, monkeypatch):
 async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
     b = binding
     root, peer, fact = map(str, (uid(7), uid(8), uid(9)))
+    semantic_doc, semantic_chunk = map(str, (uid(30), uid(31)))
     private = "endpoint01.corp.synthetic.test"
     events = []
 
@@ -160,7 +227,11 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
         elif path.endswith("/search"):
             events.append("search")
             assert body["q"] == "10.8.9.10" and body["top_k"] <= 3
-            doc = dict(results=[], retrieval=dict(dense_executed=False, lexical_method="fallback", reranker_status="unavailable"))
+            doc = dict(
+                results=[dict(document_id=semantic_doc, chunk_id=semantic_chunk,
+                              text=f"A prior observation linked the same scheduled task to host={private}.")],
+                retrieval=dict(dense_executed=False, lexical_method="fallback", reranker_status="unavailable"),
+            )
         else:
             method = body["method"]
             if method == "initialize":
@@ -191,12 +262,13 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
         return httpx.Response(200, json=doc)
 
     class Planner:
-        model = "test"
+        model = "gpt-4o-mini"
 
         async def ainvoke(self, messages, **kwargs):
             events.append("assessment")
             provider = messages[-1].content
             assert private not in provider and "HOST_" in provider
+            assert "same scheduled task" in provider and "candidate-1" in provider
             assert "10.8.9.10" not in provider and "IP_V4_PRIVATE_" in provider
             assert "analyst-fixture-17" not in provider and "USER_" in provider
             if peer in provider:
@@ -233,7 +305,9 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
         "final",
     ]
     history = state.recon.history
-    assert history["citations"] == [f"{b.kb_id}/{fact}"]
+    assert history["citations"] == [f"{b.kb_id}/{fact}", f"{b.kb_id}/{semantic_doc}"]
+    observation = next(item for item in history["evidence"] if item["tool"] == "tkg.search_history")
+    assert "text" not in observation["data"]["results"][0]
     assert (history["tool_calls"], history["tool_requests"], history["llm_calls"]) == (5, 7, 3)
     assert history["evidence"][-1]["data"]["truncated"]
 

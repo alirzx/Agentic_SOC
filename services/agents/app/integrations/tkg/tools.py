@@ -7,9 +7,9 @@ import hashlib
 import json
 import time
 from contextvars import ContextVar
-from dataclasses import dataclass
-from datetime import date, datetime
-from typing import Annotated, Literal
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
+from typing import Annotated, Literal, TypedDict
 from uuid import UUID
 
 import httpx
@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.runtime.tools import SOCTool, ToolContext, ToolPermissionDenied
 
 from .binding import BindingError
+from .budget import ModelBudget
 
 logger = structlog.get_logger()
 
@@ -32,6 +33,7 @@ class Limits(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AISOC_TKG_RECON_", extra="ignore", env_ignore_empty=True)
     enabled: bool = False
     preflight_enabled: bool = True
+    preflight_seeds: int = Field(2, ge=0, le=3)
     loop_enabled: bool = False
     profile: Literal["standard", "deep_case"] = "standard"
     max_iterations: int = Field(8, ge=1, le=20)
@@ -41,10 +43,14 @@ class Limits(BaseSettings):
     max_assessment_output_tokens: int | None = Field(None, ge=128, le=4096)
     max_model_tokens: int = Field(100000, ge=4096, le=500000)
     max_cost_usd: float = Field(0.05, gt=0, le=1)
+    unknown_input_usd_per_1k: float | None = Field(None, gt=0, le=1)
+    unknown_output_usd_per_1k: float | None = Field(None, gt=0, le=1)
     max_tool_calls: int = Field(12, ge=1, le=25)
     max_transport_requests: int = Field(32, ge=1, le=80)
     timeout_seconds: float = Field(120, ge=1, le=360)
     tool_timeout_seconds: float = Field(15, gt=0, le=60)
+    resolve_timeout_seconds: float = Field(10, gt=0, le=60)
+    mcp_setup_timeout_seconds: float = Field(10, gt=0, le=60)
     search_timeout_seconds: float = Field(30, gt=0, le=90)
     planner_timeout_seconds: float = Field(60, ge=1, le=120)
     assessment_timeout_seconds: float = Field(30, ge=1, le=120)
@@ -68,6 +74,7 @@ class Limits(BaseSettings):
                 "max_results": 8, "timeout_seconds": 240, "context_bytes": 262144,
                 "max_case_seeds": 10, "history_context_tokens": 16000,
                 "tool_timeout_seconds": 20, "search_timeout_seconds": 45,
+                "resolve_timeout_seconds": 15, "mcp_setup_timeout_seconds": 15,
                 **values,
             }
         return values
@@ -75,6 +82,11 @@ class Limits(BaseSettings):
     @property
     def assessment_tokens(self):
         return self.max_assessment_output_tokens or self.max_output_tokens
+
+    def tool_deadline(self, name):
+        return {"resolve_entity": self.resolve_timeout_seconds, "search_history": self.search_timeout_seconds}.get(
+            name, self.tool_timeout_seconds,
+        )
 
 
 class Args(BaseModel):
@@ -139,13 +151,18 @@ class ReadTool(SOCTool):
     allowed_agents = frozenset({"ReconAgent"})
     allowed_roles = frozenset({"analyst", "system"})
     permission = "READ_SECURITY_DATA"
-    timeout_seconds = 5
     audit_required = True
 
     def __init__(self, name):
         self.short = name
         self.name = "tkg." + name
-        self.description = "Read workspace-authorized TKG evidence: " + name
+        self.description = {
+            "resolve_entity": "Verify an issued alert seed or documented candidate before traversing the graph.",
+            "get_entity_context": "Read facts and evidence references for a verified entity at a selected time.",
+            "search_history": "Find semantic document and chunk candidates with retrieval status.",
+            "get_timeline": "Order dated facts for an established entity using a bounded window.",
+            "get_neighbors": "Explore one authorized relationship hop with optional predicate and entity-type filters.",
+        }[name]
         self.input_schema = SCHEMAS[name].model_json_schema()
 
     async def execute(self, input, context: ToolContext):
@@ -162,7 +179,9 @@ def register(registry):
 
 
 class ReadError(ValueError):
-    pass
+    def __init__(self, code, *, retryable=False):
+        super().__init__(code)
+        self.retryable = retryable
 
 
 @dataclass(frozen=True)
@@ -172,21 +191,48 @@ class SearchCandidate:
     chunk_id: UUID
 
 
+class Objective(TypedDict):
+    evidence_gap: str
+    expected_observation: str
+    hypothesis: str
+    question_status: Literal["open", "resolved"]
+    last_outcome: str
+
+
+@dataclass
+class ReconInvestigationMemory:
+    objectives: dict[str, Objective] = field(default_factory=dict)
+    examined: set[str] = field(default_factory=set)
+    candidates: dict[str, SearchCandidate] = field(default_factory=dict)
+    depth: dict[tuple[UUID, str], int] = field(default_factory=dict)
+    completed_queries: set[tuple[UUID, str, str]] = field(default_factory=set)
+    retryable_queries: set[tuple[UUID, str, str]] = field(default_factory=set)
+    evidence: list[dict] = field(default_factory=list)
+    stop_reason: str = "initializing"
+
+
 class Session:
-    def __init__(self, pool, http, workspace, alert_id, connector, bindings, limits, *, seeds=None, case_total=None):
+    def __init__(self, pool, http, workspace, alert_id, connector, bindings, limits, *, seeds=None, case_total=None,
+                 case_eligible=None, seed_metadata=None, omitted_bindings=0, investigation_id=None):
         self.pool, self.http = pool, http
         self.workspace, self.alert_id, self.connector = workspace, alert_id, connector
         self.bindings, self.limits = bindings, limits
-        self.seeds = seeds or {"seed-1": (alert_id, connector)}
+        self.seeds = seeds if seeds is not None else {"seed-1": (alert_id, connector)}
         self.case_total = case_total
-        self.examined = set()
-        self.candidates: dict[str, SearchCandidate] = {}
-        self.objectives: dict[str, dict[str, str]] = {}
+        self.case_eligible = case_eligible if case_eligible is not None else len(self.seeds)
+        self.seed_metadata = seed_metadata or {}
+        self.omitted_bindings = omitted_bindings
+        self.investigation_id = investigation_id
+        self.memory = ReconInvestigationMemory()
+        self.examined = self.memory.examined
+        self.candidates = self.memory.candidates
+        self.objectives = self.memory.objectives
+        self.model_budget = ModelBudget(limits)
         self.calls = self.requests = self.used_bytes = 0
-        self.depth = {}
-        self.seen = set()
+        self.depth = self.memory.depth
+        self.seen = self.memory.completed_queries
+        self.evidence = self.memory.evidence
         self.rpc_ready = set()
-        self.evidence = []
 
     async def require_enabled(self, b):
         async with self.pool.acquire() as conn, conn.transaction():
@@ -208,7 +254,7 @@ class Session:
             "POST", f"{b.origin()}/api/v1/kbs/{b.kb_id}/{path}", json=body, headers={"Authorization": "Bearer " + b.credential("reader")}
         ) as r:
             if r.status_code != 200:
-                raise ReadError(f"http_{r.status_code}")
+                raise ReadError(f"http_{r.status_code}", retryable=r.status_code in {408, 425, 429, 500, 502, 503, 504})
             buf = bytearray()
             async for part in r.aiter_bytes():
                 buf.extend(part)
@@ -257,6 +303,8 @@ class Session:
             candidates = doc.get("candidates")
             if not isinstance(candidates, list) or any(not isinstance(row, dict) for row in candidates):
                 raise ReadError("invalid_resolution_candidates")
+            if doc.get("status") not in ("resolved", "ambiguous", "pending_materialization", "unavailable", "not_found"):
+                raise ReadError("invalid_resolution_status")
             if doc.get("status") == "resolved":
                 entry = candidates[0] if len(candidates) == 1 else {}
                 if (
@@ -289,6 +337,8 @@ class Session:
             ):
                 raise ReadError("invalid_scope_or_version")
             facts = doc.get("facts")
+            if doc.get("retrieval_status") not in ("complete", "partial", "unavailable"):
+                raise ReadError("invalid_context_status")
             if not isinstance(facts, list) or len(facts) > args["limit"]:
                 raise ReadError("invalid_context_facts")
             for fact in facts:
@@ -296,12 +346,13 @@ class Session:
             return doc
         tool = {"get_timeline": "timeline", "get_neighbors": "neighbors"}[name]
         if b.id not in self.rpc_ready:
-            hello = await self.rpc(
-                b,
-                "initialize",
-                {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "aisoc-recon", "version": "1"}},
-            )
-            listed = await self.rpc(b, "tools/list", {})
+            async with asyncio.timeout(self.limits.mcp_setup_timeout_seconds):
+                hello = await self.rpc(
+                    b,
+                    "initialize",
+                    {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "aisoc-recon", "version": "1"}},
+                )
+                listed = await self.rpc(b, "tools/list", {})
             names = {t["name"] for t in listed.get("tools", []) if isinstance(t, dict)}
             if hello.get("protocolVersion") != "2025-06-18" or not {"neighbors", "timeline"} <= names or "remember" in names:
                 raise ReadError("invalid_read_pat_capabilities")
@@ -345,8 +396,11 @@ class Session:
                     continue
                 for fact in doc.get("facts", []):
                     if fact.get("id") == ref.get("fact_id") and fact.get("other_id") and not any(
-                        fact.get(flag) for flag in ("inferred", "contested", "invalidated_at", "valid_to")
+                        fact.get(flag) for flag in ("inferred", "contested", "stale", "invalidated_at", "valid_to")
                     ):
+                        since = fact.get("valid_from")
+                        if since and date.fromisoformat(since[:10]) > datetime.now(UTC).date():
+                            continue
                         targets.add(str(UUID(fact["other_id"])))
         remaining = targets if len(targets) == 1 else set()
         return {
@@ -359,6 +413,7 @@ class Session:
         if self.calls >= self.limits.max_tool_calls:
             return [{"tool": "tkg." + name, "status": "call_budget"}]
         self.calls += 1
+        deadline = time.monotonic() + self.limits.tool_deadline(name)
         results = []
         seed_id = args.get("seed_id", "seed-1")
         candidate_id = args.get("candidate_id") if name == "resolve_entity" else None
@@ -374,7 +429,14 @@ class Session:
                 continue
             if entity and (b.id, entity) not in self.depth:
                 continue
-            key = (b.id, name, seed_id if seed is not None else json.dumps(args, sort_keys=True))
+            canonical = args.copy()
+            for field_name in ("at", "as_of"):
+                value = canonical.get(field_name)
+                if value and "T" in value:
+                    instant = datetime.fromisoformat(value)
+                    if instant.tzinfo:
+                        canonical[field_name] = instant.astimezone(UTC).isoformat()
+            key = (b.id, name, seed_id if seed is not None else json.dumps(canonical, sort_keys=True))
             if seed is not None:
                 self.examined.add(seed_id)
             item = {
@@ -394,8 +456,7 @@ class Session:
                 if key in self.seen or (name == "get_neighbors" and self.depth[b.id, entity] >= self.limits.max_hops):
                     raise ReadError("visited_or_depth_limit")
                 self.seen.add(key)
-                timeout = self.limits.search_timeout_seconds if name == "search_history" else self.limits.tool_timeout_seconds
-                async with asyncio.timeout(timeout):
+                async with asyncio.timeout(max(0, deadline - time.monotonic())):
                     doc = await self.lookup(b, name, args)
                 discovered = {}
                 if name == "search_history" and args.get("as_of") is None:
@@ -419,23 +480,35 @@ class Session:
                     for fact in doc["facts"]:
                         self.remember(b, fact.get("other_id"), self.depth[b.id, entity] + 1)
 
+                if name in {"get_neighbors", "get_timeline"}:
+                    outcome = "ok" if doc["facts"] else "empty"
+                elif name == "get_entity_context":
+                    outcome = doc["retrieval_status"]
+                else:
+                    outcome = doc.get("status", "ok")
                 item.update(
-                    status=doc.get("status")
-                    or doc.get("retrieval_status")
-                    or ("empty" if name in {"get_neighbors", "get_timeline"} and not doc["facts"] else "ok"),
+                    status=outcome,
                     sha256=hashlib.sha256(data).hexdigest(),
                     data=doc,
                 )
-            except (ReadError, BindingError) as exc:
+            except ReadError as exc:
                 item["status"] = str(exc)
+                if exc.retryable and key not in self.memory.retryable_queries:
+                    self.memory.retryable_queries.add(key)
+                    self.seen.discard(key)
+            except BindingError:
+                item["status"] = "binding_credential_unavailable"
             except (TimeoutError, httpx.TransportError):
                 item["status"] = "unavailable"
-                self.seen.discard(key)
+                if key not in self.memory.retryable_queries:
+                    self.memory.retryable_queries.add(key)
+                    self.seen.discard(key)
             except (ValueError, TypeError, AttributeError, KeyError):
                 item["status"] = "invalid_response"
             logger.info(
                 "tkg_read",
                 workspace_id=str(self.workspace),
+                investigation_id=self.investigation_id,
                 binding_id=str(b.id),
                 tool=name,
                 status=item["status"],

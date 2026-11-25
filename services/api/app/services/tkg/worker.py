@@ -12,14 +12,16 @@ from uuid import UUID
 
 import asyncpg
 import httpx
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.services.tkg.binding import Binding, BindingError, tls_context
+from app.services.tkg import metrics
 from app.services.tkg.projection import freeze
 from app.services.tkg_evaluation.sender import RecordError
 
 logger = logging.getLogger(__name__)
 
-MAX_ATTEMPTS = 6
 NORMALIZER_RETRY_CODES = {"soc_normalizer_busy", "soc_normalizer_timeout"}
 CLAIM = """
 SELECT d.id AS delivery, d.alert_row_id, d.snapshot, d.payload, d.attempts, b.*
@@ -29,6 +31,27 @@ WHERE b.enabled AND d.state IN ('not_submitted','retry_scheduled','submitting')
  AND d.next_attempt <= now()
 ORDER BY d.next_attempt,d.id LIMIT 1 FOR UPDATE OF d SKIP LOCKED
 """
+
+
+class WorkerSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="AISOC_TKG_WORKER_", extra="ignore", env_ignore_empty=True)
+    max_attempts: int = Field(6, ge=1, le=12)
+    lease_seconds: float = Field(60, ge=30, le=300)
+    request_timeout_seconds: float = Field(15, ge=1, le=60)
+    db_timeout_seconds: float = Field(10, ge=1, le=30)
+    db_command_seconds: float = Field(15, ge=1, le=45)
+    idle_seconds: float = Field(5, ge=1, le=60)
+    rate: int = Field(1, ge=1, le=5)
+    retry_base_seconds: float = Field(3, ge=1, le=30)
+    retry_max_seconds: float = Field(300, ge=30, le=3600)
+    reconnect_max_seconds: float = Field(30, ge=5, le=120)
+    metrics_interval_seconds: float = Field(30, ge=15, le=300)
+
+    @model_validator(mode="after")
+    def check_lease(self):
+        if self.lease_seconds <= 2 * self.request_timeout_seconds + self.db_command_seconds:
+            raise ValueError("worker lease must cover both HTTP requests and lease verification")
+        return self
 
 
 class DeliveryError(Exception):
@@ -78,6 +101,13 @@ async def request_json(http, method, url, token, data=None, *, timeout=15):
 
 
 def receipt_state(status, delivery_state=None):
+    if status not in ("pending", "registered", "submitted", "bound", "failed", "quarantined"):
+        raise DeliveryError("unknown_receipt_status")
+    if delivery_state not in (
+        None, "accepted", "queued", "running", "waiting_for_dependency", "bound", "quarantined",
+        "failed", "failed_recoverable", "retryable_failure", "terminal_failure",
+    ):
+        raise DeliveryError("unknown_receipt_delivery_state")
     if status == "bound":
         return "bound"
     if delivery_state in {"failed_recoverable", "retryable_failure"} and status != "quarantined":
@@ -86,7 +116,7 @@ def receipt_state(status, delivery_state=None):
         return "quarantined"
     if status in {"pending", "registered", "submitted"}:
         return "pending_materialization"
-    raise DeliveryError("unknown_receipt_status")
+    raise DeliveryError("unknown_receipt_delivery_state")
 
 
 def validate_preview(preview, binding, alert_row):
@@ -110,7 +140,8 @@ def validate_preview(preview, binding, alert_row):
         raise DeliveryError("preview_scope_or_identity_mismatch")
 
 
-async def deliver(conn, http):
+async def deliver(conn, http, settings=None):
+    settings = settings or WorkerSettings()
     async with conn.transaction():
         row = await conn.fetchrow(CLAIM)
         if row is None:
@@ -118,7 +149,7 @@ async def deliver(conn, http):
         delivery = row["delivery"]
         binding = Binding.from_row(row, row["tenant_id"])
         try:
-            if row["attempts"] >= MAX_ATTEMPTS:
+            if row["attempts"] >= settings.max_attempts:
                 raise RecordError("attempts_exhausted")
             payload = row["payload"] or freeze(json.loads(row["snapshot"]), binding)
         except (RecordError, ValueError, TypeError) as exc:
@@ -127,25 +158,27 @@ async def deliver(conn, http):
                 delivery,
                 getattr(exc, "code", "invalid_snapshot"),
             )
+            metrics.deliveries.labels("quarantined").inc()
             return True
         attempt = row["attempts"] + 1
         await conn.execute(
             """UPDATE tkg_alert_deliveries SET state='submitting',attempts=$2,payload=$3,
-            payload_hash=$4,snapshot=NULL,next_attempt=now()+interval '60 seconds',updated_at=now()
+            payload_hash=$4,snapshot=NULL,next_attempt=now()+$5::double precision*interval '1 second',updated_at=now()
             WHERE id=$1""",
             delivery,
             attempt,
             payload,
             hashlib.sha256(payload).hexdigest(),
+            settings.lease_seconds,
         )
 
-    receipt = status = code = None
+    receipt = status = processing = code = None
     delay = 0
     submission_started = time.monotonic()
     try:
         base = f"{binding.origin()}/api/v1/sources/{binding.source_id}/soc"
         token = binding.credential("ingest")
-        preview = await request_json(http, "POST", base + "/preview", token, payload)
+        preview = await request_json(http, "POST", base + "/preview", token, payload, timeout=settings.request_timeout_seconds)
         validate_preview(preview, binding, row["alert_row_id"])
         # Recheck disable and lease ownership after preview. An ingest already
         # in flight can finish after disable; no lock spans network I/O.
@@ -159,9 +192,10 @@ async def deliver(conn, http):
             attempt,
         )
         if not live:
+            metrics.deliveries.labels("fenced").inc()
             return True
         try:
-            result = await request_json(http, "POST", base + "/ingest", token, payload)
+            result = await request_json(http, "POST", base + "/ingest", token, payload, timeout=settings.request_timeout_seconds)
         except DeliveryError as exc:
             if exc.code in {"invalid_response", "response_too_large"}:
                 raise DeliveryError("invalid_receipt", transient=True) from None
@@ -171,18 +205,19 @@ async def deliver(conn, http):
         try:
             receipt = UUID(str(result.get("receipt_id")))
             status = result.get("status")
-            state = receipt_state(status)
+            processing = result.get("delivery_state")
+            state = receipt_state(status, processing)
         except (ValueError, TypeError, DeliveryError):
-            receipt = status = None
+            receipt = status = processing = None
             raise DeliveryError("invalid_receipt", transient=True) from None
     except (DeliveryError, BindingError, ValueError, TypeError) as exc:
         code = getattr(exc, "code", "invalid_binding_or_receipt")
-        retry = isinstance(exc, DeliveryError) and exc.transient and attempt < MAX_ATTEMPTS
+        retry = isinstance(exc, DeliveryError) and exc.transient and attempt < settings.max_attempts
         state = "retry_scheduled" if retry else "quarantined"
-        delay = random.uniform(1, min(300, 3 * 2**attempt)) if retry else 0
+        delay = random.uniform(1, min(settings.retry_max_seconds, settings.retry_base_seconds * 2**attempt)) if retry else 0
     updated = await conn.execute(
         """UPDATE tkg_alert_deliveries SET state=$2,receipt_id=$3,receipt_status=$4,
-        error_code=$5,next_attempt=now()+$6*interval '1 second',updated_at=now(),
+        error_code=$5,next_attempt=now()+$6::double precision*interval '1 second',updated_at=now(),receipt_delivery_state=$8,
         receipt_accepted_at=CASE WHEN $3::uuid IS NULL THEN receipt_accepted_at ELSE COALESCE(receipt_accepted_at,now()) END
         WHERE id=$1 AND attempts=$7 AND state='submitting'""",
         delivery,
@@ -192,18 +227,34 @@ async def deliver(conn, http):
         code,
         delay,
         attempt,
+        processing,
     )
     logger.info(
-        "tkg_delivery id=%s workspace=%s state=%s code=%s attempt=%s elapsed_ms=%s persisted=%s",
+        "tkg_delivery id=%s workspace=%s receipt=%s state=%s code=%s attempt=%s elapsed_ms=%s persisted=%s",
         delivery,
         binding.tenant_id,
+        receipt,
         state,
         code,
         attempt,
         round((time.monotonic() - submission_started) * 1000),
         updated == "UPDATE 1",
     )
+    metrics.deliveries.labels(state if updated == "UPDATE 1" else "fenced").inc()
+    metrics.delivery_seconds.observe(time.monotonic() - submission_started)
     return True
+
+
+async def report_queue(conn):
+    stats = await conn.fetchrow(
+        """SELECT count(*) total,count(*) FILTER (WHERE next_attempt <= now()) due,
+           coalesce(max(extract(epoch from now()-created_at)),0) oldest
+           FROM tkg_alert_deliveries WHERE state IN ('not_submitted','retry_scheduled','submitting')"""
+    )
+    metrics.queue.labels("outbox").set(stats["total"])
+    metrics.queue.labels("due").set(stats["due"])
+    metrics.oldest.labels("outbox").set(float(stats["oldest"]))
+    metrics.export("sync")
 
 
 async def backfill(conn, args):
@@ -275,21 +326,24 @@ async def main():
     parser.add_argument("--connector", type=UUID)
     parser.add_argument("--after", type=UUID)
     parser.add_argument("--batch", type=int, choices=range(1, 101), default=10, metavar="1..100")
-    parser.add_argument("--rate", type=int, choices=range(1, 6), default=1)
+    parser.add_argument("--rate", type=int, choices=range(1, 6))
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     if args.mode != "run" and not args.workspace:
         parser.error("--workspace required")
     if args.mode == "run" and os.getenv("AISOC_TKG_AUTO_INGEST_ENABLED", "false").lower() != "true":
         return
+    settings = WorkerSettings()
+    args.rate = args.rate or settings.rate
     logging.basicConfig(level=logging.INFO)
     dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
-    async with httpx.AsyncClient(trust_env=False, timeout=10, verify=tls_context()) as http:
+    async with httpx.AsyncClient(trust_env=False, timeout=settings.request_timeout_seconds, verify=tls_context()) as http:
         reconnect_delay = 1.0
+        next_metrics = 0.0
         while True:
             conn = None
             try:
-                conn = await asyncpg.connect(dsn, timeout=10, command_timeout=15)
+                conn = await asyncpg.connect(dsn, timeout=settings.db_timeout_seconds, command_timeout=settings.db_command_seconds)
                 if args.mode == "backfill":
                     await backfill(conn, args)
                     return
@@ -297,9 +351,12 @@ async def main():
                     await refresh_receipts(conn, http, args)
                     return
                 while True:
-                    worked = await deliver(conn, http)
+                    worked = await deliver(conn, http, settings)
+                    if time.monotonic() >= next_metrics:
+                        await report_queue(conn)
+                        next_metrics = time.monotonic() + settings.metrics_interval_seconds
                     reconnect_delay = 1.0
-                    await asyncio.sleep(1 / args.rate if worked else 5)
+                    await asyncio.sleep(1 / args.rate if worked else settings.idle_seconds)
             except (OSError, TimeoutError, asyncpg.PostgresConnectionError) as exc:
                 if args.mode != "run":
                     raise
@@ -311,7 +368,7 @@ async def main():
                     except (OSError, TimeoutError, asyncpg.PostgresConnectionError):
                         conn.terminate()
             await asyncio.sleep(random.uniform(reconnect_delay / 2, reconnect_delay))
-            reconnect_delay = min(30, reconnect_delay * 2)
+            reconnect_delay = min(settings.reconnect_max_seconds, reconnect_delay * 2)
 
 
 if __name__ == "__main__":

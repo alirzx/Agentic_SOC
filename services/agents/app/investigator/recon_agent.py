@@ -57,10 +57,14 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
     import json
 
     model = resolve_model_alias("recon")
+    from app.integrations.tkg.budget import ModelBudgetStop
     from app.integrations.tkg.tools import active
+    from app.privacy.context import PrivacyConfigurationError
+    from app.privacy.remote import RemotePrivacyError
 
     session = active.get()
-    llm = make_chat_model("recon", temperature=0, max_tokens=session.limits.assessment_tokens if session else None)
+    options = {"max_retries": 0, "timeout": session.limits.assessment_timeout_seconds} if session else {}
+    llm = make_chat_model("recon", temperature=0, max_tokens=session.limits.assessment_tokens if session else None, **options)
 
     # Defence-in-depth: every field surfaced here can be attacker-influenced
     # (alert_summary often echoes log lines; raw_alert is verbatim event data).
@@ -86,7 +90,7 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         prompt = f"{prompt}\n\n{explanation_append}"
     from app.integrations.tkg.recon import history_prompt
 
-    prompt += history_prompt(state)
+    prompt += history_prompt(state, assessment=session is not None)
     bundle_append = format_bundle_prompt_append(state.context_bundle)
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"
@@ -108,7 +112,10 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
 
     t0 = time.monotonic()
     try:
-        response = await safe_ainvoke(llm, messages)
+        if session:
+            response = await safe_ainvoke(llm, messages, admit_provider_call=session.model_budget.guard(final=True))
+        else:
+            response = await safe_ainvoke(llm, messages)
         content = response.content
         latency_ms = int((time.monotonic() - t0) * 1000)
         tokens = 0
@@ -132,6 +139,9 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:
             return json.loads(json_match.group())
+    except (ModelBudgetStop, PrivacyConfigurationError, RemotePrivacyError):
+        if session:
+            raise
     except Exception as exc:  # noqa: BLE001
         logger.warning("recon llm failed", error_type=type(exc).__name__)
         state.log(

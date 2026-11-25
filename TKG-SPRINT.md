@@ -1,5 +1,12 @@
 # Workspace TKG integration sprint
 
+## Final polishing on 2026-11-25
+
+- [x] Verify the published SOC and TKG checkpoints, fetch authorized remotes, and confirm both organization main merge bases. Review DLP as a read-only contract.
+- [x] Review the retained graph, test logs and resource policy. The medium corpus has no completion record. The previous disposable services are paused.
+- [ ] Finish reliability, Recon state and production entry points. Verify with small mocked tests and static configuration only.
+- [ ] Record the source qualification and deferred Server 55 gates in `docs/deployment/TKG_SPRINT4_FINAL_QUALIFICATION.md`.
+
 Local work on feat/workspace-tkg-integration in both repositories. Both trees were clean and matched personal remote main at preflight. Agentic_SOC 10b64a115e4fd969fc8d1b314370a9ef08d520f0. TKG 75119697d7fdd9f877c481456ba6dffc375df52a. TKG graphify query identified the graph tool, receipt and knowledge handlers. Agentic_SOC had no generated graph.
 
 ## Progress

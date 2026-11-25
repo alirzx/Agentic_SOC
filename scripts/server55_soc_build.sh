@@ -5,23 +5,37 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 OVERRIDE="${SOC_RUNTIME_OVERRIDE:-$HOME/soc-deploy/runtime-security.override.yml}"
-C=(docker compose --project-directory "$ROOT" -p aisoc-demo
+ENV_FILE="${SOC_COMPOSE_ENV:-$ROOT/.env}"
+TKG="${SOC_TKG_OVERLAY:-off}"
+C=(docker compose --project-directory "$ROOT" --env-file "$ENV_FILE" -p aisoc-demo
   -f infra/compose/docker-compose.demo.yml
   -f infra/compose/privacy-network.override.yml
-  -f infra/compose/privacy-ca.override.yml
-  -f "$OVERRIDE")
-APPS=(api agents web fusion connectors realtime ingest-worker)
+  -f infra/compose/privacy-ca.override.yml)
+case "$TKG" in
+  off) ;;
+  on) C+=(-f infra/compose/tkg-network.override.yml --profile tkg-sync) ;;
+  private-ca) C+=(-f infra/compose/tkg-network.override.yml -f infra/compose/tkg-ca.override.yml --profile tkg-sync) ;;
+  *) echo 'FAIL: SOC_TKG_OVERLAY must be off, on or private-ca' >&2; exit 2 ;;
+esac
+# Keep on-host security settings authoritative over tracked overlays.
+C+=(-f "$OVERRIDE")
+APPS=(api agents web fusion connectors realtime ingest-worker correlation)
 
-preflight() {
-  [[ -s .env ]] || { echo 'FAIL: .env missing' >&2; return 1; }
-  [[ -f "$OVERRIDE" ]] || { echo "FAIL: runtime override missing" >&2; return 1; }
-  docker network inspect aisoc-privacy >/dev/null
-  "${C[@]}" config --quiet
-  "${C[@]}" config --format json | python3 -c '
+resolved_config() {
+  [[ -s "$ENV_FILE" ]] || { echo 'FAIL: Compose environment file missing' >&2; return 1; }
+  [[ -f "$OVERRIDE" ]] || { echo 'FAIL: runtime override missing' >&2; return 1; }
+  "${C[@]}" config --format json 2>/dev/null || { echo 'FAIL: Compose inputs could not resolve' >&2; return 1; }
+}
+
+config() {
+  resolved_config | python3 -c '
 import json,sys
+from pathlib import Path
+from urllib.parse import urlsplit
 data=json.load(sys.stdin)
 services=data["services"]
-expected={"postgres","redis","kafka","zookeeper","api","agents","web","fusion","connectors","realtime","ingest-worker"}
+tkg=sys.argv[1]
+expected={"postgres","redis","kafka","zookeeper","api","agents","web","fusion","connectors","realtime","ingest-worker","correlation"}
 assert expected <= services.keys(), "missing services"
 assert data["networks"]["privacy_gateway"]["name"]=="aisoc-privacy"
 for name in ("api","agents"):
@@ -42,8 +56,62 @@ for name in ("api","agents"):
   assert any(v.get("target")=="/run/secrets/aisoc-dlp-ca.pem" and v.get("read_only") for v in service.get("volumes",[]))
 assert services["api"]["environment"]["AISOC_PRIVACY_REMOTE_API_KEY"]==services["agents"]["environment"]["AISOC_PRIVACY_REMOTE_API_KEY"]
 assert services["api"]["environment"]["AISOC_AGENTS_TENANT_SIGNING_KEY"]==services["agents"]["environment"]["AISOC_AGENTS_TENANT_SIGNING_KEY"]
-print("PASS: 11 services; HTTPS, private CA, tenant signature and remote privacy validated (secrets hidden)")
-'
+assert {name for name,svc in services.items() if "privacy_gateway" in svc.get("networks",{})}=={"api","agents"}
+assert all(p.get("host_ip") in {"127.0.0.1","::1"} for p in services["ingest-worker"].get("ports",[])), "ingest must be private"
+enabled=lambda env,key: str(env.get(key,"")).lower() in {"1","true","on","yes"}
+agents=services["agents"]["environment"]
+if tkg=="off":
+  assert not enabled(agents,"AISOC_TKG_RECON_ENABLED"), "TKG enabled without its overlay"
+else:
+  assert data["networks"]["aisoc_tkg"]["external"] and data["networks"]["aisoc_tkg"]["name"]=="aisoc-tkg"
+  assert {name for name,svc in services.items() if "aisoc_tkg" in svc.get("networks",{})}=={"api","agents","tkg-sync","tkg-reconcile"}
+  assert agents["AISOC_TKG_RECON_PROFILE"] in {"standard","deep_case"}, "invalid Recon profile"
+  if enabled(agents,"AISOC_TKG_RECON_ENABLED"):
+    horizon=float(agents.get("AISOC_TKG_RECON_TIMEOUT_SECONDS") or (240 if agents["AISOC_TKG_RECON_PROFILE"]=="deep_case" else 120))
+    dlp_timeout=float(agents.get("AISOC_PRIVACY_REMOTE_TIMEOUT_SECONDS") or 30)
+    assert float(agents.get("AISOC_PRIVACY_CONTEXT_TTL_SECONDS") or 3600)>horizon+dlp_timeout, "DLP context expires before configured Recon budget"
+  db_users={}
+  assert not enabled(agents,"AISOC_TKG_RECON_LOOP_ENABLED") or enabled(agents,"AISOC_TKG_RECON_ENABLED"), "planner requires historical Recon"
+  for name,role,flag,dsn in (
+    ("api","reader",None,None), ("agents","reader","AISOC_TKG_RECON_ENABLED",None),
+    ("tkg-sync","ingest","AISOC_TKG_AUTO_INGEST_ENABLED","DATABASE_URL"),
+    ("tkg-reconcile","diagnostics","AISOC_TKG_RECONCILE_ENABLED","AISOC_TKG_RECONCILE_DATABASE_URL"),
+  ):
+    service=services[name]
+    assert "aisoc-demo" in service["networks"]
+    env=service["environment"]
+    mounts={v["target"]:v for v in service.get("volumes",[])}
+    target=f"/run/secrets/tkg/{role}"
+    assert {k for k in mounts if k.startswith("/run/secrets/tkg/")}=={target}
+    assert mounts[target]["read_only"]
+    if tkg=="private-ca":
+      assert mounts["/run/ca/tkg.pem"]["read_only"]
+      assert env["AISOC_TKG_CA_FILE"]=="/run/ca/tkg.pem"
+    if (flag and enabled(env,flag)) or (name=="api" and enabled(agents,"AISOC_TKG_RECON_ENABLED")):
+      if sys.argv[2]=="runtime":
+        assert Path(mounts[target]["source"]).is_dir(), f"{name}: credential mount is unavailable"
+        if tkg=="private-ca":
+          assert Path(mounts["/run/ca/tkg.pem"]["source"]).is_file(), f"{name}: TKG CA is unavailable"
+      origin=env["AISOC_TKG_ORIGIN_SERVER55"]
+      assert origin=="http://soorin-tkg:1516" or origin.startswith("https://"), f"{name}: invalid TKG origin"
+    if dsn:
+      assert service["image"]==services["api"]["image"] and "build" not in service and not service.get("ports")
+      assert service.get("mem_limit") and service.get("cpus") and "tkg-sync" in service.get("profiles",[])
+      if enabled(env,flag):
+        db_users[name]=urlsplit(env[dsn]).username
+        assert db_users[name], f"{name}: dedicated database login required"
+  api_db=urlsplit(services["api"]["environment"].get("DATABASE_URL","")).username
+  assert len(set(db_users.values()))==len(db_users) and api_db not in db_users.values(), "database logins must be separate"
+print("PASS: SOC Compose, network, image and privacy policy validated (secrets hidden)")
+' "$TKG" "${1:-static}"
+}
+
+preflight() {
+  config runtime
+  docker network inspect aisoc-privacy >/dev/null
+  if [[ "$TKG" != off ]]; then
+    docker network inspect aisoc-tkg >/dev/null
+  fi
   [[ "$(docker inspect aisoc-demo-api --format '{{ index .Config.Labels "com.docker.compose.project" }}')" == "aisoc-demo" ]]
   echo "PASS: existing Compose project verified"
 }
@@ -74,12 +142,19 @@ snapshot() {
   for service in "${APPS[@]}"; do
     container="aisoc-demo-$service"
     [[ "$service" == "ingest-worker" ]] && container="aisoc-demo-ingest"
-    image="$(docker inspect "$container" --format '{{.Image}}')"
+    if ! image="$(docker inspect "$container" --format '{{.Image}}' 2>/dev/null)"; then
+      if [[ "$service" == correlation ]]; then
+        printf '%s %s\n' "$service" absent >> "$manifest"
+        continue
+      fi
+      echo "FAIL: current $service image could not be inventoried" >&2
+      return 1
+    fi
     docker image tag "$image" "aisoc-rollback/$service:before-$stamp"
     printf '%s %s\n' "$service" "$image" >> "$manifest"
   done
   chmod 600 "$manifest"
-  echo "PASS: seven current application images tagged for rollback"
+  echo "PASS: existing application images tagged for rollback"
   echo "MANIFEST: $manifest"
 }
 
@@ -91,7 +166,7 @@ build() {
     echo "Building $service (running containers stay untouched)"
     "${C[@]}" build "$service"
   done
-  echo "PASS: seven image builds finished; no containers recreated"
+  echo "PASS: application image builds finished; no containers recreated"
 }
 
 smoke() {
@@ -118,6 +193,7 @@ print("PASS: verified TLS, health, readiness, authenticated policies")
 }
 
 case "${1:-}" in
+  config) config ;;
   preflight) preflight ;;
   apt-probe) apt_probe ;;
   snapshot) snapshot ;;
@@ -125,5 +201,5 @@ case "${1:-}" in
   smoke) smoke ;;
   status) "${C[@]}" ps -a ;;
   images) "${C[@]}" images ;;
-  *) echo "Usage: bash scripts/server55_soc_build.sh preflight|apt-probe|snapshot|build|smoke|status|images"; exit 2 ;;
+  *) echo "Usage: bash scripts/server55_soc_build.sh config|preflight|apt-probe|snapshot|build|smoke|status|images"; exit 2 ;;
 esac

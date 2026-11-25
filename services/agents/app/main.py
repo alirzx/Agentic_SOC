@@ -108,10 +108,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 business_context=applier,
             )
             app.state.triage_worker = triage_worker
-            app.state.triage_worker_task = asyncio.create_task(triage_worker.start())
+            app.state.triage_worker_task = asyncio.create_task(triage_worker.supervise())
             logger.info("auto_triage_worker.enabled")
         except Exception as exc:  # noqa: BLE001 — never block API startup
-            logger.warning("auto_triage_worker.start_failed", error=str(exc))
+            logger.warning("auto_triage_worker.start_failed", error_type=type(exc).__name__)
 
     app.state.shadow_worker = None
     app.state.shadow_worker_task = None

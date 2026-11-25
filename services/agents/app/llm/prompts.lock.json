@@ -1,27 +1,27 @@
 {
   "recon.case_investigation": {
-    "sha256": "ada66e8c30b3cd1b9e5d23c4cd41fc3f97510cc577ccb8e130ec4f6311874a4c",
-    "version": "1"
+    "sha256": "5c02f23c3d997cac972500e8b72776a3e641d79b52578be564b184ab0871ba5c",
+    "version": "2"
   },
   "recon.evidence_policy": {
-    "sha256": "eb2d1ffeb9db4772e58b17b47e665f0297a7b95ebb32807754117e2b843a9436",
-    "version": "1"
+    "sha256": "6eedafbc866da41194516f61e5747f88046275bbea151d54551476dccf3e9174",
+    "version": "2"
   },
   "recon.final_assessment": {
-    "sha256": "e29856320bd77f470667fbb01394d03e561b54acc9706f4b87f21a062c79bf77",
-    "version": "1"
+    "sha256": "484074d57c6153b765d09f327f7fec7e39c71dcdba77358fa3fcd1e7056c9cc8",
+    "version": "2"
   },
   "recon.planner": {
-    "sha256": "704fe4f54264bcbb45a15cd84761be8955cf00ff71a76881ab478b88c4ac2c88",
-    "version": "1"
+    "sha256": "888d372f43793f6c58b05c5b09353eae89f1e17cd1a789810c2a1ce0789625fc",
+    "version": "2"
   },
   "recon.system": {
-    "sha256": "ac53c2c51e6a5b595a2c56fc52685e8ea17da023f5516024a7db1ce636141420",
-    "version": "1"
+    "sha256": "49e578ed32cdd1625106687a049d902e8146b425f271d1b45b2eb2d4ec162a98",
+    "version": "2"
   },
   "recon.tool_guide": {
-    "sha256": "41c136a13c70c297c16df7ac4cb27f6d832f5d1267634d5ba7d56016ba8d656c",
-    "version": "1"
+    "sha256": "95d6ca9f106de6da610bbff4eb271c420afccae5c70876c4ad3a430308c690ca",
+    "version": "2"
   },
   "summary.system": {
     "sha256": "eb3fbcdf0bee804cb8a90489331750b059501bc0ed8ef07a9f7c36e12e8f1287",
