@@ -1,5 +1,7 @@
 # Server 55 TKG qualification
 
+Sprint 4 changes and current gates are recorded in the [Sprint 4 qualification report](TKG_SPRINT4_FINAL_QUALIFICATION.md). The earlier baseline and measurements below describe Sprint 3.
+
 Date of local qualification is 2026-11-25 in Asia/Tehran. Scope is the existing Agentic_SOC and Soorin TKG feature branches. The tests used disposable PostgreSQL, read-only source mounts, synthetic Splunk records and TKG model-test mode.
 
 ## Review findings
@@ -79,6 +81,56 @@ There were no unresolved records among the 12 materialized samples. The remainin
 Peak child RSS was approximately 150 MiB small and 147 MiB medium. User/system CPU time was 18.75/2.38 seconds small and 148.01/17.57 seconds medium. These exclude independent PostgreSQL and production model-service resource usage. Per-tool Resolve, Search, Timeline and Neighbors latency, full worker queue lag, live connection use and full Recon latency were not isolated in the benchmark. Keep the default one delivery per second for operator acceptance and measure backpressure on the real model and database stack before raising it.
 
 ## Operator preflight
+
+### Sprint 4 runtime and rollout sequence
+
+1. Check reviewed SOC and TKG revisions, verify rendered Compose using the actual private runtime override, and inventory image digests and migrations. Back up both databases and rehearse restoration in an isolated environment. Apply TKG migration `10009_receipt_status_pat.sql` with the migration role and confirm TKG health before rebuilding and rolling SOC API, Agents and Fusion. Apply SOC `095_tkg_receipt_reconciliation.sql` after `094_workspace_tkg.sql`. Complete the Fusion writer replacement before enabling new deliveries.
+2. Keep TKG and DLP on their existing private networks. From API and Agents, verify DLP hostname, TLS validation, CA bundle, protected multi-turn probe and unauthorized-workspace rejection. Resolve `soorin-tkg` from authorized services and check its private listener on port 1516. Check private CA verification when using HTTPS. Verify reverse-proxy routing and network membership for `/v1/ingest` and `/v1/ingest/batch`.
+3. Verify each workspace's connector ownership and explicit immutable KB/source mapping. Confirm read-only mounts for reader PATs in API and Agents, source tokens in `tkg-sync`, and `receipt_status` PATs in `tkg-reconcile`. Use independent database users and credential files for submission and polling. Confirm the reconciler has no table ownership, role inheritance granting extra access, `BYPASSRLS`, or superuser privileges. Check that its PAT owner has Viewer access to the assigned KB only and that revoked or foreign-KB tokens fail.
+4. Inspect the built Agents image with its regular service user. Verify all six Markdown files under `app/investigator/prompts/recon` and the eight registry hashes in `app/llm/prompts.lock.json`. Use existing build scripts and approved package and model images. Preserve the previous images and flag configuration.
+5. With DLP required and tested, enable the sync worker for a synthetic workspace and keep its default one submission per second. Enable `tkg-reconcile` and verify one valid receipt progresses from pending to bound with its original ID. Confirm worker replay after an uncertain acknowledgment leaves one receipt and alert delivery. Check stable counts and retry/quarantine reasons across successive queue measurements.
+6. Enable the agent's signed investigator path and Standard Recon with bounded preflight. Send multiple authored synthetic alerts through the private connector to exercise automatic Case creation, canonical membership, two authorized roots, isolation across workspaces, graph evidence, and RunSummary. Enable the planner loop after the preflight baseline is sound. Qualify Deep Case on an explicit acceptance case with separate model approval and cost allowance.
+7. Observe queue depth, oldest accepted-receipt age, TKG and Postgres CPU/RSS, model pressure, worker retries, and time from ingestion to bound and first valid Context. Pause flag expansion if backlog age rises across measurements, quarantine increases, or DLP cannot protect the workflow. For rollback, disable planner and historical reads, stop new submissions, and decide whether polling can safely finish already-admitted receipts before reverting images. Keep immutable bindings, frozen requests and receipt IDs intact. Re-run DLP and scope probes after rollback.
+
+### Reconciler database role
+
+Provision a dedicated login through the operator's secret manager. The following example assumes `aisoc_tkg_reconcile` already exists and has no inherited application rights. Run as the owning migration administrator. Use the deployment database and schema explicitly.
+
+```sql
+GRANT USAGE ON SCHEMA public TO aisoc_tkg_reconcile;
+GRANT SELECT (id, tenant_id, instance, kb_id, source_id, tkg_tenant,
+              source_system, source_instance, connector_id, enabled)
+  ON workspace_tkg_bindings TO aisoc_tkg_reconcile;
+GRANT SELECT (id, tenant_id, binding_id, state, receipt_id, receipt_status,
+              receipt_delivery_state, receipt_accepted_at, created_at,
+              reconcile_after, reconcile_fence, reconcile_failures)
+  ON tkg_alert_deliveries TO aisoc_tkg_reconcile;
+GRANT UPDATE (state, receipt_status, receipt_delivery_state, updated_at,
+              error_code, reconcile_after, reconcile_fence, reconcile_failures)
+  ON tkg_alert_deliveries TO aisoc_tkg_reconcile;
+CREATE POLICY tkg_reconcile_bindings ON workspace_tkg_bindings
+  FOR SELECT TO aisoc_tkg_reconcile USING (enabled);
+CREATE POLICY tkg_reconcile_deliveries ON tkg_alert_deliveries
+  FOR ALL TO aisoc_tkg_reconcile
+  USING (receipt_id IS NOT NULL AND state IN ('pending_materialization','bound','quarantined'))
+  WITH CHECK (receipt_id IS NOT NULL AND state IN ('pending_materialization','bound','quarantined'));
+```
+
+Validate the role by selecting receipt identifiers, running one fenced poll, and verifying that `payload`, `snapshot`, general alerts and credential tables are inaccessible. Its diagnostic PAT can poll the payload-free individual status endpoint only. Use `AISOC_TKG_RECONCILE_DATABASE_URL` independently from `AISOC_TKG_WORKER_DATABASE_URL`.
+
+### Recon and polling controls
+
+| Control | Standard | Deep Case |
+|---|---:|---:|
+| Planner iterations and total model calls | 8 / 9 | 11 / 12 |
+| Logical tools and HTTP requests | 12 / 32 | 15 / 48 |
+| Planner and assessment output tokens | 512 / 2,048 | 768 / 3,072 |
+| Overall deadline and retained case seeds | 120 s / 5 | 240 s / 10 |
+| Graph-tool and Search deadlines | 15 s / 30 s | 20 s / 45 s |
+
+Set `AISOC_TKG_RECON_PROFILE` to `standard` or `deep_case`. The history and planner switches default off. The state keeps server-issued roots, retained observations, examined seeds, concise objectives and distinct query keys through one run. The signed Case route uses case membership and source-diverse ordering. The signed alert route continues to use its single alert. Alternate router execution does not enable this TKG history path. The planner and final assessment use the existing DLP boundary. Search excerpts and tool outcomes count against bounded context. Citation validation checks run membership, and retained historical claims require analyst review. Historical coverage remains partial when only some roots or bindings have usable evidence.
+
+The Reconciler defaults off. Its defaults are a 30-second interval, up to 30 arrivals per pass, one concurrent request and a 10-second request deadline. Eligible rows are selected oldest due first with skip-locked and leases. It uses GET only and backs off transient failures. Recoverable TKG state remains pending, bound is terminal, and definitive terminal failure goes to quarantine. The queue log reports pending count and oldest accepted age. Warning and alert defaults are five and 30 minutes. Logs use opaque IDs, states and timings. Manual `receipts` and scoped `backfill` retain their existing CLI entry points. Review frozen payload hashes and receipt IDs before replaying any admitted work. Native TKG document revisions remain supported. SOC still delivers immutable alert rows and does not replay in-place vendor updates as new deliveries.
 
 Run the configuration comparer from the checked-out SOC directory after reviewing both HEADs. It invokes only `docker compose config` and suppresses interpolated output. The local run used synthetic environment and runtime override inputs. Use the actual server-only override for the operator run.
 

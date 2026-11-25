@@ -5,6 +5,7 @@ import argparse
 import json
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 SOC_OVERRIDES = (
     "infra/compose/docker-compose.demo.yml",
@@ -60,7 +61,7 @@ def validate(before, after, tkg, *, private_ca):
         net = stack["networks"]["aisoc_tkg"]
         require(net.get("external") and net["name"] == "aisoc-tkg", "TKG external network mismatch")
     require(
-        {k for k, v in services.items() if "aisoc_tkg" in v.get("networks", {})} == {"api", "agents", "tkg-sync"},
+        {k for k, v in services.items() if "aisoc_tkg" in v.get("networks", {})} == {"api", "agents", "tkg-sync", "tkg-reconcile"},
         "Unexpected SOC service attached to aisoc-tkg",
     )
     require(
@@ -80,11 +81,22 @@ def validate(before, after, tkg, *, private_ca):
         all(port.get("host_ip") in {"127.0.0.1", "::1"} for port in services["ingest-worker"].get("ports", [])),
         "Connector ingest publishes a host listener outside loopback",
     )
-    require(not services["tkg-sync"].get("ports"), "Sync worker publishes a host port")
-    for name in ("api", "agents", "tkg-sync"):
+    for name in ("tkg-sync", "tkg-reconcile"):
+        require(not services[name].get("ports"), f"{name}: publishes a host port")
+    worker = services["tkg-sync"]["environment"]
+    reconciler = services["tkg-reconcile"]["environment"]
+    if reconciler.get("AISOC_TKG_RECONCILE_ENABLED", "").lower() in {"true", "1", "yes", "on"}:
+        worker_user = urlsplit(worker.get("DATABASE_URL", "")).username
+        reconcile_user = urlsplit(reconciler.get("AISOC_TKG_RECONCILE_DATABASE_URL", "")).username
+        require(reconcile_user and reconcile_user != worker_user, "Reconciler must use its own database role")
+    for name in ("api", "agents", "tkg-sync", "tkg-reconcile"):
         mounts = {m.get("target"): m for m in services[name].get("volumes", [])}
-        role = "ingest" if name == "tkg-sync" else "reader"
+        role = {"tkg-sync": "ingest", "tkg-reconcile": "diagnostics"}.get(name, "reader")
         require(mounts.get(f"/run/secrets/tkg/{role}", {}).get("read_only"), f"{name}: TKG role mount is missing or writable")
+        require(
+            {path for path in mounts if path.startswith("/run/secrets/tkg/")} == {f"/run/secrets/tkg/{role}"},
+            f"{name}: unexpected TKG credential mount",
+        )
         if private_ca:
             require(mounts.get("/run/ca/tkg.pem", {}).get("read_only"), f"{name}: TKG private CA mount is missing or writable")
     print("Compose qualification passed. Existing environments, mounts, networks and dependencies were preserved.")

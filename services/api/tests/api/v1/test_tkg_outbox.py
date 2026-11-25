@@ -38,6 +38,7 @@ async def store(tmp_path, monkeypatch):
               connector_id uuid,connector_type text,llm_payload jsonb,source_event_ids jsonb,
               raw_event jsonb,rule_id text,rule_name text,ocsf_class_uid int,status text,title text);""")
         await conn.execute(MIGRATION.read_text())
+        await conn.execute(MIGRATION.with_name("095_tkg_receipt_reconciliation.sql").read_text())
         monkeypatch.setenv("AISOC_TKG_SECRET_DIR", str(tmp_path))
         monkeypatch.setenv("AISOC_TKG_ORIGIN_FIXTURE", "https://fixture.test")
         owners = []
@@ -639,7 +640,8 @@ async def test_splunk_qualification_corpus(store, count, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_malformed_receipt_uses_fenced_retry(store):
+@pytest.mark.parametrize("body", [b"{invalid", b" " * 1048577, b"[]"])
+async def test_malformed_receipt_uses_fenced_retry(store, body):
     conn, (_, binding) = store
     await insert(conn, binding, "benign")
 
@@ -654,16 +656,58 @@ async def test_malformed_receipt_uses_fenced_retry(store):
                     "canonical_event": {**record, "source_record_id": record["alert_row_id"], "event_type": "security_alert"},
                 },
             )
-        return httpx.Response(
-            200,
-            json={
-                "schema_version": "soorin.ingestion-receipt.v1",
-                "receipt_id": str(uuid4()),
-                "status": ["violates-schema"],
-            },
-        )
+        return httpx.Response(200, content=body)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(serve)) as http:
         assert await deliver(conn, http)
     row = await conn.fetchrow("SELECT state,error_code,receipt_id,receipt_status,attempts FROM tkg_alert_deliveries")
     assert tuple(row) == ("retry_scheduled", "invalid_receipt", None, None, 1)
+
+
+@pytest.mark.asyncio
+async def test_reconciler_fairly_recovers_pending_receipts_without_ingest(store):
+    from app.services.tkg.reconcile import Settings, reconcile_batch
+
+    conn, bindings = store
+    schema = await conn.fetchval("SELECT current_schema()")
+    receipts = {}
+    for b in bindings:
+        await insert(conn, b, "benign")
+        receipt = uuid4()
+        receipts[str(receipt)] = b
+        await conn.execute(
+            "UPDATE tkg_alert_deliveries SET state='pending_materialization',receipt_id=$1 WHERE binding_id=$2",
+            receipt, b.id,
+        )
+
+    observed = []
+    recovered = False
+
+    def serve(request):
+        assert request.method == "GET"
+        receipt = request.url.path.split("/")[-2]
+        b = receipts[receipt]
+        assert request.url.path == f"/api/v1/kbs/{b.kb_id}/knowledge/receipts/{receipt}/status"
+        assert request.headers["Authorization"] == f"Bearer diagnostics-{b.id}"
+        observed.append(receipt)
+        if b == bindings[0] and not recovered:
+            return httpx.Response(200, json={"receipt_id": receipt, "source_id": str(b.source_id),
+                                             "status": "failed", "delivery_state": "failed_recoverable"})
+        return httpx.Response(200, json={"receipt_id": receipt, "source_id": str(b.source_id), "status": "bound"})
+
+    settings = Settings(interval_seconds=1, concurrency=2)
+    async with (
+        asyncpg.create_pool(os.environ["TKG_TEST_POSTGRES_DSN"], server_settings={"search_path": f"{schema},public"},
+                            min_size=1, max_size=2) as pool,
+        httpx.AsyncClient(transport=httpx.MockTransport(serve)) as http,
+    ):
+        await reconcile_batch(pool, http, settings)
+        rows = await conn.fetch("SELECT tenant_id,state,error_code,attempts FROM tkg_alert_deliveries ORDER BY tenant_id")
+        assert [tuple(row)[1:] for row in rows] == [
+            ("pending_materialization", "materialization_failed_recoverable", 0), ("bound", None, 0),
+        ]
+        recovered = True
+        await conn.execute("UPDATE tkg_alert_deliveries SET reconcile_after=now()")
+        await reconcile_batch(pool, http, settings)
+    assert len(observed) == 3 and len(set(observed)) == 2
+    assert await conn.fetchval("SELECT count(*) FROM tkg_alert_deliveries WHERE state='bound'") == 2

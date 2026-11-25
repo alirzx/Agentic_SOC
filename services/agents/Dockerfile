@@ -73,6 +73,7 @@ COPY app/scripts/privacy_provider_probe.py ./scripts/privacy_provider_probe.py
 # dependency. Keep this after COPY so the build validates the real import path.
 RUN python -c "from app.security.credential_vault import CredentialVault"
 RUN python -c "from app.privacy.rest_client import PrivacyGatewayRESTClient"
+RUN python -c "from app.llm.prompt_registry import default_registry, load_lock; errors = default_registry().verify_against_lock(load_lock()); assert not errors, errors"
 
 # Execute the real CLI entrypoint, not just an import from WORKDIR.
 # This catches the historical ModuleNotFoundError for direct /app/scripts/*.py

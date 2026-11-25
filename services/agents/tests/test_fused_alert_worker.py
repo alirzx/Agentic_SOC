@@ -70,6 +70,91 @@ def _worker() -> FusedAlertTriageWorker:
     return FusedAlertTriageWorker(bootstrap_servers="unused")
 
 
+@pytest.mark.parametrize("available", [True, False])
+async def test_kafka_poison_commit_requires_durable_dlq(monkeypatch, available):
+    from types import SimpleNamespace
+
+    import aiokafka
+
+    order = []
+
+    class Consumer:
+        def __init__(self, topic, **config):
+            assert config["auto_offset_reset"] == "earliest"
+            assert not config["enable_auto_commit"]
+
+        async def start(self):
+            pass
+
+        async def __aiter__(self):
+            yield SimpleNamespace(value=b"invalid", topic="fused", partition=3, offset=17)
+
+        async def commit(self, offsets):
+            assert offsets == {aiokafka.TopicPartition("fused", 3): 18}
+            order.append("commit")
+
+        async def stop(self):
+            pass
+
+    async def dlq(message, **kwargs):
+        assert message == {"topic": "fused", "partition": 3, "offset": 17}
+        order.append("dlq")
+        if not available:
+            raise RuntimeError("unavailable")
+
+    worker = _worker()
+    monkeypatch.setenv("KAFKA_AUTO_OFFSET_RESET", "earliest")
+    monkeypatch.setattr(aiokafka, "AIOKafkaConsumer", Consumer)
+    monkeypatch.setattr(worker, "_send_to_dlq", dlq)
+    if available:
+        await worker.start()
+    else:
+        with pytest.raises(RuntimeError, match="unavailable"):
+            await worker.start()
+    assert order == (["dlq", "commit"] if available else ["dlq"])
+
+
+async def test_real_kafka_acknowledges_poison_before_committing(monkeypatch):
+    import asyncio
+    import contextlib
+    import json
+    import os
+
+    from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, TopicPartition
+    from aiokafka.admin import AIOKafkaAdminClient, NewTopic
+
+    bootstrap = os.getenv("AISOC_TEST_KAFKA_BOOTSTRAP")
+    if not bootstrap:
+        pytest.skip("requires a disposable Kafka broker")
+    suffix = uuid.uuid4().hex
+    topic, dlq = f"s4-fused-{suffix}", f"s4-dlq-{suffix}"
+    group = f"s4-triage-{suffix}"
+    monkeypatch.setenv("KAFKA_AUTO_OFFSET_RESET", "earliest")
+    worker = FusedAlertTriageWorker(bootstrap_servers=bootstrap, topic=topic, group_id=group)
+    worker._dlq_topic = dlq
+
+    async with AIOKafkaAdminClient(bootstrap_servers=bootstrap) as admin:
+        await admin.create_topics([NewTopic(name, 1, 1) for name in (topic, dlq)])
+        try:
+            async with AIOKafkaProducer(bootstrap_servers=bootstrap, acks="all") as producer:
+                await producer.send_and_wait(topic, b"malformed synthetic envelope")
+            task = asyncio.create_task(worker.start())
+            try:
+                async with AIOKafkaConsumer(dlq, bootstrap_servers=bootstrap, auto_offset_reset="earliest") as errors:
+                    record = json.loads((await asyncio.wait_for(errors.getone(), 15)).value)
+                    assert record["failure_stage"] == "decode"
+                    assert record["original"] == {"topic": topic, "partition": 0, "offset": 0}
+                async with asyncio.timeout(10):
+                    while await worker._consumer.committed(TopicPartition(topic, 0)) != 1:
+                        await asyncio.sleep(0.05)
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+        finally:
+            await admin.delete_topics([topic, dlq])
+
+
 # ── state mapping ─────────────────────────────────────────────────────────────
 
 
@@ -204,7 +289,7 @@ async def test_persist_failure_is_retried_then_dead_lettered(monkeypatch):
     sent: list[tuple[str, dict]] = []
 
     class _FakeProducer:
-        async def send(self, topic, value):  # noqa: ANN001
+        async def send_and_wait(self, topic, value):  # noqa: ANN001
             sent.append((topic, value))
 
     worker = FusedAlertTriageWorker(bootstrap_servers="unused", max_attempts=2)

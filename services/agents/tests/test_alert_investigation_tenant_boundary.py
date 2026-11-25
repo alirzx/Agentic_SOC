@@ -150,40 +150,22 @@ async def test_alert_route_tkg_grant_reaches_only_matching_background_task(monke
 
 
 @pytest.mark.asyncio
-async def test_case_route_derives_alert_scope_in_background(monkeypatch):
+async def test_case_route_preserves_verified_case_scope_in_background(monkeypatch):
     import hmac
-    from contextlib import asynccontextmanager
 
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
 
     from app.api import investigate
-    from app.integrations.tkg.tools import grant
-    from app.investigator import ledger
+    from app.integrations.tkg.tools import case_grant
 
-    case, alert = UUID(int=71), UUID(int=72)
+    case = UUID(int=71)
     signature = hmac.digest(SIGNING_KEY.encode(), f"tkg-case-v1/{TENANT_A}/{case}".encode(), "sha256").hex()
     received = []
 
-    class Database:
-        @asynccontextmanager
-        async def acquire(self):
-            yield self
-
-        transaction = acquire
-
-        async def execute(self, _, tenant):
-            assert tenant == TENANT_A
-
-        async def fetchval(self, sql, tenant, case_id):
-            assert "a.tenant_id=$1" in sql and "c.id=$2" in sql
-            assert (tenant, case_id) == (UUID(TENANT_A), case)
-            return alert
-
     async def run(*_):
-        received.append(grant.get())
+        received.append(case_grant.get())
 
-    monkeypatch.setattr(ledger, "get_pool", AsyncMock(return_value=Database()))
     monkeypatch.setattr(investigate, "_run_and_store", run)
     monkeypatch.setenv("AISOC_TKG_RECON_ENABLED", "true")
     monkeypatch.delenv("AISOC_INVESTIGATE_USE_ROUTER", raising=False)
@@ -194,5 +176,5 @@ async def test_case_route_derives_alert_scope_in_background(monkeypatch):
             headers={"X-Tenant-Id":TENANT_A,"X-AiSOC-Tenant-Signature":tenant_signature(TENANT_A,SIGNING_KEY),
                      "X-AiSOC-TKG-Grant":signature}, json={"tenant_id":TENANT_B,"alert_summary":"Synthetic case"})
     assert response.status_code == 200
-    assert received == [(UUID(TENANT_A),alert)]
-    assert grant.get() is None
+    assert received == [(UUID(TENANT_A), case)]
+    assert case_grant.get() is None

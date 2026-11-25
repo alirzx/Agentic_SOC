@@ -12,3 +12,4 @@ services:
   api: *tkg-ca
   agents: *tkg-ca
   tkg-sync: *tkg-ca
+  tkg-reconcile: *tkg-ca

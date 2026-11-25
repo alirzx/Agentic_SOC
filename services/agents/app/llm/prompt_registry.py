@@ -118,6 +118,9 @@ def default_registry() -> PromptRegistry:
     reg = PromptRegistry()
     reg.register("triage.system", "1", _TRIAGE_SYSTEM)
     reg.register("summary.system", "1", _SUMMARY_SYSTEM)
+    recon_dir = Path(__file__).resolve().parents[1] / "investigator" / "prompts" / "recon"
+    for name in ("SYSTEM", "PLANNER", "TOOL_GUIDE", "EVIDENCE_POLICY", "CASE_INVESTIGATION", "FINAL_ASSESSMENT"):
+        reg.register(f"recon.{name.lower()}", "1", (recon_dir / f"{name}.md").read_text(encoding="utf-8"))
     return reg
 
 

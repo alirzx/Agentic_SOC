@@ -5,6 +5,7 @@ import hmac
 import json
 from uuid import UUID
 from contextlib import asynccontextmanager
+from dataclasses import replace
 
 import httpx
 import pytest
@@ -13,7 +14,7 @@ from pydantic import ValidationError
 
 from app.integrations.tkg import recon
 from app.integrations.tkg.binding import Binding
-from app.integrations.tkg.tools import Limits, SCHEMAS, Session, active
+from app.integrations.tkg.tools import Limits, SCHEMAS, SearchCandidate, Session, active
 from app.investigator.state import InvestigatorState
 from app.privacy.context import privacy_context
 from app.runtime.catalog import build_tool_registry
@@ -22,6 +23,69 @@ from app.runtime.tools import ToolContext, ToolPermissionDenied
 
 def uid(n):
     return UUID(int=n)
+
+
+@pytest.mark.asyncio
+async def test_deep_case_retains_objectives_and_reserves_twelfth_model_call(binding):
+    b = binding
+    other = replace(b, id=uid(23), connector_id=uid(24), kb_id=uid(25))
+    limits = Limits(profile="deep_case", loop_enabled=True, preflight_enabled=False)
+    session = Session(Live(), None, b.tenant_id, uid(6), b.connector_id, [b, other], limits,
+                      seeds={"seed-1": (uid(6), b.connector_id), "seed-2": (uid(16), other.connector_id)})
+    state = InvestigatorState(tenant_id=str(b.tenant_id), case_id="synthetic", alert_summary="Synthetic case")
+    turns = 0
+
+    async def lookup(binding, name, args):
+        if name == "resolve_entity":
+            assert binding.connector_id == session.seeds[args.get("seed_id", "seed-1")][1]
+            return {"status": "resolved", "candidates": [{"entity_id": str(binding.connector_id)}]}
+        assert name == "get_timeline" and args["entity"] == str(other.connector_id)
+        return {"facts": [{"id": str(uid(40 + turns))}]}
+
+    async def plan(*_):
+        nonlocal turns
+        turns += 1
+        if turns <= 2:
+            name, args = "resolve_entity", {"seed_id": f"seed-{turns}"}
+        else:
+            assert session.objectives["coverage"]["last_outcome"] in {"resolved", "ok"}
+            assert len(session.examined) == 2
+            name = "get_timeline"
+            args = {"entity": str(other.connector_id), "limit": turns}
+        return json.dumps({"action": "call_tool", "tool": name, "arguments": args,
+                           "objective_id": "coverage", "evidence_gap": "Check the second source"})
+
+    async def assess(state):
+        assert state.recon.history["llm_calls"] == 12
+        assert state.recon.history["stop_reason"] == "iteration_budget"
+        assert state.recon.history["coverage"]["resolved_seeds"] == 2
+        return {"summary": "Synthetic final assessment"}
+
+    session.lookup = lookup
+    result = await recon.reason(state, session, build_tool_registry(), assess, planner=plan)
+    assert turns == 11 and result["summary"] == "Synthetic final assessment"
+
+
+@pytest.mark.asyncio
+async def test_search_pivot_requires_exact_fact_and_chunk_from_current_root(binding):
+    b = binding
+    session = Session(Live(), None, b.tenant_id, uid(6), b.connector_id, [b], Limits())
+    root, peer, fact, doc, chunk = (uid(n) for n in range(70, 75))
+    session.remember(b, str(root), 0)
+    session.candidates["candidate-1"] = SearchCandidate(b.id, doc, chunk)
+    context = {"requested_entity": str(root), "retrieval_status": "complete",
+               "facts": [{"id": str(fact), "other_id": str(peer)}],
+               "evidence_references": [{"fact_id": str(fact), "source": {"document_id": str(doc), "chunk_id": str(uid(80))}}]}
+    session.evidence.append({"binding_id": str(b.id), "tool": "tkg.get_entity_context", "status": "complete",
+                             "current_context": True, "data": context})
+    assert session.verify_candidate(b, "candidate-1")["status"] == "candidate_unverified"
+    context["evidence_references"][0]["source"]["chunk_id"] = str(chunk)
+    context["facts"][0]["contested"] = True
+    assert session.verify_candidate(b, "candidate-1")["status"] == "candidate_unverified"
+    context["facts"][0]["contested"] = False
+    assert session.verify_candidate(replace(b, id=uid(99)), "candidate-1")["status"] == "candidate_unverified"
+    assert (await session.execute("resolve_entity", {"candidate_id": "candidate-1"}))[0]["status"] == "resolved"
+    assert session.depth[b.id, str(peer)] == 1
 
 
 class Live:
@@ -151,7 +215,8 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
         return {"summary": "Synthetic investigation"}
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(serve)) as client:
-        session = Session(Live(), client, b.tenant_id, uid(6), b.connector_id, [b], Limits(loop_enabled=True))
+        limits = Limits(loop_enabled=True, max_iterations=2, max_llm_calls=3, max_results=3)
+        session = Session(Live(), client, b.tenant_id, uid(6), b.connector_id, [b], limits)
         state = InvestigatorState(tenant_id=str(b.tenant_id), case_id="synthetic", alert_summary="10.8.9.10 user=analyst-fixture-17")
         with privacy_context(str(b.tenant_id)):
             await recon.reason(state, session, build_tool_registry(), final)

@@ -237,7 +237,7 @@ services:
       # Without these, funnel stages stay stuck at `ingested`.
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC_ALERTS_FUSED: aisoc.alerts.fused
-      KAFKA_AUTO_OFFSET_RESET: latest
+      KAFKA_AUTO_OFFSET_RESET: ${KAFKA_AUTO_OFFSET_RESET:-latest}
       AISOC_AGENT_ESCALATE_TO_GRAPH: ${AISOC_AGENT_ESCALATE_TO_GRAPH:-1}
       # Case creation belongs to the correlation engine (see `correlation`
       # service below). Keep the legacy agent promoter retired.

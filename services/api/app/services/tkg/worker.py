@@ -38,10 +38,10 @@ class DeliveryError(Exception):
         self.transient = transient
 
 
-async def request_json(http, method, url, token, data=None):
+async def request_json(http, method, url, token, data=None, *, timeout=15):
     try:
         async with (
-            asyncio.timeout(15),
+            asyncio.timeout(timeout),
             http.stream(
                 method, url, content=data, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
             ) as reply,
@@ -53,7 +53,7 @@ async def request_json(http, method, url, token, data=None):
             async for part in reply.aiter_bytes():
                 buf.extend(part)
                 if len(buf) > size_limit:
-                    raise DeliveryError("response_too_large")
+                    raise DeliveryError("http_409" if reply.status_code == 409 else "response_too_large")
             if reply.status_code == 409:
                 try:
                     conflict = json.loads(buf)
@@ -80,7 +80,9 @@ async def request_json(http, method, url, token, data=None):
 def receipt_state(status, delivery_state=None):
     if status == "bound":
         return "bound"
-    if status in {"failed", "quarantined"} or delivery_state in {"failed", "terminal_failure", "failed_recoverable", "quarantined"}:
+    if delivery_state in {"failed_recoverable", "retryable_failure"} and status != "quarantined":
+        return "pending_materialization"
+    if status in {"failed", "quarantined"} or delivery_state in {"failed", "terminal_failure", "quarantined"}:
         return "quarantined"
     if status in {"pending", "registered", "submitted"}:
         return "pending_materialization"
@@ -158,7 +160,12 @@ async def deliver(conn, http):
         )
         if not live:
             return True
-        result = await request_json(http, "POST", base + "/ingest", token, payload)
+        try:
+            result = await request_json(http, "POST", base + "/ingest", token, payload)
+        except DeliveryError as exc:
+            if exc.code in {"invalid_response", "response_too_large"}:
+                raise DeliveryError("invalid_receipt", transient=True) from None
+            raise
         if result.get("schema_version") != "soorin.ingestion-receipt.v1":
             raise DeliveryError("invalid_receipt", transient=True)
         try:
@@ -175,7 +182,8 @@ async def deliver(conn, http):
         delay = random.uniform(1, min(300, 3 * 2**attempt)) if retry else 0
     updated = await conn.execute(
         """UPDATE tkg_alert_deliveries SET state=$2,receipt_id=$3,receipt_status=$4,
-        error_code=$5,next_attempt=now()+$6*interval '1 second',updated_at=now()
+        error_code=$5,next_attempt=now()+$6*interval '1 second',updated_at=now(),
+        receipt_accepted_at=CASE WHEN $3::uuid IS NULL THEN receipt_accepted_at ELSE COALESCE(receipt_accepted_at,now()) END
         WHERE id=$1 AND attempts=$7 AND state='submitting'""",
         delivery,
         state,
@@ -275,19 +283,35 @@ async def main():
     if args.mode == "run" and os.getenv("AISOC_TKG_AUTO_INGEST_ENABLED", "false").lower() != "true":
         return
     logging.basicConfig(level=logging.INFO)
-    conn = await asyncpg.connect(os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://"))
-    try:
-        async with httpx.AsyncClient(trust_env=False, timeout=10, verify=tls_context()) as http:
-            if args.mode == "backfill":
-                await backfill(conn, args)
-            elif args.mode == "receipts":
-                await refresh_receipts(conn, http, args)
-            else:
+    dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
+    async with httpx.AsyncClient(trust_env=False, timeout=10, verify=tls_context()) as http:
+        reconnect_delay = 1.0
+        while True:
+            conn = None
+            try:
+                conn = await asyncpg.connect(dsn, timeout=10, command_timeout=15)
+                if args.mode == "backfill":
+                    await backfill(conn, args)
+                    return
+                if args.mode == "receipts":
+                    await refresh_receipts(conn, http, args)
+                    return
                 while True:
                     worked = await deliver(conn, http)
+                    reconnect_delay = 1.0
                     await asyncio.sleep(1 / args.rate if worked else 5)
-    finally:
-        await conn.close()
+            except (OSError, TimeoutError, asyncpg.PostgresConnectionError) as exc:
+                if args.mode != "run":
+                    raise
+                logger.warning("tkg_worker_database_reconnect type=%s", type(exc).__name__)
+            finally:
+                if conn is not None:
+                    try:
+                        await conn.close(timeout=5)
+                    except (OSError, TimeoutError, asyncpg.PostgresConnectionError):
+                        conn.terminate()
+            await asyncio.sleep(random.uniform(reconnect_delay / 2, reconnect_delay))
+            reconnect_delay = min(30, reconnect_delay * 2)
 
 
 if __name__ == "__main__":

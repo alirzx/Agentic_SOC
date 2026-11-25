@@ -54,6 +54,7 @@ _CLONED_TABLES = (
     "correlation_observations",
     "value_frequency",
     "correlation_rule_roles",
+    "correlation_rule_resolution_audits",
 )
 
 

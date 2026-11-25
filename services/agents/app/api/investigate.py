@@ -250,32 +250,13 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
 
 
 async def _run_with_tkg_case(run_id, case_id, body, case_scope):
-    from app.integrations.tkg.tools import Limits, grant
-    from app.investigator.ledger import get_pool
+    from app.integrations.tkg.tools import case_grant
 
-    alert_scope = None
-    if case_scope and Limits().enabled and not is_router_investigate_enabled():
-        try:
-            async with asyncio.timeout(3):
-                pool = await get_pool()
-                async with pool.acquire() as conn, conn.transaction():
-                    await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(case_scope[0]))
-                    row_id = await conn.fetchval("""SELECT a.id FROM alerts a
-                        JOIN aisoc_cases c ON c.id=$2 AND c.tenant_id=a.tenant_id
-                        WHERE a.tenant_id=$1 AND (a.case_id=c.id OR
-                            (a.case_id IS NULL AND to_jsonb(c.alert_ids) ? a.id::text))
-                        AND EXISTS (SELECT 1 FROM workspace_tkg_bindings b
-                            WHERE b.tenant_id=a.tenant_id AND b.connector_id=a.connector_id AND b.enabled)
-                        ORDER BY a.event_time DESC NULLS LAST,a.id LIMIT 1""", *case_scope)
-                if row_id:
-                    alert_scope = case_scope[0], row_id
-        except Exception as exc:
-            logger.warning("investigation.tkg_case_scope_unavailable", error_type=type(exc).__name__)
-    token = grant.set(alert_scope)
+    token = case_grant.set(case_scope if not is_router_investigate_enabled() else None)
     try:
         await _run_and_store(run_id, case_id, body)
     finally:
-        grant.reset(token)
+        case_grant.reset(token)
 
 
 @router.post("/cases/{case_id}/investigate", response_model=InvestigateResponse)

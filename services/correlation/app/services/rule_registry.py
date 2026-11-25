@@ -227,7 +227,7 @@ async def load_rule_identity_maps(pool: asyncpg.Pool, tenant_id: str | uuid.UUID
                 tid,
             )
     except asyncpg.PostgresError as exc:
-        logger.warning("rule_identity_registry_unavailable", error=str(exc)[:200])
+        logger.warning("rule_identity_registry_unavailable error_type=%s", type(exc).__name__)
         return []
     return [_row_to_map(row) for row in rows]
 
@@ -288,7 +288,7 @@ async def audit_rule_resolution(
             )
         return True
     except asyncpg.PostgresError as exc:
-        logger.warning("rule_identity_resolution_audit_failed", error=str(exc)[:200])
+        logger.warning("rule_identity_resolution_audit_failed error_type=%s", type(exc).__name__)
         return False
 
 

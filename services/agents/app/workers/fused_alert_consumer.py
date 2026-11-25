@@ -309,17 +309,20 @@ class FusedAlertTriageWorker:
         self._business_context = business_context
 
     async def start(self) -> None:
-        from aiokafka import AIOKafkaConsumer  # noqa: PLC0415 — optional dep, only at runtime
+        from aiokafka import AIOKafkaConsumer, TopicPartition  # noqa: PLC0415 — optional dep, only at runtime
+
+        reset = os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest").strip().lower()
+        if reset not in {"latest", "earliest", "none"}:
+            raise ValueError("KAFKA_AUTO_OFFSET_RESET must be latest, earliest or none")
 
         self._consumer = AIOKafkaConsumer(
             self._topic,
             bootstrap_servers=self._bootstrap,
             group_id=self._group_id,
-            auto_offset_reset="latest",
+            auto_offset_reset=reset,
             # At-least-once: commit only after an alert is triaged, so a crash
             # mid-triage re-delivers the alert instead of dropping it.
             enable_auto_commit=False,
-            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
         )
         await self._consumer.start()
         self._running = True
@@ -333,13 +336,19 @@ class FusedAlertTriageWorker:
                 # or after the poison alert is dead-lettered — so a crash between
                 # inference and persistence replays the alert instead of losing
                 # it, and offsets advance only on durable completion (issue #571).
-                await self._process_with_retry(msg.value)
                 try:
-                    await self._consumer.commit()
-                except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
-                    logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
+                    message = json.loads(msg.value)
+                    if not isinstance(message, dict):
+                        raise ValueError("invalid envelope")
+                except (ValueError, TypeError, UnicodeError):
+                    await self._send_to_dlq({"topic": msg.topic, "partition": msg.partition, "offset": msg.offset},
+                                            attempts=1, stage="decode", error="invalid_envelope")
+                else:
+                    await self._process_with_retry(message)
+                # Stop on commit or DLQ failure. Continuing could commit past this record.
+                await self._consumer.commit({TopicPartition(msg.topic, msg.partition): msg.offset + 1})
         finally:
-            await self._consumer.stop()
+            await self.stop()
 
     async def _process_with_retry(self, message: Any) -> bool:
         """Triage one alert with bounded retries; dead-letter on exhaustion.
@@ -355,13 +364,13 @@ class FusedAlertTriageWorker:
                 return True
             except ledger_module.LedgerPersistError as exc:
                 stage = "persist"
-                last_error = str(exc)
+                last_error = type(exc).__name__
                 _METRICS["persist_retries"] += 1
-                logger.warning("auto_triage_worker.persist_retry", attempt=attempt, error=last_error)
+                logger.warning("auto_triage_worker.persist_retry", attempt=attempt, error_type=type(exc).__name__)
             except Exception as exc:  # noqa: BLE001 — retry, then dead-letter
                 stage = "triage"
-                last_error = str(exc)
-                logger.warning("auto_triage_worker.triage_retry", attempt=attempt, error=last_error)
+                last_error = type(exc).__name__
+                logger.warning("auto_triage_worker.triage_retry", attempt=attempt, error_type=type(exc).__name__)
             if attempt < self._max_attempts:
                 await asyncio.sleep(self._retry_backoff(attempt))
         _METRICS["errors"] += 1
@@ -379,12 +388,13 @@ class FusedAlertTriageWorker:
 
             self._producer = AIOKafkaProducer(
                 bootstrap_servers=self._bootstrap,
+                acks="all",
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             )
             await self._producer.start()
             return self._producer
-        except Exception as exc:  # noqa: BLE001 — DLQ is best-effort
-            logger.error("auto_triage_worker.dlq_producer_failed", error=str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("auto_triage_worker.dlq_producer_failed", error_type=type(exc).__name__)
             self._producer = None
             return None
 
@@ -404,14 +414,10 @@ class FusedAlertTriageWorker:
         }
         producer = await self._ensure_producer()
         if producer is None:
-            logger.error("auto_triage_worker.dlq_unavailable", alert_id=alert_id, stage=stage)
-            return
-        try:
-            await producer.send(self._dlq_topic, value=record)
-            _METRICS["dead_lettered"] += 1
-            logger.error("auto_triage_worker.dead_lettered", alert_id=alert_id, stage=stage, attempts=attempts)
-        except Exception as exc:  # noqa: BLE001 — never wedge the loop on a DLQ failure
-            logger.error("auto_triage_worker.dlq_send_failed", alert_id=alert_id, error=str(exc))
+            raise RuntimeError("auto_triage_dlq_unavailable")
+        await producer.send_and_wait(self._dlq_topic, value=record)
+        _METRICS["dead_lettered"] += 1
+        logger.error("auto_triage_worker.dead_lettered", alert_id=alert_id, stage=stage, attempts=attempts)
 
     async def _report_funnel_savings(self) -> None:
         """Log the funnel's per-interval savings: deduplicated vs. newly triaged.

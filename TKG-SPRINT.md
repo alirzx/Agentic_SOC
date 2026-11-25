@@ -121,3 +121,10 @@ Both branches retain their starting HEADs with reviewed changes in the working t
 ## Sprint 3 qualification on 2026-11-25
 
 Started from clean feature checkouts at SOC `86e99dc7` and TKG `65c9892`. Deployment classification and measured acceptance are tracked in `docs/deployment/SERVER55_TKG_QUALIFICATION.md`.
+
+## Sprint 4
+
+- [x] Verified the three starting revisions and fetched the authorized remotes.
+- [x] Merged the verified SOC main into the existing integration branch.
+- [ ] Qualify durable acknowledgment, receipt polling and the stateful Recon path.
+- [ ] Record merge and deployment gates in the Sprint 4 qualification report.

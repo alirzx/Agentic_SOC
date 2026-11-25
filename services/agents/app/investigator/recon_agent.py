@@ -60,7 +60,7 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
     from app.integrations.tkg.tools import active
 
     session = active.get()
-    llm = make_chat_model("recon", temperature=0, max_tokens=session.limits.max_output_tokens if session else None)
+    llm = make_chat_model("recon", temperature=0, max_tokens=session.limits.assessment_tokens if session else None)
 
     # Defence-in-depth: every field surfaced here can be attacker-influenced
     # (alert_summary often echoes log lines; raw_alert is verbatim event data).
@@ -133,11 +133,11 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         if json_match:
             return json.loads(json_match.group())
     except Exception as exc:  # noqa: BLE001
-        logger.warning("recon llm failed", error=str(exc))
+        logger.warning("recon llm failed", error_type=type(exc).__name__)
         state.log(
             StepKind.ERROR,
             "ReconAgent",
-            f"LLM call failed, falling back to heuristics: {exc}",
+            f"LLM call failed, falling back to heuristics: {type(exc).__name__}",
         )
 
     # Fallback: heuristic extraction
@@ -168,9 +168,13 @@ async def run_recon(state_dict: dict[str, Any]) -> dict[str, Any]:
     state.status = "running"
 
     # 1. LLM-powered recon
-    from app.integrations.tkg.recon import assess_with_history
+    from app.integrations.tkg.recon import assess_with_history, validate_historical_claims
 
-    llm_result = await assess_with_history(state,_llm_recon)
+    llm_result = await assess_with_history(state, _llm_recon)
+    if state.recon.history:
+        state.recon.history["historical_claims"] = validate_historical_claims(
+            llm_result.get("historical_claims"), state.recon.history,
+        )
 
     iocs: list[dict[str, Any]] = llm_result.get("iocs", [])
     # Also extract heuristically and merge

@@ -235,7 +235,8 @@ async def test_list_cases_scopes_by_tenant() -> None:
         count_row,
         [status_row],
     ])
-    result = await list_cases(db=db, user=user)
+    result = await list_cases(db=db, user=user, status_filter=None, severity=None, assignee=None,
+                              creation_method=None, limit=50, offset=0)
     assert len(result.cases) == 2
     assert result.total == 2
     assert result.status_totals.get("new") == 2
@@ -254,6 +255,9 @@ async def test_list_cases_with_filters_keeps_tenant_scope() -> None:
         status_filter="investigating",
         severity="high",
         assignee="analyst@example.com",
+        creation_method=None,
+        limit=50,
+        offset=0,
     )
     sql, params = db.executed[0]
     normalized = re.sub(r"\s+", " ", sql).lower()
@@ -347,9 +351,9 @@ async def test_update_case_scopes_update_statement() -> None:
 
 
 @pytest.mark.asyncio
-async def test_add_alerts_cross_tenant_returns_404() -> None:
+async def test_add_alerts_cross_tenant_cannot_claim_or_update_case() -> None:
     user = _user()
-    db = _mk_db([None])  # UPDATE ... RETURNING * yields nothing.
+    db = _mk_db([[]])  # No alert satisfies the tenant-scoped UPDATE.
     with pytest.raises(HTTPException) as exc:
         await add_alerts(
             case_id=str(uuid.uuid4()),
@@ -357,8 +361,11 @@ async def test_add_alerts_cross_tenant_returns_404() -> None:
             db=db,
             user=user,
         )
-    assert exc.value.status_code == 404
-    _assert_tenant_scoped(db.executed, user.tenant_id)
+    assert exc.value.status_code == 422
+    assert exc.value.detail["error"] == "no_linkable_alerts"
+    assert len(db.executed) == 1
+    query, params = db.executed[0]
+    assert "tenant_id = :tenant_id" in query and params["tenant_id"] == user.tenant_id
 
 
 @pytest.mark.asyncio
