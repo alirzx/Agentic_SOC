@@ -60,6 +60,8 @@ def prompt_evidence(items):
             "truncated": doc.get("truncated") is True or (doc.get("bounds") or {}).get("truncated") is True,
             "entity_type": doc.get("entity_type"),
             "conflict": bool(doc.get("conflicts")),
+            "evidence_status": (doc.get("evidence") or {}).get("status"),
+            "evidence_references": [],
             "facts": [],
             "candidates": [],
         }
@@ -70,7 +72,7 @@ def prompt_evidence(items):
         ):
             for row in rows[:20]:
                 entry = {}
-                for key in ("id", "entity_id", "other_id", "fact_id", "document_id", "chunk_id"):
+                for key in ("id", "entity_id", "subject_id", "object_id", "other_id", "fact_id", "document_id", "chunk_id"):
                     try:
                         entry[key] = str(UUID(str(row.get(key))))
                     except ValueError:
@@ -83,8 +85,14 @@ def prompt_evidence(items):
                             pass
                 if row.get("direction") in ("in", "out"):
                     entry["direction"] = row["direction"]
-                if isinstance(row.get("inferred"), bool):
-                    entry["inferred"] = row["inferred"]
+                for flag in ("inferred", "stale", "corrected"):
+                    if isinstance(row.get(flag), bool):
+                        entry[flag] = row[flag]
+                if row.get("contested"):
+                    entry["contested"] = True
+                literal = row.get("object_value")
+                if type(literal) in (bool, int, float):
+                    entry["object_value"] = literal
                 for key in ("predicate_key", "predicate_label", "other_type", "entity_type"):
                     value = row.get(key)
                     if isinstance(value, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_ -]{0,63}", value):
@@ -105,6 +113,21 @@ def prompt_evidence(items):
                 ):
                     entry["endpoint"] = "host=" + host
                 view[target].append(entry)
+        references = doc.get("evidence_references") or (doc.get("evidence") or {}).get("references", [])
+        for reference in references[:20]:
+            if not isinstance(reference, dict):
+                continue
+            source = reference.get("source") or reference
+            try:
+                view["evidence_references"].append(
+                    {
+                        "fact_id": str(UUID(reference["fact_id"])),
+                        "document_id": str(UUID(source["document_id"])),
+                        "chunk_id": str(UUID(source["chunk_id"])),
+                    }
+                )
+            except (KeyError, ValueError, TypeError):
+                continue
         result.append(view)
     return result
 
@@ -173,7 +196,7 @@ async def reason(state, session, registry, assess, planner=choose):
 
     token = active.set(session)
     llm_calls = 0
-    outcome = "assessed"
+    outcome = "iteration_budget" if limits.loop_enabled else "assessed"
     try:
         if limits.preflight_enabled:
             await call("resolve_entity", {})
@@ -186,12 +209,17 @@ async def reason(state, session, registry, assess, planner=choose):
             await call("search_history", {"q": iocs[0]["value"], "top_k": limits.max_results})
         tracker = current_cost_tracker()
         for _ in range(limits.max_iterations if limits.loop_enabled else 0):
-            if (
-                session.calls >= limits.max_tool_calls
-                or llm_calls + 1 >= limits.max_llm_calls
-                or (tracker and tracker.total_cost_usd >= limits.max_cost_usd)
-            ):
-                outcome = "tool_budget" if session.calls >= limits.max_tool_calls else "llm_or_cost_budget"
+            if session.calls >= limits.max_tool_calls:
+                outcome = "tool_budget"
+                break
+            if session.requests >= limits.max_transport_requests:
+                outcome = "transport_budget"
+                break
+            if llm_calls + 1 >= limits.max_llm_calls:
+                outcome = "llm_budget"
+                break
+            if tracker and tracker.total_cost_usd >= limits.max_cost_usd:
+                outcome = "cost_budget"
                 break
             llm_calls += 1
             try:
@@ -205,11 +233,13 @@ async def reason(state, session, registry, assess, planner=choose):
                     raise ValueError("unknown tool")
                 output = await call(step.tool, step.arguments)
                 if not output or all(i["status"] in {"visited_or_depth_limit", "call_budget"} for i in output):
+                    outcome = "no_progress"
                     break
             except (ValueError, TypeError):
                 outcome = "invalid_reasoning_step"
                 break
         if tracker and tracker.total_cost_usd >= limits.max_cost_usd:
+            outcome = "cost_budget"
             return {"summary": "Historical assessment stopped at the configured cost limit."}
         llm_calls += 1
         state.recon.history = {"evidence": session.evidence, "citations": references(session.evidence)}

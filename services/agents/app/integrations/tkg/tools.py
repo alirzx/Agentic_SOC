@@ -5,18 +5,22 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from contextvars import ContextVar
 from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
 import httpx
+import structlog
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.runtime.tools import SOCTool, ToolContext, ToolPermissionDenied
 
 from .binding import BindingError
+
+logger = structlog.get_logger()
 
 Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)]
 Limit = Annotated[int, Field(ge=1, le=20)]
@@ -193,24 +197,44 @@ class Session:
             ):
                 raise ReadError("invalid_scope_or_version")
             candidates = doc.get("candidates")
-            if doc.get("automatic") is True and doc.get("status") == "resolved" and isinstance(candidates, list) and len(candidates) == 1:
-                entry = candidates[0]
-                if entry.get("has_conflict") is False and not entry.get("graph_conflict") and not entry.get("candidates_truncated"):
-                    self.remember(b, entry.get("entity_id"), 0)
+            if not isinstance(candidates, list) or any(not isinstance(row, dict) for row in candidates):
+                raise ReadError("invalid_resolution_candidates")
+            if doc.get("status") == "resolved":
+                entry = candidates[0] if len(candidates) == 1 else {}
+                if (
+                    doc.get("automatic") is not True
+                    or entry.get("has_conflict") is not False
+                    or entry.get("graph_conflict")
+                    or entry.get("candidates_truncated")
+                    or not entry.get("entity_id")
+                ):
+                    raise ReadError("ambiguous_resolution")
+                UUID(entry["entity_id"])
             return doc
         if name == "search_history":
             data = await self.post(b, "search", {**args, "top_k": min(args["top_k"], self.limits.max_results)})
-            if not isinstance(data.get("results"), list):
+            results = data.get("results")
+            if not isinstance(results, list) or any(not isinstance(row, dict) for row in results):
                 raise ReadError("invalid_search_response")
-            return {"status": "candidates" if data["results"] else "empty", **data}
+            return {
+                **data,
+                "status": "candidates" if results else "empty",
+                "results": results[: min(args["top_k"], self.limits.max_results)],
+            }
         if name == "get_entity_context":
             doc = await self.post(b, "knowledge/context", {"tenant_id": b.tkg_tenant, **args})
             if (
                 doc.get("schema_version") != "soorin.knowledge-context.v2"
                 or doc.get("tenant_id") != b.tkg_tenant
                 or doc.get("knowledge_base_id") != str(b.kb_id)
+                or doc.get("requested_entity") != args["entity"]
             ):
                 raise ReadError("invalid_scope_or_version")
+            facts = doc.get("facts")
+            if not isinstance(facts, list) or len(facts) > args["limit"]:
+                raise ReadError("invalid_context_facts")
+            for fact in facts:
+                UUID(fact["id"])
             return doc
         tool = {"get_timeline": "timeline", "get_neighbors": "neighbors"}[name]
         if b.id not in self.rpc_ready:
@@ -232,7 +256,7 @@ class Session:
             raise ReadError("structured_evidence_unavailable")
         if doc.get("schema_version") != "soorin.graph-evidence.v1" or doc.get("tool") != tool:
             raise ReadError("structured_evidence_version")
-        if not isinstance(doc.get("truncated"), bool) or not isinstance(doc.get("facts"), list):
+        if not isinstance(doc.get("truncated"), bool) or not isinstance(doc.get("facts"), list) or len(doc["facts"]) > args["limit"]:
             raise ReadError("invalid_graph_evidence")
         for fact in doc["facts"]:
             try:
@@ -241,9 +265,6 @@ class Session:
                 raise ReadError("invalid_graph_fact") from None
         if doc.get("kb_id") != str(b.kb_id) or doc.get("entity_id") != args["entity"]:
             raise ReadError("mcp_scope_mismatch")
-        if tool == "neighbors":
-            for fact in doc.get("facts", []):
-                self.remember(b, fact.get("other_id"), self.depth[b.id, args["entity"]] + 1)
         return doc
 
     async def execute(self, name, args):
@@ -266,6 +287,7 @@ class Session:
                 "source_instance": b.source_instance,
                 "tool": "tkg." + name,
             }
+            started = time.monotonic()
             try:
                 if key in self.seen or (name == "get_neighbors" and self.depth[b.id, entity] >= self.limits.max_hops):
                     raise ReadError("visited_or_depth_limit")
@@ -276,8 +298,19 @@ class Session:
                 if self.used_bytes + len(data) > self.limits.context_bytes:
                     raise ReadError("context_truncated")
                 self.used_bytes += len(data)
+                # Only observations retained under the context budget can authorize a pivot.
+                if name == "resolve_entity" and doc.get("status") == "resolved":
+                    self.remember(b, doc["candidates"][0]["entity_id"], 0)
+                elif name == "get_neighbors":
+                    for fact in doc["facts"]:
+                        self.remember(b, fact.get("other_id"), self.depth[b.id, entity] + 1)
+
                 item.update(
-                    status=doc.get("status") or doc.get("retrieval_status") or "ok", sha256=hashlib.sha256(data).hexdigest(), data=doc
+                    status=doc.get("status")
+                    or doc.get("retrieval_status")
+                    or ("empty" if name in {"get_neighbors", "get_timeline"} and not doc["facts"] else "ok"),
+                    sha256=hashlib.sha256(data).hexdigest(),
+                    data=doc,
                 )
             except (ReadError, BindingError) as exc:
                 item["status"] = str(exc)
@@ -285,6 +318,14 @@ class Session:
                 item["status"] = "unavailable"
             except (ValueError, TypeError, AttributeError, KeyError):
                 item["status"] = "invalid_response"
+            logger.info(
+                "tkg_read",
+                workspace_id=str(self.workspace),
+                binding_id=str(b.id),
+                tool=name,
+                status=item["status"],
+                elapsed_ms=round((time.monotonic() - started) * 1000),
+            )
             results.append(item)
         if not results:
             results.append({"tool": "tkg." + name, "status": "unverified_entity" if args.get("entity") else "no_source_binding"})

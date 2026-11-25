@@ -94,7 +94,9 @@ SELECT
     $18, $19, $20::jsonb, $21,
     $22, $23, $24::jsonb, $25::jsonb
 WHERE NOT EXISTS (
-    SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
+    SELECT 1 FROM alerts WHERE tenant_id = $2 AND (
+        dedup_hash = $11::text OR (dedup_hash = $26::text AND connector_id = $18)
+    )
 )
 ON CONFLICT (id) DO NOTHING
 RETURNING id
@@ -196,7 +198,9 @@ class AlertSink:
         # Optional title+rule+host collapse. Default OFF — Funnel already
         # groups by title in the UI, and this gate hid brand-new Splunk
         # notables behind "Events ingested" while /alerts stayed stale.
-        if settings.alert_display_dedup_enabled:
+        scoped_splunk = alert.connector_type == "splunk" and alert.connector_id is not None
+        legacy_fingerprint = alert.fingerprint(legacy=True) if scoped_splunk else None
+        if settings.alert_display_dedup_enabled and not scoped_splunk:
             display_hit = await self.lookup_display_duplicate(
                 alert.tenant_id,
                 title=alert.title[:500],
@@ -253,10 +257,18 @@ class AlertSink:
                     json.dumps(alert.llm_payload, default=str)
                     if alert.llm_payload
                     else None,
+                    legacy_fingerprint,
                 )
             if row is None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
                 existing = await self.lookup_dedup(alert.tenant_id, alert.fingerprint())
+                if existing is None and legacy_fingerprint is not None:
+                    prior = await pool.fetchrow(
+                        """SELECT id FROM alerts WHERE tenant_id=$1 AND connector_id=$2 AND dedup_hash=$3
+                           ORDER BY created_at,id LIMIT 1""",
+                        alert.tenant_id, alert.connector_id, legacy_fingerprint,
+                    )
+                    existing = str(prior["id"]) if prior else None
                 if existing is None:
                     await self._bump_persist_failed(alert.connector_id, alert.tenant_id)
                     return PersistResult(PersistOutcome.FAILED)

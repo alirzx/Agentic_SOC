@@ -360,3 +360,73 @@ async def test_empty_llm_payload_is_written_as_null():
 
     (_sql, args) = pool.conn.calls[0]
     assert args[24] is None
+
+
+def test_splunk_fingerprint_scopes_connector_and_recognizes_legacy():
+    alert = _fused().alert
+    alert.connector_type = "splunk"
+    alert.connector_id = uuid.UUID(int=101)
+    alert.source_event_ids = ["vendor-notable-1"]
+    second = alert.model_copy(update={"connector_id": uuid.UUID(int=102)})
+    assert alert.fingerprint(legacy=True) == second.fingerprint(legacy=True)
+    assert alert.fingerprint() != second.fingerprint()
+    assert alert.deterministic_id() != second.deterministic_id()
+    assert alert.model_copy().deterministic_id() == alert.deterministic_id()
+
+
+@pytest.mark.asyncio
+async def test_splunk_sql_preserves_legacy_and_outboxes_distinct_connectors():
+    import os
+
+    dsn = os.getenv("TKG_TEST_CHAIN_DSN")
+    if not dsn:
+        pytest.skip("requires disposable SOC migration-chain database")
+    conn = await asyncpg.connect(dsn)
+    tenant, old_connector, new_connector, legacy_id = [uuid.uuid4() for _ in range(4)]
+    try:
+        async with conn.transaction():
+            await conn.execute("INSERT INTO tenants(id,name,slug) VALUES ($1,'Sprint fixture',$2)", tenant, str(tenant))
+            for connector in (old_connector, new_connector):
+                await conn.execute(
+                    "INSERT INTO connectors(id,tenant_id,name,connector_type) VALUES ($1,$2,'fixture','splunk')", connector, tenant
+                )
+                await conn.execute("""INSERT INTO workspace_tkg_bindings
+                    (tenant_id,instance,kb_id,source_id,tkg_tenant,source_system,source_instance,connector_id,enabled,auto_ingest)
+                    VALUES ($1,'fixture',$2,$3,'fixture','splunk',$4,$5,true,true)""",
+                    tenant, uuid.uuid4(), uuid.uuid4(), str(connector), connector)
+            fused = _fused()
+            fused.alert.tenant_id = tenant
+            fused.alert.connector_type = "splunk"
+            fused.alert.connector_id = old_connector
+            fused.alert.source_event_ids = ["same-finding"]
+            await conn.execute("""INSERT INTO alerts(id,tenant_id,connector_id,connector_type,title,dedup_hash)
+                VALUES ($1,$2,$3,'splunk','historical',$4)""",
+                legacy_id, tenant, old_connector, fused.alert.fingerprint(legacy=True))
+            sink = AlertSink(dsn)
+
+            class SameConnection:
+                @asynccontextmanager
+                async def acquire(self):
+                    yield conn
+
+                async def fetchrow(self, sql, *args):
+                    return await conn.fetchrow(sql, *args)
+
+            sink._pool = SameConnection()
+            fused.id = fused.alert.deterministic_id()
+            old = await sink.persist(fused)
+            assert (old.outcome, old.alert_id) == (PersistOutcome.DUPLICATE, str(legacy_id))
+
+            fused.alert.connector_id = new_connector
+            fused.id = fused.alert.deterministic_id()
+            inserted = await sink.persist(fused)
+            assert inserted.outcome is PersistOutcome.INSERTED
+            assert (await sink.persist(fused)).outcome is PersistOutcome.DUPLICATE
+            actual = await conn.fetch("SELECT alert_row_id FROM tkg_alert_deliveries WHERE tenant_id=$1", tenant)
+            assert {row["alert_row_id"] for row in actual} == {legacy_id, fused.id}
+            raise RuntimeError("rollback fixture")
+    except RuntimeError as exc:
+        if str(exc) != "rollback fixture":
+            raise
+    finally:
+        await conn.close()

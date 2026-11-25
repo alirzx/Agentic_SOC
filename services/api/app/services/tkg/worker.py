@@ -4,9 +4,10 @@ import argparse
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import random
-import logging
+import time
 from uuid import UUID
 
 import asyncpg
@@ -19,6 +20,7 @@ from app.services.tkg_evaluation.sender import RecordError
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 6
+NORMALIZER_RETRY_CODES = {"soc_normalizer_busy", "soc_normalizer_timeout"}
 CLAIM = """
 SELECT d.id AS delivery, d.alert_row_id, d.snapshot, d.payload, d.attempts, b.*
 FROM tkg_alert_deliveries d JOIN workspace_tkg_bindings b
@@ -44,13 +46,27 @@ async def request_json(http, method, url, token, data=None):
                 method, url, content=data, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
             ) as reply,
         ):
-            if reply.status_code != 200:
-                raise DeliveryError(f"http_{reply.status_code}", reply.status_code in {408, 429, 502, 503, 504})
+            if reply.status_code not in {200, 409}:
+                raise DeliveryError(f"http_{reply.status_code}", reply.status_code in {408, 429, 500, 502, 503, 504})
             buf = bytearray()
+            size_limit = 4096 if reply.status_code == 409 else 1048576
             async for part in reply.aiter_bytes():
                 buf.extend(part)
-                if len(buf) > 1048576:
+                if len(buf) > size_limit:
                     raise DeliveryError("response_too_large")
+            if reply.status_code == 409:
+                try:
+                    conflict = json.loads(buf)
+                except ValueError:
+                    conflict = {}
+                if isinstance(conflict, dict):
+                    # Existing TKG releases expose the stable marker as error.
+                    # Keep unknown and authority conflicts terminal.
+                    for key in ("code", "error"):
+                        marker = conflict.get(key)
+                        if isinstance(marker, str) and marker in NORMALIZER_RETRY_CODES:
+                            raise DeliveryError(marker, transient=True)
+                raise DeliveryError("http_409")
             result = json.loads(buf)
             if not isinstance(result, dict):
                 raise ValueError
@@ -123,6 +139,7 @@ async def deliver(conn, http):
 
     receipt = status = code = None
     delay = 0
+    submission_started = time.monotonic()
     try:
         base = f"{binding.origin()}/api/v1/sources/{binding.source_id}/soc"
         token = binding.credential("ingest")
@@ -144,15 +161,19 @@ async def deliver(conn, http):
         result = await request_json(http, "POST", base + "/ingest", token, payload)
         if result.get("schema_version") != "soorin.ingestion-receipt.v1":
             raise DeliveryError("invalid_receipt", transient=True)
-        receipt = UUID(str(result.get("receipt_id")))
-        status = result.get("status")
-        state = receipt_state(status)
+        try:
+            receipt = UUID(str(result.get("receipt_id")))
+            status = result.get("status")
+            state = receipt_state(status)
+        except (ValueError, TypeError, DeliveryError):
+            receipt = status = None
+            raise DeliveryError("invalid_receipt", transient=True) from None
     except (DeliveryError, BindingError, ValueError, TypeError) as exc:
         code = getattr(exc, "code", "invalid_binding_or_receipt")
         retry = isinstance(exc, DeliveryError) and exc.transient and attempt < MAX_ATTEMPTS
         state = "retry_scheduled" if retry else "quarantined"
         delay = random.uniform(1, min(300, 3 * 2**attempt)) if retry else 0
-    await conn.execute(
+    updated = await conn.execute(
         """UPDATE tkg_alert_deliveries SET state=$2,receipt_id=$3,receipt_status=$4,
         error_code=$5,next_attempt=now()+$6*interval '1 second',updated_at=now()
         WHERE id=$1 AND attempts=$7 AND state='submitting'""",
@@ -164,7 +185,16 @@ async def deliver(conn, http):
         delay,
         attempt,
     )
-    logger.info("tkg_delivery id=%s state=%s code=%s attempt=%s", delivery, state, code, attempt)
+    logger.info(
+        "tkg_delivery id=%s workspace=%s state=%s code=%s attempt=%s elapsed_ms=%s persisted=%s",
+        delivery,
+        binding.tenant_id,
+        state,
+        code,
+        attempt,
+        round((time.monotonic() - submission_started) * 1000),
+        updated == "UPDATE 1",
+    )
     return True
 
 
@@ -244,6 +274,7 @@ async def main():
         parser.error("--workspace required")
     if args.mode == "run" and os.getenv("AISOC_TKG_AUTO_INGEST_ENABLED", "false").lower() != "true":
         return
+    logging.basicConfig(level=logging.INFO)
     conn = await asyncpg.connect(os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://"))
     try:
         async with httpx.AsyncClient(trust_env=False, timeout=10, verify=tls_context()) as http:

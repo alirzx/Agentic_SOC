@@ -89,6 +89,7 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
                 knowledge_base_id=str(b.kb_id),
                 tenant_id="blue",
                 retrieval_status="partial",
+                requested_entity=root,
                 facts=[dict(id=fact, subject=private, other_type="Host", other_name=private)],
                 limitations=["fixture"],
             )
@@ -132,7 +133,13 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
             events.append("assessment")
             provider = messages[-1].content
             assert private not in provider and "HOST_" in provider
-            name, entity = ("get_neighbors", root) if events.count("assessment") == 1 else ("get_timeline", peer)
+            assert "10.8.9.10" not in provider and "IP_V4_PRIVATE_" in provider
+            assert "analyst-fixture-17" not in provider and "USER_" in provider
+            if peer in provider:
+                name, entity = "get_timeline", peer
+            else:
+                assert root in provider
+                name, entity = "get_neighbors", root
             return AIMessage(content=json.dumps({"action": "call_tool", "tool": name, "arguments": {"entity": entity}}))
 
     monkeypatch.setattr(recon, "make_chat_model", lambda *a, **k: Planner())
@@ -145,7 +152,7 @@ async def test_historical_loop_and_dlp(binding, privacy_enabled, monkeypatch):
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(serve)) as client:
         session = Session(Live(), client, b.tenant_id, uid(6), b.connector_id, [b], Limits(loop_enabled=True))
-        state = InvestigatorState(tenant_id=str(b.tenant_id), case_id="synthetic", alert_summary="10.8.9.10")
+        state = InvestigatorState(tenant_id=str(b.tenant_id), case_id="synthetic", alert_summary="10.8.9.10 user=analyst-fixture-17")
         with privacy_context(str(b.tenant_id)):
             await recon.reason(state, session, build_tool_registry(), final)
     assert events == [
@@ -201,3 +208,47 @@ def test_grant_authenticates_durable_alert_and_explicit_workspace(monkeypatch):
     assert recon.verify_grant(sig, str(uid(1)), str(uid(6))) == (uid(1), uid(6))
     for tenant, alert in [(uid(2), uid(6)), (uid(1), uid(9)), ("default", uid(6))]:
         assert recon.verify_grant(sig, str(tenant), str(alert)) is None
+
+
+@pytest.mark.asyncio
+async def test_discarded_result_never_authorizes_graph_pivot(binding):
+    b = binding
+    entity = str(uid(51))
+
+    def reply(_):
+        return httpx.Response(
+            200,
+            json={
+                "schema_version": "soorin.identity-resolution.v1",
+                "knowledge_base_id": str(b.kb_id),
+                "tenant_id": b.tkg_tenant,
+                "status": "resolved",
+                "automatic": True,
+                "candidates": [{"entity_id": entity, "has_conflict": False, "padding": "x" * 2048}],
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        session = Session(Live(), client, b.tenant_id, uid(6), b.connector_id, [b], Limits(context_bytes=1024, max_tool_calls=2))
+        assert (await session.execute("resolve_entity", {}))[0]["status"] == "context_truncated"
+        assert (await session.execute("get_neighbors", {"entity": entity}))[0]["status"] == "unverified_entity"
+        assert (await session.execute("resolve_entity", {}))[0]["status"] == "call_budget"
+        assert session.requests == 1
+        assert session.depth == {}
+
+
+@pytest.mark.asyncio
+async def test_mcp_setup_obeys_independent_transport_budget(binding):
+    b = binding
+    entity = str(uid(51))
+
+    def reply(request):
+        rpc = json.loads(request.content)
+        assert rpc["method"] == "initialize"
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": rpc["id"], "result": {"protocolVersion": "2025-06-18"}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        session = Session(Live(), client, b.tenant_id, uid(6), b.connector_id, [b], Limits(max_transport_requests=1))
+        session.remember(b, entity, 0)
+        assert (await session.execute("get_timeline", {"entity": entity, "limit": 1}))[0]["status"] == "transport_budget"
+        assert session.calls == session.requests == 1

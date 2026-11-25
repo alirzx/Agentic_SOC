@@ -36,6 +36,19 @@ def source_time(value):
     raise RecordError("missing_or_invalid_source_time")
 
 
+def original_splunk_event(raw):
+    """Recover the vendor record from current OCSF envelopes and compact legacy rows."""
+    node = obj(raw.get("raw_data")) if raw.get("raw_data") is not None else raw
+    for _ in range(4):
+        nested = node.get("raw_event")
+        if nested is None:
+            return node
+        node = obj(nested)
+    if node.get("raw_event") is not None:
+        raise RecordError("source_event_nesting_limit")
+    return node
+
+
 def freeze(snapshot, binding):
     if snapshot.get("connector_type") != "splunk" or binding.source_system != "splunk":
         raise RecordError("unsupported_profile")
@@ -46,15 +59,21 @@ def freeze(snapshot, binding):
     except (KeyError, ValueError):
         raise RecordError("invalid_alert_row_id") from None
     raw = obj(snapshot.get("raw_event"))
-    envelope = obj(raw.get("raw_data"))
-    original = obj(envelope.get("raw_event")) or envelope
-    payload = obj(snapshot.get("llm_payload"))
-    if "llm_payload" in payload:
+    for key, expected in (("source_connector_id", binding.connector_id), ("tenant_uid", binding.tenant_id)):
+        if raw.get(key) is not None and str(raw[key]) != str(expected):
+            raise RecordError("source_scope_mismatch")
+    original = original_splunk_event(raw)
+    payload = obj(snapshot.get("llm_payload") or original.get("llm_payload"))
+    for _ in range(4):
+        if "llm_payload" not in payload:
+            break
         payload = obj(payload["llm_payload"])
+    if "llm_payload" in payload:
+        raise RecordError("llm_payload_nesting_limit")
     api = obj(payload.get("_meta")).get("mode") == "enriched_from_api"
     if api and payload.get("alert_id") not in (None, row_id):
         raise RecordError("conflicting_soc_alert_identity")
-    finding = obj(raw.get("finding"))
+    finding = obj(raw.get("finding") or original.get("finding"))
     notable = original.get("notable_id") or original.get("source_guid") or (None if api else payload.get("alert_id"))
     event_ids = original.get("source_event_ids") or []
     if not isinstance(event_ids, list):
@@ -68,7 +87,7 @@ def freeze(snapshot, binding):
     ids = [v for v in event_ids if isinstance(v, str) and v.strip()]
     if not any(isinstance(v, str) and v.strip() for v in [notable, finding.get("uid"), *ids]):
         raise RecordError("missing_source_identity")
-    occurrence = payload.get("event_time") or payload.get("alert_time") or original.get("_time")
+    occurrence = payload.get("event_time") or payload.get("alert_time") or original.get("_time") or original.get("event_time")
     version = original.get("source_updated_at") or original.get("updated_at") or payload.get("source_updated_at")
     occurrence = source_time(occurrence)
     if version is not None:
@@ -94,6 +113,7 @@ def freeze(snapshot, binding):
         "alert_row_id": row_id,
         "event_time": occurrence,
         "source_updated_at": version,
+        "source_revision_id": original.get("source_revision_id") or payload.get("source_revision_id"),
         "tenant_id": binding.tkg_tenant,
         "source_system": binding.source_system,
         "source_instance": binding.source_instance,

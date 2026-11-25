@@ -104,7 +104,7 @@ class RawAlert(BaseModel):
         """
         return uuid5(ALERT_ID_NAMESPACE, f"{self.tenant_id}:{self.fingerprint()}")
 
-    def fingerprint(self) -> str:
+    def fingerprint(self, *, legacy: bool = False) -> str:
         """Generate a stable deduplication fingerprint.
 
         When a vendor event id is present (``source_event_ids`` / Splunk
@@ -146,6 +146,8 @@ class RawAlert(BaseModel):
             }
         if source_instance:
             fields["source_instance"] = str(source_instance).strip().lower()
+        if self.connector_type == "splunk" and self.connector_id and not legacy:
+            fields["connector_id"] = str(self.connector_id)
         canonical = json.dumps(fields, sort_keys=True)
         return hashlib.sha256(canonical.encode()).hexdigest()
 

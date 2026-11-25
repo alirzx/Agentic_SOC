@@ -8,13 +8,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_docker_fallback_installs_rest_runtime_without_external_sdk() -> None:
+def test_docker_installs_locked_rest_runtime_without_external_sdk() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = pyproject["tool"]["poetry"]["dependencies"]
 
-    assert '"httpx>=0.26,<0.29"' in dockerfile
-    assert '"jsonschema>=4.21,<5"' in dockerfile
+    lock = tomllib.loads((ROOT / "poetry.lock").read_text(encoding="utf-8"))
+    main_packages = {package["name"] for package in lock["package"] if "main" in package.get("groups", [])}
+    assert {"httpx", "jsonschema"} <= main_packages
+    assert "poetry install --only main --no-root" in dockerfile
+    assert "/app/.venv/bin/python -m pip check" in dockerfile
     assert dependencies["httpx"] == ">=0.26,<0.29"
     assert dependencies["jsonschema"] == ">=4.21,<5.0"
     assert "soorin-privacy-sdk" not in dependencies

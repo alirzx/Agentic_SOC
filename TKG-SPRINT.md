@@ -117,3 +117,7 @@ The Rust acceptance run used the cached Rust builder with `cargo test --locked -
 - TKG transport and coverage. `crates/utopia-server/src/api/{soc_curated,soc_runtime_tests,tools_graph,mcp_tests}.rs`, `web/src/docs/mcp.md`, and `docker-compose.tkg-network.override.yml`.
 
 Both branches retain their starting HEADs with reviewed changes in the working trees. Personal SOC remote main and feature matched local refs. Personal TKG remote main matched the local base. The personal TKG remote returned no feature branch. No commits, pushes, merges, deployments or production database operations were performed during this continuation.
+
+## Sprint 3 qualification on 2026-11-25
+
+Started from clean feature checkouts at SOC `86e99dc7` and TKG `65c9892`. Deployment classification and measured acceptance are tracked in `docs/deployment/SERVER55_TKG_QUALIFICATION.md`.
