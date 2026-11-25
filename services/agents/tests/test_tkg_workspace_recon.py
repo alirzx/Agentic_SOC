@@ -73,7 +73,10 @@ async def test_failing_final_assessment_is_never_restarted(binding, monkeypatch)
         case_grant.reset(grant_token)
     assert calls == 1 and active.get() is None
     assert state.recon.history["coverage"]["case_alerts"] == 4
-    assert state.recon.history["historical_status"] == "empty"
+    # Empty was the pre-assessment state. A failed final assessment must not
+    # be reported as a successful empty history after the exception propagates.
+    assert state.recon.history["stop_reason"] == "internal_error"
+    assert state.recon.history["historical_status"] == "unavailable"
 
 
 def test_packing_retains_required_state_and_claims_require_visible_facts():
