@@ -1116,6 +1116,29 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
 type LiveStep = { kind: string; agent: string; summary: string; ts: string };
 
+/**
+ * Investigator `recommended_actions` are objects
+ * (`{priority, action, rationale, risk}`); older fixtures may still be strings.
+ */
+function formatRecommendedAction(action: unknown): string {
+  if (typeof action === 'string') return action;
+  if (action && typeof action === 'object') {
+    const row = action as Record<string, unknown>;
+    const body = row.action ?? row.title ?? row.summary ?? row.description;
+    if (typeof body === 'string' && body.trim()) {
+      const priority = row.priority != null ? `P${String(row.priority)} · ` : '';
+      const risk = typeof row.risk === 'string' && row.risk ? ` (${row.risk})` : '';
+      return `${priority}${body}${risk}`;
+    }
+    try {
+      return JSON.stringify(action);
+    } catch {
+      return 'Recommended action';
+    }
+  }
+  return String(action ?? '');
+}
+
 function InvestigationPanel({
   status,
   data,
@@ -1200,19 +1223,44 @@ function InvestigationPanel({
             <div>
               <p className="text-[11px] text-slate-500 mb-1">IOCs found:</p>
               <ul className="space-y-0.5">
-                {(recon.iocs as Array<{ type: string; value: string }>).slice(0, 5).map((ioc) => (
-                  <li key={ioc.value} className="text-[11px] font-mono text-slate-300">
-                    <span className="text-slate-500">[{ioc.type}]</span> {ioc.value}
-                  </li>
-                ))}
+                {(recon.iocs as unknown[]).slice(0, 5).map((ioc, i) => {
+                  if (typeof ioc === 'string') {
+                    return (
+                      <li key={`${ioc}-${i}`} className="text-[11px] font-mono text-slate-300">
+                        {ioc}
+                      </li>
+                    );
+                  }
+                  if (ioc && typeof ioc === 'object') {
+                    const row = ioc as Record<string, unknown>;
+                    const value = String(row.value ?? row.ioc ?? row.indicator ?? '');
+                    const type = String(row.type ?? row.kind ?? 'ioc');
+                    if (!value) return null;
+                    return (
+                      <li key={`${value}-${i}`} className="text-[11px] font-mono text-slate-300">
+                        <span className="text-slate-500">[{type}]</span> {value}
+                      </li>
+                    );
+                  }
+                  return null;
+                })}
               </ul>
             </div>
           )}
           {Array.isArray(recon?.mitre_techniques) && recon.mitre_techniques.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {(recon.mitre_techniques as string[]).map((t) => (
-                <span key={t} className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] text-orange-300 ring-1 ring-orange-500/20">{t}</span>
-              ))}
+              {(recon.mitre_techniques as unknown[]).map((t, i) => {
+                const label = typeof t === 'string' ? t : String(t ?? '');
+                if (!label) return null;
+                return (
+                  <span
+                    key={`${label}-${i}`}
+                    className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] text-orange-300 ring-1 ring-orange-500/20"
+                  >
+                    {label}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1237,26 +1285,35 @@ function InvestigationPanel({
           )}
         </div>
 
-        {/* Responder */}
+        {/* Responder — actions arrive as `{priority, action, rationale, risk}` objects
+            from the investigator agent (not bare strings). Rendering objects as React
+            children crashes the case page after Investigate completes. */}
         <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-300">Response</h4>
           {responder?.summary != null && <p className="text-xs text-slate-400">{String(responder.summary)}</p>}
           {Array.isArray(responder?.recommended_actions) && (
             <ul className="space-y-1">
-              {(responder.recommended_actions as string[]).slice(0, 4).map((action, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-xs text-slate-300">
-                  <span className="mt-0.5 h-1.5 w-1.5 flex-none rounded-full bg-amber-400" />
-                  {action}
-                </li>
-              ))}
+              {(responder.recommended_actions as unknown[])
+                .slice(0, 4)
+                .map((action, i) => {
+                  const label = formatRecommendedAction(action);
+                  return (
+                    <li key={i} className="flex items-start gap-1.5 text-xs text-slate-300">
+                      <span className="mt-0.5 h-1.5 w-1.5 flex-none rounded-full bg-amber-400" />
+                      {label}
+                    </li>
+                  );
+                })}
             </ul>
           )}
           {responder?.risk_level != null && (
             <span className={clsx(
               'inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1',
-              responder.risk_level === 'high' ? 'bg-red-500/10 text-red-300 ring-red-500/20' :
-              responder.risk_level === 'medium' ? 'bg-amber-500/10 text-amber-300 ring-amber-500/20' :
-              'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
+              responder.risk_level === 'high' || responder.risk_level === 'critical'
+                ? 'bg-red-500/10 text-red-300 ring-red-500/20'
+                : responder.risk_level === 'medium'
+                  ? 'bg-amber-500/10 text-amber-300 ring-amber-500/20'
+                  : 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
             )}>
               {String(responder.risk_level)} risk
             </span>
