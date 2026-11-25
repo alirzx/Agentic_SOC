@@ -20,6 +20,7 @@ import {
 import { format, isValid } from 'date-fns';
 import { clsx } from 'clsx';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
+import { TkgCoverage, TkgRunHistory } from '@/components/cases/TkgKnowledgePanel';
 import { ExplainDrawer } from '@/components/alerts/ExplainDrawer';
 import { CreateCaseModal } from '@/components/alerts/CreateCaseModal';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -879,6 +880,7 @@ function AIInvestigation({ alertId }: { alertId: string }) {
           {investigation.findings}
         </div>
       )}
+      {investigation.id !== 'pending' && <TkgRunHistory kind="alert" resourceId={alertId} runId={investigation.id} compact />}
 
       {/* Recommendations */}
       {investigation.recommendations && investigation.recommendations.length > 0 && (
@@ -1926,6 +1928,7 @@ export function AlertDetailView({
             <Section title="AI Investigation">
               <AIInvestigation alertId={alertId} />
             </Section>
+            <TkgCoverage kind="alert" resourceId={alert.id || alertId} />
 
             <Section title="Verdict & feedback">
               <AnalystOverridePanel alert={alert} onMutate={mutate} />

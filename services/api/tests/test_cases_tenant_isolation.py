@@ -230,8 +230,12 @@ async def test_list_cases_scopes_by_tenant() -> None:
     status_row = MagicMock()
     status_row.status = "new"
     status_row.n = 2
+    alert_count = MagicMock()
+    alert_count.count = 1
     db = _mk_db([
         [_case_row(title="A"), _case_row(title="B")],
+        [], alert_count,
+        [], alert_count,
         count_row,
         [status_row],
     ])

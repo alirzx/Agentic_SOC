@@ -1,5 +1,7 @@
 'use client';
 
+import { TkgRunHistory } from '@/components/cases/TkgKnowledgePanel';
+
 /**
  * Investigation Rail (v1.5 W6 — SOC console parity).
  *
@@ -120,6 +122,7 @@ export interface InvestigationRailProps {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) {
+  const [historyRun, setHistoryRun] = useState<string | null>(null);
   // The drawer is mounted on demand and closed by default; we don't
   // burn the LLM call until the analyst explicitly asks for it.
   const [deepExplainOpen, setDeepExplainOpen] = useState(false);
@@ -166,6 +169,10 @@ export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) 
         <RelatedEntitiesSection entities={alert.relatedEntities ?? []} />
         <MiniTimelineSection events={alert.miniTimeline ?? []} />
         <RecommendedActionsSection actions={alert.recommendedActions ?? []} />
+        {alert.ledgerRunId && <details className="px-4 py-3 text-xs" onToggle={(event) => setHistoryRun(event.currentTarget.open ? alert.ledgerRunId! : null)}>
+          <summary>Historical Recon evidence</summary>
+          {historyRun === alert.ledgerRunId && <TkgRunHistory kind="alert" resourceId={alert.id || alertId} runId={historyRun} compact />}
+        </details>}
       </RailShell>
       {/*
        * Deep Explain is mounted only when requested — keeping it inside the

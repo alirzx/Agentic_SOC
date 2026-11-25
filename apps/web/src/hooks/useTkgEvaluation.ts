@@ -26,19 +26,20 @@ function statusOf(error: unknown): number | undefined {
   return (error as { status?: number } | undefined)?.status;
 }
 
-export function useTkgEvaluation(caseId: string | null) {
+export function useTkgEvaluation(caseId: string | null, workspace: string) {
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [live, setLive] = useState<TkgRunSnapshot | null>(null);
-  const runIdRef = useRef<string | null>(null);;
+  const runIdRef = useRef<string | null>(null);
+  const polling = useRef<AbortController | null>(null);
 
-  const health = useSWR<TkgHealth>('/api/v1/cases/tkg-evaluation/health', () => caseTkgApi.health(), {
+  const health = useSWR<TkgHealth>(['case-tkg-health', workspace], () => caseTkgApi.health(), {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
   });
 
   const latest = useSWR<TkgEvaluation>(
-    caseId ? ['case-tkg-evaluation', caseId] : null,
+    caseId ? ['case-tkg-evaluation', workspace, caseId] : null,
     () => caseTkgApi.latest(caseId as string),
     {
       revalidateOnFocus: false,
@@ -54,7 +55,7 @@ export function useTkgEvaluation(caseId: string | null) {
   // busy for one login. Only asked for when the newest row is unusable.
   const unusable = Boolean(latest.data && !['ok', 'partial'].includes(latest.data.status));
   const history = useSWR<TkgEvaluation[]>(
-    caseId && unusable ? ['case-tkg-history', caseId] : null,
+    caseId && unusable ? ['case-tkg-history', workspace, caseId] : null,
     () => caseTkgApi.history(caseId as string, 10),
     { revalidateOnFocus: false, shouldRetryOnError: false }
   );
@@ -71,17 +72,23 @@ export function useTkgEvaluation(caseId: string | null) {
    */
   const run = useCallback(
     async (engineVerdict?: string | null, refresh = false) => {
-      if (!caseId) return null;
+      if (!caseId || polling.current) return null;
+      const controller = new AbortController();
+      polling.current = controller;
       setRunning(true);
       setRunError(null);
       try {
         let snapshot = await caseTkgApi.startRun(caseId, engineVerdict, refresh);
+        if (controller.signal.aborted) return null;
         runIdRef.current = snapshot.run_id;
         setLive(snapshot);
 
-        while (snapshot.state === 'running') {
+        const deadline = Date.now() + 12 * 60_000;
+        while (snapshot.state === 'running' && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-          snapshot = await caseTkgApi.runSnapshot(caseId, snapshot.run_id);
+          if (controller.signal.aborted) return null;
+          snapshot = await caseTkgApi.runSnapshot(caseId, snapshot.run_id, controller.signal);
+          if (controller.signal.aborted) return null;
           setLive(snapshot);
         }
 
@@ -100,13 +107,17 @@ export function useTkgEvaluation(caseId: string | null) {
         if (snapshot.state === 'failed') {
           setRunError(snapshot.error ?? 'TKG evaluation failed');
         }
+        if (snapshot.state === 'running') setRunError('Evaluation is still running on the server. Refresh to check again.');
         return null;
       } catch (error) {
-        setRunError(error instanceof Error ? error.message : 'TKG evaluation failed');
+        if (!controller.signal.aborted) setRunError(error instanceof Error ? error.message : 'TKG evaluation failed');
         return null;
       } finally {
-        runIdRef.current = null;
-        setRunning(false);
+        if (polling.current === controller) {
+          polling.current = null;
+          runIdRef.current = null;
+          setRunning(false);
+        }
       }
     },
     [caseId, latest]
@@ -137,8 +148,10 @@ export function useTkgEvaluation(caseId: string | null) {
   // Leaving the page mid-run stops the polling; the job itself keeps going and
   // its result is stored, so returning to the case shows the finished run.
   useEffect(() => () => {
+    polling.current?.abort();
+    polling.current = null;
     runIdRef.current = null;
-  }, []);
+  }, [caseId, workspace]);
 
   return {
     health: health.data,

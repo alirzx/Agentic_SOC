@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage
 from pydantic import ValidationError
 
 from app.integrations.tkg import recon
+from app.integrations.tkg.analyst import history_for_ledger
 from app.integrations.tkg.binding import Binding
 from app.integrations.tkg.budget import ModelBudget, ModelBudgetStop
 from app.integrations.tkg.tools import Limits, SCHEMAS, SearchCandidate, Session, active, case_grant
@@ -24,6 +25,24 @@ from app.runtime.tools import ToolContext, ToolPermissionDenied
 
 def uid(n):
     return UUID(int=n)
+
+
+def test_ledger_projection_is_bound_to_signed_resource_and_drops_search_text():
+    state = InvestigatorState(tenant_id=str(uid(1)), case_id=str(uid(2)), alert_summary="Synthetic case")
+    state.recon.history = {"profile": "standard", "historical_status": "partial", "evidence": [
+        {"kb_id": str(uid(3)), "tool": "tkg.search_history", "status": "candidates", "duration_ms": 11,
+         "data": {"results": [{"document_id": str(uid(4)), "chunk_id": str(uid(5)), "text": "sensitive fixture"}]}},
+    ]}
+    assert history_for_ledger(state) is None
+    token = case_grant.set((uid(1), uid(2)))
+    try:
+        view = history_for_ledger(state)
+    finally:
+        case_grant.reset(token)
+    assert view["resource_id"] == str(uid(2)) and view["resource_kind"] == "case"
+    assert view["history"]["tools"][0]["duration_ms"] == 11
+    assert view["history"]["candidates"][0]["chunk_id"] == str(uid(5))
+    assert not view["history"]["facts"] and "sensitive fixture" not in json.dumps(view)
 
 
 def test_profile_overrides_and_budget_reserves_final_request(monkeypatch):

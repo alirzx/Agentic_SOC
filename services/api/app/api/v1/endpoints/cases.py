@@ -3800,7 +3800,13 @@ async def case_investigation_run(
     case_id: str,
     run_id: str,
     user: AuthUser,
+    db: DBSession,
 ) -> dict[str, Any]:
+    from .tkg_knowledge import _require_owner
+
+    user.require_permission("cases:read")
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    await _require_owner(db, user.tenant_id, "case", cid)
     # URL-encode the user-supplied run_id so it cannot inject `/`, `?`, `#`,
     # CR/LF, or other URL syntax into the proxied path.
     safe_run_id = quote(run_id, safe="")
@@ -3811,7 +3817,10 @@ async def case_investigation_run(
     )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    return resp.json()
+    run = resp.json()
+    if str(run.get("case_id")) != str(cid):
+        raise HTTPException(status_code=404, detail="Investigation run not found")
+    return run
 
 
 # Filename sanitiser for Content-Disposition: keep only safe ASCII so the

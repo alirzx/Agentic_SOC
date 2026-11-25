@@ -138,7 +138,10 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
 
         json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:
-            return json.loads(json_match.group())
+            result = json.loads(json_match.group())
+            if session:
+                result["_assessment_outcome"] = "model_output"
+            return result
     except (ModelBudgetStop, PrivacyConfigurationError, RemotePrivacyError):
         if session:
             raise
@@ -161,6 +164,7 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         alternatives=["llm_extraction"],
     )
     return {
+        **({"_assessment_outcome": "heuristic_fallback"} if session else {}),
         "iocs": iocs,
         "mitre_techniques": techniques,
         "threat_actors": [],
@@ -259,12 +263,16 @@ async def run_recon(state_dict: dict[str, Any]) -> dict[str, Any]:
     )
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
+    from app.integrations.tkg.analyst import history_for_ledger
+
+    history_view = history_for_ledger(state)
     state.log(
         StepKind.RECON,
         "ReconAgent",
         f"Found {len(iocs)} IOCs, {len(mitre)} MITRE techniques in {elapsed_ms}ms",
         ioc_count=len(iocs),
         duration_ms=elapsed_ms,
+        **({"tkg_history_v1": history_view} if history_view else {}),
         input_hash=sha256_of(state.alert_summary),
         output_hash=sha256_of(state.recon.model_dump()),
     )

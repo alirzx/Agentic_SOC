@@ -2694,8 +2694,9 @@ export interface LedgerExplain {
 // ADDED_BY_CODEBUFF: casesApi block ends here
 export const ledgerApi = {
   /** List investigation runs for the current tenant (optionally scoped to a case). */
-  listRuns: (params?: { caseId?: string; status?: string; limit?: number }) =>
+  listRuns: (params?: { caseId?: string; status?: string; limit?: number; workspaceId?: string }) =>
     request<LedgerRunSummary[]>('/api/v1/investigations', {
+      headers: params?.workspaceId ? { 'X-Tenant-Id': params.workspaceId } : undefined,
       params: {
         case_id: params?.caseId,
         status: params?.status,

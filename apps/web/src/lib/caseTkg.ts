@@ -215,8 +215,8 @@ export const caseTkgApi = {
       body: JSON.stringify({ engine_verdict: engineVerdict ?? null, refresh, send_missing: true }),
     }),
 
-  runSnapshot: (caseId: string, runId: string) =>
-    request<TkgRunSnapshot>(`${base(caseId)}/run/${encodeURIComponent(runId)}`),
+  runSnapshot: (caseId: string, runId: string, signal?: AbortSignal) =>
+    request<TkgRunSnapshot>(`${base(caseId)}/run/${encodeURIComponent(runId)}`, { signal }),
 
   cancelRun: (caseId: string, runId: string) =>
     request<TkgRunSnapshot>(`${base(caseId)}/run/${encodeURIComponent(runId)}`, {

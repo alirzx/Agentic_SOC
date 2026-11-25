@@ -197,7 +197,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
                         "report_md": state_data.get("report_md", ""),
                         "report_html": state_data.get("report_html", ""),
                         "audit_log": audit_log,
-                        "recon": state_data.get("recon", {}),
+                        "recon": {key: value for key, value in (state_data.get("recon") or {}).items() if key != "history"},
                         "forensic": state_data.get("forensic", {}),
                         "responder": state_data.get("responder", {}),
                         "completed_at": datetime.utcnow().isoformat(),
@@ -336,6 +336,8 @@ async def get_investigation(run_id: str, request: Request):
     run = await _load_run_or_404(run_id)
     await require_run_owner(request, run.get("_tenant_owner"))
     slim = {k: v for k, v in run.items() if k not in ("report_md", "report_html", "_tenant_owner")}
+    if isinstance(slim.get("recon"), dict):
+        slim["recon"] = {key: value for key, value in slim["recon"].items() if key != "history"}
     return slim
 
 

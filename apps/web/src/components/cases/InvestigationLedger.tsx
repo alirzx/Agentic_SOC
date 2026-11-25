@@ -1,5 +1,7 @@
 'use client';
 
+import { TkgRunHistory } from './TkgKnowledgePanel';
+
 /**
  * Investigation Ledger.
  *
@@ -319,6 +321,9 @@ export function InvestigationLedger({
 
   return (
     <div className="space-y-4">
+      {resolvedRunId && <details><summary className="mb-2 text-sm font-medium">Recon · historical evidence</summary>
+        <TkgRunHistory kind="case" resourceId={caseId} runId={resolvedRunId} compact />
+      </details>}
       {/* Toolbar: run picker + filters + export */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/40 px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">

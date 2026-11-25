@@ -393,6 +393,9 @@ async def reason(state, session, registry, assess, planner=choose):
     deadline = started + limits.timeout_seconds
     reserve = min(limits.assessment_timeout_seconds, limits.timeout_seconds)
     llm_calls = 0
+    planner_attempts = 0
+    preflight_tool_calls = 0
+    assessment_status = "not_started"
     repair_available = True
     no_progress = 0
     outcome = "iteration_budget" if limits.loop_enabled else "assessed"
@@ -408,12 +411,18 @@ async def reason(state, session, registry, assess, planner=choose):
             "status": outcome,
             "stop_reason": outcome,
             "historical_status": history_status(stats, session.evidence, outcome),
+            "profile": limits.profile,
+            "limits": {"tools": limits.max_tool_calls, "requests": limits.max_transport_requests,
+                       "model_calls": limits.max_llm_calls, "model_tokens": limits.max_model_tokens},
             "context_tokens": limits.history_context_tokens,
             "excerpt_chars": limits.semantic_excerpt_chars,
             "coverage": stats,
             "tool_calls": session.calls,
             "tool_requests": session.requests,
             "llm_calls": llm_calls,
+            "planner_attempts": planner_attempts,
+            "preflight_tool_calls": preflight_tool_calls,
+            "assessment_status": assessment_status,
             "provider_calls": session.model_budget.provider_calls,
             "reserved_tokens_charged": session.model_budget.tokens,
             "estimated_cost_usd": session.model_budget.estimated_cost,
@@ -423,18 +432,23 @@ async def reason(state, session, registry, assess, planner=choose):
         async with asyncio.timeout(max(0, deadline - clock.time() - reserve)):
             return await registry.execute("tkg." + name, args, ctx)
 
+    async def preflight(name, args):
+        nonlocal preflight_tool_calls
+        preflight_tool_calls += 1
+        await explore(name, args)
+
     try:
         try:
             if limits.preflight_enabled and session.bindings:
                 for seed_id in list(session.seeds)[:min(limits.preflight_seeds, max(0, limits.max_tool_calls - 1))]:
-                    await explore("resolve_entity", {} if seed_id == "seed-1" else {"seed_id": seed_id})
+                    await preflight("resolve_entity", {} if seed_id == "seed-1" else {"seed_id": seed_id})
                 for entity in dict.fromkeys(entity for _, entity in session.depth):
                     if session.calls >= max(0, limits.max_tool_calls - 1):
                         break
-                    await explore("get_entity_context", {"entity": entity})
+                    await preflight("get_entity_context", {"entity": entity})
                 iocs = extract_iocs(state.alert_summary)
                 if iocs and session.calls < limits.max_tool_calls - 1:
-                    await explore("search_history", {"q": iocs[0]["value"], "top_k": limits.max_results})
+                    await preflight("search_history", {"q": iocs[0]["value"], "top_k": limits.max_results})
             for _ in range(limits.max_iterations if limits.loop_enabled and session.bindings else 0):
                 if clock.time() >= deadline - reserve:
                     outcome = "exploration_deadline"
@@ -449,6 +463,7 @@ async def reason(state, session, registry, assess, planner=choose):
                     outcome = "llm_budget"
                     break
                 llm_calls += 1
+                planner_attempts += 1
                 try:
                     async with asyncio.timeout(min(limits.planner_timeout_seconds, max(0, deadline - clock.time() - reserve))):
                         step = ReasoningStep.model_validate_json(await planner(state, session))
@@ -497,23 +512,31 @@ async def reason(state, session, registry, assess, planner=choose):
         elif not session.bindings:
             outcome = "no_workspace_binding"
         llm_calls += 1
+        assessment_status = "started"
         session.memory.stop_reason = outcome
         state.recon.history = snapshot()
         try:
             async with asyncio.timeout(min(limits.assessment_timeout_seconds, max(0, deadline - clock.time()))):
-                return await assess(state)
+                result = await assess(state)
+                assessment_status = result.pop("_assessment_outcome", "returned_result")
+                return result
         except ModelBudgetStop as exc:
             outcome = str(exc)
         except TimeoutError:
             outcome = "assessment_deadline"
         except (PrivacyConfigurationError, RemotePrivacyError):
             outcome = "privacy_unavailable"
+        assessment_status = "failed"
         return {"summary": "Historical assessment could not complete within its configured protections."}
     except asyncio.CancelledError:
         outcome = "cancelled"
+        if assessment_status == "started":
+            assessment_status = "cancelled"
         raise
     except Exception:
         outcome = "internal_error"
+        if assessment_status == "started":
+            assessment_status = "failed"
         raise
     finally:
         session.memory.stop_reason = outcome

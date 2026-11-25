@@ -976,7 +976,7 @@ function AttributionTable({ alerts }: { alerts: TkgAttributionAlert[] }) {
   );
 }
 
-export function TkgEvaluationPanel({ caseId, engineVerdict }: { caseId: string; engineVerdict?: string | null }) {
+export function TkgEvaluationPanel({ caseId, workspace, engineVerdict }: { caseId: string; workspace: string; engineVerdict?: string | null }) {
   const {
     evaluation,
     lastUsable,
@@ -989,7 +989,7 @@ export function TkgEvaluationPanel({ caseId, engineVerdict }: { caseId: string; 
     run,
     cancelRun,
     skipWait,
-  } = useTkgEvaluation(caseId);
+  } = useTkgEvaluation(caseId, workspace);
   // The newest attempt can fail to reach the graph; the panel then keeps showing
   // the last run that did reach it, clearly labelled, instead of a blank error.
   const unusable = Boolean(evaluation && evaluation.status !== 'ok' && evaluation.status !== 'partial');

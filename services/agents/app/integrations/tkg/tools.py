@@ -518,6 +518,7 @@ class Session:
                     self.seen.discard(key)
             except (ValueError, TypeError, AttributeError, KeyError):
                 item["status"] = "invalid_response"
+            item["duration_ms"] = round((time.monotonic() - started) * 1000)
             logger.info(
                 "tkg_read",
                 workspace_id=str(self.workspace),
@@ -525,7 +526,7 @@ class Session:
                 binding_id=str(b.id),
                 tool=name,
                 status=item["status"],
-                elapsed_ms=round((time.monotonic() - started) * 1000),
+                elapsed_ms=item["duration_ms"],
             )
             results.append(item)
         if not results:

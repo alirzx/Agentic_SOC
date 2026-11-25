@@ -43,7 +43,7 @@ import { InvestigationLedger } from './InvestigationLedger';
 import { CaseSummary } from './CaseSummary';
 import { CaseInvestigationBriefPanel } from './CaseInvestigationBriefPanel';
 import { CaseCorrelationModal } from './CaseCorrelationModal';
-import { TkgEvaluationPanel } from './TkgEvaluationPanel';
+import { CaseTkgKnowledgePanel, TkgRunHistory } from './TkgKnowledgePanel';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 
 type WorkspaceTab =
@@ -854,11 +854,8 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
         <AttackChainPanel caseId={caseRecord.id || caseId} />
       )}
 
-      {/* TKG tab — advisory second opinion from the Soorin knowledge graph.
-          Read-only toward the graph and toward the case: an unreachable or
-          unconfigured TKG renders its reason codes instead of an error page. */}
       {activeTab === 'tkg' && (
-        <TkgEvaluationPanel caseId={caseRecord.id || caseId} />
+        <CaseTkgKnowledgePanel caseId={caseRecord.id || caseId} runId={investigationRunId} />
       )}
 
       {/* Ledger tab — persistent, replayable agent decision log */}
@@ -871,13 +868,10 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       )}
 
       {/* Report tab */}
-      {activeTab === 'report' && (
-        <ReportPanel
-          markdown={reportMd}
-          caseId={caseRecord.id || caseId}
-          runId={investigationRunId ?? ''}
-        />
-      )}
+      {activeTab === 'report' && <div className="space-y-4">
+        <ReportPanel markdown={reportMd} caseId={caseRecord.id || caseId} runId={investigationRunId ?? ''} />
+        {investigationRunId && <TkgRunHistory kind="case" resourceId={caseRecord.id || caseId} runId={investigationRunId} compact />}
+      </div>}
 
       {/* Overview: Three-pane layout */}
       {activeTab === 'overview' && (

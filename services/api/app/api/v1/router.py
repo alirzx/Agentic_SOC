@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     business_context,
     case_graph_views,
     case_tkg_evaluation,
+    tkg_knowledge,
     cases,
     community,
     compliance,
@@ -352,3 +353,4 @@ api_router.include_router(kpi.router)
 # reads its facts and compares the graph's verdict with the correlation engine's.
 # Read-only toward the TKG and advisory toward the case.
 api_router.include_router(case_tkg_evaluation.router)
+api_router.include_router(tkg_knowledge.router)
