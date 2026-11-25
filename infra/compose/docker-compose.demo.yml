@@ -299,7 +299,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "${AISOC_BIND_ADDR:-127.0.0.1}:${AISOC_CORRELATION_PORT:-8010}:8010"
+      - "127.0.0.1:${AISOC_CORRELATION_PORT:-8010}:8010"
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc

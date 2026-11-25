@@ -47,6 +47,7 @@ for name in ("api","agents"):
     "AISOC_LLM_PRIVACY_REQUIRED":"1",
     "AISOC_PRIVACY_BACKEND":"remote",
     "AISOC_PRIVACY_REMOTE_URL":"https://privacy-gateway:8443",
+    "AISOC_PRIVACY_REMOTE_PROFILE":"agentic-soc-v1",
     "SSL_CERT_FILE":"/run/secrets/aisoc-dlp-ca.pem",
     "ENV":"production"
   }.items():
@@ -57,9 +58,12 @@ for name in ("api","agents"):
 assert services["api"]["environment"]["AISOC_PRIVACY_REMOTE_API_KEY"]==services["agents"]["environment"]["AISOC_PRIVACY_REMOTE_API_KEY"]
 assert services["api"]["environment"]["AISOC_AGENTS_TENANT_SIGNING_KEY"]==services["agents"]["environment"]["AISOC_AGENTS_TENANT_SIGNING_KEY"]
 assert {name for name,svc in services.items() if "privacy_gateway" in svc.get("networks",{})}=={"api","agents"}
-assert all(p.get("host_ip") in {"127.0.0.1","::1"} for p in services["ingest-worker"].get("ports",[])), "ingest must be private"
+for name in ("ingest-worker","correlation","fusion","connectors"):
+  assert all(p.get("host_ip") in {"127.0.0.1","::1"} for p in services[name].get("ports",[])), f"{name} must be private"
 enabled=lambda env,key: str(env.get(key,"")).lower() in {"1","true","on","yes"}
 agents=services["agents"]["environment"]
+for flag in ("AISOC_AGENTS_ALLOW_UNSIGNED_TENANT_HEADER", "AISOC_LLM_HUMAN_TRACE_ENABLED"):
+  assert agents.get(flag)=="0", f"agents: invalid {flag}"
 if tkg=="off":
   assert not enabled(agents,"AISOC_TKG_RECON_ENABLED"), "TKG enabled without its overlay"
 else:

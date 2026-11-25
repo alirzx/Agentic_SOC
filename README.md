@@ -93,7 +93,7 @@ Apps: `apps/web` (Next.js), `apps/docs`. Backend under `services/` (api, agents,
 - End-to-end SIEM spine: connector ingest → ClickHouse lake → detection corpus → fused alert.
 - Autonomous triage with copilot / dry-run response by default (human approval for real actions).
 - Investigation Rail + replayable Investigation Ledger.
-- Optional workspace-scoped TKG alert history and Case Recon. [Integration and operator guide](docs/deployment/SERVER55_TKG_QUALIFICATION.md) · [Sprint 4 qualification](docs/deployment/TKG_SPRINT4_FINAL_QUALIFICATION.md)
+- Optional workspace-scoped TKG delivery coverage and run-specific historical evidence in the Case TKG tab. [Integration and operator guide](docs/deployment/SERVER55_TKG_QUALIFICATION.md) · [Sprint 4 qualification](docs/deployment/TKG_SPRINT4_FINAL_QUALIFICATION.md)
 - Hunt-as-Code and `/hunt` workbench.
 - Soorin golden playbooks and technique mapping under `playbooks/doc/` and `services/agents/app/runtime/playbooks/`.
 

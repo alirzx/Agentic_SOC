@@ -81,10 +81,9 @@ def validate(before, after, tkg, *, private_ca):
         "TKG application publishes a host listener outside loopback",
     )
     # The existing connector ingest route trusts service-network provenance.
-    require(
-        all(port.get("host_ip") in {"127.0.0.1", "::1"} for port in services["ingest-worker"].get("ports", [])),
-        "Connector ingest publishes a host listener outside loopback",
-    )
+    for name in ("ingest-worker", "correlation", "fusion", "connectors"):
+        require(all(port.get("host_ip") in {"127.0.0.1", "::1"} for port in services[name].get("ports", [])),
+                f"{name}: publishes a host listener outside loopback")
     for name in ("tkg-sync", "tkg-reconcile"):
         require(not services[name].get("ports"), f"{name}: publishes a host port")
         require(services[name]["image"] == services["api"]["image"] and not services[name].get("build"),

@@ -1,5 +1,12 @@
 # Workspace TKG integration sprint
 
+## Final release and analyst UI, 2026-11-25
+
+- [x] Verified clean published feature checkpoints `b2266d61` (SOC) and `50f323e` (TKG). Both organization main branches are unchanged and included in the feature history. DLP remains at `226af03e`.
+- [x] Audited the existing Case TKG panel, Investigation Ledger, Alert Detail and their APIs before UI changes. [Inventory](docs/deployment/TKG_SPRINT4_FINAL_QUALIFICATION.md#existing-analyst-surfaces)
+- [x] Implement bounded coverage and historical run evidence through the SOC API and analyst UI. Targeted API, Agents, frontend markup and static Compose checks passed. Full browser, provider and service qualification remain deferred.
+- [ ] Publish both feature branches and organization PRs. Merge TKG first only when CI and approvals qualify it, then assess SOC and branch cleanup.
+
 ## Final polishing on 2026-11-25
 
 - [x] Verify the published SOC and TKG checkpoints, fetch authorized remotes, and confirm both organization main merge bases. Review DLP as a read-only contract.
