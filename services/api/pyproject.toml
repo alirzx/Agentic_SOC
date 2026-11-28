@@ -48,6 +48,8 @@ pyyaml = "^6.0.1"
 strawberry-graphql = { version = ">=0.236,<0.324", extras = ["fastapi"] }
 webauthn = ">=2.2,<4.0"
 weasyprint = ">=62,<70"          # WS-G2: server-side PDF generation from print-ready HTML
+# 4.69.0 shipped only CPython 3.11 wheels; 4.69.1 restores universal wheels.
+fonttools = ">=4.0,<5.0,!=4.69.0"
 # Phase 4.5 / Milestone 1F — the hunt scheduler now drives next-fire
 # computation through croniter, replacing the bespoke parser that only
 # understood a handful of common cadences. Pinned with a wide range
