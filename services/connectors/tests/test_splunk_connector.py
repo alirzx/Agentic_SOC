@@ -530,7 +530,7 @@ def test_normalize_extracts_mitre_from_annotations():
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_lookup_notable_filters_search_name_and_host():
+async def test_lookup_notable_searches_title_and_prefers_matching_host():
     c = _conn()
     # Lookups use oneshot + return results in the POST body (fast path).
     jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
@@ -538,6 +538,13 @@ async def test_lookup_notable_filters_search_name_and_host():
             200,
             json={
                 "results": [
+                    {
+                        "_time": "2026-07-01T12:49:35.000+03:30",
+                        "search_name": "Network - Unapproved Port Activity Detected - Rule",
+                        "dvc": "other-host.example.invalid",
+                        "dest_port": "443",
+                        "severity": "low",
+                    },
                     {
                         "_time": "2026-07-01T12:48:35.000+03:30",
                         "search_name": "Network - Unapproved Port Activity Detected - Rule",
@@ -565,7 +572,9 @@ async def test_lookup_notable_filters_search_name_and_host():
     form = parse_qs(jobs.calls[0].request.content.decode())
     spl = form["search"][0]
     assert 'search_name="Network - Unapproved Port Activity Detected - Rule"' in spl
-    assert "WIN-017UMT7DCGT.soorinsec.local" in spl
+    # The query is title-scoped; host preference happens over returned rows.
+    assert "WIN-017UMT7DCGT.soorinsec.local" not in spl
+    assert len(jobs.calls) == 1
     assert "eval rule_specific_json" in spl
     assert "llm_payload" in spl
     assert "orig_rule_description" in spl
