@@ -4,6 +4,7 @@ checkpointed pagination + deterministic identity (#529)."""
 from __future__ import annotations
 
 import json
+import re
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -34,7 +35,9 @@ def test_mission_control_spl_tables_extracted_fields():
     assert "analyst_labels=json_object" in spl
     assert "annotations_mitre_attack" in spl
     assert "annotations_analytic_story" in spl
-    assert "earliest=" not in spl
+    # Dispatch time belongs to the HTTP request, not the initial search clause.
+    # Computed window_earliest fields in the enrichment pipeline are legitimate.
+    assert not re.search(r"(?<![\w.])(?:earliest|latest)\s*=", spl.split("|", 1)[0])
     lookup = mission_control_spl('(search_name="Network - Unapproved Port Activity Detected - Rule")', limit=5)
     assert "search_name=" in lookup
     assert "| head 5" in lookup
@@ -288,12 +291,15 @@ async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
         return_value=_done_status()
     )
     out = await c.fetch_alerts()
-    body = jobs.calls[0].request.content.decode()
-    assert "notable" in body
-    assert "eval rule_specific_json" in body
-    assert "llm_payload" in body
-    assert "orig_rule_description" in body
-    assert "exec_mode=oneshot" not in body
+    form = parse_qs(jobs.calls[0].request.content.decode())
+    spl = form["search"][0]
+    assert spl.startswith("search index=notable")
+    assert "eval rule_specific_json" in spl
+    assert "llm_payload" in spl
+    assert "orig_rule_description" in spl
+    assert form["earliest_time"] == ["-90d@d"]
+    assert form["latest_time"] == ["now"]
+    assert "exec_mode" not in form
     assert len(out) == 1
     assert out[0]["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
     assert out[0]["description"].startswith("The device connected")
@@ -524,7 +530,7 @@ def test_normalize_extracts_mitre_from_annotations():
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_lookup_notable_filters_search_name_and_host():
+async def test_lookup_notable_searches_title_and_prefers_matching_host():
     c = _conn()
     # Lookups use oneshot + return results in the POST body (fast path).
     jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
@@ -532,6 +538,13 @@ async def test_lookup_notable_filters_search_name_and_host():
             200,
             json={
                 "results": [
+                    {
+                        "_time": "2026-07-01T12:49:35.000+03:30",
+                        "search_name": "Network - Unapproved Port Activity Detected - Rule",
+                        "dvc": "other-host.example.invalid",
+                        "dest_port": "443",
+                        "severity": "low",
+                    },
                     {
                         "_time": "2026-07-01T12:48:35.000+03:30",
                         "search_name": "Network - Unapproved Port Activity Detected - Rule",
@@ -556,13 +569,18 @@ async def test_lookup_notable_filters_search_name_and_host():
     assert out["hostname"] == "WIN-017UMT7DCGT.soorinsec.local"
     assert out["raw_event"]["dest_port"] == "3389"
     assert "llm_payload" in out["raw_event"]
-    body = jobs.calls[0].request.content.decode()
-    assert "Unapproved" in body
-    assert "eval rule_specific_json" in body
-    assert "llm_payload" in body
-    assert "orig_rule_description" in body
-    assert "exec_mode=oneshot" in body
-    assert "earliest_time=-30d" in body
+    form = parse_qs(jobs.calls[0].request.content.decode())
+    spl = form["search"][0]
+    assert 'search_name="Network - Unapproved Port Activity Detected - Rule"' in spl
+    # The query is title-scoped; host preference happens over returned rows.
+    assert "WIN-017UMT7DCGT.soorinsec.local" not in spl
+    assert len(jobs.calls) == 1
+    assert "eval rule_specific_json" in spl
+    assert "llm_payload" in spl
+    assert "orig_rule_description" in spl
+    assert form["exec_mode"] == ["oneshot"]
+    assert form["earliest_time"] == ["-30d"]
+    assert form["latest_time"] == ["now"]
 
 
 def test_timeless_catalog_dedupes_via_seen_ids():

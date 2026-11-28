@@ -43,9 +43,10 @@ def test_config_adds_tkg_overlays_before_private_runtime_override(tmp_path):
     assert args.index("infra/compose/tkg-ca.override.yml") < args.index(str(config))
 
 
-def test_static_production_matrix(tmp_path):
+@pytest.mark.parametrize("cross_repository", [False, True], ids=["soc_only", "cross_repository"])
+def test_static_production_matrix(tmp_path, cross_repository):
     checkout = os.getenv("SOORIN_TKG_CHECKOUT")
-    if not checkout:
+    if cross_repository and not checkout:
         pytest.skip("requires an adjacent TKG checkout and Docker Compose config")
     env_file = tmp_path / "fixture.env"
     env_file.write_text("SYNTHETIC_FIXTURE=1\n")
@@ -87,6 +88,8 @@ def test_static_production_matrix(tmp_path):
     }, True)
     check(soc, ROOT, {"SOC_TKG_OVERLAY": "on", "AISOC_TKG_RECONCILE_ENABLED": "true"}, False)
     check(soc, ROOT, {"SOC_RUNTIME_OVERRIDE": str(exposed)}, False)
+    if not cross_repository:
+        return
     check(tkg, checkout, {"SOORIN_SOC_INTEGRATION": "off"}, True)
     check(tkg, checkout, {"SOORIN_SOC_INTEGRATION": "on"}, True)
     check(tkg, checkout, {"SOORIN_IMAGE": "example.invalid/tkg:latest"}, False)
