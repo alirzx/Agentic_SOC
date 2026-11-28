@@ -145,3 +145,8 @@ docs/ahmadi/
 .tmp_patch*
 
 Report_sample
+
+# Private server runtime overrides
+/runtime-secrets.override.yml
+/runtime-secrets.override.api.yml
+/runtime-tkg.override.yml
