@@ -161,7 +161,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SECRET_KEY: dev_secret_key_change_in_production
+      # Must come from .env in production — hardcoded placeholders now fail boot
+      # via enforce_secure_defaults() when ENVIRONMENT=production.
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      JWT_SECRET: ${JWT_SECRET:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:-}
+      AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:-}
       ENV: ${ENV:-development}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: info
